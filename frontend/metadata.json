@@ -1,0 +1,5 @@
+{
+  "name": "DriveFlow - Car Rental Management",
+  "description": "A comprehensive car rental management system featuring customer management, vehicle tracking, reservations, and an administrative dashboard.",
+  "requestFramePermissions": []
+}

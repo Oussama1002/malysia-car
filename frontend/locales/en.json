@@ -1,0 +1,60 @@
+{
+  "app": { "name": "DriveFlow OS", "tagline": "Automotive & Leasing" },
+  "nav": {
+    "group": {
+      "overview": "Overview",
+      "operations": "Operations",
+      "finance": "Finance & risk",
+      "intelligence": "Intelligence",
+      "system": "System"
+    },
+    "dashboard": "Executive cockpit",
+    "fleet": "Fleet",
+    "fleetCompliance": "Vehicle compliance",
+    "customers": "Customers & compliance",
+    "contracts": "Contracts",
+    "credit": "Credit analysis",
+    "finance": "Finance & tax",
+    "accounting": "Accounting",
+    "arrears": "Arrears & recovery",
+    "signatures": "E-signatures",
+    "usedCars": "Used vehicles",
+    "gps": "GPS & tracking",
+    "ai": "AI & predictions",
+    "mobileOps": "Field operations",
+    "notifications": "Notifications",
+    "documents": "Document center",
+    "settings": "Settings",
+    "audit": "Audit trail",
+    "rentals": "Short-term rentals"
+  },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "email": "Work email",
+    "password": "Password",
+    "loginInvalid": "Invalid credentials, or the API is unreachable. Check VITE_API_BASE and the Laravel server.",
+    "loginApiUnreachable": "Laravel API is unreachable. Check VITE_API_BASE and ensure the Laravel server is responding (no HTTP 500).",
+    "loginServerError": "Laravel responded with a server error. Check backend logs and try again.",
+    "forgot": "Forgot password?",
+    "resetSent": "If an account exists, an email was sent."
+  },
+  "shell": {
+    "home": "Home",
+    "new": "New",
+    "templates": "Templates",
+    "userManagement": "Users",
+    "reload": "Reload app"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "search": "Search",
+    "filters": "Filters",
+    "actions": "Actions",
+    "empty": "No data",
+    "error": "Something went wrong"
+  }
+}

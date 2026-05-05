@@ -1,0 +1,60 @@
+{
+  "app": { "name": "DriveFlow OS", "tagline": "Automobile & Leasing" },
+  "nav": {
+    "dashboard": "Cockpit direction",
+    "fleet": "Flotte",
+    "fleetCompliance": "Conformité véhicules",
+    "customers": "Clients & conformité",
+    "contracts": "Contrats",
+    "credit": "Analyse crédit",
+    "finance": "Finance & fiscalité",
+    "accounting": "Comptabilité",
+    "arrears": "Impayés & contentieux",
+    "signatures": "Signatures électroniques",
+    "usedCars": "Véhicules d'occasion",
+    "gps": "GPS & géolocalisation",
+    "ai": "IA & prédictions",
+    "mobileOps": "Opérations terrain",
+    "notifications": "Notifications",
+    "documents": "Centre documentaire",
+    "settings": "Paramètres",
+    "audit": "Audit & traçabilité",
+    "rentals": "Locations courte durée",
+    "group": {
+      "overview": "Vue d'ensemble",
+      "operations": "Opérations",
+      "finance": "Finance & risque",
+      "intelligence": "Intelligence",
+      "system": "Système"
+    }
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "email": "Email professionnel",
+    "password": "Mot de passe",
+    "loginInvalid": "Identifiants invalides. Vérifiez l’e-mail et le mot de passe (ou la configuration VITE_API_BASE + serveur Laravel).",
+    "loginApiUnreachable": "API Laravel injoignable. Vérifiez VITE_API_BASE et que le serveur Laravel répond (pas d’erreur 500).",
+    "loginServerError": "Le serveur Laravel a répondu avec une erreur. Vérifiez les logs backend puis réessayez.",
+    "forgot": "Mot de passe oublié ?",
+    "resetSent": "Si un compte existe, un email a été envoyé."
+  },
+  "shell": {
+    "home": "Accueil",
+    "new": "Nouveau",
+    "templates": "Modèles",
+    "userManagement": "Utilisateurs",
+    "reload": "Recharger l'application"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "search": "Rechercher",
+    "filters": "Filtres",
+    "actions": "Actions",
+    "empty": "Aucune donnée",
+    "error": "Une erreur est survenue"
+  }
+}

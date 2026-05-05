@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "driveflow-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "C:\\xampp2\\htdocs\\driveflow\\frontend",
+      "port": 3000
+    }
+  ]
+}

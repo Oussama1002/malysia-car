@@ -1,0 +1,60 @@
+{
+  "app": { "name": "درايف فلو", "tagline": "السيارات والتأجير" },
+  "nav": {
+    "group": {
+      "overview": "نظرة عامة",
+      "operations": "العمليات",
+      "finance": "المالية والمخاطر",
+      "intelligence": "الذكاء",
+      "system": "النظام"
+    },
+    "dashboard": "قمرة القيادة التنفيذية",
+    "fleet": "الأسطول",
+    "fleetCompliance": "امتثال المركبات",
+    "customers": "العملاء والامتثال",
+    "contracts": "العقود",
+    "credit": "تحليل الائتمان",
+    "finance": "المالية والضرائب",
+    "accounting": "المحاسبة",
+    "arrears": "المتأخرات والتحصيل",
+    "signatures": "التوقيعات الإلكترونية",
+    "usedCars": "السيارات المستعملة",
+    "gps": "تحديد المواقع",
+    "ai": "الذكاء الاصطناعي",
+    "mobileOps": "عمليات الميدان",
+    "notifications": "الإشعارات",
+    "documents": "مركز المستندات",
+    "settings": "الإعدادات",
+    "audit": "التدقيق",
+    "rentals": "تأجير قصير الأجل"
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "email": "البريد المهني",
+    "password": "كلمة المرور",
+    "loginInvalid": "بيانات الاعتماد غير صحيحة، أو الخادم غير متوفر. تحقق من VITE_API_BASE وخادم Laravel.",
+    "loginApiUnreachable": "تعذر الوصول إلى Laravel API. تحقق من VITE_API_BASE وتأكد أن الخادم يعمل بدون خطأ 500.",
+    "loginServerError": "الخادم Laravel أعاد خطأ داخليًا. راجع سجلات الخلفية ثم أعد المحاولة.",
+    "forgot": "نسيت كلمة المرور؟",
+    "resetSent": "إذا وُجد حساب، تم إرسال بريد."
+  },
+  "shell": {
+    "home": "الرئيسية",
+    "new": "جديد",
+    "templates": "قوالب",
+    "userManagement": "المستخدمون",
+    "reload": "إعادة التحميل"
+  },
+  "common": {
+    "loading": "جاري التحميل…",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "search": "بحث",
+    "filters": "عوامل التصفية",
+    "actions": "إجراءات",
+    "empty": "لا توجد بيانات",
+    "error": "حدث خطأ"
+  }
+}
