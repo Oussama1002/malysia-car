@@ -3,6 +3,43 @@ import { useQuery } from '@tanstack/react-query';
 import { auditApi } from '@/services/auditApi';
 import { formatDate } from '@/modules/shared/formatters';
 
+const HIDDEN_AUDIT_FIELDS = new Set([
+  'id',
+  'company_id',
+  'branch_id',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+]);
+
+function toComparable(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function formatFieldLabel(field: string): string {
+  return field.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function summarizeChanges(beforeData?: Record<string, unknown> | null, afterData?: Record<string, unknown> | null): string[] {
+  const before = beforeData ?? {};
+  const after = afterData ?? {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const lines: string[] = [];
+
+  keys.forEach((key) => {
+    if (HIDDEN_AUDIT_FIELDS.has(key)) return;
+    const previous = toComparable(before[key]);
+    const next = toComparable(after[key]);
+    if (previous !== next) {
+      lines.push(`${formatFieldLabel(key)}: ${previous || '—'} -> ${next || '—'}`);
+    }
+  });
+
+  return lines.slice(0, 8);
+}
+
 /**
  * Drop into any detail page (contract, customer, invoice, vehicle, …).
  * Calls `GET /api/v1/entities/{entityType}/{entityId}/audit`.
@@ -58,22 +95,20 @@ export const EntityAuditTimeline: React.FC<{
             {(r.before_data || r.after_data) && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-[11px] font-semibold text-indigo-600">
-                  Voir le diff
+                  Voir les changements
                 </summary>
-                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                  <div>
-                    <div className="text-[10px] font-black uppercase text-slate-500">Avant</div>
-                    <pre className="overflow-auto rounded bg-slate-50 p-2 text-[10px]">
-                      {r.before_data ? JSON.stringify(r.before_data, null, 2) : '—'}
-                    </pre>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-black uppercase text-slate-500">Après</div>
-                    <pre className="overflow-auto rounded bg-slate-50 p-2 text-[10px]">
-                      {r.after_data ? JSON.stringify(r.after_data, null, 2) : '—'}
-                    </pre>
-                  </div>
-                </div>
+                <ul className="mt-2 space-y-1 text-[11px] text-slate-600">
+                  {summarizeChanges(
+                    r.before_data as Record<string, unknown> | null,
+                    r.after_data as Record<string, unknown> | null,
+                  ).map((line) => (
+                    <li key={line}>- {line}</li>
+                  ))}
+                  {summarizeChanges(
+                    r.before_data as Record<string, unknown> | null,
+                    r.after_data as Record<string, unknown> | null,
+                  ).length === 0 && <li>- Changement enregistré.</li>}
+                </ul>
               </details>
             )}
           </div>

@@ -16,6 +16,53 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { ConfirmModal } from '@/modules/shared/components/ConfirmModal';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 
+const MODULE_HELP: Record<string, string> = {
+  contracts: 'Gestion des contrats, validations et actions de signature.',
+  customers: 'Consultation et gestion des dossiers clients.',
+  fleet: 'Gestion du parc, véhicules, disponibilité et opérations.',
+  finance: 'Facturation, paiements et suivi financier.',
+  accounting: 'Écritures comptables et clôture.',
+  settings: 'Administration de la plateforme et configuration.',
+  audit: 'Historique, traces et conformité.',
+  gps: 'Géolocalisation, alertes et suivi des trajets.',
+};
+
+function humanizePermissionCode(code: string): string {
+  return code
+    .replace(/[._]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isReadPermission(code: string): boolean {
+  const normalized = code.toLowerCase();
+  return normalized.startsWith('view_') || normalized.endsWith('.view') || normalized.includes('.view_');
+}
+
+function isWritePermission(code: string): boolean {
+  if (isReadPermission(code)) return false;
+  const normalized = code.toLowerCase();
+  return [
+    '.create',
+    '.update',
+    '.delete',
+    '.manage',
+    '.approve',
+    '.reject',
+    '.assign',
+    '.send',
+    '.sync',
+    '.issue',
+    '.cancel',
+    '.post',
+    '.close',
+    '.upload',
+    '.generate',
+    '.transition',
+    '.decide',
+    'manage_',
+  ].some((token) => normalized.includes(token));
+}
+
 export const RolesPermissionsPage: React.FC = () => {
   const qc = useQueryClient();
   const rolesQ = useQuery({ queryKey: ['admin', 'roles'], queryFn: () => listRoles() });
@@ -29,6 +76,11 @@ export const RolesPermissionsPage: React.FC = () => {
   const roles = rolesQ.data?.data ?? [];
   const permissions = permsQ.data?.data ?? [];
   const selected = useMemo(() => roles.find((r) => r.id === selectedId) ?? null, [roles, selectedId]);
+  React.useEffect(() => {
+    if (!selectedId && roles.length > 0) {
+      setSelectedId(roles[0].id);
+    }
+  }, [roles, selectedId]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin', 'roles'] });
 
@@ -70,6 +122,21 @@ export const RolesPermissionsPage: React.FC = () => {
     });
     return g;
   }, [permissions]);
+  const groupedFallbackFromRole = useMemo(() => {
+    const g: Record<string, AdminPermission[]> = {};
+    (selected?.permissions ?? []).forEach((p) => {
+      const mod = p.module || 'autre';
+      (g[mod] = g[mod] ?? []).push({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        module: mod,
+        description: null,
+      });
+    });
+    return g;
+  }, [selected]);
+  const groupedForDisplay = Object.keys(grouped).length > 0 ? grouped : groupedFallbackFromRole;
 
   const [draftPermIds, setDraftPermIds] = useState<number[] | null>(null);
   React.useEffect(() => {
@@ -191,15 +258,37 @@ export const RolesPermissionsPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {(Object.entries(grouped) as [string, AdminPermission[]][]).map(([module, perms]) => {
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                    Utilisez les cases <strong>Voir</strong> et <strong>Modifier</strong> pour définir rapidement ce que ce type d'utilisateur peut consulter ou modifier par module.
+                  </div>
+                  {permsQ.isError && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Impossible de charger le catalogue complet des permissions. Affichage basé sur les permissions déjà liées à ce rôle.
+                    </div>
+                  )}
+                  {(Object.entries(groupedForDisplay) as [string, AdminPermission[]][]).map(([module, perms]) => {
                     const all = perms.every((p) => draftPermIds?.includes(p.id));
                     const some = perms.some((p) => draftPermIds?.includes(p.id));
+                    const selectedCount = perms.filter((p) => draftPermIds?.includes(p.id)).length;
+                    const readPerms = perms.filter((p) => isReadPermission(p.code));
+                    const writePerms = perms.filter((p) => isWritePermission(p.code));
+                    const readIds = readPerms.map((p) => p.id);
+                    const writeIds = writePerms.map((p) => p.id);
+                    const allReadSelected = readIds.length > 0 && readIds.every((id) => draftPermIds?.includes(id));
+                    const someReadSelected = readIds.some((id) => draftPermIds?.includes(id));
+                    const allWriteSelected = writeIds.length > 0 && writeIds.every((id) => draftPermIds?.includes(id));
+                    const someWriteSelected = writeIds.some((id) => draftPermIds?.includes(id));
                     return (
                       <div key={module} className="rounded-xl border border-slate-200">
                         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-4 py-2">
-                          <span className="text-xs font-black uppercase tracking-wider text-slate-700">
-                            {module}
-                          </span>
+                          <div>
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-700">
+                              {module}
+                            </span>
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              {MODULE_HELP[module] ?? 'Permissions fonctionnelles de ce module.'}
+                            </p>
+                          </div>
                           <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
                             <input
                               type="checkbox"
@@ -217,7 +306,47 @@ export const RolesPermissionsPage: React.FC = () => {
                                 });
                               }}
                             />
-                            Tout sélectionner
+                            Tout sélectionner ({selectedCount}/{perms.length})
+                          </label>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 border-b border-slate-100 bg-white px-4 py-2 text-xs">
+                          <label className="flex items-center gap-2 font-semibold text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={allReadSelected}
+                              ref={(el) => {
+                                if (el) el.indeterminate = !allReadSelected && someReadSelected;
+                              }}
+                              onChange={(e) => {
+                                setDraftPermIds((d) => {
+                                  const set = new Set(d ?? []);
+                                  if (e.target.checked) readIds.forEach((id) => set.add(id));
+                                  else readIds.forEach((id) => set.delete(id));
+                                  return Array.from(set);
+                                });
+                              }}
+                              disabled={readIds.length === 0}
+                            />
+                            Voir ({readIds.length})
+                          </label>
+                          <label className="flex items-center gap-2 font-semibold text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={allWriteSelected}
+                              ref={(el) => {
+                                if (el) el.indeterminate = !allWriteSelected && someWriteSelected;
+                              }}
+                              onChange={(e) => {
+                                setDraftPermIds((d) => {
+                                  const set = new Set(d ?? []);
+                                  if (e.target.checked) writeIds.forEach((id) => set.add(id));
+                                  else writeIds.forEach((id) => set.delete(id));
+                                  return Array.from(set);
+                                });
+                              }}
+                              disabled={writeIds.length === 0}
+                            />
+                            Modifier ({writeIds.length})
                           </label>
                         </div>
                         <div className="grid gap-2 p-4 md:grid-cols-2">
@@ -234,9 +363,9 @@ export const RolesPermissionsPage: React.FC = () => {
                                 <span>
                                   <span className="font-bold text-slate-800">{p.name}</span>
                                   <span className="block text-xs text-slate-500">{p.code}</span>
-                                  {p.description && (
-                                    <span className="block text-xs text-slate-400">{p.description}</span>
-                                  )}
+                                  <span className="block text-xs text-slate-400">
+                                    {p.description ?? humanizePermissionCode(p.code)}
+                                  </span>
                                 </span>
                               </label>
                             );
@@ -245,6 +374,11 @@ export const RolesPermissionsPage: React.FC = () => {
                       </div>
                     );
                   })}
+                  {Object.keys(groupedForDisplay).length === 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                      Aucune permission disponible à afficher. Vérifiez l'accès API `/v1/permissions` ou les données RBAC.
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">

@@ -35,7 +35,7 @@ class VehicleCostService
         // --- Revenue (from closed/active contracts) ---
         $totalRevenue = (float) Contract::query()
             ->where('vehicle_id', $vehicle->id)
-            ->whereIn('status', ['ACTIVE', 'TERMINATED', 'COMPLETED'])
+            ->whereIn('status', ['active', 'terminated', 'completed'])
             ->sum('base_amount');
 
         // --- Acquisition ---

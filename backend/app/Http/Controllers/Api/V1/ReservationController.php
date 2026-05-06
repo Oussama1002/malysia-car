@@ -13,6 +13,7 @@ use App\Models\RentalHandoverReport;
 use App\Models\Reservation;
 use App\Services\AuditLogger;
 use App\Services\RentalAvailabilityService;
+use App\Support\PaymentMethodNormalizer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -76,6 +77,9 @@ class ReservationController extends Controller
             'delivery_latitude' => ['nullable', 'numeric'],
             'delivery_longitude' => ['nullable', 'numeric'],
             'estimated_price' => ['nullable', 'numeric', 'min:0'],
+            'payment_method' => ['nullable', 'string', 'max:40'],
+            'pickup_location' => ['nullable', 'string', 'max:500'],
+            'return_location' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string'],
             'company_id' => ['nullable', 'uuid'],
             'branch_id' => ['nullable', 'uuid'],
@@ -102,6 +106,9 @@ class ReservationController extends Controller
                 'delivery_latitude' => $data['delivery_latitude'] ?? null,
                 'delivery_longitude' => $data['delivery_longitude'] ?? null,
                 'estimated_price' => $data['estimated_price'] ?? null,
+                'payment_method' => PaymentMethodNormalizer::normalize($data['payment_method'] ?? null),
+                'pickup_location' => $data['pickup_location'] ?? null,
+                'return_location' => $data['return_location'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => auth()->id(),
             ]);
@@ -195,6 +202,64 @@ class ReservationController extends Controller
         $this->transitionReservation($reservation, 'cancelled', $request);
 
         return ApiResponse::success($reservation->fresh());
+    }
+
+    public function update(Request $request, Reservation $reservation): JsonResponse
+    {
+        $data = $request->validate([
+            'customer_id' => ['sometimes', 'uuid'],
+            'vehicle_id' => ['sometimes', 'uuid'],
+            'reservation_type' => ['sometimes', 'string', 'max:50'],
+            'desired_start_at' => ['sometimes', 'date'],
+            'desired_end_at' => ['sometimes', 'date'],
+            'pickup_address' => ['nullable', 'string', 'max:255'],
+            'delivery_address' => ['nullable', 'string', 'max:255'],
+            'pickup_location' => ['nullable', 'string', 'max:500'],
+            'return_location' => ['nullable', 'string', 'max:500'],
+            'delivery_latitude' => ['nullable', 'numeric'],
+            'delivery_longitude' => ['nullable', 'numeric'],
+            'estimated_price' => ['nullable', 'numeric', 'min:0'],
+            'payment_method' => ['nullable', 'string', 'max:40'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        if (isset($data['payment_method'])) {
+            $data['payment_method'] = PaymentMethodNormalizer::normalize($data['payment_method']);
+        }
+
+        DB::transaction(function () use ($reservation, $data, $request): void {
+            $locked = Reservation::withoutGlobalScopes()
+                ->whereKey((string) $reservation->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (isset($data['vehicle_id']) || isset($data['desired_start_at']) || isset($data['desired_end_at'])) {
+                $vehicleId = $data['vehicle_id'] ?? $locked->vehicle_id;
+                $startAt = Carbon::parse($data['desired_start_at'] ?? $locked->desired_start_at);
+                $endAt = Carbon::parse($data['desired_end_at'] ?? $locked->desired_end_at);
+                $this->availability->assertVehicleAvailableWithLock(
+                    (string) $vehicleId,
+                    $startAt,
+                    $endAt,
+                    (string) $locked->id
+                );
+            }
+
+            $locked->fill($data);
+            $locked->save();
+        });
+
+        AuditLogger::updated($reservation->fresh(), $request->user(), before: [], after: $data, request: $request);
+
+        return ApiResponse::success($reservation->fresh());
+    }
+
+    /**
+     * Alias for return handover flow (client-facing "return rental").
+     */
+    public function rentalReturn(Request $request, Reservation $reservation): JsonResponse
+    {
+        return $this->handoverReturn($request, $reservation);
     }
 
     public function handoverPickup(Request $request, Reservation $reservation): JsonResponse

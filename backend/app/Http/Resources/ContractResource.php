@@ -46,6 +46,11 @@ class ContractResource extends JsonResource
             'signedAt' => optional($c->signed_at)?->toIso8601String(),
             'terminatedReason' => $c->terminated_reason,
             'notes' => $c->notes,
+            'paymentMethod' => $c->payment_method,
+            'paymentTerms' => $c->payment_terms,
+            'bankReference' => $c->bank_reference,
+            'chequeNumber' => $c->cheque_number,
+            'expectedPaymentDay' => $c->expected_payment_day,
             'createdAt' => optional($c->created_at)?->toIso8601String(),
             'updatedAt' => optional($c->updated_at)?->toIso8601String(),
         ];

@@ -57,6 +57,7 @@ class StoreMaintenanceEventRequest extends ApiFormRequest
             'odometer_km' => ['nullable', 'integer', 'min:0', 'max:2000000'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'cost_mad' => ['nullable', 'numeric', 'min:0'],
+            'lifecycle_status' => ['nullable', 'in:planned,in_progress,completed,cancelled'],
         ];
     }
 }

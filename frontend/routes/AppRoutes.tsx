@@ -11,6 +11,8 @@ import { FleetListPage } from '@/modules/fleet/FleetListPage';
 import { FleetVehicleDetailPage } from '@/modules/fleet/FleetVehicleDetailPage';
 import { FleetMaintenanceDashboardPage } from '@/modules/fleet/FleetMaintenanceDashboardPage';
 import { FleetComplianceDashboardPage } from '@/modules/fleet/FleetComplianceDashboardPage';
+import { FleetAnalysisPage } from '@/modules/fleet/FleetAnalysisPage';
+import { SubRentalsPage } from '@/modules/fleet/SubRentalsPage';
 import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
@@ -25,6 +27,7 @@ import { InvoiceDetailPage } from '@/modules/finance/InvoiceDetailPage';
 import { PaymentsPage } from '@/modules/finance/PaymentsPage';
 import { TreasuryPage } from '@/modules/finance/TreasuryPage';
 import { CustomerStatementPage } from '@/modules/finance/CustomerStatementPage';
+import { FixedChargesPage } from '@/modules/finance/FixedChargesPage';
 // Phase 11 — Accounting
 import { AccountingPage } from '@/modules/accounting/AccountingPage';
 import { ChartOfAccountsPage } from '@/modules/accounting/ChartOfAccountsPage';
@@ -210,6 +213,22 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
+            <Route
+              path="/fleet/analysis"
+              element={
+                <ModuleGate module="fleet">
+                  <FleetAnalysisPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/fleet/sub-rentals"
+              element={
+                <ModuleGate module="fleet">
+                  <SubRentalsPage />
+                </ModuleGate>
+              }
+            />
 
             <Route
               path="/customers"
@@ -307,6 +326,14 @@ export default function AppRoutes(): React.ReactElement {
               element={
                 <ModuleGate module="finance">
                   <TreasuryPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/finance/fixed-charges"
+              element={
+                <ModuleGate module="finance">
+                  <FixedChargesPage />
                 </ModuleGate>
               }
             />
@@ -692,6 +719,7 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
+            <Route path="/reservations" element={<Navigate to="/rentals" replace />} />
 
             <Route path="*" element={<NotFoundPage />} />
           </Route>

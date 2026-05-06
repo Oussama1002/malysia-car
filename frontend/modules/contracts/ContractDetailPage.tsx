@@ -12,18 +12,18 @@ import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 
 export const ContractDetailPage: React.FC = () => {
   const { id } = useParams();
-  const cid = Number(id);
+  const cid = id ?? '';
   const [tab, setTab] = useState('details');
 
   const q = useQuery({
     queryKey: queryKeys.contracts.one(cid),
     queryFn: async () => contractsApi.get(cid),
-    enabled: Number.isFinite(cid),
+    enabled: !!cid,
   });
 
   const c = q.data?.contract ?? null;
   const history = q.data?.history ?? [];
-  if (!Number.isFinite(cid)) return <div className="text-sm text-slate-600">Identifiant invalide.</div>;
+  if (!cid) return <div className="text-sm text-slate-600">Identifiant invalide.</div>;
   if (q.isLoading) return <div className="text-sm text-slate-500">Chargement…</div>;
   if (!c) {
     return (
@@ -81,7 +81,19 @@ export const ContractDetailPage: React.FC = () => {
           </div>
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="text-xs font-black uppercase tracking-widest text-slate-400">Parties / véhicule</div>
-            <div className="mt-2 text-sm text-slate-700">Client #{c.clientId} • Véhicule #{c.vehicleId ?? '—'}</div>
+            <div className="mt-2 text-sm text-slate-700">
+              Client #{(c as { customerId?: string }).customerId ?? c.clientId ?? '—'} • Véhicule #{c.vehicleId ?? '—'}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm md:col-span-2">
+            <div className="text-xs font-black uppercase tracking-widest text-slate-400">Paiement</div>
+            <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-slate-700 md:grid-cols-2">
+              <div><span className="text-slate-500">Mode:</span> {c.paymentMethod ?? '—'}</div>
+              <div><span className="text-slate-500">Échéance jour:</span> {c.expectedPaymentDay ?? '—'}</div>
+              <div className="md:col-span-2"><span className="text-slate-500">Conditions:</span> {c.paymentTerms ?? '—'}</div>
+              <div><span className="text-slate-500">Réf. virement:</span> {c.bankReference ?? '—'}</div>
+              <div><span className="text-slate-500">N° chèque:</span> {c.chequeNumber ?? '—'}</div>
+            </div>
           </div>
         </div>
       )}

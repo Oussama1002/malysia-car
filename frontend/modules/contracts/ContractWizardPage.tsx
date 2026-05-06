@@ -10,6 +10,9 @@ import { UploadZone } from '@/modules/shared/components/UploadZone';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import type { ContractType } from '@/services/dtos';
 import { contractsApi } from '@/services/contractsApi';
+import { documentsApi } from '@/services/documentsApi';
+import { createEnvelope, sendEnvelope } from '@/services/signatureApi';
+import { useAuthSession } from '@/modules/auth/AuthContext';
 
 type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
 
@@ -88,6 +91,11 @@ interface WizardState {
   securityDepositMad: number;
   residualValuePct: number;
   notes: string;
+  paymentMethod: string;
+  paymentTerms: string;
+  bankReference: string;
+  chequeNumber: string;
+  expectedPaymentDay: number | '';
 }
 
 const INITIAL: WizardState = {
@@ -100,14 +108,23 @@ const INITIAL: WizardState = {
   securityDepositMad: 10000,
   residualValuePct: 38,
   notes: '',
+  paymentMethod: 'virement',
+  paymentTerms: '',
+  bankReference: '',
+  chequeNumber: '',
+  expectedPaymentDay: 5,
 };
 
 export const ContractWizardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { session } = useAuthSession();
   const [stepIdx, setStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftInfo, setDraftInfo] = useState<string | null>(null);
+  const [draftContractId, setDraftContractId] = useState<string | null>(null);
   const step = STEPS[stepIdx];
 
   const clients = useQuery({
@@ -179,23 +196,78 @@ export const ContractWizardPage: React.FC = () => {
     setState((s) => ({ ...s, [k]: v }));
   }
 
+  function buildCreatePayload(status?: 'draft' | 'pending_approval') {
+    return {
+      type: state.type,
+      clientId: state.clientId ?? '',
+      vehicleId: state.vehicleId ?? undefined,
+      amountMad: totalAmount,
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: undefined,
+      durationMonths: state.durationMonths,
+      monthlyPayment: state.monthlyRentMad,
+      allowedKm: state.kmInclMonth * state.durationMonths,
+      depositAmount: state.securityDepositMad,
+      notes: state.notes,
+      paymentMethod: state.paymentMethod,
+      paymentTerms: state.paymentTerms || undefined,
+      bankReference: state.bankReference || undefined,
+      chequeNumber: state.chequeNumber || undefined,
+      expectedPaymentDay: state.expectedPaymentDay === '' ? undefined : Number(state.expectedPaymentDay),
+      status,
+    } as any;
+  }
+
+  async function ensureDraftContract(): Promise<string> {
+    if (!state.clientId) {
+      throw new Error('Sélectionnez un client avant de sauvegarder le brouillon.');
+    }
+    if (!state.vehicleId) {
+      throw new Error('Sélectionnez un véhicule avant de sauvegarder le brouillon.');
+    }
+    if (draftContractId) {
+      return draftContractId;
+    }
+    const created = await contractsApi.create(buildCreatePayload('draft'));
+    setDraftContractId(String(created.id));
+    return String(created.id);
+  }
+
+  async function handleSaveDraft(): Promise<void> {
+    setDraftBusy(true);
+    setSaveError(null);
+    setDraftInfo(null);
+    try {
+      const id = await ensureDraftContract();
+      setDraftInfo(`Brouillon sauvegardé (${id.slice(0, 8)}…).`);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Erreur de sauvegarde du brouillon');
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  async function handleDraftPdf(): Promise<void> {
+    setDraftBusy(true);
+    setSaveError(null);
+    setDraftInfo(null);
+    try {
+      const id = await ensureDraftContract();
+      const res = await documentsApi.generateContractPdf(id);
+      await documentsApi.downloadWithAuth(res.data.id, `contrat-brouillon-${id.slice(0, 8)}.pdf`);
+      setDraftInfo('Brouillon PDF généré.');
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Erreur de génération PDF');
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
   async function submit(): Promise<void> {
     setSaving(true);
     setSaveError(null);
     try {
-      const created = await contractsApi.create({
-        type: state.type,
-        clientId: state.clientId ?? '',
-        vehicleId: state.vehicleId ?? undefined,
-        amountMad: totalAmount,
-        startDate: new Date().toISOString().slice(0, 10),
-        endDate: undefined,
-        durationMonths: state.durationMonths,
-        monthlyPayment: state.monthlyRentMad,
-        allowedKm: state.kmInclMonth * state.durationMonths,
-        depositAmount: state.securityDepositMad,
-        notes: state.notes,
-      } as any);
+      const created = await contractsApi.create(buildCreatePayload('pending_approval'));
 
       await contractsApi.generateSchedule(created.id, {
         start_date: new Date().toISOString().slice(0, 10),
@@ -203,6 +275,35 @@ export const ContractWizardPage: React.FC = () => {
         monthly_amount: state.monthlyRentMad,
         tax_rate: 0.2,
       });
+      const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
+
+      const signers: Array<{ name: string; email: string; role: 'company_rep' | 'client'; signer_order: number }> = [];
+      if (session?.user?.email) {
+        signers.push({
+          name: session.user.name || 'Bailleur',
+          email: session.user.email,
+          role: 'company_rep',
+          signer_order: 1,
+        });
+      }
+      if (selectedClient?.email) {
+        signers.push({
+          name: selectedClient.name,
+          email: selectedClient.email,
+          role: 'client',
+          signer_order: signers.length + 1,
+        });
+      }
+
+      if (signers.length > 0) {
+        const envelope = await createEnvelope({
+          subject: `Signature contrat ${state.type} - ${selectedClient.name}`,
+          provider: 'internal',
+          source_file_id: String(generatedDoc.data.id),
+          signers,
+        });
+        await sendEnvelope(envelope.data.id);
+      }
 
       navigate(`/contracts/${created.id}`);
     } catch (e) {
@@ -226,7 +327,9 @@ export const ContractWizardPage: React.FC = () => {
           <p className="text-[color:var(--df-text-muted)]">Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).</p>
         </div>
         <div className="flex gap-2">
-          <button className="df-btn df-btn--ghost df-btn--sm"><Icon name="download" size={14} /> Brouillon PDF</button>
+          <button className="df-btn df-btn--ghost df-btn--sm" disabled={draftBusy} onClick={() => void handleDraftPdf()}>
+            <Icon name="download" size={14} /> {draftBusy ? 'Traitement…' : 'Brouillon PDF'}
+          </button>
           <Link to="/contracts" className="df-btn df-btn--subtle df-btn--sm"><Icon name="close" size={14} /> Abandonner</Link>
         </div>
       </header>
@@ -275,6 +378,11 @@ export const ContractWizardPage: React.FC = () => {
             {saveError && (
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
                 {saveError}
+              </div>
+            )}
+            {draftInfo && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+                {draftInfo}
               </div>
             )}
             {step.key === 'client' && (
@@ -463,6 +571,36 @@ export const ContractWizardPage: React.FC = () => {
                     </Field>
                   )}
                 </div>
+                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Mode de paiement">
+                    <select className="df-input" value={state.paymentMethod} onChange={(e) => patch('paymentMethod', e.target.value)}>
+                      <option value="virement">Virement</option>
+                      <option value="cheque">Chèque</option>
+                      <option value="espece">Espèce</option>
+                      <option value="carte">Carte</option>
+                      <option value="autre">Autre</option>
+                    </select>
+                  </Field>
+                  <Field label="Jour de paiement attendu (1–31)">
+                    <input
+                      type="number"
+                      className="df-input"
+                      min={1}
+                      max={31}
+                      value={state.expectedPaymentDay}
+                      onChange={(e) => patch('expectedPaymentDay', e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  </Field>
+                  <Field label="Conditions de paiement">
+                    <input className="df-input" value={state.paymentTerms} onChange={(e) => patch('paymentTerms', e.target.value)} />
+                  </Field>
+                  <Field label="Référence virement">
+                    <input className="df-input" value={state.bankReference} onChange={(e) => patch('bankReference', e.target.value)} />
+                  </Field>
+                  <Field label="N° chèque">
+                    <input className="df-input" value={state.chequeNumber} onChange={(e) => patch('chequeNumber', e.target.value)} />
+                  </Field>
+                </div>
                 <AIHint
                   tone="brand"
                   text={`Suggestion IA: pour ce profil client et véhicule, le loyer optimal est ${formatCurrencyMad(4280)}/mois. Conforme Bank Al-Maghrib.`}
@@ -494,11 +632,13 @@ export const ContractWizardPage: React.FC = () => {
               <Icon name="chevron-left" size={14} /> Précédent
             </button>
             <div className="flex items-center gap-2">
-              <button className="df-btn df-btn--subtle df-btn--sm"><Icon name="download" size={14} /> Sauver brouillon</button>
+              <button className="df-btn df-btn--subtle df-btn--sm" disabled={draftBusy} onClick={() => void handleSaveDraft()}>
+                <Icon name="download" size={14} /> {draftBusy ? 'Traitement…' : 'Sauver brouillon'}
+              </button>
               {stepIdx === STEPS.length - 1 ? (
                 <button
                   className="df-btn df-btn--primary"
-                  disabled={saving}
+                  disabled={saving || !state.clientId || !state.vehicleId}
                   onClick={() => void submit()}
                 >
                   <Icon name="sign" size={14} /> {saving ? 'Création…' : 'Envoyer pour signature'}

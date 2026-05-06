@@ -159,18 +159,28 @@ class VehicleController extends Controller
             'insurancePolicies' => fn ($q) => $q->orderByDesc('end_date'),
             'technicalInspections' => fn ($q) => $q->orderByDesc('inspection_date'),
             'complianceAlerts' => fn ($q) => $q->where('status', 'open')->orderByDesc('triggered_at'),
+            'movements' => fn ($q) => $q->orderByDesc('performed_at')->limit(100),
+            'currentReservation',
         ]);
 
         $currentMileage = $vehicle->odometerReadings->first()?->reading_km ?? $vehicle->mileage_current;
         $currentStatus = $vehicle->statusHistory->first()?->status ?? $vehicle->status;
+
+        $currentCustomer = $vehicle->current_customer_id
+            ? \App\Models\Customer::query()->find($vehicle->current_customer_id)
+            : null;
+        $currentContract = $vehicle->current_contract_id
+            ? \App\Models\Contract::query()->find($vehicle->current_contract_id)
+            : null;
 
         return ApiResponse::success([
             'vehicle' => (new VehicleResource($vehicle))->resolve($request),
             'current' => [
                 'status' => $currentStatus,
                 'mileageKm' => $currentMileage ? (int) $currentMileage : null,
-                'customer' => null,
-                'contract' => null,
+                'customer' => $currentCustomer,
+                'contract' => $currentContract,
+                'reservation' => $vehicle->currentReservation,
             ],
             'documents' => $vehicle->documents,
             'statusHistory' => $vehicle->statusHistory,
@@ -180,6 +190,7 @@ class VehicleController extends Controller
             'complianceAlerts' => $vehicle->complianceAlerts,
             'odometer' => $vehicle->odometerReadings,
             'costProfile' => $vehicle->costProfile,
+            'movements' => $vehicle->movements,
         ]);
     }
 
@@ -246,6 +257,16 @@ class VehicleController extends Controller
                 'notes',
                 'branch_id',
                 'company_id',
+                'transmission',
+                'chassis_number',
+                'ownership_status',
+                'physical_status',
+                'availability_status',
+                'current_location',
+                'current_customer_id',
+                'current_contract_id',
+                'current_reservation_id',
+                'unavailability_reason',
             ] as $k) {
                 if (array_key_exists($k, $data)) {
                     $vehicle->{$k} = $data[$k];

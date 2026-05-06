@@ -63,6 +63,12 @@ use App\Http\Controllers\Api\V1\VehicleInsurancePolicyController;
 use App\Http\Controllers\Api\V1\VehicleTechnicalInspectionController;
 use App\Http\Controllers\Api\V1\ComplianceAlertController;
 use App\Http\Controllers\Api\V1\VehicleRepairController;
+use App\Http\Controllers\Api\V1\VehicleMovementController;
+use App\Http\Controllers\Api\V1\FleetAnalysisController;
+use App\Http\Controllers\Api\V1\SupplierAgencyController;
+use App\Http\Controllers\Api\V1\SubRentalController;
+use App\Http\Controllers\Api\V1\FixedChargeController;
+use App\Http\Controllers\Api\V1\FixedChargePaymentController;
 use App\Http\Controllers\Api\V1\VehicleAccidentController;
 use App\Http\Controllers\Api\V1\TripController;
 use Illuminate\Support\Facades\Route;
@@ -250,6 +256,24 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:repairs.manage');
         Route::patch('repairs/{repair}', [VehicleRepairController::class, 'update'])
             ->middleware('permission:repairs.manage');
+        Route::post('repairs/{repair}/start', [VehicleRepairController::class, 'start'])
+            ->middleware('permission:repairs.manage');
+        Route::post('repairs/{repair}/complete', [VehicleRepairController::class, 'complete'])
+            ->middleware('permission:repairs.manage');
+
+        Route::post('vehicles/{vehicle}/entry', [VehicleMovementController::class, 'entry'])
+            ->middleware('permission:vehicles.update');
+        Route::post('vehicles/{vehicle}/exit', [VehicleMovementController::class, 'exit'])
+            ->middleware('permission:vehicles.update');
+        Route::post('vehicles/{vehicle}/return', [VehicleMovementController::class, 'returnMovement'])
+            ->middleware('permission:vehicles.update');
+        Route::get('vehicles/{vehicle}/movements', [VehicleMovementController::class, 'index'])
+            ->middleware('permission:vehicles.view');
+
+        Route::post('maintenance-events/{maintenance_event}/start', [VehicleMaintenanceEventController::class, 'start'])
+            ->middleware('permission:maintenance.event_create');
+        Route::post('maintenance-events/{maintenance_event}/complete', [VehicleMaintenanceEventController::class, 'complete'])
+            ->middleware('permission:maintenance.event_create');
 
         // Accidents
         Route::get('vehicles/{vehicle}/accidents', [VehicleAccidentController::class, 'index'])
@@ -276,6 +300,33 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:vehicles.view');
         Route::get('fleet/vehicles/{vehicle}', [VehicleController::class, 'show'])
             ->middleware('permission:vehicles.view');
+
+        Route::get('fleet/analysis', FleetAnalysisController::class)
+            ->middleware('permission:vehicles.view');
+
+        Route::get('supplier-agencies', [SupplierAgencyController::class, 'index'])
+            ->middleware('permission:vehicles.view');
+        Route::post('supplier-agencies', [SupplierAgencyController::class, 'store'])
+            ->middleware('permission:vehicles.create');
+        Route::get('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'show'])
+            ->middleware('permission:vehicles.view');
+        Route::put('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'update'])
+            ->middleware('permission:vehicles.update');
+        Route::patch('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'update'])
+            ->middleware('permission:vehicles.update');
+
+        Route::get('sub-rentals', [SubRentalController::class, 'index'])
+            ->middleware('permission:vehicles.view');
+        Route::post('sub-rentals', [SubRentalController::class, 'store'])
+            ->middleware('permission:vehicles.create');
+        Route::get('sub-rentals/{subRentalContract}', [SubRentalController::class, 'show'])
+            ->middleware('permission:vehicles.view');
+        Route::post('sub-rentals/{subRentalContract}/activate', [SubRentalController::class, 'activate'])
+            ->middleware('permission:vehicles.update');
+        Route::post('sub-rentals/{subRentalContract}/return', [SubRentalController::class, 'returnContract'])
+            ->middleware('permission:vehicles.update');
+        Route::post('sub-rentals/{subRentalContract}/close', [SubRentalController::class, 'close'])
+            ->middleware('permission:vehicles.update');
 
         // ==================================================================
         // Phase 5 — Contracts
@@ -378,6 +429,12 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:reservations.view');
         Route::post('reservations', [ReservationController::class, 'store'])
             ->middleware('permission:reservations.create');
+        Route::put('reservations/{reservation}', [ReservationController::class, 'update'])
+            ->middleware('permission:reservations.create');
+        Route::patch('reservations/{reservation}', [ReservationController::class, 'update'])
+            ->middleware('permission:reservations.create');
+        Route::post('reservations/{reservation}/return', [ReservationController::class, 'rentalReturn'])
+            ->middleware('permission:rentals.handover_return');
         Route::get('rentals/availability', [RentalController::class, 'availability'])
             ->middleware('permission:rentals.availability');
         Route::post('reservations/{reservation}/confirm', [ReservationController::class, 'confirm'])
@@ -596,6 +653,23 @@ Route::prefix('v1')->group(function () {
             ->middleware(['permission:treasury.import', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
         Route::post('treasury/bank-transactions/{transaction}/match', [TreasuryController::class, 'matchTransaction'])
             ->middleware(['permission:treasury.match', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+
+        Route::get('fixed-charges/dashboard', [FixedChargeController::class, 'dashboard'])
+            ->middleware('permission:invoices.view');
+        Route::get('fixed-charges', [FixedChargeController::class, 'index'])
+            ->middleware('permission:invoices.view');
+        Route::post('fixed-charges', [FixedChargeController::class, 'store'])
+            ->middleware('permission:invoices.create');
+        Route::get('fixed-charges/{fixedCharge}', [FixedChargeController::class, 'show'])
+            ->middleware('permission:invoices.view');
+        Route::put('fixed-charges/{fixedCharge}', [FixedChargeController::class, 'update'])
+            ->middleware('permission:invoices.update');
+        Route::patch('fixed-charges/{fixedCharge}', [FixedChargeController::class, 'update'])
+            ->middleware('permission:invoices.update');
+        Route::post('fixed-charges/{fixedCharge}/generate-payment', [FixedChargeController::class, 'generatePayment'])
+            ->middleware('permission:invoices.create');
+        Route::post('fixed-charge-payments/{fixedChargePayment}/mark-paid', [FixedChargePaymentController::class, 'markPaid'])
+            ->middleware('permission:payments.create');
 
         // ==================================================================
         // Phase 11 — Accounting

@@ -26,12 +26,17 @@ class VehicleMaintenanceEvent extends Model
         'vendor',
         'cost_mad',
         'created_by',
+        'lifecycle_status',
+        'started_at',
+        'completed_at',
     ];
 
     protected $casts = [
         'performed_at' => 'date',
         'cost_mad' => 'decimal:2',
         'odometer_km' => 'integer',
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     public function vehicle(): BelongsTo

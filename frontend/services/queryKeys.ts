@@ -13,7 +13,7 @@ export const queryKeys = {
   },
   contracts: {
     all: ['contracts'] as const,
-    one: (id: number) => ['contracts', id] as const,
+    one: (id: number | string) => ['contracts', id] as const,
   },
   credit: {
     cases: ['credit', 'cases'] as const,

@@ -12,14 +12,15 @@ use App\Models\CreditApplication;
 use App\Models\CreditScore;
 use App\Models\ContractHistory;
 use App\Models\ContractInstallment;
-use App\Models\Customer;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
 use App\Services\RentalAvailabilityService;
+use App\Support\PaymentMethodNormalizer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 
 class ContractController extends Controller
@@ -76,17 +77,6 @@ class ContractController extends Controller
         $actorRole = method_exists($request->user(), 'primaryRoleCode') ? $request->user()->primaryRoleCode() : '';
         $isDirectorLevel = in_array($actorRole, ['ADMIN', 'DIRECTEUR'], true);
 
-        $customer = Customer::query()->with(['latestKycCase', 'blacklistEntries'])->find($data['customer_id']);
-        $kycApproved = (string) ($customer?->latestKycCase?->kyc_status ?? '') === 'approved';
-        $isBlacklisted = (bool) ($customer?->is_blacklisted ?? false)
-            || (bool) ($customer?->blacklistEntries?->firstWhere('removed_at', null));
-        if (!$kycApproved) {
-            return ApiResponse::error('KYC non approuve: creation de contrat bloquee.', 422);
-        }
-        if ($isBlacklisted && !$isDirectorLevel) {
-            return ApiResponse::error('Client blackliste: override directeur requis.', 422);
-        }
-
         if (!empty($data['credit_application_id'])) {
             $credit = CreditApplication::query()->find($data['credit_application_id']);
             if ($credit) {
@@ -113,8 +103,8 @@ class ContractController extends Controller
             $c->template_id = $data['template_id'] ?? null;
             $c->credit_application_id = $data['credit_application_id'] ?? null;
             $c->status = $data['status'] ?? 'draft';
-            $c->legal_status = $data['legal_status'] ?? null;
-            $c->signature_status = $data['signature_status'] ?? null;
+            $c->legal_status = $data['legal_status'] ?? 'pending';
+            $c->signature_status = $data['signature_status'] ?? 'pending';
             $c->start_date = $data['start_date'] ?? null;
             $c->end_date = $data['end_date'] ?? null;
             $c->duration_months = $data['duration_months'] ?? null;
@@ -130,6 +120,11 @@ class ContractController extends Controller
                 'insurance_included',
                 'maintenance_included',
                 'notes',
+                'payment_method',
+                'payment_terms',
+                'bank_reference',
+                'cheque_number',
+                'expected_payment_day',
             ] as $k) {
                 if (array_key_exists($k, $data)) {
                     $c->{$k} = $data[$k];
@@ -209,6 +204,11 @@ class ContractController extends Controller
                 'signed_at',
                 'terminated_reason',
                 'notes',
+                'payment_method',
+                'payment_terms',
+                'bank_reference',
+                'cheque_number',
+                'expected_payment_day',
             ] as $k) {
                 if (array_key_exists($k, $data)) {
                     $locked->{$k} = $data[$k];
@@ -216,6 +216,9 @@ class ContractController extends Controller
             }
             if (array_key_exists('status', $data)) {
                 $locked->status = $data['status'];
+            }
+            if ((string) $locked->status === 'active') {
+                $this->assertContractPaymentReadyForActivation($locked);
             }
             if ((string) $locked->status === 'active' && $locked->vehicle_id) {
                 [$windowStart, $windowEnd] = $this->rentalAvailability->contractActiveWindow($locked);
@@ -342,6 +345,9 @@ class ContractController extends Controller
                 ->whereKey((string) $contract->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $this->assertContractPaymentReadyForActivation($locked);
+
             if ($locked->vehicle_id) {
                 [$windowStart, $windowEnd] = $this->rentalAvailability->contractActiveWindow($locked);
                 $this->rentalAvailability->assertVehicleAvailableWithLock(
@@ -507,6 +513,21 @@ class ContractController extends Controller
         });
 
         return ApiResponse::success(['installments' => $rows]);
+    }
+
+    private function assertContractPaymentReadyForActivation(Contract $locked): void
+    {
+        $pm = PaymentMethodNormalizer::normalize($locked->payment_method ?? null);
+        if ($pm === null || $pm === '') {
+            throw ValidationException::withMessages([
+                'payment_method' => [__('Méthode de paiement obligatoire pour activer le contrat.')],
+            ]);
+        }
+        if ($pm === 'check' && empty($locked->cheque_number)) {
+            throw ValidationException::withMessages([
+                'cheque_number' => [__('Numéro de chèque obligatoire pour ce mode de paiement.')],
+            ]);
+        }
     }
 }
 

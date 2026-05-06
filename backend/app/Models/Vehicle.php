@@ -16,6 +16,8 @@ use App\Models\VehicleAccident;
 use App\Models\VehicleInsurancePolicy;
 use App\Models\VehicleTechnicalInspection;
 use App\Models\ComplianceAlert;
+use App\Models\Reservation;
+use App\Models\VehicleMovement;
 
 class Vehicle extends Model
 {
@@ -56,6 +58,17 @@ class Vehicle extends Model
         'gps_enabled',
         'notes',
         'photo_file_id',
+        'brand_name',
+        'model_name',
+        'transmission',
+        'chassis_number',
+        'ownership_status',
+        'physical_status',
+        'current_location',
+        'current_reservation_id',
+        'unavailability_reason',
+        'current_customer_id',
+        'current_contract_id',
     ];
 
     protected $casts = [
@@ -182,6 +195,22 @@ class Vehicle extends Model
     public function complianceAlerts(): HasMany
     {
         return $this->hasMany(ComplianceAlert::class, 'vehicle_id')->orderByDesc('triggered_at');
+    }
+
+    /**
+     * @return HasMany<VehicleMovement, $this>
+     */
+    public function movements(): HasMany
+    {
+        return $this->hasMany(VehicleMovement::class, 'vehicle_id')->orderByDesc('performed_at');
+    }
+
+    /**
+     * @return BelongsTo<Reservation, $this>
+     */
+    public function currentReservation(): BelongsTo
+    {
+        return $this->belongsTo(Reservation::class, 'current_reservation_id');
     }
 }
 

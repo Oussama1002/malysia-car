@@ -235,6 +235,8 @@ export const FleetVehicleDetailPage: React.FC = () => {
       const vehicle = (d.vehicle ?? d) as Record<string, unknown>;
       return {
         vehicle,
+        current: (d.current as Record<string, unknown>) ?? {},
+        movements: (d.movements as Record<string, unknown>[]) ?? [],
         insurancePolicies: (d.insurancePolicies as InsurancePolicyRow[]) ?? [],
         technicalInspections: (d.technicalInspections as TechnicalInspectionRow[]) ?? [],
         complianceAlerts: (d.complianceAlerts as VehicleComplianceAlertRow[]) ?? [],
@@ -372,6 +374,8 @@ export const FleetVehicleDetailPage: React.FC = () => {
         onChange={setTab}
         tabs={[
           { id: 'overview', label: 'Vue générale' },
+          { id: 'identity', label: 'Identité' },
+          { id: 'movements', label: 'Mouvements' },
           { id: 'maintenance', label: 'Entretien' },
           { id: 'repairs', label: 'Réparations' },
           { id: 'accidents', label: 'Accidents' },
@@ -387,6 +391,66 @@ export const FleetVehicleDetailPage: React.FC = () => {
       {/* ════════════════════════════════════════════════════════
           TAB: Vue générale
       ════════════════════════════════════════════════════════ */}
+      {tab === 'identity' && veh && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <SectionCard title="Identité véhicule">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Immatriculation" value={<span className="font-mono">{veh.registration}</span>} />
+              <Field label="VIN" value={<span className="font-mono text-xs">{veh.vin}</span>} />
+              <Field label="Châssis" value={veh.chassisNumber} />
+              <Field label="Transmission" value={veh.transmission} />
+              <Field label="Statut physique" value={veh.physicalStatus} />
+              <Field label="Disponibilité" value={veh.availabilityStatus} />
+              <Field label="Propriété" value={veh.ownershipStatus} />
+              <Field label="Emplacement" value={veh.currentLocation} />
+              <Field label="Motif indispo." value={veh.unavailabilityReason} />
+            </div>
+          </SectionCard>
+          <SectionCard title="Contexte location">
+            <div className="space-y-2 text-sm">
+              <Field label="Client (lié)" value={(vehicleQ.data?.current as any)?.customer?.legal_name ?? (vehicleQ.data?.current as any)?.customer?.name ?? null} />
+              <Field label="Contrat courant" value={(vehicleQ.data?.current as any)?.contract?.contract_number ?? null} />
+              <Field label="Réservation courante" value={(vehicleQ.data?.current as any)?.reservation?.reservation_number ?? null} />
+            </div>
+          </SectionCard>
+        </div>
+      )}
+
+      {tab === 'movements' && (
+        <div className="space-y-4">
+          <SectionCard title="Historique des mouvements">
+            <div className="overflow-x-auto">
+              <table className="df-table w-full text-sm">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Km</th>
+                    <th>Carburant %</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(vehicleQ.data?.movements ?? []).length === 0 && (
+                    <tr><td colSpan={5} className="text-[color:var(--df-text-muted)]">Aucun mouvement enregistré.</td></tr>
+                  )}
+                  {(vehicleQ.data?.movements ?? []).map((m: Record<string, unknown>) => (
+                    <tr key={String(m.id)}>
+                      <td>{m.performed_at ? formatDate(String(m.performed_at)) : '—'}</td>
+                      <td className="font-semibold">{String(m.movement_type ?? '')}</td>
+                      <td>{m.odometer_km != null ? String(m.odometer_km) : '—'}</td>
+                      <td>{m.fuel_level != null ? String(m.fuel_level) : '—'}</td>
+                      <td className="max-w-xs truncate">{String(m.condition_notes ?? '')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+          <MovementForms vehicleId={id!} onDone={() => invalidateVehicle()} />
+        </div>
+      )}
+
       {tab === 'overview' && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <SectionCard title="Identification">
@@ -1491,6 +1555,60 @@ function AccidentCard({ accident, vehicleId, onUpdated }: { accident: Accident; 
 
       <div className="border-t border-[color:var(--df-border)] pt-3">
         <EntityDocuments entityType="accident" entityId={String(accident.id)} title="Documents du sinistre" />
+      </div>
+    </div>
+  );
+}
+
+function MovementForms({ vehicleId, onDone }: { vehicleId: string; onDone: () => void }): React.ReactElement {
+  const [odometer, setOdometer] = useState('');
+  const [fuel, setFuel] = useState('');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const post = async (type: 'entry' | 'exit' | 'return') => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await apiClient(`/v1/vehicles/${vehicleId}/${type === 'return' ? 'return' : type}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          odometer_km: odometer ? Number(odometer) : undefined,
+          fuel_level: fuel ? Number(fuel) : undefined,
+          condition_notes: notes || undefined,
+        }),
+      });
+      onDone();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="df-card df-card--elev p-4 space-y-3">
+      <div className="text-sm font-bold">Enregistrer un mouvement</div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div>
+          <label className="df-label">Km compteur</label>
+          <input className="df-input" value={odometer} onChange={(e) => setOdometer(e.target.value)} />
+        </div>
+        <div>
+          <label className="df-label">Carburant %</label>
+          <input className="df-input" value={fuel} onChange={(e) => setFuel(e.target.value)} />
+        </div>
+        <div className="sm:col-span-3">
+          <label className="df-label">Notes / état</label>
+          <input className="df-input" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('entry')}>Entrée</button>
+        <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('exit')}>Sortie</button>
+        <button type="button" className="df-btn df-btn--primary df-btn--sm" disabled={busy} onClick={() => void post('return')}>Retour</button>
       </div>
     </div>
   );

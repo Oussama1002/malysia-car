@@ -7,6 +7,14 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
 import { contractsApi } from '@/services/contractsApi';
 
+function formatAmount(value: unknown): string {
+  const amount = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(amount)) {
+    return '0 MAD';
+  }
+  return `${amount.toLocaleString('fr-MA')} MAD`;
+}
+
 export const ContractsPage: React.FC = () => {
   const [filters, setFilters] = React.useState<{ q: string; type: string; status: string }>({ q: '', type: '', status: '' });
   const q = useQuery({
@@ -79,7 +87,11 @@ export const ContractsPage: React.FC = () => {
           {
             key: 'amt',
             header: 'Montant',
-            render: (r) => <span className="font-black text-indigo-700">{r.amountMad.toLocaleString('fr-MA')} MAD</span>,
+            render: (r) => (
+              <span className="font-black text-indigo-700">
+                {formatAmount((r as any).amountMad ?? (r as any).baseAmount)}
+              </span>
+            ),
           },
           {
             key: 'a',

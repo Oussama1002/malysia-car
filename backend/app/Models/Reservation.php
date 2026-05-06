@@ -43,6 +43,9 @@ class Reservation extends Model
         'delivery_latitude',
         'delivery_longitude',
         'estimated_price',
+        'payment_method',
+        'pickup_location',
+        'return_location',
         'notes',
         'created_by',
     ];

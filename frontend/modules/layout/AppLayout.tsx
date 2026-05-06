@@ -31,6 +31,8 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/fleet', module: 'fleet', labelKey: 'nav.fleet', icon: 'car' },
       { to: '/fleet/compliance', module: 'fleet', labelKey: 'nav.fleetCompliance', icon: 'shield' },
+      { to: '/fleet/analysis', module: 'fleet', labelKey: 'nav.fleetAnalysis', icon: 'coin' },
+      { to: '/fleet/sub-rentals', module: 'fleet', labelKey: 'nav.subRentals', icon: 'car' },
       { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },
       { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
       { to: '/contracts', module: 'contracts', labelKey: 'nav.contracts', icon: 'doc' },
@@ -44,9 +46,9 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/credit', module: 'credit', labelKey: 'nav.credit', icon: 'credit' },
       { to: '/finance', module: 'finance', labelKey: 'nav.finance', icon: 'coin' },
+      { to: '/finance/fixed-charges', module: 'finance', labelKey: 'nav.fixedCharges', icon: 'coin' },
       { to: '/accounting', module: 'accounting', labelKey: 'nav.accounting', icon: 'coin' },
       { to: '/arrears', module: 'arrears', labelKey: 'nav.arrears', icon: 'alert' },
-      { to: '/signatures', module: 'signatures', labelKey: 'nav.signatures', icon: 'sign' },
     ],
   },
   {

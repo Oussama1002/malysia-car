@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Support\TenantScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -62,6 +63,11 @@ class Contract extends Model
         'notes',
         'created_by',
         'approved_by',
+        'payment_method',
+        'payment_terms',
+        'bank_reference',
+        'cheque_number',
+        'expected_payment_day',
     ];
 
     protected $casts = [
@@ -79,6 +85,7 @@ class Contract extends Model
         'allowed_km' => 'decimal:2',
         'excess_km_rate' => 'decimal:2',
         'deposit_amount' => 'decimal:2',
+        'expected_payment_day' => 'integer',
     ];
 
     /**
@@ -95,6 +102,22 @@ class Contract extends Model
     public function history(): HasMany
     {
         return $this->hasMany(ContractHistory::class, 'contract_id')->orderByDesc('at');
+    }
+
+    /**
+     * @return BelongsTo<Customer, $this>
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    /**
+     * @return BelongsTo<Vehicle, $this>
+     */
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'vehicle_id');
     }
 }
 

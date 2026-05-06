@@ -51,6 +51,16 @@ class UpdateVehicleRequest extends ApiFormRequest
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'branch_id' => ['sometimes', 'nullable', 'uuid'],
             'company_id' => ['sometimes', 'nullable', 'uuid'],
+            'transmission' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'chassis_number' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'ownership_status' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'physical_status' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'availability_status' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'current_location' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'current_customer_id' => ['sometimes', 'nullable', 'uuid'],
+            'current_contract_id' => ['sometimes', 'nullable', 'uuid'],
+            'current_reservation_id' => ['sometimes', 'nullable', 'uuid'],
+            'unavailability_reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
 }

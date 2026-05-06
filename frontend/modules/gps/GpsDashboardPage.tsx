@@ -208,10 +208,10 @@ export const GpsDashboardPage: React.FC = () => {
                       }}
                     >
                       <Popup>
-                        <div style={{ minWidth: 180 }}>
-                          <div style={{ fontWeight: 700, fontSize: 13 }}>{v.brand} {v.model}</div>
-                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, marginTop: 2 }}>{v.registration}</div>
-                          <div style={{ marginTop: 6, fontSize: 11 }}>{meta.label}</div>
+                        <div style={{ minWidth: 120 }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700 }}>
+                            {v.registration}
+                          </div>
                         </div>
                       </Popup>
                     </Marker>
@@ -324,10 +324,6 @@ export const GpsDashboardPage: React.FC = () => {
         </aside>
       </section>
 
-      {/* Vehicle side drawer when selected */}
-      {selected && (
-        <VehicleDetailPanel vehicle={selected} onClose={() => setSelectedId(null)} />
-      )}
     </div>
   );
 };
@@ -361,100 +357,3 @@ const AlertRow: React.FC<{ a: GpsAlertDto }> = ({ a }) => {
   );
 };
 
-const VehicleDetailPanel: React.FC<{ vehicle: FleetVehicleDto; onClose: () => void }> = ({ vehicle, onClose }) => {
-  const meta = STATUS_META[vehicle.status] ?? STATUS_META.AVAILABLE;
-  return (
-    <div className="df-card df-card--elev overflow-hidden">
-      <div className="grid gap-0 lg:grid-cols-[220px_1fr_320px]">
-        {/* Left — photo / title */}
-        <div
-          className="p-5"
-          style={{ background: `linear-gradient(135deg, color-mix(in srgb, ${meta.color} 14%, transparent), transparent)` }}
-        >
-          <div className="df-card__hint">Véhicule sélectionné</div>
-          <h3 className="mt-1 text-xl font-black">{vehicle.brand} {vehicle.model}</h3>
-          <div className="mt-1 font-mono text-[12px] text-[color:var(--df-text-muted)]">{vehicle.registration}</div>
-          <div className="mt-3"><StatusChip label={meta.label} tone={meta.tone} dot /></div>
-          {vehicle.image && (
-            <img src={vehicle.image} alt="" className="mt-4 h-28 w-full rounded-xl border border-[color:var(--df-border)] object-cover" />
-          )}
-        </div>
-
-        {/* Middle — metadata grid */}
-        <div className="border-y border-[color:var(--df-border)] p-5 lg:border-y-0 lg:border-x">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-            <Meta label="Année" value={String(vehicle.year)} />
-            <Meta label="Kilométrage" value={`${(vehicle.mileageKm ?? 0).toLocaleString('fr-MA')} km`} />
-            <Meta label="Carburant" value={vehicle.fuel ?? '—'} />
-            <Meta label="Transmission" value={vehicle.transmission ?? '—'} />
-            <Meta label="Agence" value={`#${vehicle.branchId ?? '—'}`} />
-            <Meta label="Valeur nette" value={formatCurrencyMad(vehicle.currentValueMad ?? 0)} />
-            <Meta label="Assurance" value={vehicle.insuranceExpiry ?? '—'} warn={isSoon(vehicle.insuranceExpiry)} />
-            <Meta label="Visite technique" value={vehicle.techControlExpiry ?? '—'} warn={isSoon(vehicle.techControlExpiry)} />
-            <Meta label="Vignette" value={vehicle.vignetteExpiry ?? '—'} warn={isSoon(vehicle.vignetteExpiry)} />
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button className="df-btn df-btn--primary df-btn--sm" onClick={() => navigate(`/fleet/${vehicle.id}`)}><Icon name="eye" size={14} /> Fiche complète</button>
-            <button className="df-btn df-btn--ghost df-btn--sm" onClick={() => navigate(`/gps/vehicles/${vehicle.id}/live`)}><Icon name="wifi" size={14} /> Live</button>
-            <button className="df-btn df-btn--ghost df-btn--sm" onClick={() => navigate(`/gps/vehicles/${vehicle.id}/trips`)}><Icon name="map" size={14} /> Historique trajets</button>
-            <button className="df-btn df-btn--ghost df-btn--sm"><Icon name="doc" size={14} /> Contrat lié</button>
-            <button className="df-btn df-btn--ghost df-btn--sm"><Icon name="sparkles" size={14} /> Analyse IA</button>
-            <button className="df-btn df-btn--subtle df-btn--sm ms-auto" onClick={onClose}><Icon name="close" size={14} /> Fermer</button>
-          </div>
-        </div>
-
-        {/* Right — kilometric contract widget */}
-        <div className="p-5">
-          <div className="df-card__hint">Contrôle contractuel GPS</div>
-          <h4 className="mt-1 text-[15px] font-bold">Kilométrage inclus</h4>
-          <div className="mt-3">
-            <KmBar consumedKm={vehicle.mileageKm ?? 0} limitKm={Math.max((vehicle.mileageKm ?? 0) + 20000, 50000)} />
-          </div>
-          <div className="mt-4 space-y-2">
-            <Row label="Dernière position" value={`Casablanca · Maârif`} />
-            <Row label="Dernière synchro" value="il y a 1 min" />
-            <Row label="Score conduite IA" value="82 / 100" chip="success" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Meta: React.FC<{ label: string; value: string; warn?: boolean }> = ({ label, value, warn }) => (
-  <div>
-    <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">{label}</div>
-    <div className={`mt-0.5 text-[13px] font-semibold ${warn ? 'text-amber-500' : ''}`}>{value} {warn && <Icon name="alert" size={12} className="inline" />}</div>
-  </div>
-);
-
-const Row: React.FC<{ label: string; value: string; chip?: 'success' | 'warning' | 'danger' }> = ({ label, value, chip }) => (
-  <div className="flex items-center justify-between text-[12.5px]">
-    <span className="text-[color:var(--df-text-muted)]">{label}</span>
-    {chip ? <StatusChip label={value} tone={chip} dot /> : <span className="font-semibold">{value}</span>}
-  </div>
-);
-
-const KmBar: React.FC<{ consumedKm: number; limitKm: number }> = ({ consumedKm, limitKm }) => {
-  const pct = Math.min(100, Math.round((consumedKm / limitKm) * 100));
-  const color = pct > 90 ? 'var(--df-danger-500)' : pct > 70 ? 'var(--df-warning-500)' : 'var(--df-success-500)';
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-[12px]">
-        <span className="df-num font-bold">{consumedKm.toLocaleString('fr-MA')} km</span>
-        <span className="text-[color:var(--df-text-muted)]">/ {limitKm.toLocaleString('fr-MA')} km</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--df-surface-sunk)]">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color, boxShadow: `0 0 10px ${color}` }} />
-      </div>
-      <div className="mt-1 text-[11px] text-[color:var(--df-text-faint)]">{pct}% consommé — facturation ajustée si dépassement.</div>
-    </div>
-  );
-};
-
-function isSoon(iso?: string): boolean {
-  if (!iso) return false;
-  const diff = new Date(iso).getTime() - Date.now();
-  return diff < 1000 * 60 * 60 * 24 * 30;
-}

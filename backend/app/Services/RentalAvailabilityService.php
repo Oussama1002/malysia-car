@@ -7,6 +7,7 @@ use App\Models\Mission;
 use App\Models\Reservation;
 use App\Models\Vehicle;
 use App\Models\VehicleAccident;
+use App\Models\VehicleMaintenanceEvent;
 use App\Models\VehicleRepair;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -15,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 class RentalAvailabilityService
 {
     /** Reservation lifecycle states that still occupy the vehicle calendar. */
-    private const RESERVATION_BLOCKING_STATUSES = [
+    public const RESERVATION_BLOCKING_STATUSES = [
         'reserved',
         'confirmed',
         'pickup_scheduled',
@@ -40,6 +41,14 @@ class RentalAvailabilityService
         'immobilised',
         'blocked',
     ];
+
+    /**
+     * @return list<string>
+     */
+    public static function blockingReservationStatuses(): array
+    {
+        return self::RESERVATION_BLOCKING_STATUSES;
+    }
 
     /**
      * Read-only availability check (no row locks).
@@ -219,6 +228,15 @@ class RentalAvailabilityService
         if ($openRepair) {
             $reasons[] = 'vehicle_in_maintenance';
             $messages['vehicle_in_maintenance'] = 'Vehicle has an open repair order.';
+        }
+
+        $openMaintEvent = VehicleMaintenanceEvent::query()
+            ->where('vehicle_id', $vehicleId)
+            ->where('lifecycle_status', 'in_progress')
+            ->exists();
+        if ($openMaintEvent) {
+            $reasons[] = 'vehicle_in_scheduled_maintenance';
+            $messages['vehicle_in_scheduled_maintenance'] = 'Vehicle maintenance is in progress.';
         }
 
         $openAccident = VehicleAccident::query()

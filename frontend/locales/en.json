@@ -11,13 +11,16 @@
     "dashboard": "Executive cockpit",
     "fleet": "Fleet",
     "fleetCompliance": "Vehicle compliance",
+    "fleetAnalysis": "Fleet analysis",
+    "subRentals": "Sub-rentals",
+    "fixedCharges": "Fixed charges",
     "customers": "Customers & compliance",
     "contracts": "Contracts",
     "credit": "Credit analysis",
     "finance": "Finance & tax",
     "accounting": "Accounting",
     "arrears": "Arrears & recovery",
-    "signatures": "E-signatures",
+    "signatures": "Contract signatures",
     "usedCars": "Used vehicles",
     "gps": "GPS & tracking",
     "ai": "AI & predictions",
@@ -26,7 +29,7 @@
     "documents": "Document center",
     "settings": "Settings",
     "audit": "Audit trail",
-    "rentals": "Short-term rentals"
+    "rentals": "Reservations / Rentals"
   },
   "auth": {
     "login": "Sign in",

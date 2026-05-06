@@ -100,16 +100,23 @@ export interface CustomerDto {
 export type ContractType = 'LLD' | 'LOA' | 'CREDIT_AUTO' | 'VENTE_VO' | 'LOCATION_COURTE';
 
 export interface ContractDto {
-  id: number;
+  id: string | number;
   reference: string;
   type: ContractType;
-  clientId: number;
-  vehicleId?: number;
+  /** API field */
+  customerId?: number | string;
+  clientId?: number | string;
+  vehicleId?: number | string;
   status: string;
   startDate: string;
   endDate?: string;
   amountMad: number;
   createdAt: string;
+  paymentMethod?: string | null;
+  paymentTerms?: string | null;
+  bankReference?: string | null;
+  chequeNumber?: string | null;
+  expectedPaymentDay?: number | null;
 }
 
 export type CreditCaseStatus =

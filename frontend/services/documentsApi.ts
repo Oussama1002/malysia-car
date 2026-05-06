@@ -50,4 +50,32 @@ export const documentsApi = {
   downloadUrl(id: string): string {
     return `${getApiBase()}${endpoints.documents.download(id)}`;
   },
+  /** Downloads with Bearer auth (required by protected API). */
+  async downloadWithAuth(id: string, fallbackFilename = 'document.pdf'): Promise<void> {
+    const raw = localStorage.getItem('df_session');
+    const token = raw ? (JSON.parse(raw) as { token?: string }).token : undefined;
+    const url = this.downloadUrl(id);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/pdf,application/octet-stream,*/*',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Téléchargement impossible (${res.status})`);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+    const filename = match?.[1] ? decodeURIComponent(match[1].replace(/"/g, '')) : fallbackFilename;
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  },
 };

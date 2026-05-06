@@ -3,9 +3,19 @@
 namespace App\Http\Requests\Api\V1\Contracts;
 
 use App\Http\Requests\ApiFormRequest;
+use App\Support\PaymentMethodNormalizer;
 
 class StoreContractRequest extends ApiFormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('payment_method')) {
+            $this->merge([
+                'payment_method' => PaymentMethodNormalizer::normalize($this->input('payment_method')),
+            ]);
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -35,6 +45,12 @@ class StoreContractRequest extends ApiFormRequest
             'insurance_included' => ['nullable', 'boolean'],
             'maintenance_included' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
+
+            'payment_method' => ['nullable', 'string', 'max:40'],
+            'payment_terms' => ['nullable', 'string'],
+            'bank_reference' => ['nullable', 'string', 'max:120'],
+            'cheque_number' => ['nullable', 'string', 'max:80'],
+            'expected_payment_day' => ['nullable', 'integer', 'min:1', 'max:31'],
 
             'company_id' => ['nullable', 'uuid'],
             'branch_id' => ['nullable', 'uuid'],

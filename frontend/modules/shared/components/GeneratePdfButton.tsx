@@ -21,8 +21,7 @@ export const GeneratePdfButton: React.FC<{
         kind === 'contract'
           ? await documentsApi.generateContractPdf(entityId)
           : await documentsApi.generateInvoicePdf(entityId);
-      const url = documentsApi.downloadUrl(res.data.id);
-      window.open(url, '_blank', 'noopener');
+      await documentsApi.downloadWithAuth(res.data.id, `${kind}-${entityId}.pdf`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Échec de génération');
     } finally {

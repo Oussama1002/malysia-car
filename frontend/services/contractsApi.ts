@@ -60,6 +60,11 @@ export const contractsApi = {
       excess_km_rate: (payload as any).excessKmRate ?? null,
       deposit_amount: (payload as any).depositAmount ?? null,
       notes: (payload as any).notes ?? null,
+      payment_method: (payload as any).paymentMethod ?? null,
+      payment_terms: (payload as any).paymentTerms ?? null,
+      bank_reference: (payload as any).bankReference ?? null,
+      cheque_number: (payload as any).chequeNumber ?? null,
+      expected_payment_day: (payload as any).expectedPaymentDay ?? null,
     };
     const res = await apiClient<{ data: ContractDto }>(endpoints.contracts.list, {
       method: 'POST',

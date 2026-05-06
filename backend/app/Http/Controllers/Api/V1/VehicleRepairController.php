@@ -7,11 +7,15 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Vehicle;
 use App\Models\VehicleRepair;
 use App\Services\AuditLogger;
+use App\Services\VehicleOperationalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class VehicleRepairController extends Controller
 {
+    public function __construct(private readonly VehicleOperationalService $ops) {}
+
     /** GET /vehicles/{vehicle}/repairs */
     public function index(Vehicle $vehicle): JsonResponse
     {
@@ -48,9 +52,9 @@ class VehicleRepairController extends Controller
             'created_by'  => auth()->id(),
         ]);
 
-        // If repair started, put vehicle in maintenance
-        if (in_array($repair->status, ['in_progress'])) {
+        if (in_array($repair->status, ['in_progress'], true)) {
             $vehicle->update(['status' => 'MAINTENANCE']);
+            $this->ops->markUnavailable($vehicle, 'unavailable', 'repair', 'Réparation: '.$repair->repair_type);
         }
 
         AuditLogger::created($repair, $request->user(), request: $request);
@@ -85,9 +89,62 @@ class VehicleRepairController extends Controller
                 ->exists();
 
             if (!$activeRepairs) {
-                $repair->vehicle?->update(['status' => 'AVAILABLE']);
+                $v = $repair->vehicle;
+                if ($v) {
+                    $this->ops->tryReleaseAfterWorkshop($v);
+                }
             }
         }
+
+        return ApiResponse::success($this->format($repair->fresh()));
+    }
+
+    public function start(Request $request, VehicleRepair $repair): JsonResponse
+    {
+        DB::transaction(function () use ($repair): void {
+            $repair->status = 'in_progress';
+            $repair->started_at = $repair->started_at ?? now();
+            $repair->save();
+
+            $vehicle = $repair->vehicle;
+            if ($vehicle) {
+                $vehicle->update(['status' => 'MAINTENANCE']);
+                $this->ops->markUnavailable($vehicle, 'unavailable', 'repair', 'Réparation: '.$repair->repair_type);
+            }
+        });
+
+        AuditLogger::updated($repair->fresh(), $request->user(), before: [], after: [], request: $request);
+
+        return ApiResponse::success($this->format($repair->fresh()));
+    }
+
+    public function complete(Request $request, VehicleRepair $repair): JsonResponse
+    {
+        $data = $request->validate([
+            'completed_at' => ['nullable', 'date'],
+            'cost_amount' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        DB::transaction(function () use ($repair, $data): void {
+            $repair->status = 'completed';
+            $repair->completed_at = $data['completed_at'] ?? now();
+            if (isset($data['cost_amount'])) {
+                $repair->cost_amount = $data['cost_amount'];
+            }
+            $repair->save();
+
+            $activeRepairs = VehicleRepair::query()
+                ->where('vehicle_id', $repair->vehicle_id)
+                ->where('id', '!=', $repair->id)
+                ->whereIn('status', ['reported', 'in_progress'])
+                ->exists();
+
+            if (! $activeRepairs && $repair->vehicle) {
+                $this->ops->tryReleaseAfterWorkshop($repair->vehicle);
+            }
+        });
+
+        AuditLogger::updated($repair->fresh(), $request->user(), before: [], after: [], request: $request);
 
         return ApiResponse::success($this->format($repair->fresh()));
     }

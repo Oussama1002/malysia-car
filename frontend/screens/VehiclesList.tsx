@@ -365,6 +365,40 @@ const VehiclesList: React.FC = () => {
   const inputCls = 'w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold';
   const selectCls = inputCls;
   const labelCls = 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1';
+  const totalVehicles = vehicles.length;
+  const availableVehicles = vehicles.filter((v: any) => {
+    const status = String(v.status ?? '').toUpperCase();
+    const availability = String(v.availability_status ?? '').toLowerCase();
+    return status === 'AVAILABLE' || availability === 'available';
+  }).length;
+  const rentedVehicles = vehicles.filter((v: any) => {
+    const status = String(v.status ?? '').toUpperCase();
+    return status === 'RENTED' || status === 'UNDER_LOA' || status === 'UNDER_CREDIT';
+  }).length;
+  const maintenanceVehicles = vehicles.filter((v: any) => {
+    const status = String(v.status ?? '').toUpperCase();
+    const physical = String(v.physical_status ?? '').toLowerCase();
+    const availability = String(v.availability_status ?? '').toLowerCase();
+    return status === 'MAINTENANCE' || physical === 'maintenance' || availability === 'maintenance';
+  }).length;
+  const repairVehicles = vehicles.filter((v: any) => {
+    const status = String(v.status ?? '').toUpperCase();
+    const physical = String(v.physical_status ?? '').toLowerCase();
+    return status === 'IN_REPAIR' || physical === 'repair';
+  }).length;
+  const accidentVehicles = vehicles.filter((v: any) => {
+    const physical = String(v.physical_status ?? '').toLowerCase();
+    return physical === 'accident';
+  }).length;
+  const unavailableVehicles = vehicles.filter((v: any) => {
+    const status = String(v.status ?? '').toUpperCase();
+    const availability = String(v.availability_status ?? '').toLowerCase();
+    const physical = String(v.physical_status ?? '').toLowerCase();
+    return ['BLOCKED', 'UNAVAILABLE', 'SOLD', 'SCRAPPED'].includes(status)
+      || ['unavailable', 'immobilized', 'repair', 'maintenance', 'accident'].includes(availability)
+      || ['immobilized', 'repair', 'maintenance', 'accident'].includes(physical);
+  }).length;
+  const utilizationPct = totalVehicles > 0 ? Math.round((rentedVehicles / totalVehicles) * 100) : 0;
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-10">
@@ -394,6 +428,25 @@ const VehiclesList: React.FC = () => {
           {loadError}
         </div>
       )}
+
+      {/* Fleet analysis KPIs on main fleet page */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+        {[
+          ['Total', totalVehicles],
+          ['Disponibles', availableVehicles],
+          ['En location', rentedVehicles],
+          ['Maintenance', maintenanceVehicles],
+          ['Réparation', repairVehicles],
+          ['Sinistre', accidentVehicles],
+          ['Indisponibles', unavailableVehicles],
+          ['Utilisation %', utilizationPct],
+        ].map(([label, val]) => (
+          <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">{String(label)}</div>
+            <div className="mt-1 text-xl font-black text-slate-900">{Number(val).toLocaleString('fr-MA')}</div>
+          </div>
+        ))}
+      </div>
 
       {/* Compliance alerts */}
       {alerts.length > 0 && (
