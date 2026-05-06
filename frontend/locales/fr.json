@@ -23,6 +23,7 @@
     "settings": "Paramètres",
     "audit": "Audit & traçabilité",
     "rentals": "Réservations / Locations",
+    "subRentals": "Sous-location",
     "group": {
       "overview": "Vue d'ensemble",
       "operations": "Opérations",

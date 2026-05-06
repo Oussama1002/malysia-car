@@ -248,5 +248,17 @@ return [
         'documents.upload'           => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE', 'AGENT_COMMERCIAL', 'COMPTABLE', 'ANALYSTE_CREDIT', 'AGENT_LIVRAISON'],
         'documents.delete'           => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE', 'CONTENTIEUX'],
         'documents.generate'         => ['ADMIN', 'DIRECTEUR', 'AGENT_COMMERCIAL', 'COMPTABLE'],
+
+        // Granular — Sous-location (Sub-rental)
+        'supplier_agencies.view'   => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE', 'COMPTABLE', 'CONTENTIEUX'],
+        'supplier_agencies.manage' => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+        'sub_rentals.view'         => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE', 'COMPTABLE', 'AGENT_COMMERCIAL', 'CONTENTIEUX'],
+        'sub_rentals.create'       => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+        'sub_rentals.update'       => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+        'sub_rentals.activate'     => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+        'sub_rentals.return'       => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+        'sub_rentals.close'        => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+        'sub_rentals.payments'     => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE', 'COMPTABLE'],
+        'sub_rentals.documents'    => ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
     ],
 ];

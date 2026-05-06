@@ -47,6 +47,7 @@ class Vehicle extends Model
         'year',
         'mileage_current',
         'status',
+        'ownership_status',
         'acquisition_type',
         'acquisition_date',
         'purchase_price',
@@ -211,6 +212,26 @@ class Vehicle extends Model
     public function currentReservation(): BelongsTo
     {
         return $this->belongsTo(Reservation::class, 'current_reservation_id');
+    }
+
+    /**
+     * @return HasMany<\App\Models\SubRentalContract, $this>
+     */
+    public function subRentalContracts(): HasMany
+    {
+        return $this->hasMany(\App\Models\SubRentalContract::class, 'vehicle_id');
+    }
+
+    public function activeSubRentalContract(): HasOne
+    {
+        return $this->hasOne(\App\Models\SubRentalContract::class, 'vehicle_id')
+            ->where('status', 'active')
+            ->latest();
+    }
+
+    public function isSubRented(): bool
+    {
+        return ($this->ownership_status ?? 'owned') === 'sub_rented';
     }
 }
 
