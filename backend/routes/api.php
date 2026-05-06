@@ -68,8 +68,6 @@ use App\Http\Controllers\Api\V1\ComplianceAlertController;
 use App\Http\Controllers\Api\V1\VehicleRepairController;
 use App\Http\Controllers\Api\V1\VehicleMovementController;
 use App\Http\Controllers\Api\V1\FleetAnalysisController;
-use App\Http\Controllers\Api\V1\SupplierAgencyController;
-use App\Http\Controllers\Api\V1\SubRentalController;
 use App\Http\Controllers\Api\V1\FixedChargeController;
 use App\Http\Controllers\Api\V1\FixedChargePaymentController;
 use App\Http\Controllers\Api\V1\VehicleAccidentController;
@@ -306,30 +304,6 @@ Route::prefix('v1')->group(function () {
 
         Route::get('fleet/analysis', FleetAnalysisController::class)
             ->middleware('permission:vehicles.view');
-
-        Route::get('supplier-agencies', [SupplierAgencyController::class, 'index'])
-            ->middleware('permission:vehicles.view');
-        Route::post('supplier-agencies', [SupplierAgencyController::class, 'store'])
-            ->middleware('permission:vehicles.create');
-        Route::get('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'show'])
-            ->middleware('permission:vehicles.view');
-        Route::put('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'update'])
-            ->middleware('permission:vehicles.update');
-        Route::patch('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'update'])
-            ->middleware('permission:vehicles.update');
-
-        Route::get('sub-rentals', [SubRentalController::class, 'index'])
-            ->middleware('permission:vehicles.view');
-        Route::post('sub-rentals', [SubRentalController::class, 'store'])
-            ->middleware('permission:vehicles.create');
-        Route::get('sub-rentals/{subRentalContract}', [SubRentalController::class, 'show'])
-            ->middleware('permission:vehicles.view');
-        Route::post('sub-rentals/{subRentalContract}/activate', [SubRentalController::class, 'activate'])
-            ->middleware('permission:vehicles.update');
-        Route::post('sub-rentals/{subRentalContract}/return', [SubRentalController::class, 'returnContract'])
-            ->middleware('permission:vehicles.update');
-        Route::post('sub-rentals/{subRentalContract}/close', [SubRentalController::class, 'close'])
-            ->middleware('permission:vehicles.update');
 
         // ==================================================================
         // Phase 5 — Contracts
