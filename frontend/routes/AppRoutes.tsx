@@ -76,6 +76,11 @@ import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
 import { RentalsPage } from '@/modules/rentals/RentalsPage';
+// Sous-location
+import { SubRentalsPage } from '@/modules/subRentals/SubRentalsPage';
+import { SubRentalCreatePage } from '@/modules/subRentals/SubRentalCreatePage';
+import { SubRentalDetailPage } from '@/modules/subRentals/SubRentalDetailPage';
+import { SupplierAgenciesPage } from '@/modules/subRentals/SupplierAgenciesPage';
 import { ProfilePage } from '@/modules/profile/ProfilePage';
 import { AgencePage } from '@/modules/profile/AgencePage';
 import { ModuleGate } from '@/routes/ModuleGate';
@@ -689,6 +694,40 @@ export default function AppRoutes(): React.ReactElement {
               element={
                 <ModuleGate module="rentals">
                   <RentalsPage />
+                </ModuleGate>
+              }
+            />
+
+            {/* Sous-location */}
+            <Route
+              path="/fleet/sub-rentals"
+              element={
+                <ModuleGate module="subRentals">
+                  <SubRentalsPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/fleet/sub-rentals/new"
+              element={
+                <ModuleGate module="subRentals">
+                  <SubRentalCreatePage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/fleet/sub-rentals/:id"
+              element={
+                <ModuleGate module="subRentals">
+                  <SubRentalDetailPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/fleet/supplier-agencies"
+              element={
+                <ModuleGate module="subRentals">
+                  <SupplierAgenciesPage />
                 </ModuleGate>
               }
             />

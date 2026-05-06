@@ -26,7 +26,8 @@
     "documents": "Document center",
     "settings": "Settings",
     "audit": "Audit trail",
-    "rentals": "Short-term rentals"
+    "rentals": "Short-term rentals",
+    "subRentals": "Sub-rental"
   },
   "auth": {
     "login": "Sign in",

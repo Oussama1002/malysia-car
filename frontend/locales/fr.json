@@ -20,6 +20,7 @@
     "settings": "Paramètres",
     "audit": "Audit & traçabilité",
     "rentals": "Locations courte durée",
+    "subRentals": "Sous-location",
     "group": {
       "overview": "Vue d'ensemble",
       "operations": "Opérations",
