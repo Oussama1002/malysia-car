@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Str;
 use App\Models\VehicleMaintenancePlan;
 use App\Models\VehicleRepair;
 use App\Models\VehicleAccident;
@@ -84,6 +85,15 @@ class Vehicle extends Model
         'daily_rental_price' => 'decimal:2',
         'monthly_rental_price' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $model): void {
+            if (empty($model->id)) {
+                $model->id = (string) Str::uuid();
+            }
+        });
+    }
 
     /**
      * @return BelongsTo<VehicleBrand, $this>

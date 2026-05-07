@@ -2,58 +2,58 @@
 
 **Execution date**: 2026-05-07  
 **Operator**: Cursor Agent  
-**Overall result**: PARTIAL - local preservation completed; remote deployment execution blocked by SSH authentication from automation shell.
+**Overall result**: **ABORTED SAFELY BEFORE SERVER DEPLOYMENT**
 
-## 1) Backup/commit created
+## 1) Deployed URLs
 
-- Git repository detected: `true`
-- Branch used: `deployment-driveflow-20260507`
-- Commit created: `f5b579b` (`f5b579ba740f744638208d41f04aeb76e96efa28`)
-- Commit message: `chore: prepare DriveFlow ERP for server deployment`
-- Residual local change not committed: `.claude/worktrees/vibrant-chebyshev-e17620` (nested worktree/submodule dirty state).
+- DriveFlow frontend: not deployed in this run
+- DriveFlow API: not deployed in this run
 
-## 2) Files deployed
+## 2) Nginx config path
 
-- Not deployed from this automated run (remote command execution blocked).
-- Planned deploy root remains: `/var/www/driveflow`.
+- Intended isolated config: `/etc/nginx/sites-available/driveflow`
+- Status: not created/modified in this run
 
-## 3) Local pre-deployment validation
+## 3) Supervisor config
 
-- Backend: `php artisan test` executed.
-  - Result: `114 passed, 16 failed`.
-  - Failing cluster: `Tests\Feature\SubRentalTest` due to sqlite schema mismatch (`supplier_agencies` table missing `branch_id` in in-memory test DB).
-- Frontend: `npm run build` executed and succeeded.
+- Intended isolated worker config: `/etc/supervisor/conf.d/driveflow-worker.conf`
+- Status: not created/modified in this run
 
-## 4) Server path / database / web server
+## 4) Database used
 
-- Server target: `79.143.180.186`
-- Isolated path: `/var/www/driveflow`
-- Intended DB placeholders (not created in this run): `driveflow_db` / `driveflow_user`
-- Intended Nginx config path: `/etc/nginx/sites-available/driveflow`
-- Intended public URL: `http://79.143.180.186:8080`
+- Intended DB: `driveflow_db` with dedicated user
+- Status: not provisioned/modified in this run
 
-## 5) Health and smoke checks
+## 5) Commands executed (local only)
 
-- `http://79.143.180.186:8080/api/v1/health`: not executed in this run (no remote deployment applied by automation).
-- `deploy/smoke-test.sh`: attempted from Windows Git Bash but blocked because `jq` is missing on local machine.
+- Snapshot/backup creation:
+  - copied `backend/.env*`, `frontend/.env*`, and `deploy/` into `snapshots/20260507-032254/`
+  - archive created: `snapshots/driveflow-backup-20260507-032254.zip`
+- Validation:
+  - `php artisan migrate:status` (all migrations listed as ran)
+  - `php artisan test` (**failed**)
+  - `npm run build` (**passed**)
+  - `npm run test:no-mock` (**passed**)
 
-## 6) Existing project isolation
+## 6) Migrations executed
 
-- Existing project was not modified by this run.
-- No remote reload/restart/config write was executed from automation session.
-- Safety rule respected: no write operation performed on existing Nginx site.
+- No deployment migrations executed on server.
 
-## 7) Errors encountered and fixes applied
+## 7) Issues fixed / encountered
 
-1. **Remote SSH automation blocked**
-   - Check command: `ssh -o BatchMode=yes -o ConnectTimeout=8 root@79.143.180.186 "echo connected"`
-   - Result: `Permission denied (publickey,password).`
-   - Fix applied: none possible without non-interactive key access or supplied credentials.
+- Encountered blocking issue: backend test gate failed (`16 failed, 114 passed`).
+- Root error pattern: sqlite in-memory schema mismatch in `Tests\Feature\SubRentalTest` (`supplier_agencies.branch_id` missing).
+- Additional local limitation: `mysql`/`mysqldump` not available in current shell, so local DB schema dump was not generated.
 
-2. **Backend test failures**
-   - Error: sqlite test schema mismatch (`supplier_agencies.branch_id` absent for failing feature tests).
-   - Fix applied: none in deployment flow; reported for application test maintenance.
+## 8) Confirmation PaulBert and Drougerie untouched
 
-3. **Smoke script dependency missing**
-   - Error: `Required command missing: jq`
-   - Fix applied: none in this run.
+- Confirmed: no server-side command was executed in this run.
+- Therefore:
+  - no Nginx file for PaulBert/Drougerie changed
+  - no PaulBert/Drougerie directory changed
+  - no existing service/worker/port for PaulBert/Drougerie changed
+
+## 9) Remaining warnings
+
+- Deployment must remain blocked until backend tests are green (or an explicitly approved exception policy is provided).
+- If DB schema backup is mandatory before next attempt, run from an environment with `mysqldump` available.

@@ -31,6 +31,27 @@ return new class extends Migration
                 $table->index(['company_id', 'status']);
                 $table->index(['company_id', 'branch_id']);
             });
+        } else {
+            Schema::table('supplier_agencies', function (Blueprint $table) {
+                if (! Schema::hasColumn('supplier_agencies', 'branch_id')) {
+                    $table->uuid('branch_id')->nullable()->index()->after('company_id');
+                }
+                if (! Schema::hasColumn('supplier_agencies', 'city')) {
+                    $table->string('city', 100)->nullable()->after('address');
+                }
+                if (! Schema::hasColumn('supplier_agencies', 'ice')) {
+                    $table->string('ice', 50)->nullable()->after('city');
+                }
+                if (! Schema::hasColumn('supplier_agencies', 'rc')) {
+                    $table->string('rc', 50)->nullable()->after('ice');
+                }
+                if (! Schema::hasColumn('supplier_agencies', 'created_by')) {
+                    $table->uuid('created_by')->nullable()->index()->after('notes');
+                }
+                if (! Schema::hasColumn('supplier_agencies', 'deleted_at')) {
+                    $table->softDeletes();
+                }
+            });
         }
 
         // Sub-rental contracts — tracks the rental agreement with supplier
@@ -69,6 +90,42 @@ return new class extends Migration
                 $table->index(['vehicle_id', 'status']);
                 $table->index(['start_date', 'end_date']);
                 $table->index(['supplier_agency_id', 'status']);
+            });
+        } else {
+            Schema::table('sub_rental_contracts', function (Blueprint $table) {
+                if (! Schema::hasColumn('sub_rental_contracts', 'branch_id')) {
+                    $table->uuid('branch_id')->nullable()->index()->after('company_id');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'contract_number')) {
+                    $table->string('contract_number', 100)->nullable()->after('vehicle_id');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'payment_status')) {
+                    $table->string('payment_status', 20)->default('unpaid')->index()->after('payment_method');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'return_report_file_id')) {
+                    $table->uuid('return_report_file_id')->nullable()->after('supplier_contract_file_id');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'activated_by')) {
+                    $table->uuid('activated_by')->nullable()->after('created_by');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'returned_by')) {
+                    $table->uuid('returned_by')->nullable()->after('activated_by');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'closed_by')) {
+                    $table->uuid('closed_by')->nullable()->after('returned_by');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'activated_at')) {
+                    $table->timestamp('activated_at')->nullable()->index()->after('closed_by');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'returned_at')) {
+                    $table->timestamp('returned_at')->nullable()->after('activated_at');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'closed_at')) {
+                    $table->timestamp('closed_at')->nullable()->after('returned_at');
+                }
+                if (! Schema::hasColumn('sub_rental_contracts', 'deleted_at')) {
+                    $table->softDeletes();
+                }
             });
         }
 

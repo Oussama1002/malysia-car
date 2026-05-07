@@ -8,6 +8,7 @@ use App\Models\SubRentalContract;
 use App\Models\SupplierAgency;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -60,27 +61,37 @@ class SubRentalTest extends TestCase
     private function makeBrand(string $name = 'Peugeot'): string
     {
         $id = (string) Str::uuid();
-        \DB::table('vehicle_brands')->insert([
+        $payload = [
             'id'         => $id,
-            'company_id' => $this->companyId,
             'name'       => $name,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+        if (Schema::hasColumn('vehicle_brands', 'company_id')) {
+            $payload['company_id'] = $this->companyId;
+        }
+        \DB::table('vehicle_brands')->insert($payload);
         return $id;
     }
 
     private function makeModel(string $brandId, string $name = '208'): string
     {
         $id = (string) Str::uuid();
-        \DB::table('vehicle_models')->insert([
+        $payload = [
             'id'              => $id,
-            'company_id'      => $this->companyId,
-            'vehicle_brand_id'=> $brandId,
             'name'            => $name,
             'created_at'      => now(),
             'updated_at'      => now(),
-        ]);
+        ];
+        if (Schema::hasColumn('vehicle_models', 'company_id')) {
+            $payload['company_id'] = $this->companyId;
+        }
+        if (Schema::hasColumn('vehicle_models', 'vehicle_brand_id')) {
+            $payload['vehicle_brand_id'] = $brandId;
+        } else {
+            $payload['brand_id'] = $brandId;
+        }
+        \DB::table('vehicle_models')->insert($payload);
         return $id;
     }
 
@@ -89,12 +100,12 @@ class SubRentalTest extends TestCase
         $brandId  = $this->makeBrand();
         $modelId  = $this->makeModel($brandId);
         $id       = (string) Str::uuid();
-        \DB::table('vehicles')->insert(array_merge([
+        $payload = [
             'id'                  => $id,
             'company_id'          => $this->companyId,
             'branch_id'           => $this->branchId,
-            'vehicle_brand_id'    => $brandId,
-            'vehicle_model_id'    => $modelId,
+            'brand_id'            => $brandId,
+            'model_id'            => $modelId,
             'registration_number' => 'A-' . rand(10000, 99999) . '-B',
             'availability_status' => 'available',
             'ownership_status'    => 'owned',
@@ -102,7 +113,16 @@ class SubRentalTest extends TestCase
             'color'               => 'Blanc',
             'created_at'          => now(),
             'updated_at'          => now(),
-        ], $overrides));
+        ];
+        if (Schema::hasColumn('vehicles', 'vehicle_brand_id')) {
+            unset($payload['brand_id']);
+            $payload['vehicle_brand_id'] = $brandId;
+        }
+        if (Schema::hasColumn('vehicles', 'vehicle_model_id')) {
+            unset($payload['model_id']);
+            $payload['vehicle_model_id'] = $modelId;
+        }
+        \DB::table('vehicles')->insert(array_merge($payload, $overrides));
         return $id;
     }
 
@@ -309,7 +329,7 @@ class SubRentalTest extends TestCase
             ]);
 
         $res->assertStatus(201)
-            ->assertJsonPath('payment_status', 'partial');
+            ->assertJsonPath('data.payment_status', 'partial');
 
         $this->assertDatabaseHas('sub_rental_payments', [
             'sub_rental_contract_id' => $contractId,
@@ -332,7 +352,7 @@ class SubRentalTest extends TestCase
                 'amount'         => 500,
                 'payment_method' => 'bank_transfer',
                 'payment_date'   => now()->toDateString(),
-            ])->assertStatus(201)->assertJsonPath('payment_status', 'paid');
+            ])->assertStatus(201)->assertJsonPath('data.payment_status', 'paid');
 
         $this->assertDatabaseHas('sub_rental_contracts', [
             'id'             => $contractId,
@@ -386,7 +406,7 @@ class SubRentalTest extends TestCase
                 'odometer_km'        => 45000,
                 'fuel_level'         => 'full',
                 'condition_notes'    => 'Bon état',
-                'signed_by_supplier' => true,
+                'signed_by_supplier' => 'Supplier Agent',
             ]);
 
         $res->assertStatus(200)
