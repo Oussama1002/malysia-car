@@ -1,297 +1,114 @@
-# DriveFlow — Deployment Execution Report
+# DriveFlow ERP - Deployment Execution Report
 
-**Date d'exécution** : 2026-05-05
-**Opérateur** : Cursor Agent + propriétaire VPS
-**Résultat global** : ✅ **SUCCESS** — DriveFlow déployé en isolation, projet existant intact, login admin fonctionnel.
+**Execution date**: 2026-05-07  
+**Operator**: Cursor Agent  
+**Overall result**: PARTIAL - local preservation and prechecks completed, server deployment blocked by SSH authentication.
 
----
+## 1) Backup/commit created
 
-## 1. Cible
+- Git repository detected: `true`
+- Branch created: `deployment-driveflow-20260507`
+- Commit created: `86152ec`
+- Commit message: `chore: prepare DriveFlow ERP for server deployment`
+- Note: commit includes embedded repository path `.claude/worktrees/vibrant-chebyshev-e17620` (git mode `160000`).
 
-| Item | Valeur |
-|---|---|
-| Serveur (Contabo VPS) | `79.143.180.186` (`vmi3261580`) |
-| OS | Ubuntu 24.04 (noble) |
-| Mode déploiement | **isolated staging** (port `8080`) |
-| URL Frontend DriveFlow | http://79.143.180.186:8080 |
-| URL API health | http://79.143.180.186:8080/api/v1/health |
-| Chemin de déploiement | `/var/www/driveflow` |
-| Branche déployée | `main` (origin: https://github.com/Oussama1002/malysia-car) |
+## 2) Files prepared for deployment (from commit)
 
----
+- Backend changed under: `backend/app`, `backend/database/seeders`
+- Frontend changed under: `frontend/modules`, `frontend/services`
+- New frontend files: `frontend/services/entityCode.ts`, `frontend/services/labels.ts`
+- Full file list captured via `git show --name-only HEAD`.
 
-## 2. Protection du projet existant (`paulbert`)
+## 3) Local validation results
 
-| Vérification | Résultat |
-|---|---|
-| Inspection des sites nginx avant déploiement | ✅ OUI (lecture seule) |
-| Site par défaut nginx modifié | ❌ NON |
-| Site `paulbert` modifié | ❌ NON |
-| Services existants stoppés | ❌ NON |
-| Répertoires existants réutilisés | ❌ NON |
-| `paulbert` toujours accessible après déploiement | ✅ OUI |
-| URL existante vérifiée `http://79.143.180.186/` | ✅ HTTP/1.1 200 OK |
+- `php artisan test` (backend): FAILED  
+  - Result: `16 failed, 114 passed`
+  - Main failure pattern: sqlite schema mismatch (`supplier_agencies` missing `branch_id`) in `Tests\Feature\SubRentalTest`
+- `npm run build` (frontend): PASSED
+- `deploy/smoke-test.sh`: NOT EXECUTED locally (no bash/WSL available in this environment)
 
-**Preuve** :
-```
-$ sudo ss -tlnp | grep -E ':(80|8080)\s'
-LISTEN 0  511  0.0.0.0:8080  ...  nginx (driveflow)
-LISTEN 0  511  0.0.0.0:80    ...  nginx (paulbert)
-```
+## 4) Server deployment target
 
-DriveFlow est servi exclusivement sur `:8080`. Aucune ressource du projet `paulbert` n'a été touchée.
+- Server IP: `79.143.180.186`
+- Intended isolated path: `/var/www/driveflow`
+- Intended URL: `http://79.143.180.186:8080`
+- Intended Nginx config: `/etc/nginx/sites-available/driveflow`
 
----
+## 5) Server access and safety status
 
-## 3. Stack installée / vérifiée
+- Non-interactive SSH check attempted:
+  - `ssh -o BatchMode=yes root@79.143.180.186 "echo connected"`
+  - Result: `Permission denied (publickey,password).`
+- Because authenticated remote shell was unavailable, no server-side deployment commands were executed.
+- Existing project status on server: NOT MODIFIED by this run.
 
-| Composant | Version |
-|---|---|
-| Nginx | `1.24.0 (Ubuntu)` |
-| PHP CLI | `8.2.30` |
-| PHP-FPM | `8.2 (php8.2-fpm.sock)` |
-| Composer | (présent, dépendances installées via lockfile) |
-| Node.js | `20.x` (NodeSource) |
-| npm | (fourni avec Node 20) |
-| MySQL Server | `8.0.45-0ubuntu0.24.04.1` |
-| Supervisor | `4.2.5-1ubuntu0.1` |
-| Laravel | `12.58.0` |
+## 6) Database name/user used
 
----
+- Not created/used in this execution (deployment blocked before remote DB provisioning).
+- Planned placeholders (to set during deployment): `driveflow_db` / `driveflow_user`.
 
-## 4. Base de données
+## 7) Health check result
 
-| Item | Valeur |
-|---|---|
-| Hôte | `127.0.0.1:3306` |
-| Database | `driveflow_db` |
-| User | `driveflow_user` |
-| Migrations | ✅ OUI — **60 migrations** exécutées avec succès |
-| Seeders | ✅ OUI — `RbacSeeder` exécuté (10 rôles système, 211 permissions) |
+- `http://79.143.180.186:8080/api/v1/health`: NOT EXECUTED in this run (deployment not applied).
 
-**Preuve health check** :
-```json
-{"success":true,"data":{"status":"ok","app":"DriveFlow API","version":"1","env":"production","php":"8.2.30","laravel":"12.58.0","checks":{"database":"ok","queue":"ok","storage":"ok","app_key":"ok"},"time":"2026-05-05T12:34:13+00:00"}}
-```
+## 8) Smoke test result
 
----
+- `deploy/smoke-test.sh`: BLOCKED locally (missing bash runtime) and not run on server.
 
-## 5. Configuration d'environnement
+## 9) Confirmation existing project untouched
 
-### Backend (`/var/www/driveflow/backend/.env`)
+- Confirmed for this execution scope: no remote write/reload operation was run, therefore existing project configuration and runtime were not changed by this session.
 
-| Variable | Valeur |
-|---|---|
-| `APP_ENV` | `production` ✅ |
-| `APP_DEBUG` | `false` ✅ |
-| `APP_URL` | `http://79.143.180.186:8080` ✅ |
-| `APP_KEY` | généré via `php artisan key:generate` ✅ |
-| `DB_HOST` | `127.0.0.1` ✅ |
-| `DB_DATABASE` | `driveflow_db` ✅ |
-| `DB_USERNAME` | `driveflow_user` ✅ |
-| `DB_PASSWORD` | (set, non commité) ✅ |
-| `SANCTUM_STATEFUL_DOMAINS` | `79.143.180.186:8080` ✅ |
-| `FRONTEND_URL` | `http://79.143.180.186:8080` ✅ |
-| `SESSION_DRIVER` | `database` ✅ |
-| `CACHE_STORE` | `database` ✅ |
-| `QUEUE_CONNECTION` | `database` ✅ |
-| `MAIL_MAILER` | `log` (par défaut) |
+## 10) Errors encountered and fixes applied
 
-### Frontend (`/var/www/driveflow/frontend/.env.production`)
+1. **SSH authentication blocked deployment**
+   - Error: `Permission denied (publickey,password).`
+   - Fix applied: none possible without credentials or preconfigured SSH key.
 
-| Variable | Valeur |
-|---|---|
-| `VITE_API_BASE` | `http://79.143.180.186:8080/api` ✅ |
-| `VITE_DEMO_MODE` | `false` ✅ |
-| `VITE_ALLOW_MOCK_FALLBACK` | `false` ✅ |
+2. **Backend test suite failures**
+   - Error: sqlite test DB schema mismatch for `supplier_agencies.branch_id`.
+   - Fix applied: none in this deployment session (reported for follow-up).
 
-Build artefacts produits :
-```
-dist/index.html                     1.53 kB │ gzip:   0.77 kB
-dist/assets/index-C7es6Xar.css     37.09 kB │ gzip:  11.19 kB
-dist/assets/index-D6EHgoWY.js   1,553.54 kB │ gzip: 416.61 kB
-```
+3. **Smoke script runtime unavailable locally**
+   - Error: `/bin/bash` not available in current Windows shell context.
+   - Fix applied: none; run on Linux host or install WSL/Git Bash.
 
----
-
-## 6. Commandes principales exécutées
+## 11) Safe next commands (to run once SSH access is provided)
 
 ```bash
-# Préparation (depuis /var/www/driveflow)
-git pull origin main
+# On server (after SSH login), isolated deploy root:
+mkdir -p /var/www/driveflow
+cd /var/www/driveflow
+
+# Copy source here (git clone or rsync/scp), then:
+cd backend
+cp .env.example .env
+# set APP_ENV=production, APP_DEBUG=false, APP_URL=http://79.143.180.186:8080
+# set DB_* values for DriveFlow database/user
 composer install --no-dev --optimize-autoloader
-php artisan key:generate
-php artisan migrate --force        # 60 migrations OK
-php artisan db:seed --force        # RbacSeeder OK
+php artisan key:generate   # only if APP_KEY missing
+php artisan migrate --force
+php artisan db:seed --force
 php artisan storage:link
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
-chown -R www-data:www-data backend/storage backend/bootstrap/cache
 
-# Frontend
-cd frontend
+cd /var/www/driveflow/frontend
 npm ci
-npm run build                      # vite build production OK
+# set VITE_API_BASE=http://79.143.180.186:8080/api
+# set VITE_DEMO_MODE=false
+# set VITE_ALLOW_MOCK_FALLBACK=false
+npm run build
 
-# Nginx isolated
+# Create ONLY /etc/nginx/sites-available/driveflow (listen 8080), then:
 ln -s /etc/nginx/sites-available/driveflow /etc/nginx/sites-enabled/driveflow
-nginx -t && systemctl reload nginx
+nginx -t
+systemctl reload nginx
 
-# Queue worker
-supervisorctl reread && supervisorctl update
-supervisorctl start driveflow-worker
-
-# Firewall
-ufw allow 8080/tcp
+# Queue worker (Supervisor) + scheduler (cron)
+# add /etc/supervisor/conf.d/driveflow-worker.conf then:
+supervisorctl reread && supervisorctl update && supervisorctl start driveflow-worker
+crontab -e
+# * * * * * php /var/www/driveflow/backend/artisan schedule:run >> /dev/null 2>&1
 ```
-
----
-
-## 7. Nginx Isolation
-
-| Item | Valeur |
-|---|---|
-| Fichier de config | `/etc/nginx/sites-available/driveflow` (nouveau) |
-| Symlink | `/etc/nginx/sites-enabled/driveflow` |
-| Port d'écoute | `8080` (uniquement) |
-| Root frontend | `/var/www/driveflow/frontend/dist` |
-| Backend | `php-fpm` via `unix:/run/php/php8.2-fpm.sock` |
-| `try_files` SPA fallback `/index.html` | ✅ OUI |
-| `/api` proxifié vers Laravel | ✅ OUI |
-| Blocage `.env`, `vendor/`, `storage/` privé | ✅ OUI |
-| Gzip activé | ✅ OUI |
-| Cache static assets | ✅ OUI |
-| Site `paulbert` (existant) modifié | ❌ NON |
-| `nginx -t` | ✅ PASS — `syntax is ok` / `test is successful` |
-| `systemctl reload nginx` | ✅ PASS |
-
----
-
-## 8. Queue & Scheduler
-
-| Item | Valeur |
-|---|---|
-| Supervisor config | `/etc/supervisor/conf.d/driveflow-worker.conf` |
-| Worker | ✅ `driveflow-worker RUNNING pid 122666, uptime 0:04:30` |
-| Commande worker | `php8.2 artisan queue:work --queue=default --sleep=3 --tries=3` |
-| Cron scheduler (`www-data`) | ✅ `* * * * * php artisan schedule:run` |
-
----
-
-## 9. Sécurité
-
-| Vérification | Résultat |
-|---|---|
-| `APP_DEBUG=false` | ✅ |
-| `.env` non exposé (bloqué nginx) | ✅ (regex `~ /\.env`) |
-| `vendor/` non exposé | ✅ |
-| Permissions Laravel (`storage`, `bootstrap/cache` = `www-data:www-data`) | ✅ |
-| Mot de passe DB stocké uniquement dans `.env` (chmod 640, owner `www-data`) | ✅ |
-| UFW rules | `22/tcp`, `80/tcp` (existant), `443/tcp`, `8080/tcp` (DriveFlow) |
-| HTTPS / TLS sur :8080 | ❌ pas activé en mode staging — à ajouter via Let's Encrypt si domaine attaché |
-
----
-
-## 10. Compte administrateur
-
-Le seeder utilisateur a été volontairement skippé (`Skipping user seeder: use driveflow_db users or insert via SQL`). Un compte admin a été créé manuellement :
-
-| Champ | Valeur |
-|---|---|
-| User ID | `478b8fc9-2a4e-49fe-b783-ec6a60de8451` |
-| Email | `admin@driveflow.local` |
-| Status | `active` |
-| Company | `59ef1139-fee8-46c1-b5df-a82f3fee063a` (DriveFlow local) |
-| Rôle | `ADMIN` (id=1, via `user_roles`) |
-| Permissions chargées au login | **211** |
-
-> ⚠️ **Le mot de passe initial choisi pendant la mise en service est connu uniquement du propriétaire du serveur. Il doit être changé via l'écran Profil dès la première connexion.**
-
----
-
-## 11. Tests de validation
-
-### Frontend (HTTP)
-```
-$ curl -I http://127.0.0.1:8080/
-HTTP/1.1 200 OK
-Server: nginx/1.24.0 (Ubuntu)
-Content-Type: text/html
-```
-
-### API health
-```
-$ curl -i http://127.0.0.1:8080/api/v1/health
-HTTP/1.1 200 OK
-{"success":true,"data":{"status":"ok",...,"checks":{"database":"ok","queue":"ok","storage":"ok","app_key":"ok"}}}
-```
-
-### API login (E2E)
-```
-$ curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login -H "Content-Type: application/json" -d '{...}'
-{"data":{"token":"1|...","token_type":"Bearer","user":{...,"role":"ADMIN",...},"permissions":[211 items]}}
-```
-
-### Projet existant intact
-```
-$ curl -I http://127.0.0.1/
-HTTP/1.1 200 OK
-ETag: "69f62573-353"   (paulbert, inchangé depuis le 02/05/2026)
-```
-
-| Test | Résultat |
-|---|---|
-| Existing project still works | ✅ PASS |
-| DriveFlow frontend loads | ✅ PASS (HTTP 200, HTML React shell servi) |
-| DriveFlow API health OK | ✅ PASS (`status: ok`, tous checks `ok`) |
-| API login `POST /api/v1/auth/login` | ✅ PASS (token + 211 permissions) |
-| Dashboard / Fleet / Invoices (UI) | ✅ Disponible — à finaliser côté navigateur par l'utilisateur |
-
----
-
-## 12. Incidents rencontrés et résolutions
-
-1. **PPA `ondrej/php` (sury) injoignable** depuis le VPS (`Could not connect to ppa.launchpadcontent.net:443`).
-   - Impact : impossible d'installer/upgrader PHP 8.4. PHP 8.2 était déjà présent.
-   - **Fix** : suppression de la source `ondrej-ubuntu-php-noble.sources`, court-circuit de l'étape `install_base` du script (variable `SKIP_INSTALL`/edit local), poursuite avec PHP 8.2.30 (compatible Laravel 12).
-
-2. **Script `deploy/contabo-isolated-8080.sh` absent du repo cloné** initialement.
-   - **Fix** : création locale du script sur le VPS via `nano` puis exécution.
-
-3. **Apache2 redémarrage en échec** durant l'installation des packages PHP.
-   - Cause : Apache (déjà installé pour `paulbert`) n'a pas pu rebinder `:80` car nginx l'occupait.
-   - **Impact** : aucun. Apache n'est pas requis. nginx reste en charge de `paulbert` et de DriveFlow.
-
-4. **Tinker `psysh` warning** (`Writing to directory /var/www/.config/psysh is not allowed`).
-   - **Fix** : préfixer toutes les commandes tinker par `env HOME=/tmp`.
-
-5. **`UserSeeder` non exécuté** par design.
-   - **Fix** : création manuelle d'un utilisateur ADMIN aligné sur le vrai schéma (`first_name`, `last_name`, `password_hash`, `status`) + insertion dans `user_roles`.
-
-6. **Storage symlink déjà existant** au 2ᵉ run (idempotence).
-   - **Fix** : non bloquant, message informatif uniquement.
-
----
-
-## 13. Statut final
-
-| Indicateur | Valeur |
-|---|---|
-| **Statut déploiement** | ✅ **SUCCESS** |
-| **Recommandation Go-Live** | ✅ **READY** (staging) |
-| **Non-régression projet existant** | ✅ Confirmée |
-| **Login admin** | ✅ Fonctionnel |
-
-### Actions recommandées avant production réelle
-- [ ] Changer le mot de passe admin via l'écran Profil dès la 1ʳᵉ connexion.
-- [ ] Attacher un nom de domaine + activer TLS (Let's Encrypt) si exposition publique.
-- [ ] Créer les utilisateurs métiers via l'UI Settings → Users (DIRECTEUR, AGENT_COMMERCIAL, etc.).
-- [ ] Configurer le mailer SMTP (`MAIL_MAILER`, `MAIL_HOST`, etc.) si envoi de mails requis.
-- [ ] Mettre en place les sauvegardes MySQL automatiques (`mysqldump` cron).
-- [ ] Configurer un monitoring (uptime + erreurs Laravel `storage/logs/laravel.log`).
-
-### URLs finales
-- Frontend : http://79.143.180.186:8080
-- API health : http://79.143.180.186:8080/api/v1/health
-- Login : http://79.143.180.186:8080/login
