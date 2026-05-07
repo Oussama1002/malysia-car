@@ -15,6 +15,7 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { KpiCard } from '@/modules/shared/components/KpiCard';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { formatClientCode } from '@/services/entityCode';
 
 const STAGES: ArrearsStage[] = ['new', 'reminder_1', 'reminder_2', 'formal_notice', 'promise', 'legal', 'repossession', 'closed'];
 
@@ -127,7 +128,7 @@ export const ArrearsDashboardPage: React.FC = () => {
               {cases.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2 font-mono font-bold text-slate-900">{c.case_number}</td>
-                  <td className="text-slate-800">{c.customer?.full_name ?? c.customer_id}</td>
+                  <td className="text-slate-800">{c.customer?.full_name ?? formatClientCode(c.customer_id)}</td>
                   <td className="font-mono text-slate-600">{c.contract?.contract_number ?? '—'}</td>
                   <td className="text-right font-mono text-rose-600 font-semibold">{formatCurrencyMad(Number(c.total_overdue))}</td>
                   <td className="text-right font-mono text-emerald-600">{formatCurrencyMad(Number(c.total_recovered))}</td>

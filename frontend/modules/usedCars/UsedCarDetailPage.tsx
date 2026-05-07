@@ -25,6 +25,7 @@ import { TabsSection } from '@/modules/shared/components/TabsSection';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+import { formatClientCode } from '@/services/entityCode';
 
 type Tab = 'overview' | 'valuations' | 'sale' | 'transfers';
 
@@ -354,7 +355,7 @@ const SalesTab: React.FC<{ sales: UsedCarSale[] }> = ({ sales }) => {
             </div>
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Acheteur</div>
-              <div className="font-bold">{s.buyer?.full_name ?? s.buyer_customer_id}</div>
+              <div className="font-bold">{s.buyer?.full_name ?? formatClientCode(s.buyer_customer_id)}</div>
             </div>
             {s.notes && <div className="md:col-span-4 text-sm text-slate-600">{s.notes}</div>}
           </div>

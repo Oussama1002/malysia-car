@@ -1,18 +1,23 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   allocatePayment,
   createPayment,
+  listInvoices,
+  listBankAccounts,
   listPayments,
   PAYMENT_METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
   paymentStatusTone,
+  type Invoice,
   type Payment,
   type PaymentCreatePayload,
   type PaymentListParams,
   type PaymentMethod,
   type PaymentStatus,
 } from '@/services/financeApi';
+import { listCustomers } from '@/services/customersApi';
+import { listBranches } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
@@ -199,7 +204,7 @@ export const PaymentsPage: React.FC = () => {
         </div>
       )}
 
-      <DrawerPanel open={createOpen} title="Nouveau paiement" onClose={() => setCreateOpen(false)}>
+      <DrawerPanel open={createOpen} title="Nouveau paiement" onClose={() => setCreateOpen(false)} widthClass="max-w-2xl">
         <PaymentForm
           submitting={createMut.isPending}
           error={error}
@@ -243,29 +248,176 @@ const PaymentForm: React.FC<{
     payment_method: 'bank_transfer',
     payment_direction: 'incoming',
     amount: 0,
+    currency_code: 'MAD',
     payment_date: new Date().toISOString().slice(0, 10),
   });
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerLabel, setCustomerLabel] = useState('');
+  const [showCustomerList, setShowCustomerList] = useState(false);
+  const [linkInvoice, setLinkInvoice] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
+
+  const customersQ = useQuery({
+    queryKey: ['customers-search', customerSearch],
+    queryFn: () => listCustomers({ search: customerSearch, per_page: 10 }),
+    enabled: customerSearch.length >= 2,
+    staleTime: 10_000,
+  });
+
+  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
+
+  const banksQ = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => listBankAccounts({ is_active: true }),
+  });
+
+  const invoicesQ = useQuery({
+    queryKey: ['invoices-due', form.customer_id],
+    queryFn: () =>
+      listInvoices({
+        customer_id: form.customer_id,
+        status: 'issued',
+        per_page: 50,
+      }),
+    enabled: !!form.customer_id && linkInvoice,
+  });
+
+  const dueInvoices = useMemo<Invoice[]>(
+    () => (invoicesQ.data?.data ?? []).filter((i) => Number(i.amount_due) > 0),
+    [invoicesQ.data],
+  );
+
+  const selectedInvoice = dueInvoices.find((i) => i.id === selectedInvoiceId);
+
   return (
     <form
-      className="space-y-3"
+      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(form);
+        const payload: PaymentCreatePayload = { ...form };
+        if (linkInvoice && selectedInvoiceId && form.amount > 0) {
+          payload.allocations = [
+            {
+              invoice_id: selectedInvoiceId,
+              amount_allocated: Math.min(form.amount, Number(selectedInvoice?.amount_due ?? form.amount)),
+            },
+          ];
+        }
+        onSubmit(payload);
       }}
     >
       {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
-      <div>
-        <label className="text-xs font-bold uppercase text-slate-500">ID client</label>
-        <input
-          className="df-input mt-1"
-          value={form.customer_id}
-          onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
-          required
-        />
+
+      {/* Direction toggle */}
+      <div className="flex gap-2">
+        {(['incoming', 'outgoing'] as const).map((d) => (
+          <button
+            type="button"
+            key={d}
+            onClick={() => setForm({ ...form, payment_direction: d })}
+            className={`flex-1 rounded-xl border px-4 py-2 text-sm font-bold transition ${
+              form.payment_direction === d
+                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {d === 'incoming' ? '↓ Encaissement' : '↑ Décaissement'}
+          </button>
+        ))}
       </div>
+
+      {/* Customer search */}
+      <div className="relative">
+        <label className="text-xs font-bold uppercase text-slate-500">Client *</label>
+        {form.customer_id ? (
+          <div className="mt-1 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <span className="text-sm font-semibold text-slate-800">{customerLabel}</span>
+            <button
+              type="button"
+              className="text-xs font-bold text-rose-600"
+              onClick={() => {
+                setForm({ ...form, customer_id: '' });
+                setCustomerLabel('');
+                setCustomerSearch('');
+                setLinkInvoice(false);
+                setSelectedInvoiceId('');
+              }}
+            >
+              Changer
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              className="df-input mt-1"
+              placeholder="Tapez le nom ou le code client (≥ 2 caractères)…"
+              value={customerSearch}
+              onChange={(e) => {
+                setCustomerSearch(e.target.value);
+                setShowCustomerList(true);
+              }}
+              onFocus={() => setShowCustomerList(true)}
+              onBlur={() => setTimeout(() => setShowCustomerList(false), 200)}
+            />
+            {showCustomerList && customerSearch.length >= 2 && (
+              <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                {customersQ.isLoading ? (
+                  <div className="p-3 text-sm text-slate-500">Recherche…</div>
+                ) : (customersQ.data?.data ?? []).length === 0 ? (
+                  <div className="p-3 text-sm text-slate-500">Aucun client</div>
+                ) : (
+                  customersQ.data!.data.map((c) => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setForm({ ...form, customer_id: c.id });
+                        setCustomerLabel(`${c.display_name ?? c.customer_code} · ${c.customer_code}`);
+                        setShowCustomerList(false);
+                      }}
+                    >
+                      <div className="font-semibold text-slate-800">{c.display_name ?? c.customer_code}</div>
+                      <div className="text-xs text-slate-500">
+                        {c.customer_code} · {c.customer_type}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2">
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Mode</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Montant *</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className="df-input mt-1"
+            value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+            required
+          />
+        </div>
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Devise</label>
+          <select
+            className="df-input mt-1"
+            value={form.currency_code ?? 'MAD'}
+            onChange={(e) => setForm({ ...form, currency_code: e.target.value })}
+          >
+            <option value="MAD">MAD</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Mode de paiement *</label>
           <select
             className="df-input mt-1"
             value={form.payment_method}
@@ -279,30 +431,7 @@ const PaymentForm: React.FC<{
           </select>
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Sens</label>
-          <select
-            className="df-input mt-1"
-            value={form.payment_direction}
-            onChange={(e) => setForm({ ...form, payment_direction: e.target.value as 'incoming' | 'outgoing' })}
-          >
-            <option value="incoming">Entrant</option>
-            <option value="outgoing">Sortant</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Montant</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            className="df-input mt-1"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-            required
-          />
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Date du paiement *</label>
           <input
             type="date"
             className="df-input mt-1"
@@ -311,58 +440,155 @@ const PaymentForm: React.FC<{
             required
           />
         </div>
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Agence</label>
+          <select
+            className="df-input mt-1"
+            value={form.branch_id ?? ''}
+            onChange={(e) => setForm({ ...form, branch_id: e.target.value || undefined })}
+          >
+            <option value="">— Aucune —</option>
+            {branchesQ.data?.data.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {(form.payment_method === 'bank_transfer' || form.payment_method === 'check' || form.payment_method === 'card') && (
+          <div>
+            <label className="text-xs font-bold uppercase text-slate-500">Compte bancaire</label>
+            <select
+              className="df-input mt-1"
+              value={form.bank_account_id ?? ''}
+              onChange={(e) => setForm({ ...form, bank_account_id: e.target.value || undefined })}
+            >
+              <option value="">— Sélectionner —</option>
+              {(banksQ.data?.data ?? []).map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bank_name} · {b.account_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
       <div>
-        <label className="text-xs font-bold uppercase text-slate-500">Référence externe</label>
+        <label className="text-xs font-bold uppercase text-slate-500">
+          {form.payment_method === 'bank_transfer' ? 'Référence du virement' : 'Référence externe'}
+        </label>
         <input
           className="df-input mt-1"
+          placeholder={form.payment_method === 'bank_transfer' ? 'Ex: TRF-202605-0042' : 'Référence transaction'}
           value={form.external_reference ?? ''}
           onChange={(e) => setForm({ ...form, external_reference: e.target.value })}
         />
       </div>
+
       {form.payment_method === 'check' && (
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">N° chèque</label>
-            <input
-              className="df-input mt-1"
-              value={form.check_number ?? ''}
-              onChange={(e) => setForm({ ...form, check_number: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">Banque</label>
-            <input
-              className="df-input mt-1"
-              value={form.check_bank ?? ''}
-              onChange={(e) => setForm({ ...form, check_bank: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
-            <input
-              type="date"
-              className="df-input mt-1"
-              value={form.check_date ?? ''}
-              onChange={(e) => setForm({ ...form, check_date: e.target.value })}
-            />
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+          <div className="mb-2 text-xs font-bold uppercase text-indigo-700">Détails du chèque</div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">N° chèque *</label>
+              <input
+                className="df-input mt-1"
+                value={form.check_number ?? ''}
+                onChange={(e) => setForm({ ...form, check_number: e.target.value })}
+                required={form.payment_method === 'check'}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Banque émettrice *</label>
+              <input
+                className="df-input mt-1"
+                placeholder="Ex: Attijariwafa"
+                value={form.check_bank ?? ''}
+                onChange={(e) => setForm({ ...form, check_bank: e.target.value })}
+                required={form.payment_method === 'check'}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
+              <input
+                type="date"
+                className="df-input mt-1"
+                value={form.check_date ?? ''}
+                onChange={(e) => setForm({ ...form, check_date: e.target.value })}
+              />
+            </div>
           </div>
         </div>
       )}
+
+      {/* Optional invoice allocation */}
+      {form.customer_id && form.payment_direction === 'incoming' && (
+        <div className="rounded-xl border border-slate-200 p-3">
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={linkInvoice}
+              onChange={(e) => {
+                setLinkInvoice(e.target.checked);
+                if (!e.target.checked) setSelectedInvoiceId('');
+              }}
+            />
+            Allouer ce paiement à une facture du client
+          </label>
+          {linkInvoice && (
+            <div className="mt-3">
+              {invoicesQ.isLoading ? (
+                <div className="text-sm text-slate-500">Chargement des factures…</div>
+              ) : dueInvoices.length === 0 ? (
+                <div className="text-sm text-slate-500">Aucune facture due pour ce client.</div>
+              ) : (
+                <select
+                  className="df-input"
+                  value={selectedInvoiceId}
+                  onChange={(e) => setSelectedInvoiceId(e.target.value)}
+                >
+                  <option value="">— Sélectionner une facture —</option>
+                  {dueInvoices.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.invoice_number} · Reste dû {formatCurrencyMad(Number(i.amount_due))} ·{' '}
+                      {i.due_date ? `Échéance ${formatDate(i.due_date)}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {selectedInvoice && form.amount > Number(selectedInvoice.amount_due) && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Le montant dépasse le reste dû ({formatCurrencyMad(Number(selectedInvoice.amount_due))}). Le surplus
+                  restera non alloué.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Notes</label>
         <textarea
           className="df-input mt-1"
+          rows={2}
           value={form.notes ?? ''}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          placeholder="Observations, contexte du paiement…"
         />
       </div>
+
       <div className="flex justify-end gap-2">
         <button type="button" className="df-btn df-btn--ghost" onClick={onCancel}>
           Annuler
         </button>
-        <button type="submit" className="df-btn df-btn--primary" disabled={submitting}>
-          Enregistrer
+        <button
+          type="submit"
+          className="df-btn df-btn--primary"
+          disabled={submitting || !form.customer_id || form.amount <= 0}
+        >
+          {submitting ? 'Enregistrement…' : 'Enregistrer le paiement'}
         </button>
       </div>
     </form>

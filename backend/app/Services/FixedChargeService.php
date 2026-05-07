@@ -115,6 +115,96 @@ class FixedChargeService
         return $n;
     }
 
+    /**
+     * Notify accounting/management roles about upcoming fixed-charge payments based
+     * on the parent charge's frequency:
+     *   monthly   →  10d, 5d, 1d
+     *   quarterly →  30d, 10d, 5d, 1d
+     *   yearly    →  90d, 30d, 10d, 5d, 1d
+     *   one_time  →  same as yearly
+     * Each (payment, threshold) pair fires at most once thanks to a category-based
+     * deduplication on the Notification entity.
+     */
+    public function notifyUpcomingPayments(): int
+    {
+        $thresholdsByFrequency = [
+            'monthly'   => [10, 5, 1],
+            'quarterly' => [30, 10, 5, 1],
+            'yearly'    => [90, 30, 10, 5, 1],
+            'one_time'  => [90, 30, 10, 5, 1],
+        ];
+        $today = Carbon::today();
+        $sent = 0;
+
+        FixedChargePayment::query()
+            ->with('fixedCharge')
+            ->where('status', 'pending')
+            ->whereDate('due_date', '>=', $today->toDateString())
+            ->whereDate('due_date', '<=', $today->copy()->addDays(90)->toDateString())
+            ->each(function (FixedChargePayment $payment) use ($thresholdsByFrequency, $today, &$sent): void {
+                $charge = $payment->fixedCharge;
+                if (! $charge) {
+                    return;
+                }
+                $thresholds = $thresholdsByFrequency[$charge->frequency] ?? $thresholdsByFrequency['monthly'];
+                $daysUntil = $today->diffInDays(Carbon::parse($payment->due_date->toDateString()), false);
+
+                foreach ($thresholds as $threshold) {
+                    if ($daysUntil !== $threshold) {
+                        continue;
+                    }
+                    $category = "finance.fixed_charge_due_{$threshold}d";
+
+                    $alreadySent = \App\Models\Notification::query()
+                        ->where('category', $category)
+                        ->where('entity_type', $payment->getMorphClass())
+                        ->where('entity_id', (string) $payment->getKey())
+                        ->exists();
+                    if ($alreadySent) {
+                        continue;
+                    }
+
+                    $priority = match (true) {
+                        $threshold <= 1  => 'urgent',
+                        $threshold <= 5  => 'high',
+                        default          => 'normal',
+                    };
+
+                    $title = $threshold === 1
+                        ? 'Charge fixe — échéance demain'
+                        : "Charge fixe — échéance dans {$threshold} jours";
+                    $body = sprintf(
+                        '%s · %s MAD · échéance le %s',
+                        $charge->name ?? 'Charge fixe',
+                        number_format((float) $payment->amount, 2, ',', ' '),
+                        $payment->due_date->toDateString(),
+                    );
+
+                    $this->notifications->notifyRoles(
+                        roleCodes: ['COMPTABLE', 'DIRECTEUR', 'ADMIN'],
+                        category: $category,
+                        title: $title,
+                        body: $body,
+                        module: 'finance',
+                        priority: $priority,
+                        entity: $payment,
+                        linkUrl: '/finance/fixed-charges',
+                        payload: [
+                            'fixed_charge_id' => $charge->id,
+                            'payment_id'      => $payment->id,
+                            'frequency'       => $charge->frequency,
+                            'threshold_days'  => $threshold,
+                            'due_date'        => $payment->due_date->toDateString(),
+                            'amount'          => (float) $payment->amount,
+                        ],
+                    );
+                    $sent++;
+                }
+            });
+
+        return $sent;
+    }
+
     private function notifyOverdue(FixedChargePayment $payment): void
     {
         $charge = $payment->fixedCharge;

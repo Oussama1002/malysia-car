@@ -1,4 +1,5 @@
 import { apiClient, endpoints, getApiBase } from '@/services/apiClient';
+import { formatEntityCode, formatReservationCode } from '@/services/entityCode';
 
 type ApiListResponse<T> = { data: T[]; meta?: unknown; links?: unknown };
 
@@ -51,10 +52,10 @@ export const opsApi = {
     const res = await apiClient<ApiListResponse<MissionDto>>(endpoints.missions.list);
     return res.data.map((m) => ({
       id: m.id,
-      title: m.title ?? `${m.mission_type} #${m.id.slice(0, 6)}`,
+      title: m.title ?? `${m.mission_type} ${formatEntityCode('M', m.id)}`,
       status: m.status === 'planned' ? 'PENDING' : m.status === 'in_progress' ? 'IN_PROGRESS' : m.status === 'completed' ? 'DONE' : 'PENDING',
       scheduledAt: m.scheduled_start_at ?? new Date().toISOString(),
-      clientName: m.reservation_id ? `Reservation ${m.reservation_id.slice(0, 6)}` : 'Client',
+      clientName: m.reservation_id ? `Réservation ${formatReservationCode(m.reservation_id)}` : 'Client',
       address: m.destination_address ?? m.origin_address ?? '',
     }));
   },

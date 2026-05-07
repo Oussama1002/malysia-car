@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, endpoints, getApiBase, apiClient } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
 import { opsApi, type RentalAvailabilityDto, type ReservationDto } from '@/services/opsApi';
-import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
+import { contractsApi } from '@/services/contractsApi';
+import type { ContractDto, CustomerDto, FleetVehicleDto } from '@/services/dtos';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
+import { formatClientCode, formatVehicleCode } from '@/services/entityCode';
+import { labelContractType, labelContractStatus, labelReservationStatus } from '@/services/labels';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -47,6 +51,12 @@ export const ReservationsOpsPage: React.FC = () => {
   const reservationsQ = useQuery({
     queryKey: queryKeys.reservations,
     queryFn: async () => opsApi.reservations(),
+    enabled: hasBackend(),
+  });
+
+  const contractsQ = useQuery({
+    queryKey: ['contracts', 'rental-relevant'],
+    queryFn: async () => contractsApi.list(),
     enabled: hasBackend(),
   });
 
@@ -361,6 +371,100 @@ export const ReservationsOpsPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Contracts created in the contracts module — surfaced here for rental management */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-black text-slate-900">Contrats actifs</div>
+            <div className="text-xs text-slate-500">
+              Contrats créés dans le module Contrats (LLD, LOA, location courte durée…). Cliquez pour gérer.
+            </div>
+          </div>
+          <Link
+            to="/contracts"
+            className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Module contrats →
+          </Link>
+        </div>
+        {contractsQ.isLoading ? (
+          <div className="text-sm text-slate-500">Chargement des contrats…</div>
+        ) : contractsQ.isError ? (
+          <div className="text-sm text-rose-600">Erreur lors du chargement des contrats.</div>
+        ) : (() => {
+          const all = (contractsQ.data ?? []) as ContractDto[];
+          const rentalTypes = ['LLD', 'LOA', 'LOCATION_COURTE'];
+          const list = all.filter((c) => rentalTypes.includes(String(c.type)));
+          if (list.length === 0) {
+            return <div className="text-sm text-slate-500">Aucun contrat de location à afficher.</div>;
+          }
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Référence</th>
+                    <th className="px-3 py-2 text-left">Type</th>
+                    <th className="px-3 py-2 text-left">Client</th>
+                    <th className="px-3 py-2 text-left">Véhicule</th>
+                    <th className="px-3 py-2 text-left">Période</th>
+                    <th className="px-3 py-2 text-right">Montant</th>
+                    <th className="px-3 py-2 text-left">Statut</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {list.map((c) => (
+                    <tr key={String(c.id)} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 font-mono font-bold text-slate-900">{c.reference}</td>
+                      <td className="px-3 py-2">
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
+                          {labelContractType(c.type)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                        {formatClientCode(c.customerId ?? c.clientId)}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                        {formatVehicleCode(c.vehicleId)}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-600">
+                        {c.startDate ? new Date(c.startDate).toLocaleDateString('fr-MA') : '—'}
+                        {' → '}
+                        {c.endDate ? new Date(c.endDate).toLocaleDateString('fr-MA') : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {Number(c.amountMad ?? 0).toLocaleString('fr-MA')} MAD
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge
+                          label={labelContractStatus(c.status)}
+                          tone={
+                            c.status === 'ACTIVE' || c.status === 'active'
+                              ? 'success'
+                              : c.status === 'TERMINATED' || c.status === 'cancelled'
+                              ? 'danger'
+                              : 'info'
+                          }
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Link
+                          to={`/contracts/${c.id}`}
+                          className="text-xs font-black text-indigo-600 hover:underline"
+                        >
+                          Gérer →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </div>
+
       <SearchFilterBar placeholder="Filtrer…" value={q} onChange={setQ} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]">
@@ -371,14 +475,14 @@ export const ReservationsOpsPage: React.FC = () => {
               <div>
                 <div className="text-xs font-black text-slate-400 uppercase tracking-widest">{r.reservation_number}</div>
                 <div className="mt-1 text-sm font-bold text-slate-900">
-                  Client <span className="font-mono">{r.customer_id.slice(0, 8)}</span> · Véhicule <span className="font-mono">{r.vehicle_id.slice(0, 8)}</span>
+                  Client <span className="font-mono">{formatClientCode(r.customer_id)}</span> · Véhicule <span className="font-mono">{formatVehicleCode(r.vehicle_id)}</span>
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
                   {new Date(r.desired_start_at).toLocaleString('fr-MA')} → {new Date(r.desired_end_at).toLocaleString('fr-MA')}
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <StatusBadge label={r.status} tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : 'info'} />
+                <StatusBadge label={labelReservationStatus(r.status)} tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : 'info'} />
                 <button
                   className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
                   disabled={createMission.isPending}

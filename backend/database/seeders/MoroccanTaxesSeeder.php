@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class MoroccanTaxesSeeder extends Seeder
 {
@@ -36,19 +37,24 @@ class MoroccanTaxesSeeder extends Seeder
                     ]
                 );
             } else {
-                DB::table('taxes')->updateOrInsert(
-                    ['code' => $row['code']],
-                    [
-                        'name' => $row['name'],
-                        'rate' => $row['rate'],
-                        'tax_type' => $row['tax_type'],
-                        'applies_to' => $row['applies_to'],
-                        'is_active' => 1,
-                        'account_code' => $row['account_code'],
-                        'updated_at' => now(),
-                        'created_at' => now(),
-                    ]
-                );
+                $existing = DB::table('taxes')->where('code', $row['code'])->first();
+                $payload = [
+                    'code' => $row['code'],
+                    'name' => $row['name'],
+                    'rate' => $row['rate'],
+                    'tax_type' => $row['tax_type'],
+                    'applies_to' => $row['applies_to'],
+                    'is_active' => 1,
+                    'account_code' => $row['account_code'],
+                    'updated_at' => now(),
+                ];
+                if ($existing) {
+                    DB::table('taxes')->where('id', $existing->id)->update($payload);
+                } else {
+                    $payload['id'] = (string) Str::uuid();
+                    $payload['created_at'] = now();
+                    DB::table('taxes')->insert($payload);
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class MoroccanAccountingJournalsSeeder extends Seeder
 {
@@ -36,20 +37,25 @@ class MoroccanAccountingJournalsSeeder extends Seeder
                     ]
                 );
             } else {
-                DB::table('accounting_journals')->updateOrInsert(
-                    ['code' => $row['code']],
-                    [
-                        'company_id' => null,
-                        'name' => $row['name'],
-                        'journal_type' => $row['journal_type'],
-                        'is_active' => 1,
-                        'is_default' => $row['code'] === 'OD' ? 1 : 0,
-                        'sequence_prefix' => $row['code'],
-                        'sequence_next' => 1,
-                        'updated_at' => now(),
-                        'created_at' => now(),
-                    ]
-                );
+                $existing = DB::table('accounting_journals')->where('code', $row['code'])->first();
+                $payload = [
+                    'company_id' => null,
+                    'code' => $row['code'],
+                    'name' => $row['name'],
+                    'journal_type' => $row['journal_type'],
+                    'is_active' => 1,
+                    'is_default' => $row['code'] === 'OD' ? 1 : 0,
+                    'sequence_prefix' => $row['code'],
+                    'sequence_next' => 1,
+                    'updated_at' => now(),
+                ];
+                if ($existing) {
+                    DB::table('accounting_journals')->where('id', $existing->id)->update($payload);
+                } else {
+                    $payload['id'] = (string) Str::uuid();
+                    $payload['created_at'] = now();
+                    DB::table('accounting_journals')->insert($payload);
+                }
             }
         }
     }

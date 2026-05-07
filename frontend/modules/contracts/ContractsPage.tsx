@@ -6,6 +6,7 @@ import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
 import { contractsApi } from '@/services/contractsApi';
+import { labelContractType, labelContractStatus } from '@/services/labels';
 
 function formatAmount(value: unknown): string {
   const amount = typeof value === 'number' ? value : Number(value);
@@ -82,8 +83,8 @@ export const ContractsPage: React.FC = () => {
         loading={q.isLoading}
         columns={[
           { key: 'ref', header: 'Référence', render: (r) => <span className="font-mono text-xs font-bold">{r.reference}</span> },
-          { key: 'type', header: 'Type', render: (r) => <StatusBadge label={r.type} tone="info" /> },
-          { key: 'status', header: 'Statut', render: (r) => <span className="text-sm font-bold">{r.status}</span> },
+          { key: 'type', header: 'Type', render: (r) => <StatusBadge label={labelContractType(r.type)} tone="info" /> },
+          { key: 'status', header: 'Statut', render: (r) => <span className="text-sm font-bold">{labelContractStatus(r.status)}</span> },
           {
             key: 'amt',
             header: 'Montant',

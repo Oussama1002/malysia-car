@@ -18,6 +18,14 @@ class DatabaseSeeder extends Seeder
         // Always seed the RBAC catalogue (idempotent, safe on MySQL and SQLite).
         $this->call(RbacSeeder::class);
 
+        // Accounting baseline (PCG marocain, journaux, taxes, exercice fiscal courant).
+        $this->call([
+            FiscalYearSeeder::class,
+            MoroccanChartOfAccountsSeeder::class,
+            MoroccanAccountingJournalsSeeder::class,
+            MoroccanTaxesSeeder::class,
+        ]);
+
         if (config('database.default') !== 'sqlite') {
             $this->command?->info('Skipping user seeder: use driveflow_db users or insert via SQL (see docs/DATABASE-LOCAL.md).');
 

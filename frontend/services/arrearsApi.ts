@@ -102,7 +102,7 @@ function q(p: Record<string, unknown>): string {
 // ============================================================================
 // Arrears cases
 // ============================================================================
-export interface ArrearsCaseListParams { stage?: ArrearsStage; customer_id?: string; branch_id?: string; assigned_to_user_id?: string; search?: string; page?: number; per_page?: number; }
+export interface ArrearsCaseListParams { stage?: ArrearsStage; customer_id?: string; contract_id?: string; branch_id?: string; assigned_to_user_id?: string; search?: string; page?: number; per_page?: number; }
 
 export function listArrearsCases(params: ArrearsCaseListParams = {}): Promise<Paginated<ArrearsCase>> {
   return apiClient<Paginated<ArrearsCase>>(`/v1/arrears/cases${q(params as Record<string, unknown>)}`);

@@ -28,6 +28,9 @@ class ArrearsCaseController extends Controller
         if ($customer = $request->query('customer_id')) {
             $q->where('customer_id', $customer);
         }
+        if ($contract = $request->query('contract_id')) {
+            $q->where('contract_id', $contract);
+        }
         if ($branch = $request->query('branch_id')) {
             $q->where('branch_id', $branch);
         }

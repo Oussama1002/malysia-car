@@ -87,7 +87,16 @@ class FixedChargeController extends Controller
 
         AuditLogger::created($row, $request->user(), request: $request);
 
-        return ApiResponse::success($row, null, null, 201);
+        // Generate the first pending payment so the alert scheduler can track upcoming due dates.
+        try {
+            if ($row->status === 'active' && $row->next_due_date) {
+                DB::transaction(fn () => $this->svc->generatePayment($row));
+            }
+        } catch (\Throwable $e) {
+            // Non-blocking — charge is created even if first payment generation fails
+        }
+
+        return ApiResponse::success($row->fresh(['payments']), null, null, 201);
     }
 
     public function show(FixedCharge $fixedCharge): JsonResponse

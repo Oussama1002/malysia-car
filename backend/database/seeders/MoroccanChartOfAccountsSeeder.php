@@ -38,20 +38,28 @@ class MoroccanChartOfAccountsSeeder extends Seeder
     public function run(): void
     {
         foreach (self::rows() as $row) {
-            AccountingAccount::query()->updateOrCreate(
-                ['code' => $row['code']],
-                [
-                    'id' => AccountingAccount::query()->where('code', $row['code'])->value('id') ?? (string) Str::uuid(),
-                    'company_id' => null,
-                    'name' => $row['name'],
-                    'account_type' => $row['account_type'],
-                    'normal_balance' => $row['normal_balance'],
-                    'is_detail' => true,
-                    'is_active' => true,
-                    'allow_direct_posting' => true,
-                    'currency_code' => 'MAD',
-                ]
-            );
+            $existing = \DB::table('accounting_accounts')->where('code', $row['code'])->first();
+            $payload = [
+                'company_id' => null,
+                'code' => $row['code'],
+                'name' => $row['name'],
+                'account_type' => $row['account_type'],
+                'normal_balance' => $row['normal_balance'],
+                'is_detail' => true,
+                'is_active' => true,
+                'allow_direct_posting' => true,
+                'currency_code' => 'MAD',
+                'opening_balance' => 0,
+                'current_balance' => 0,
+                'updated_at' => now(),
+            ];
+            if ($existing) {
+                \DB::table('accounting_accounts')->where('id', $existing->id)->update($payload);
+            } else {
+                $payload['id'] = (string) Str::uuid();
+                $payload['created_at'] = now();
+                \DB::table('accounting_accounts')->insert($payload);
+            }
         }
     }
 }

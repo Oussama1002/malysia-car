@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Icon } from '@/modules/shared/components/Icon';
+import { labelPaymentMethod } from '@/services/labels';
 
 type Dashboard = {
   totalMonthlyEquivalent: number;
@@ -146,70 +147,71 @@ export const FixedChargesPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="df-card p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-bold">Liste Charges fixes</h2>
-          <span className="rounded-full bg-[color:var(--df-surface-sunk)] px-2.5 py-1 text-xs font-semibold text-[color:var(--df-text-muted)]">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
+          <h2 className="text-sm font-bold text-slate-900">Liste des charges fixes</h2>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
             {(listQ.data ?? []).length} ligne(s)
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="df-table w-full min-w-[900px] text-sm">
-            <thead>
-              <tr>
-                <th>Charge</th>
-                <th>Catégorie</th>
-                <th>Montant</th>
-                <th>Fréquence</th>
-                <th>Prochaine échéance</th>
-                <th>Statut</th>
-                <th className="text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {listQ.isLoading && (
+        {listQ.isLoading ? (
+          <div className="px-5 py-12 text-center text-sm text-slate-500">Chargement des charges fixes…</div>
+        ) : (listQ.data ?? []).length === 0 ? (
+          <div className="px-5 py-12 text-center text-sm text-slate-400">Aucune charge fixe enregistrée.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-sm text-[color:var(--df-text-muted)]">
-                    Chargement des charges fixes…
-                  </td>
+                  <th className="px-4 py-3 text-left">Charge</th>
+                  <th className="px-4 py-3 text-left">Catégorie</th>
+                  <th className="px-4 py-3 text-right">Montant</th>
+                  <th className="px-4 py-3 text-left">Fréquence</th>
+                  <th className="px-4 py-3 text-left">Prochaine échéance</th>
+                  <th className="px-4 py-3 text-left">Statut</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
-              )}
-              {!listQ.isLoading && (listQ.data ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-sm text-[color:var(--df-text-muted)]">
-                    Aucune charge fixe enregistrée.
-                  </td>
-                </tr>
-              )}
-              {(listQ.data ?? []).map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <div className="font-semibold text-[color:var(--df-text)]">{row.name}</div>
-                    <div className="mt-0.5 font-mono text-[11px] text-[color:var(--df-text-faint)]">{row.id.slice(0, 8)}…</div>
-                  </td>
-                  <td>
-                    <span className="rounded-full bg-[color:var(--df-surface-sunk)] px-2 py-0.5 text-xs font-semibold text-[color:var(--df-text-muted)]">
-                      {row.category}
-                    </span>
-                  </td>
-                  <td className="font-semibold">{formatCurrencyMad(Number(row.amount))}</td>
-                  <td>{frequencyLabel[row.frequency] ?? row.frequency}</td>
-                  <td>{formatDate(row.next_due_date)}</td>
-                  <td>
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${statusMeta[row.status]?.className ?? 'bg-slate-100 text-slate-700'}`}>
-                      {statusMeta[row.status]?.label ?? row.status}
-                    </span>
-                  </td>
-                  <td className="text-right">
-                    <button type="button" className="df-btn df-btn--ghost df-btn--sm" onClick={() => setSelectedId(row.id)}>
-                      <Icon name="eye" size={14} /> Détail
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(listQ.data ?? []).map((row) => (
+                  <tr key={row.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-900">{row.name}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                        {row.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-slate-800">
+                      {formatCurrencyMad(Number(row.amount))}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{frequencyLabel[row.frequency] ?? row.frequency}</td>
+                    <td className="px-4 py-3 text-slate-700">{formatDate(row.next_due_date)}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                          statusMeta[row.status]?.className ?? 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {statusMeta[row.status]?.label ?? row.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        onClick={() => setSelectedId(row.id)}
+                      >
+                        <Icon name="eye" size={14} /> Détail
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {selectedId && (
@@ -238,7 +240,7 @@ export const FixedChargesPage: React.FC = () => {
                   <DetailField label="Prochaine échéance" value={formatDate((detailQ.data.next_due_date as string | null) ?? null)} />
                   <DetailField label="Statut" value={statusMeta[String(detailQ.data.status ?? '')]?.label ?? String(detailQ.data.status ?? '—')} />
                   <DetailField label="Fournisseur" value={String(detailQ.data.supplier_name ?? '—')} />
-                  <DetailField label="Mode de paiement" value={String(detailQ.data.payment_method ?? '—')} />
+                  <DetailField label="Mode de paiement" value={labelPaymentMethod(detailQ.data.payment_method as string | null | undefined)} />
                   <DetailField label="Devise" value={String(detailQ.data.currency_code ?? 'MAD')} />
                 </div>
               )}

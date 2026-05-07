@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { subRentalApi, type SubRentalPayment, type PaymentMethod } from '@/services/subRentalApi';
 import { getApiBase } from '@/services/apiClient';
+import { labelPaymentMethod, labelPaymentStatus } from '@/services/labels';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
 
@@ -256,8 +257,8 @@ export const SubRentalDetailPage: React.FC = () => {
                 <InfoRow label="Coût journalier" value={`${Number(c.daily_cost).toLocaleString('fr-MA')} MAD`} />
                 <InfoRow label="Coût total" value={`${Number(c.total_cost).toLocaleString('fr-MA')} MAD`} />
                 <InfoRow label="Caution" value={c.deposit_amount ? `${Number(c.deposit_amount).toLocaleString('fr-MA')} MAD` : '—'} />
-                <InfoRow label="Mode de paiement" value={c.payment_method} />
-                <InfoRow label="Statut paiement" value={c.payment_status} />
+                <InfoRow label="Mode de paiement" value={labelPaymentMethod(c.payment_method)} />
+                <InfoRow label="Statut paiement" value={labelPaymentStatus(c.payment_status)} />
               </div>
             </div>
             {c.notes && (
@@ -379,7 +380,7 @@ export const SubRentalDetailPage: React.FC = () => {
                         <tr key={p.id}>
                           <td className="px-3 py-2 text-slate-600">{new Date(p.payment_date).toLocaleDateString('fr-MA')}</td>
                           <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">{Number(p.amount).toLocaleString('fr-MA')} MAD</td>
-                          <td className="px-3 py-2 text-slate-600">{p.payment_method}</td>
+                          <td className="px-3 py-2 text-slate-600">{labelPaymentMethod(p.payment_method)}</td>
                           <td className="px-3 py-2 text-slate-500 text-xs">{p.reference ?? '—'}</td>
                         </tr>
                       ))}

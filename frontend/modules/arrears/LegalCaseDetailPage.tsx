@@ -14,6 +14,7 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { formatClientCode } from '@/services/entityCode';
 
 const STATUS_LABEL: Record<LegalCase['status'], string> = {
   open: 'Ouvert',
@@ -98,7 +99,7 @@ export const LegalCaseDetailPage: React.FC = () => {
         <div>
           <Link to="/arrears/legal" className="text-xs font-bold text-indigo-600">← Dossiers juridiques</Link>
           <h1 className="text-2xl font-black text-slate-900">{legalCase.case_number}</h1>
-          <p className="text-slate-500">{legalCase.customer?.full_name ?? legalCase.customer_id}</p>
+          <p className="text-slate-500">{legalCase.customer?.full_name ?? formatClientCode(legalCase.customer_id)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <StatusBadge label={STATUS_LABEL[legalCase.status]} tone={STATUS_TONE[legalCase.status]} />
