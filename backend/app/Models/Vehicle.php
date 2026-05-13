@@ -70,6 +70,14 @@ class Vehicle extends Model
         'unavailability_reason',
         'current_customer_id',
         'current_contract_id',
+        'vehicle_type',
+        'numero_police',
+        'nombre_cylindres',
+        'gamme',
+        'mise_en_circulation',
+        'date_immatriculation',
+        'categorie',
+        'immat_online',
     ];
 
     protected $casts = [
@@ -78,6 +86,8 @@ class Vehicle extends Model
         'insurance_expiry' => 'date',
         'tech_control_expiry' => 'date',
         'vignette_expiry' => 'date',
+        'mise_en_circulation' => 'date',
+        'date_immatriculation' => 'date',
         'purchase_price' => 'decimal:2',
         'residual_value' => 'decimal:2',
         'book_value' => 'decimal:2',

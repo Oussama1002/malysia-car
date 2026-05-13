@@ -47,11 +47,20 @@ class VehicleResource extends JsonResource
             'currentReservationId' => $v->current_reservation_id,
             'unavailabilityReason' => $v->unavailability_reason,
             'acquisitionType' => $v->acquisition_type,
+            'acquisitionDate' => $v->acquisition_date?->toDateString(),
             'purchaseCostMad' => $v->purchase_price !== null ? (float) $v->purchase_price : null,
             'currentValueMad' => $v->book_value !== null ? (float) $v->book_value : null,
             'branchId' => $v->branch_id,
             'pricePerDay' => $v->daily_rental_price !== null ? (float) $v->daily_rental_price : null,
             'photoUrl' => $this->resolvePhotoUrl($v),
+            'vehicleType' => $v->vehicle_type,
+            'numeroPolice' => $v->numero_police,
+            'nombreCylindres' => $v->nombre_cylindres !== null ? (int) $v->nombre_cylindres : null,
+            'gamme' => $v->gamme,
+            'miseEnCirculation' => $v->mise_en_circulation?->toDateString(),
+            'dateImmatriculation' => $v->date_immatriculation?->toDateString(),
+            'categorie' => $v->categorie,
+            'immatOnline' => $v->immat_online,
         ];
     }
 
