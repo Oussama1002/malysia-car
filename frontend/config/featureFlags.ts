@@ -15,5 +15,5 @@ export function isFeatureEnabled(flag: FeatureFlag): boolean {
  * Set `VITE_ENABLE_REAL_DASHBOARD=true` when backend metrics are validated.
  */
 export function isRealDashboardEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_REAL_DASHBOARD === 'true';
+  return import.meta.env.VITE_ENABLE_REAL_DASHBOARD !== 'false';
 }
