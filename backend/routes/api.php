@@ -186,7 +186,11 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:vehicles.view');
         Route::post('vehicle-brands', [VehicleBrandController::class, 'storeBrand'])
             ->middleware('permission:vehicles.create');
+        Route::put('vehicle-brands/{brand}', [VehicleBrandController::class, 'updateBrand'])
+            ->middleware('permission:vehicles.create');
         Route::post('vehicle-models', [VehicleBrandController::class, 'storeModel'])
+            ->middleware('permission:vehicles.create');
+        Route::put('vehicle-models/{model}', [VehicleBrandController::class, 'updateModel'])
             ->middleware('permission:vehicles.create');
 
         Route::get('vehicles', [VehicleController::class, 'index'])

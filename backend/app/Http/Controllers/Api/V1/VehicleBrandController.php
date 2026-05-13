@@ -68,4 +68,26 @@ class VehicleBrandController extends Controller
             'brand_id' => $model->brand_id,
         ], null, null, $existing ? 200 : 201);
     }
+
+    public function updateBrand(Request $request, VehicleBrand $brand): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+        ]);
+
+        $brand->update(['name' => trim($data['name'])]);
+
+        return ApiResponse::success(['id' => $brand->id, 'name' => $brand->name]);
+    }
+
+    public function updateModel(Request $request, VehicleModel $model): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+        ]);
+
+        $model->update(['name' => trim($data['name'])]);
+
+        return ApiResponse::success(['id' => $model->id, 'name' => $model->name, 'brand_id' => $model->brand_id]);
+    }
 }

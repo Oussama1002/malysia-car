@@ -75,6 +75,7 @@ import { SettingsPage } from '@/modules/settings/SettingsPage';
 import { UserManagementPage } from '@/modules/settings/UserManagementPage';
 import { RolesPermissionsPage } from '@/modules/settings/RolesPermissionsPage';
 import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
+import { VehiculeSettingsPage } from '@/modules/settings/VehiculeSettingsPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
 import { RentalsPage } from '@/modules/rentals/RentalsPage';
@@ -680,6 +681,16 @@ export default function AppRoutes(): React.ReactElement {
                 <ModuleGate module="settings">
                   <SettingsRoleGate>
                     <BranchManagementPage />
+                  </SettingsRoleGate>
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/settings/vehicules"
+              element={
+                <ModuleGate module="settings">
+                  <SettingsRoleGate>
+                    <VehiculeSettingsPage />
                   </SettingsRoleGate>
                 </ModuleGate>
               }
