@@ -255,6 +255,18 @@ class RbacSeeder extends Seeder
             ['documents.upload', 'documents', 'Téléverser / rattacher des documents'],
             ['documents.delete', 'documents', 'Supprimer des documents du centre'],
             ['documents.generate', 'documents', 'Générer un PDF (contrat / facture)'],
+
+            // === Granular — Sous-location (Sub-rental) ===
+            ['supplier_agencies.view',   'fleet', 'Voir les agences fournisseurs'],
+            ['supplier_agencies.manage', 'fleet', 'Gérer les agences fournisseurs'],
+            ['sub_rentals.view',         'fleet', 'Voir les contrats de sous-location'],
+            ['sub_rentals.create',       'fleet', 'Créer un contrat de sous-location'],
+            ['sub_rentals.update',       'fleet', 'Modifier un contrat de sous-location'],
+            ['sub_rentals.activate',     'fleet', 'Activer un contrat de sous-location'],
+            ['sub_rentals.return',       'fleet', 'Retourner un véhicule au fournisseur'],
+            ['sub_rentals.close',        'fleet', 'Clôturer un contrat de sous-location'],
+            ['sub_rentals.payments',     'fleet', 'Gérer les paiements fournisseur'],
+            ['sub_rentals.documents',    'fleet', 'Gérer les documents sous-location'],
         ];
 
         foreach ($permissions as [$code, $module, $desc]) {
@@ -290,6 +302,10 @@ class RbacSeeder extends Seeder
 
         $admin_full = ['users.view', 'users.create', 'users.update', 'users.delete', 'users.activate', 'users.assign_branches', 'users.view_login_history', 'roles.view', 'roles.manage', 'roles.sync_permissions', 'permissions.view', 'branches.view', 'branches.manage', 'audit.view', 'documents.view', 'documents.upload', 'documents.delete', 'documents.generate'];
 
+        $sub_rental_read  = ['sub_rentals.view', 'supplier_agencies.view'];
+        $sub_rental_write = ['sub_rentals.create', 'sub_rentals.update', 'sub_rentals.activate', 'sub_rentals.return', 'sub_rentals.close', 'sub_rentals.documents', 'supplier_agencies.manage'];
+        $sub_rental_finance = ['sub_rentals.payments'];
+
         $roleMatrix = [
             'ADMIN' => ['Administrateur système', '*'],
 
@@ -309,7 +325,8 @@ class RbacSeeder extends Seeder
                 ['reservations.view', 'reservations.create', 'missions.view', 'missions.customer_signature', 'mobile_ops.customer_tracking'],
                 ['reservations.confirm', 'reservations.cancel', 'rentals.availability', 'rentals.handover_pickup', 'rentals.handover_return', 'rentals.extension', 'rentals.damage_report', 'rentals.close_billing'],
                 ['dashboard.executive', 'dashboard.finance', 'dashboard.risk', 'dashboard.fleet', 'dashboard.gps'],
-                ['users.view', 'users.create', 'users.update', 'users.activate', 'users.assign_branches', 'users.view_login_history', 'roles.view', 'permissions.view', 'branches.view', 'branches.manage', 'audit.view', 'documents.view', 'documents.upload', 'documents.delete', 'documents.generate']
+                ['users.view', 'users.create', 'users.update', 'users.activate', 'users.assign_branches', 'users.view_login_history', 'roles.view', 'permissions.view', 'branches.view', 'branches.manage', 'audit.view', 'documents.view', 'documents.upload', 'documents.delete', 'documents.generate'],
+                $sub_rental_read, $sub_rental_write, $sub_rental_finance
             )],
 
             'ANALYSTE_CREDIT' => ['Analyste crédit', array_merge(
@@ -348,7 +365,8 @@ class RbacSeeder extends Seeder
                 ['reservations.view', 'reservations.create', 'reservations.create_mission'],
                 ['reservations.confirm', 'reservations.cancel', 'rentals.availability', 'rentals.extension', 'rentals.damage_report'],
                 ['missions.view'],
-                ['dashboard.fleet', 'dashboard.gps']
+                ['dashboard.fleet', 'dashboard.gps'],
+                $sub_rental_read, $sub_rental_write, $sub_rental_finance
             )],
 
             'COMPTABLE' => ['Comptable', array_merge(
@@ -360,7 +378,8 @@ class RbacSeeder extends Seeder
                 $finance_read, $finance_write,
                 ['arrears.view'],
                 ['signatures.view'],
-                ['dashboard.finance']
+                ['dashboard.finance'],
+                $sub_rental_read, $sub_rental_finance
             )],
 
             'CONTENTIEUX' => ['Contentieux', array_merge(
@@ -372,7 +391,8 @@ class RbacSeeder extends Seeder
                 $arrears_read, $arrears_write,
                 ['invoices.view', 'payments.view', 'customer_balance.view'],
                 ['signatures.view'],
-                ['dashboard.risk']
+                ['dashboard.risk'],
+                $sub_rental_read
             )],
 
             'AGENT_LIVRAISON' => ['Agent de livraison', array_merge(

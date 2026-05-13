@@ -12,7 +12,6 @@ import { FleetVehicleDetailPage } from '@/modules/fleet/FleetVehicleDetailPage';
 import { FleetMaintenanceDashboardPage } from '@/modules/fleet/FleetMaintenanceDashboardPage';
 import { FleetComplianceDashboardPage } from '@/modules/fleet/FleetComplianceDashboardPage';
 import { FleetAnalysisPage } from '@/modules/fleet/FleetAnalysisPage';
-import { SubRentalsPage } from '@/modules/fleet/SubRentalsPage';
 import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
@@ -79,6 +78,11 @@ import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
 import { RentalsPage } from '@/modules/rentals/RentalsPage';
+// Sous-location
+import { SubRentalsPage } from '@/modules/subRentals/SubRentalsPage';
+import { SubRentalCreatePage } from '@/modules/subRentals/SubRentalCreatePage';
+import { SubRentalDetailPage } from '@/modules/subRentals/SubRentalDetailPage';
+import { SupplierAgenciesPage } from '@/modules/subRentals/SupplierAgenciesPage';
 import { ProfilePage } from '@/modules/profile/ProfilePage';
 import { AgencePage } from '@/modules/profile/AgencePage';
 import { ModuleGate } from '@/routes/ModuleGate';
@@ -221,15 +225,6 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
-            <Route
-              path="/fleet/sub-rentals"
-              element={
-                <ModuleGate module="fleet">
-                  <SubRentalsPage />
-                </ModuleGate>
-              }
-            />
-
             <Route
               path="/customers"
               element={
@@ -720,6 +715,40 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
             <Route path="/reservations" element={<Navigate to="/rentals" replace />} />
+
+            {/* Sous-location */}
+            <Route
+              path="/fleet/sub-rentals"
+              element={
+                <ModuleGate module="subRentals">
+                  <SubRentalsPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/fleet/sub-rentals/new"
+              element={
+                <ModuleGate module="subRentals">
+                  <SubRentalCreatePage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/fleet/sub-rentals/:id"
+              element={
+                <ModuleGate module="subRentals">
+                  <SubRentalDetailPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/fleet/supplier-agencies"
+              element={
+                <ModuleGate module="subRentals">
+                  <SupplierAgenciesPage />
+                </ModuleGate>
+              }
+            />
 
             <Route path="*" element={<NotFoundPage />} />
           </Route>

@@ -48,6 +48,9 @@ use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\PermissionController;
 use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\Api\V1\RentalController;
+use App\Http\Controllers\Api\V1\SupplierAgencyController;
+use App\Http\Controllers\Api\V1\SubRentalController;
+use App\Http\Controllers\Api\V1\SubRentalPaymentController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VehicleBrandController;
@@ -65,8 +68,6 @@ use App\Http\Controllers\Api\V1\ComplianceAlertController;
 use App\Http\Controllers\Api\V1\VehicleRepairController;
 use App\Http\Controllers\Api\V1\VehicleMovementController;
 use App\Http\Controllers\Api\V1\FleetAnalysisController;
-use App\Http\Controllers\Api\V1\SupplierAgencyController;
-use App\Http\Controllers\Api\V1\SubRentalController;
 use App\Http\Controllers\Api\V1\FixedChargeController;
 use App\Http\Controllers\Api\V1\FixedChargePaymentController;
 use App\Http\Controllers\Api\V1\VehicleAccidentController;
@@ -303,30 +304,6 @@ Route::prefix('v1')->group(function () {
 
         Route::get('fleet/analysis', FleetAnalysisController::class)
             ->middleware('permission:vehicles.view');
-
-        Route::get('supplier-agencies', [SupplierAgencyController::class, 'index'])
-            ->middleware('permission:vehicles.view');
-        Route::post('supplier-agencies', [SupplierAgencyController::class, 'store'])
-            ->middleware('permission:vehicles.create');
-        Route::get('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'show'])
-            ->middleware('permission:vehicles.view');
-        Route::put('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'update'])
-            ->middleware('permission:vehicles.update');
-        Route::patch('supplier-agencies/{supplierAgency}', [SupplierAgencyController::class, 'update'])
-            ->middleware('permission:vehicles.update');
-
-        Route::get('sub-rentals', [SubRentalController::class, 'index'])
-            ->middleware('permission:vehicles.view');
-        Route::post('sub-rentals', [SubRentalController::class, 'store'])
-            ->middleware('permission:vehicles.create');
-        Route::get('sub-rentals/{subRentalContract}', [SubRentalController::class, 'show'])
-            ->middleware('permission:vehicles.view');
-        Route::post('sub-rentals/{subRentalContract}/activate', [SubRentalController::class, 'activate'])
-            ->middleware('permission:vehicles.update');
-        Route::post('sub-rentals/{subRentalContract}/return', [SubRentalController::class, 'returnContract'])
-            ->middleware('permission:vehicles.update');
-        Route::post('sub-rentals/{subRentalContract}/close', [SubRentalController::class, 'close'])
-            ->middleware('permission:vehicles.update');
 
         // ==================================================================
         // Phase 5 — Contracts
@@ -881,6 +858,54 @@ Route::prefix('v1')->group(function () {
             ->middleware(['permission:ai.predictions.vehicle_pricing', 'role:ADMIN,DIRECTEUR,GESTIONNAIRE_FLOTTE']);
         Route::get('ai/anomalies', [AiAnomalyController::class, 'index'])
             ->middleware(['permission:ai.anomalies', 'role:ADMIN,DIRECTEUR,CONTENTIEUX']);
+
+        // ==================================================================
+        // Sous-location (Sub-rental) module
+        // ==================================================================
+
+        // Supplier agencies
+        Route::get('supplier-agencies', [SupplierAgencyController::class, 'index'])
+            ->middleware('permission:supplier_agencies.view');
+        Route::get('supplier-agencies/{id}', [SupplierAgencyController::class, 'show'])
+            ->middleware('permission:supplier_agencies.view');
+        Route::post('supplier-agencies', [SupplierAgencyController::class, 'store'])
+            ->middleware('permission:supplier_agencies.manage');
+        Route::put('supplier-agencies/{id}', [SupplierAgencyController::class, 'update'])
+            ->middleware('permission:supplier_agencies.manage');
+        Route::patch('supplier-agencies/{id}', [SupplierAgencyController::class, 'update'])
+            ->middleware('permission:supplier_agencies.manage');
+        Route::delete('supplier-agencies/{id}', [SupplierAgencyController::class, 'destroy'])
+            ->middleware('permission:supplier_agencies.manage');
+
+        // Sub-rental contracts
+        Route::get('sub-rentals/dashboard', [SubRentalController::class, 'dashboard'])
+            ->middleware('permission:sub_rentals.view');
+        Route::get('sub-rentals', [SubRentalController::class, 'index'])
+            ->middleware('permission:sub_rentals.view');
+        Route::get('sub-rentals/{id}', [SubRentalController::class, 'show'])
+            ->middleware('permission:sub_rentals.view');
+        Route::post('sub-rentals', [SubRentalController::class, 'store'])
+            ->middleware('permission:sub_rentals.create');
+        Route::put('sub-rentals/{id}', [SubRentalController::class, 'update'])
+            ->middleware('permission:sub_rentals.update');
+        Route::patch('sub-rentals/{id}', [SubRentalController::class, 'update'])
+            ->middleware('permission:sub_rentals.update');
+        Route::post('sub-rentals/{id}/activate', [SubRentalController::class, 'activate'])
+            ->middleware('permission:sub_rentals.activate');
+        Route::post('sub-rentals/{id}/return', [SubRentalController::class, 'returnToSupplier'])
+            ->middleware('permission:sub_rentals.return');
+        Route::post('sub-rentals/{id}/close', [SubRentalController::class, 'close'])
+            ->middleware('permission:sub_rentals.close');
+        Route::get('sub-rentals/{id}/profitability', [SubRentalController::class, 'profitability'])
+            ->middleware('permission:sub_rentals.view');
+        Route::post('sub-rentals/{id}/documents', [SubRentalController::class, 'uploadDocument'])
+            ->middleware('permission:sub_rentals.documents');
+
+        // Sub-rental payments
+        Route::get('sub-rentals/{id}/payments', [SubRentalPaymentController::class, 'index'])
+            ->middleware('permission:sub_rentals.payments');
+        Route::post('sub-rentals/{id}/payments', [SubRentalPaymentController::class, 'store'])
+            ->middleware('permission:sub_rentals.payments');
 
         // ==================================================================
         // Admin / Directeur management surface

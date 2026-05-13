@@ -29,7 +29,8 @@
     "documents": "Document center",
     "settings": "Settings",
     "audit": "Audit trail",
-    "rentals": "Reservations / Rentals"
+    "rentals": "Reservations / Rentals",
+    "subRentals": "Sub-rental"
   },
   "auth": {
     "login": "Sign in",

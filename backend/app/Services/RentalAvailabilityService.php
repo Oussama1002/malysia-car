@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Contract;
 use App\Models\Mission;
 use App\Models\Reservation;
+use App\Models\SubRentalContract;
 use App\Models\Vehicle;
 use App\Models\VehicleAccident;
 use App\Models\VehicleMaintenanceEvent;
@@ -246,6 +247,36 @@ class RentalAvailabilityService
         if ($openAccident) {
             $reasons[] = 'vehicle_accident_hold';
             $messages['vehicle_accident_hold'] = 'Vehicle has an open accident case.';
+        }
+
+        // Sub-rental period constraint: reservation must fit within supplier contract
+        if (strtolower(trim((string) ($vehicle->ownership_status ?? 'owned'))) === 'sub_rented') {
+            $activeSubRental = SubRentalContract::query()
+                ->where('vehicle_id', $vehicleId)
+                ->where('status', 'active')
+                ->first();
+
+            if ($activeSubRental) {
+                $supplierStart = Carbon::parse($activeSubRental->start_date)->startOfDay();
+                $supplierEnd   = Carbon::parse($activeSubRental->end_date)->endOfDay();
+
+                if ($startAt->lessThan($supplierStart)) {
+                    $reasons[] = 'sub_rental_period_exceeded';
+                    $messages['sub_rental_period_exceeded'] = sprintf(
+                        'La réservation commence avant la période fournisseur (%s).',
+                        $activeSubRental->start_date
+                    );
+                } elseif ($endAt->greaterThan($supplierEnd)) {
+                    $reasons[] = 'sub_rental_period_exceeded';
+                    $messages['sub_rental_period_exceeded'] = sprintf(
+                        'La réservation dépasse la date de retour fournisseur (%s).',
+                        $activeSubRental->end_date
+                    );
+                }
+            } elseif (! SubRentalContract::query()->where('vehicle_id', $vehicleId)->whereIn('status', ['active', 'draft'])->exists()) {
+                $reasons[] = 'sub_rental_no_active_contract';
+                $messages['sub_rental_no_active_contract'] = 'Ce véhicule est en sous-location mais aucun contrat actif fournisseur n\'existe.';
+            }
         }
 
         $reasons = array_values(array_unique($reasons));

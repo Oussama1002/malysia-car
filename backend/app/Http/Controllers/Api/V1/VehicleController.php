@@ -128,6 +128,17 @@ class VehicleController extends Controller
             $v->notes = $data['notes'] ?? null;
             $v->branch_id = $data['branch_id'] ?? null;
             $v->company_id = $data['company_id'] ?? $request->user()?->company_id;
+            $v->vehicle_type = $data['vehicle_type'] ?? null;
+            $v->numero_police = $data['numero_police'] ?? null;
+            $v->nombre_cylindres = $data['nombre_cylindres'] ?? null;
+            $v->gamme = $data['gamme'] ?? null;
+            $v->mise_en_circulation = $data['mise_en_circulation'] ?? null;
+            $v->date_immatriculation = $data['date_immatriculation'] ?? null;
+            $v->categorie = $data['categorie'] ?? null;
+            $v->immat_online = $data['immat_online'] ?? null;
+            if (isset($data['chassis'])) {
+                $v->chassis_number = $data['chassis'];
+            }
             $v->save();
 
             VehicleStatusHistory::query()->create([
@@ -242,6 +253,9 @@ class VehicleController extends Controller
             if (array_key_exists('mileage_km', $data)) {
                 $vehicle->mileage_current = $data['mileage_km'];
             }
+            if (array_key_exists('chassis', $data)) {
+                $vehicle->chassis_number = $data['chassis'];
+            }
             if (array_key_exists('status', $data)) {
                 $vehicle->status = $data['status'];
             }
@@ -267,6 +281,14 @@ class VehicleController extends Controller
                 'current_contract_id',
                 'current_reservation_id',
                 'unavailability_reason',
+                'vehicle_type',
+                'numero_police',
+                'nombre_cylindres',
+                'gamme',
+                'mise_en_circulation',
+                'date_immatriculation',
+                'categorie',
+                'immat_online',
             ] as $k) {
                 if (array_key_exists($k, $data)) {
                     $vehicle->{$k} = $data[$k];

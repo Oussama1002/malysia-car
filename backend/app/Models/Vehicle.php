@@ -47,6 +47,7 @@ class Vehicle extends Model
         'year',
         'mileage_current',
         'status',
+        'ownership_status',
         'acquisition_type',
         'acquisition_date',
         'purchase_price',
@@ -69,6 +70,14 @@ class Vehicle extends Model
         'unavailability_reason',
         'current_customer_id',
         'current_contract_id',
+        'vehicle_type',
+        'numero_police',
+        'nombre_cylindres',
+        'gamme',
+        'mise_en_circulation',
+        'date_immatriculation',
+        'categorie',
+        'immat_online',
     ];
 
     protected $casts = [
@@ -77,6 +86,8 @@ class Vehicle extends Model
         'insurance_expiry' => 'date',
         'tech_control_expiry' => 'date',
         'vignette_expiry' => 'date',
+        'mise_en_circulation' => 'date',
+        'date_immatriculation' => 'date',
         'purchase_price' => 'decimal:2',
         'residual_value' => 'decimal:2',
         'book_value' => 'decimal:2',
@@ -211,6 +222,26 @@ class Vehicle extends Model
     public function currentReservation(): BelongsTo
     {
         return $this->belongsTo(Reservation::class, 'current_reservation_id');
+    }
+
+    /**
+     * @return HasMany<\App\Models\SubRentalContract, $this>
+     */
+    public function subRentalContracts(): HasMany
+    {
+        return $this->hasMany(\App\Models\SubRentalContract::class, 'vehicle_id');
+    }
+
+    public function activeSubRentalContract(): HasOne
+    {
+        return $this->hasOne(\App\Models\SubRentalContract::class, 'vehicle_id')
+            ->where('status', 'active')
+            ->latest();
+    }
+
+    public function isSubRented(): bool
+    {
+        return ($this->ownership_status ?? 'owned') === 'sub_rented';
     }
 }
 

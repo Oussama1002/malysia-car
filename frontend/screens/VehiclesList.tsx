@@ -11,6 +11,9 @@ interface VehicleBrandOption { id: string; name: string; models: VehicleModelOpt
 const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWY'.split('');
 const PLATE_REGIONS = Array.from({ length: 99 }, (_, i) => i + 1);
 const FUEL_OPTIONS = ['Diesel', 'Essence', 'Hybride', 'Électrique', 'GPL'];
+const GAMME_OPTIONS = ['CLASS', 'SPORT', 'MINI', 'UTL', 'AUTO MINI', 'SPORT 4x4', 'V.Citadines', 'V.Berlines', 'V.Compactes', 'V. 4x4', 'V.Luxe'];
+const CATEGORIE_OPTIONS = ['Particulier', 'Utilitaire', 'Commercial', 'Tourisme', 'Moto'];
+const VEHICLE_TYPE_OPTIONS = ['Berline', 'SUV', 'Citadine', 'Break', 'Coupé', 'Cabriolet', 'Monospace', 'Pick-up', 'Van', 'Camion'];
 
 const DocPhotoUpload: React.FC<{
   preview: string | null;
@@ -71,6 +74,18 @@ const emptyForm = () => ({
   cv: '' as string | number,
   mileageKm: '' as string | number,
   fuel: 'Diesel',
+  // new fields
+  vehicleType: '',
+  numeroPolice: '',
+  nombreCylindres: '' as string | number,
+  gamme: '',
+  acquisitionDate: '',
+  miseEnCirculation: '',
+  dateImmatriculation: '',
+  categorie: '',
+  chassis: '',
+  immatOnline: '',
+  montant: '' as string | number,
   // document photo previews
   docPhotos: {
     carteGrise: null as string | null,
@@ -180,6 +195,17 @@ const VehiclesList: React.FC = () => {
         cv: (v as any).cv ?? '',
         mileageKm: (v as any).mileageKm ?? '',
         fuel: (v as any).fuel ?? 'Diesel',
+        vehicleType: (v as any).vehicleType ?? '',
+        numeroPolice: (v as any).numeroPolice ?? '',
+        nombreCylindres: (v as any).nombreCylindres ?? '',
+        gamme: (v as any).gamme ?? '',
+        acquisitionDate: (v as any).acquisitionDate ?? '',
+        miseEnCirculation: (v as any).miseEnCirculation ?? '',
+        dateImmatriculation: (v as any).dateImmatriculation ?? '',
+        categorie: (v as any).categorie ?? '',
+        chassis: (v as any).chassisNumber ?? '',
+        immatOnline: (v as any).immatOnline ?? '',
+        montant: (v as any).purchaseCostMad ?? '',
         docPhotos: emptyForm().docPhotos,
         photoPreviews: [],
         videoPreview: '',
@@ -208,6 +234,17 @@ const VehiclesList: React.FC = () => {
         vignette_expiry: formData.vignetteExpiry || undefined,
         daily_rental_price: formData.pricePerDay || undefined,
         status: formData.status,
+        vehicle_type: formData.vehicleType || undefined,
+        numero_police: formData.numeroPolice || undefined,
+        nombre_cylindres: formData.nombreCylindres !== '' ? Number(formData.nombreCylindres) : undefined,
+        gamme: formData.gamme || undefined,
+        acquisition_date: formData.acquisitionDate || undefined,
+        mise_en_circulation: formData.miseEnCirculation || undefined,
+        date_immatriculation: formData.dateImmatriculation || undefined,
+        categorie: formData.categorie || undefined,
+        chassis: formData.chassis || undefined,
+        immat_online: formData.immatOnline || undefined,
+        purchase_price: formData.montant !== '' ? Number(formData.montant) : undefined,
       };
       if (formData.brand_id) body.brand_id = formData.brand_id;
       if (formData.model_id) body.model_id = formData.model_id;
@@ -572,133 +609,9 @@ const VehiclesList: React.FC = () => {
                 <h3 className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em]">Fiche Technique</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                  {/* Marque */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className={labelCls}>Marque</label>
-                      {brands.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setAddingBrand((v) => !v)}
-                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700"
-                        >
-                          + Ajouter
-                        </button>
-                      )}
-                    </div>
-                    {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.brand_id ?? ''}
-                        onChange={e => {
-                          const bid = e.target.value ? String(e.target.value) : null;
-                          const bObj = brands.find(b => b.id === bid);
-                          setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? '', model_id: null, model: '' }));
-                        }}>
-                        <option value="">— Sélectionner —</option>
-                        {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    ) : (
-                      <input required className={inputCls} value={formData.brand} onChange={e => setFormData(fd => ({ ...fd, brand: e.target.value }))} placeholder="ex: Dacia" />
-                    )}
-                    {addingBrand && brands.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          className={inputCls}
-                          placeholder="Nouvelle marque"
-                          value={newBrandName}
-                          onChange={(e) => setNewBrandName(e.target.value)}
-                        />
-                        <button type="button" onClick={handleAddBrand} className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black">
-                          OK
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Modèle */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className={labelCls}>Modèle</label>
-                      {brands.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setAddingModel((v) => !v)}
-                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700"
-                        >
-                          + Ajouter
-                        </button>
-                      )}
-                    </div>
-                    {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.model_id ?? ''} disabled={!formData.brand_id}
-                        onChange={e => {
-                          const mid = e.target.value ? String(e.target.value) : null;
-                          const mObj = brands.find(b => b.id === formData.brand_id)?.models.find(m => m.id === mid);
-                          setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? '' }));
-                        }}>
-                        <option value="">— Sélectionner —</option>
-                        {(brands.find(b => b.id === formData.brand_id)?.models ?? []).map(m => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input required className={inputCls} value={formData.model} onChange={e => setFormData(fd => ({ ...fd, model: e.target.value }))} placeholder="ex: Logan" />
-                    )}
-                    {addingModel && brands.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          className={inputCls}
-                          disabled={!formData.brand_id}
-                          placeholder={formData.brand_id ? 'Nouveau modèle' : 'Choisir une marque d’abord'}
-                          value={newModelName}
-                          onChange={(e) => setNewModelName(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddModel}
-                          disabled={!formData.brand_id}
-                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black disabled:opacity-50"
-                        >
-                          OK
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Année */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Année</label>
-                    <input type="number" required className={inputCls} value={formData.year}
-                      onChange={e => setFormData(fd => ({ ...fd, year: parseInt(e.target.value) }))} />
-                  </div>
-
-                  {/* CV */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Puissance (CV)</label>
-                    <input type="number" min="1" className={inputCls} placeholder="ex: 90"
-                      value={formData.cv}
-                      onChange={e => setFormData(fd => ({ ...fd, cv: e.target.value }))} />
-                  </div>
-
-                  {/* Kilométrage */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Kilométrage (km)</label>
-                    <input type="number" min="0" className={inputCls} placeholder="ex: 45000"
-                      value={formData.mileageKm}
-                      onChange={e => setFormData(fd => ({ ...fd, mileageKm: e.target.value }))} />
-                  </div>
-
-                  {/* Carburant */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Carburant</label>
-                    <select className={selectCls} value={formData.fuel}
-                      onChange={e => setFormData(fd => ({ ...fd, fuel: e.target.value }))}>
-                      {FUEL_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Immatriculation — 3 parts */}
+                  {/* Immatriculation — 3 parts (col-span-2) */}
                   <div className="space-y-2 md:col-span-2">
-                    <label className={labelCls}>Immatriculation</label>
+                    <label className={labelCls}>Immat.</label>
                     <div className="flex items-center gap-2">
                       <input
                         required
@@ -708,7 +621,7 @@ const VehiclesList: React.FC = () => {
                         className="flex-1 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
                         placeholder="12345"
                         value={formData.platNum}
-                        onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, '') }))}
+                        onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, ‘’) }))}
                       />
                       <span className="text-slate-300 font-black text-xl">–</span>
                       <select
@@ -727,7 +640,220 @@ const VehiclesList: React.FC = () => {
                         {PLATE_REGIONS.map(n => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </div>
-                    <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
+                    <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || ‘XXXXX’}-{formData.platLetter}-{formData.platRegion}</span></p>
+                  </div>
+
+                  {/* Type */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Type</label>
+                    <select className={selectCls} value={formData.vehicleType}
+                      onChange={e => setFormData(fd => ({ ...fd, vehicleType: e.target.value }))}>
+                      <option value="">— Choix type —</option>
+                      {VEHICLE_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Type de carburant */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Type de carburant</label>
+                    <select className={selectCls} value={formData.fuel}
+                      onChange={e => setFormData(fd => ({ ...fd, fuel: e.target.value }))}>
+                      <option value="">— Choix carburant —</option>
+                      {FUEL_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+
+                  {/* N° police */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>N° police</label>
+                    <input className={inputCls} placeholder="ex: POL-2024-001" value={formData.numeroPolice}
+                      onChange={e => setFormData(fd => ({ ...fd, numeroPolice: e.target.value }))} />
+                  </div>
+
+                  {/* Nombre de cylindres */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Nombre de cylindre</label>
+                    <input type="number" min="1" max="16" className={inputCls} placeholder="ex: 4"
+                      value={formData.nombreCylindres}
+                      onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
+                  </div>
+
+                  {/* Statut */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Status</label>
+                    <select className={selectCls} value={formData.status}
+                      onChange={e => setFormData(fd => ({ ...fd, status: e.target.value as VehicleStatus }))}>
+                      <option value="">— Choix status —</option>
+                      <option value={VehicleStatus.AVAILABLE}>Disponible</option>
+                      <option value={VehicleStatus.RENTED}>Louée</option>
+                      <option value={VehicleStatus.MAINTENANCE}>Maintenance</option>
+                    </select>
+                  </div>
+
+                  {/* Gamme */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Gamme</label>
+                    <select className={selectCls} value={formData.gamme}
+                      onChange={e => setFormData(fd => ({ ...fd, gamme: e.target.value }))}>
+                      <option value="">— Choix gamme —</option>
+                      {GAMME_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Date d’acquisition */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Date d’acquisition</label>
+                    <input type="date" className={inputCls} value={formData.acquisitionDate}
+                      onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
+                  </div>
+
+                  {/* Marque */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className={labelCls}>Marque</label>
+                      {brands.length > 0 && (
+                        <button type="button" onClick={() => setAddingBrand((v) => !v)}
+                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
+                          + Ajouter
+                        </button>
+                      )}
+                    </div>
+                    {brands.length > 0 ? (
+                      <select required className={selectCls} value={formData.brand_id ?? ‘’}
+                        onChange={e => {
+                          const bid = e.target.value ? String(e.target.value) : null;
+                          const bObj = brands.find(b => b.id === bid);
+                          setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? ‘’, model_id: null, model: ‘’ }));
+                        }}>
+                        <option value="">— Choix marque —</option>
+                        {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    ) : (
+                      <input required className={inputCls} value={formData.brand}
+                        onChange={e => setFormData(fd => ({ ...fd, brand: e.target.value }))} placeholder="ex: Dacia" />
+                    )}
+                    {addingBrand && brands.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <input className={inputCls} placeholder="Nouvelle marque" value={newBrandName}
+                          onChange={(e) => setNewBrandName(e.target.value)} />
+                        <button type="button" onClick={handleAddBrand}
+                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black">OK</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* N° Carte grise */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>N° de la carte grise</label>
+                    <input required className={inputCls} value={formData.registrationCard}
+                      onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
+                  </div>
+
+                  {/* Puissance */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Puissance (CV)</label>
+                    <input type="number" min="1" className={inputCls} placeholder="ex: 90"
+                      value={formData.cv}
+                      onChange={e => setFormData(fd => ({ ...fd, cv: e.target.value }))} />
+                  </div>
+
+                  {/* Mise en circulation */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Mise en circulation</label>
+                    <input type="date" className={inputCls} value={formData.miseEnCirculation}
+                      onChange={e => setFormData(fd => ({ ...fd, miseEnCirculation: e.target.value }))} />
+                  </div>
+
+                  {/* Date immatriculation */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Date immatriculation</label>
+                    <input type="date" className={inputCls} value={formData.dateImmatriculation}
+                      onChange={e => setFormData(fd => ({ ...fd, dateImmatriculation: e.target.value }))} />
+                  </div>
+
+                  {/* Catégorie */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Catégorie</label>
+                    <select className={selectCls} value={formData.categorie}
+                      onChange={e => setFormData(fd => ({ ...fd, categorie: e.target.value }))}>
+                      <option value="">— Choix catégorie —</option>
+                      {CATEGORIE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Modèle */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className={labelCls}>Modèle</label>
+                      {brands.length > 0 && (
+                        <button type="button" onClick={() => setAddingModel((v) => !v)}
+                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
+                          + Ajouter
+                        </button>
+                      )}
+                    </div>
+                    {brands.length > 0 ? (
+                      <select required className={selectCls} value={formData.model_id ?? ‘’} disabled={!formData.brand_id}
+                        onChange={e => {
+                          const mid = e.target.value ? String(e.target.value) : null;
+                          const mObj = brands.find(b => b.id === formData.brand_id)?.models.find(m => m.id === mid);
+                          setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? ‘’ }));
+                        }}>
+                        <option value="">— Choix modèle —</option>
+                        {(brands.find(b => b.id === formData.brand_id)?.models ?? []).map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input required className={inputCls} value={formData.model}
+                        onChange={e => setFormData(fd => ({ ...fd, model: e.target.value }))} placeholder="ex: Logan" />
+                    )}
+                    {addingModel && brands.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <input className={inputCls} disabled={!formData.brand_id}
+                          placeholder={formData.brand_id ? ‘Nouveau modèle’ : ‘Choisir une marque d’abord’}
+                          value={newModelName} onChange={(e) => setNewModelName(e.target.value)} />
+                        <button type="button" onClick={handleAddModel} disabled={!formData.brand_id}
+                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black disabled:opacity-50">OK</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Châssis */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Chassis</label>
+                    <input className={inputCls} placeholder="ex: VF1AA000..." value={formData.chassis}
+                      onChange={e => setFormData(fd => ({ ...fd, chassis: e.target.value }))} />
+                  </div>
+
+                  {/* Immat. en ligne */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Immat. www</label>
+                    <input className={inputCls} placeholder="Immatriculation en ligne" value={formData.immatOnline}
+                      onChange={e => setFormData(fd => ({ ...fd, immatOnline: e.target.value }))} />
+                  </div>
+
+                  {/* Index conteur / Km */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Index conteur (Km)</label>
+                    <input type="number" min="0" className={inputCls} placeholder="ex: 45000"
+                      value={formData.mileageKm}
+                      onChange={e => setFormData(fd => ({ ...fd, mileageKm: e.target.value }))} />
+                  </div>
+
+                  {/* Montant (prix d’acquisition) */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Montant (DH)</label>
+                    <input type="number" min="0" className={inputCls} placeholder="ex: 150000"
+                      value={formData.montant}
+                      onChange={e => setFormData(fd => ({ ...fd, montant: e.target.value }))} />
+                  </div>
+
+                  {/* Année */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Année</label>
+                    <input type="number" required className={inputCls} value={formData.year}
+                      onChange={e => setFormData(fd => ({ ...fd, year: parseInt(e.target.value) }))} />
                   </div>
 
                   {/* Prix / jour */}
@@ -737,16 +863,6 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, pricePerDay: parseInt(e.target.value) }))} />
                   </div>
 
-                  {/* Statut */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Statut Initial</label>
-                    <select className={selectCls} value={formData.status}
-                      onChange={e => setFormData(fd => ({ ...fd, status: e.target.value as VehicleStatus }))}>
-                      <option value={VehicleStatus.AVAILABLE}>Disponible</option>
-                      <option value={VehicleStatus.RENTED}>Louée</option>
-                      <option value={VehicleStatus.MAINTENANCE}>Maintenance</option>
-                    </select>
-                  </div>
                 </div>
               </div>
 
@@ -754,11 +870,9 @@ const VehiclesList: React.FC = () => {
               <div className="space-y-6 pt-6 border-t border-slate-100">
                 <h3 className="text-xs font-black text-rose-500 uppercase tracking-[0.2em]">Conformité Administrative</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* Carte Grise */}
+                  {/* Carte Grise — photo only (number entered in Fiche Technique) */}
                   <div className="space-y-2">
-                    <label className={labelCls}>N° Carte Grise</label>
-                    <input required className={inputCls} value={formData.registrationCard}
-                      onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
+                    <label className={labelCls}>Photo Carte Grise</label>
                     <DocPhotoUpload
                       preview={formData.docPhotos.carteGrise}
                       onFile={f => handleDocPhoto('carteGrise', f)}
