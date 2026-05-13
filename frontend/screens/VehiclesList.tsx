@@ -311,7 +311,7 @@ const VehiclesList: React.FC = () => {
       setNewBrandName('');
       setAddingBrand(false);
     } catch (err: any) {
-      alert(err?.message ?? 'Impossible d'ajouter la marque');
+      alert(err?.message ?? "Impossible d'ajouter la marque");
     }
   };
 
@@ -342,7 +342,7 @@ const VehiclesList: React.FC = () => {
       setNewModelName('');
       setAddingModel(false);
     } catch (err: any) {
-      alert(err?.message ?? 'Impossible d'ajouter le modèle');
+      alert(err?.message ?? "Impossible d'ajouter le modèle");
     }
   };
 
@@ -811,7 +811,7 @@ const VehiclesList: React.FC = () => {
                     {addingModel && brands.length > 0 && (
                       <div className="flex items-center gap-2">
                         <input className={inputCls} disabled={!formData.brand_id}
-                          placeholder={formData.brand_id ? 'Nouveau modèle' : 'Choisir une marque d'abord'}
+                          placeholder={formData.brand_id ? 'Nouveau modèle' : "Choisir une marque d'abord"}
                           value={newModelName} onChange={(e) => setNewModelName(e.target.value)} />
                         <button type="button" onClick={handleAddModel} disabled={!formData.brand_id}
                           className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black disabled:opacity-50">OK</button>
