@@ -711,28 +711,23 @@ const VehiclesList: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <label className={labelCls}>Marque</label>
-                      {brands.length > 0 && (
+                      {getApiBase() && (
                         <button type="button" onClick={() => setAddingBrand((v) => !v)}
                           className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
                           + Ajouter
                         </button>
                       )}
                     </div>
-                    {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.brand_id ?? ''}
-                        onChange={e => {
-                          const bid = e.target.value ? String(e.target.value) : null;
-                          const bObj = brands.find(b => b.id === bid);
-                          setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? '', model_id: null, model: '' }));
-                        }}>
-                        <option value="">— Choix marque —</option>
-                        {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    ) : (
-                      <input required className={inputCls} value={formData.brand}
-                        onChange={e => setFormData(fd => ({ ...fd, brand: e.target.value }))} placeholder="ex: Dacia" />
-                    )}
-                    {addingBrand && brands.length > 0 && (
+                    <select required className={selectCls} value={formData.brand_id ?? ''}
+                      onChange={e => {
+                        const bid = e.target.value ? String(e.target.value) : null;
+                        const bObj = brands.find(b => b.id === bid);
+                        setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? '', model_id: null, model: '' }));
+                      }}>
+                      <option value="">— Choix marque —</option>
+                      {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    {addingBrand && (
                       <div className="flex items-center gap-2">
                         <input className={inputCls} placeholder="Nouvelle marque" value={newBrandName}
                           onChange={(e) => setNewBrandName(e.target.value)} />
@@ -785,36 +780,30 @@ const VehiclesList: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <label className={labelCls}>Modèle</label>
-                      {brands.length > 0 && (
+                      {getApiBase() && formData.brand_id && (
                         <button type="button" onClick={() => setAddingModel((v) => !v)}
                           className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
                           + Ajouter
                         </button>
                       )}
                     </div>
-                    {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.model_id ?? ''} disabled={!formData.brand_id}
-                        onChange={e => {
-                          const mid = e.target.value ? String(e.target.value) : null;
-                          const mObj = brands.find(b => b.id === formData.brand_id)?.models.find(m => m.id === mid);
-                          setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? '' }));
-                        }}>
-                        <option value="">— Choix modèle —</option>
-                        {(brands.find(b => b.id === formData.brand_id)?.models ?? []).map(m => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input required className={inputCls} value={formData.model}
-                        onChange={e => setFormData(fd => ({ ...fd, model: e.target.value }))} placeholder="ex: Logan" />
-                    )}
-                    {addingModel && brands.length > 0 && (
+                    <select required className={selectCls} value={formData.model_id ?? ''} disabled={!formData.brand_id}
+                      onChange={e => {
+                        const mid = e.target.value ? String(e.target.value) : null;
+                        const mObj = brands.find(b => b.id === formData.brand_id)?.models.find(m => m.id === mid);
+                        setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? '' }));
+                      }}>
+                      <option value="">— Choix modèle —</option>
+                      {(brands.find(b => b.id === formData.brand_id)?.models ?? []).map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    {addingModel && formData.brand_id && (
                       <div className="flex items-center gap-2">
-                        <input className={inputCls} disabled={!formData.brand_id}
-                          placeholder={formData.brand_id ? 'Nouveau modèle' : "Choisir une marque d'abord"}
+                        <input className={inputCls} placeholder="Nouveau modèle"
                           value={newModelName} onChange={(e) => setNewModelName(e.target.value)} />
-                        <button type="button" onClick={handleAddModel} disabled={!formData.brand_id}
-                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black disabled:opacity-50">OK</button>
+                        <button type="button" onClick={handleAddModel}
+                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black">OK</button>
                       </div>
                     )}
                   </div>

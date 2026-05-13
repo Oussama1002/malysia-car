@@ -1,21 +1,55 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/mockApi';
-import { DashboardStats } from '../types';
+import { apiClient, getApiBase } from '@/services/apiClient';
+
+interface KpiData {
+  totalVehicles: number;
+  availableVehicles: number;
+  activeRentals: number;
+  revenueMonthly: number;
+}
 
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [kpi, setKpi] = useState<KpiData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getStats().then(setStats);
+    if (!getApiBase()) {
+      setError("API non configurée (VITE_API_BASE manquant).");
+      return;
+    }
+
+    Promise.all([
+      apiClient<{ data: unknown[]; meta: { total: number } }>('/v1/vehicles?per_page=1'),
+      apiClient<{ data: unknown[]; meta: { total: number } }>('/v1/vehicles?status=AVAILABLE&per_page=1'),
+      apiClient<{ data: unknown[]; meta: { total: number } }>('/v1/vehicles?status=RENTED&per_page=1'),
+      apiClient<{ data: { revenueMonthly?: number; monthlyRevenue?: number } }>('/v1/dashboard/executive').catch(() => ({ data: {} })),
+    ]).then(([all, avail, rented, dash]) => {
+      const revenue = (dash as any)?.data?.revenueMonthly
+        ?? (dash as any)?.data?.monthlyRevenue
+        ?? (dash as any)?.data?.revenue_monthly
+        ?? 0;
+      setKpi({
+        totalVehicles: all.meta?.total ?? 0,
+        availableVehicles: avail.meta?.total ?? 0,
+        activeRentals: rented.meta?.total ?? 0,
+        revenueMonthly: Number(revenue),
+      });
+    }).catch(err => setError(err?.message ?? 'Erreur de chargement'));
   }, []);
 
-  if (!stats) return <div className="p-8 text-center text-slate-400">Chargement des données...</div>;
+  if (error) return (
+    <div className="p-8 text-center text-rose-400 font-semibold">{error}</div>
+  );
+
+  if (!kpi) return (
+    <div className="p-8 text-center text-slate-400">Chargement des données...</div>
+  );
 
   const cards = [
-    { title: "Réservations / Jour", value: stats.dailyReservations, icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z", color: "bg-blue-600" },
-    { title: "Flotte Disponible", value: stats.availableVehicles, icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", color: "bg-emerald-600" },
-    { title: "Locations Actives", value: stats.ongoingRentals, icon: "M13 10V3L4 14h7v7l9-11h-7z", color: "bg-amber-600" },
-    { title: "Chiffre d'Affaires", value: `${stats.revenueMonthly.toLocaleString('fr-MA')} DH`, icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z", color: "bg-indigo-600" },
+    { title: "Total Flotte", value: kpi.totalVehicles, icon: "M4 14v4h3m13-4v4h-3M4 14l1.8-5.2A2 2 0 017.7 7.4h8.6a2 2 0 011.9 1.4L20 14M4 14h16", color: "bg-blue-600" },
+    { title: "Flotte Disponible", value: kpi.availableVehicles, icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", color: "bg-emerald-600" },
+    { title: "Locations Actives", value: kpi.activeRentals, icon: "M13 10V3L4 14h7v7l9-11h-7z", color: "bg-amber-600" },
+    { title: "C.A. du mois (DH)", value: kpi.revenueMonthly > 0 ? kpi.revenueMonthly.toLocaleString('fr-MA') : '—', icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z", color: "bg-indigo-600" },
   ];
 
   return (
