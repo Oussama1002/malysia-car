@@ -400,6 +400,50 @@ const VehiclesList: React.FC = () => {
     isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.techControlExpiry) || isExpiringSoon(v.vignetteExpiry)
   );
 
+  const downloadParcPDF = () => {
+    const rows = filteredVehicles.map(v => [
+      v.registration,
+      (v as any).immatOnline || '—',
+      v.brand || '—',
+      v.model || '—',
+      (v as any).miseEnCirculation ? new Date((v as any).miseEnCirculation).toLocaleDateString('fr-MA') : '—',
+      (v as any).cv ?? '—',
+      (v as any).fuel || '—',
+      v.status === 'AVAILABLE' ? 'Disponible' : v.status === 'RENTED' ? 'Louée' : 'Maintenance',
+    ]);
+
+    const tableRows = rows.map(r =>
+      `<tr>${r.map((cell, i) => `<td style="padding:7px 12px;border-bottom:1px solid #e2e8f0;font-family:monospace;${i === 0 ? 'font-weight:700;' : ''}${i === 7 ? 'color:#4f46e5;font-weight:700;' : ''}">${cell}</td>`).join('')}</tr>`
+    ).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Parc Automobile — DriveFlow</title>
+<style>
+  body{margin:0;padding:24px;font-family:Arial,sans-serif;font-size:12px;color:#1e293b}
+  h1{font-size:18px;font-weight:900;margin:0 0 4px}
+  p{margin:0 0 16px;color:#64748b;font-size:11px}
+  table{width:100%;border-collapse:collapse}
+  thead tr{background:#f8fafc;border-bottom:2px solid #e2e8f0}
+  th{padding:8px 12px;text-align:left;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8}
+  tr:last-child td{border-bottom:none}
+  @media print{body{padding:12px}@page{margin:15mm}}
+</style></head><body>
+<h1>Parc Automobile</h1>
+<p>DriveFlow — Édité le ${new Date().toLocaleDateString('fr-MA', { day:'2-digit', month:'long', year:'numeric' })} · ${rows.length} véhicule${rows.length !== 1 ? 's' : ''}</p>
+<table>
+  <thead><tr>
+    <th>Immatriculation</th><th>Immat. www</th><th>Marque</th><th>Modèle</th>
+    <th>Mise en circulation</th><th>Puissance (CV)</th><th>Carburant</th><th>Statut</th>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+</table>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
   const inputCls = 'w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold';
   const selectCls = inputCls;
   const labelCls = 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1';
@@ -453,6 +497,13 @@ const VehiclesList: React.FC = () => {
               value={search} onChange={e => setSearch(e.target.value)} />
             <svg className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
+          {/* PDF download */}
+          <button onClick={downloadParcPDF}
+            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 whitespace-nowrap">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            PDF
+          </button>
+
           {/* View toggle */}
           <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl">
             <button onClick={() => setViewMode('cards')}
