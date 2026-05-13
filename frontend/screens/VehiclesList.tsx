@@ -1,4 +1,4 @@
-
+﻿
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/mockApi';
@@ -311,7 +311,7 @@ const VehiclesList: React.FC = () => {
       setNewBrandName('');
       setAddingBrand(false);
     } catch (err: any) {
-      alert(err?.message ?? 'Impossible d’ajouter la marque');
+      alert(err?.message ?? 'Impossible d'ajouter la marque');
     }
   };
 
@@ -342,7 +342,7 @@ const VehiclesList: React.FC = () => {
       setNewModelName('');
       setAddingModel(false);
     } catch (err: any) {
-      alert(err?.message ?? 'Impossible d’ajouter le modèle');
+      alert(err?.message ?? 'Impossible d'ajouter le modèle');
     }
   };
 
@@ -621,7 +621,7 @@ const VehiclesList: React.FC = () => {
                         className="flex-1 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
                         placeholder="12345"
                         value={formData.platNum}
-                        onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, ‘’) }))}
+                        onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, '') }))}
                       />
                       <span className="text-slate-300 font-black text-xl">–</span>
                       <select
@@ -640,7 +640,7 @@ const VehiclesList: React.FC = () => {
                         {PLATE_REGIONS.map(n => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </div>
-                    <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || ‘XXXXX’}-{formData.platLetter}-{formData.platRegion}</span></p>
+                    <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
                   </div>
 
                   {/* Type */}
@@ -700,9 +700,9 @@ const VehiclesList: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Date d’acquisition */}
+                  {/* Date d'acquisition */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Date d’acquisition</label>
+                    <label className={labelCls}>Date d'acquisition</label>
                     <input type="date" className={inputCls} value={formData.acquisitionDate}
                       onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
                   </div>
@@ -719,11 +719,11 @@ const VehiclesList: React.FC = () => {
                       )}
                     </div>
                     {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.brand_id ?? ‘’}
+                      <select required className={selectCls} value={formData.brand_id ?? ''}
                         onChange={e => {
                           const bid = e.target.value ? String(e.target.value) : null;
                           const bObj = brands.find(b => b.id === bid);
-                          setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? ‘’, model_id: null, model: ‘’ }));
+                          setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? '', model_id: null, model: '' }));
                         }}>
                         <option value="">— Choix marque —</option>
                         {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -793,11 +793,11 @@ const VehiclesList: React.FC = () => {
                       )}
                     </div>
                     {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.model_id ?? ‘’} disabled={!formData.brand_id}
+                      <select required className={selectCls} value={formData.model_id ?? ''} disabled={!formData.brand_id}
                         onChange={e => {
                           const mid = e.target.value ? String(e.target.value) : null;
                           const mObj = brands.find(b => b.id === formData.brand_id)?.models.find(m => m.id === mid);
-                          setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? ‘’ }));
+                          setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? '' }));
                         }}>
                         <option value="">— Choix modèle —</option>
                         {(brands.find(b => b.id === formData.brand_id)?.models ?? []).map(m => (
@@ -811,7 +811,7 @@ const VehiclesList: React.FC = () => {
                     {addingModel && brands.length > 0 && (
                       <div className="flex items-center gap-2">
                         <input className={inputCls} disabled={!formData.brand_id}
-                          placeholder={formData.brand_id ? ‘Nouveau modèle’ : ‘Choisir une marque d’abord’}
+                          placeholder={formData.brand_id ? 'Nouveau modèle' : 'Choisir une marque d'abord'}
                           value={newModelName} onChange={(e) => setNewModelName(e.target.value)} />
                         <button type="button" onClick={handleAddModel} disabled={!formData.brand_id}
                           className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black disabled:opacity-50">OK</button>
@@ -841,7 +841,7 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, mileageKm: e.target.value }))} />
                   </div>
 
-                  {/* Montant (prix d’acquisition) */}
+                  {/* Montant (prix d'acquisition) */}
                   <div className="space-y-2">
                     <label className={labelCls}>Montant (DH)</label>
                     <input type="number" min="0" className={inputCls} placeholder="ex: 150000"
