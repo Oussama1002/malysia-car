@@ -739,17 +739,6 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
                   </div>
 
-                  {/* Statut */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Status</label>
-                    <select className={selectCls} value={formData.status}
-                      onChange={e => setFormData(fd => ({ ...fd, status: e.target.value as VehicleStatus }))}>
-                      <option value="">— Choix status —</option>
-                      <option value={VehicleStatus.AVAILABLE}>Disponible</option>
-                      <option value={VehicleStatus.RENTED}>Louée</option>
-                      <option value={VehicleStatus.MAINTENANCE}>Maintenance</option>
-                    </select>
-                  </div>
 
                   {/* Gamme */}
                   <div className="space-y-2">
@@ -904,13 +893,6 @@ const VehiclesList: React.FC = () => {
                     <label className={labelCls}>Année</label>
                     <input type="number" required className={inputCls} value={formData.year}
                       onChange={e => setFormData(fd => ({ ...fd, year: parseInt(e.target.value) }))} />
-                  </div>
-
-                  {/* Prix / jour */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Prix Location / Jour (DH)</label>
-                    <input type="number" required className={`${inputCls} text-indigo-600`} value={formData.pricePerDay}
-                      onChange={e => setFormData(fd => ({ ...fd, pricePerDay: parseInt(e.target.value) }))} />
                   </div>
 
                 </div>
