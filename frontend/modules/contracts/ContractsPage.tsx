@@ -37,7 +37,7 @@ export const ContractsPage: React.FC = () => {
           to="/contracts/new"
           className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100"
         >
-          Nouveau (assistant)
+          + Nouveau contrat
         </Link>
       </div>
 
