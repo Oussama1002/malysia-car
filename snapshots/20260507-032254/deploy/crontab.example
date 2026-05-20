@@ -1,0 +1,27 @@
+# DriveFlow — Production Crontab   (Phase 1 / Phase 5)
+#
+# Install for www-data user:
+#   sudo crontab -u www-data -e
+# Then paste the lines below (adjust the path to match your server).
+#
+# The single Laravel scheduler entry fires every minute and dispatches
+# all scheduled commands defined in routes/console.php:
+#
+#   driveflow:check-maintenance-due        → every hour
+#   driveflow:check-vehicle-documents-expiry → twice daily (08:00 & 16:00)
+#   driveflow:check-immobilized-vehicles   → every 30 minutes
+#   driveflow:check-compliance-expiry      → daily at 07:15
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Laravel task scheduler — required
+* * * * * /usr/bin/php /var/www/driveflow/backend/artisan schedule:run >> /var/log/driveflow-scheduler.log 2>&1
+
+# Optional: queue worker health-restart (in case supervisor doesn't manage workers)
+# This is a safety net — prefer Supervisor (see runbook.md).
+# @reboot /usr/bin/php /var/www/driveflow/backend/artisan queue:work --sleep=3 --tries=3 >> /var/log/driveflow-queue.log 2>&1
+
+# Optional: nightly DB backup (adjust credentials)
+# 2 3 * * * mysqldump -u driveflow_user -pSECRET driveflow_db | gzip > /var/backups/driveflow/driveflow_$(date +\%Y\%m\%d).sql.gz 2>&1
+# Optional: prune backups older than 30 days
+# 5 3 * * * find /var/backups/driveflow/ -name "*.sql.gz" -mtime +30 -delete

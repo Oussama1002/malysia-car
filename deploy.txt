@@ -1,0 +1,265 @@
+You are a senior DevOps engineer.
+
+
+
+Project: DriveFlow ERP.
+
+
+
+Goal:
+
+Save the current modifications and deploy DriveFlow to my Contabo server without breaking the existing project.
+
+
+
+Server:
+
+
+
+* IP: 79.143.180.186
+
+* Existing project already running on the same IP
+
+* DO NOT overwrite or stop the existing project
+
+* Deploy DriveFlow separately
+
+
+
+Step 1 — Save current modifications
+
+
+
+1. Check if this project is inside a Git repository.
+
+2. If Git exists:
+
+
+
+   * run `git status`
+
+   * create a new branch:
+
+     `deployment-driveflow-YYYYMMDD`
+
+   * commit all current changes with message:
+
+     `chore: prepare DriveFlow ERP for server deployment`
+
+3. If Git does NOT exist:
+
+
+
+   * create a local backup archive before deployment:
+
+     `driveflow-backup-YYYYMMDD-HHMM.zip`
+
+   * include backend, frontend, deploy files, reports, migrations, tests
+
+   * exclude node_modules, vendor, storage/logs, .env secrets
+
+
+
+Step 2 — Prepare server deployment
+
+
+
+Deploy path:
+
+
+
+* `/var/www/driveflow`
+
+
+
+Use isolated deployment:
+
+
+
+* DO NOT modify existing Nginx site
+
+* DO NOT use port 80 if already used
+
+* Use port `8080` first:
+
+  `http://79.143.180.186:8080`
+
+
+
+Backend:
+
+
+
+* Laravel API in `/var/www/driveflow/backend`
+
+* configure `.env` production
+
+* APP_ENV=production
+
+* APP_DEBUG=false
+
+* APP_URL=http://79.143.180.186:8080
+
+* configure MySQL DB for DriveFlow
+
+* run:
+
+  `composer install --no-dev --optimize-autoloader`
+
+  `php artisan key:generate` only if APP_KEY missing
+
+  `php artisan migrate --force`
+
+  `php artisan db:seed --force`
+
+  `php artisan storage:link`
+
+  `php artisan config:cache`
+
+  `php artisan route:cache`
+
+  `php artisan view:cache`
+
+
+
+Frontend:
+
+
+
+* React/Vite build
+
+* set:
+
+  `VITE_API_BASE=http://79.143.180.186:8080/api`
+
+  `VITE_DEMO_MODE=false`
+
+  `VITE_ALLOW_MOCK_FALLBACK=false`
+
+* run:
+
+  `npm ci`
+
+  `npm run build`
+
+
+
+Nginx:
+
+
+
+* create new config only:
+
+  `/etc/nginx/sites-available/driveflow`
+
+* listen on `8080`
+
+* root should serve frontend build
+
+* `/api` should route to Laravel backend public/index.php
+
+* block `.env`, logs, vendor, private storage
+
+* do not touch existing config
+
+* enable site:
+
+  `ln -s /etc/nginx/sites-available/driveflow /etc/nginx/sites-enabled/driveflow`
+
+* run:
+
+  `nginx -t`
+
+  `systemctl reload nginx`
+
+
+
+Queue / scheduler:
+
+
+
+* create Supervisor config for DriveFlow queue worker
+
+* add cron for Laravel scheduler:
+
+  `* * * * * php /var/www/driveflow/backend/artisan schedule:run >> /dev/null 2>&1`
+
+
+
+Verification:
+
+
+
+1. Existing project still works on current IP/port.
+
+2. DriveFlow frontend works:
+
+   `http://79.143.180.186:8080`
+
+3. DriveFlow API works:
+
+   `http://79.143.180.186:8080/api/v1/health`
+
+4. Login works.
+
+5. Dashboard loads.
+
+6. Vehicles page loads.
+
+7. Reservations page loads.
+
+8. Used cars page loads.
+
+9. Finance page loads.
+
+
+
+Run:
+
+
+
+* `php artisan test` locally before deployment if possible
+
+* `npm run build`
+
+* deployment smoke tests if available:
+
+  `deploy/smoke-test.sh`
+
+
+
+Create final report:
+
+`DEPLOYMENT_EXECUTION_REPORT.md`
+
+
+
+Report must include:
+
+
+
+* backup/commit created
+
+* files deployed
+
+* server path
+
+* database name/user used
+
+* Nginx config path
+
+* URL
+
+* health check result
+
+* smoke test result
+
+* confirmation existing project is untouched
+
+* errors encountered and fixes applied
+
+
+
+Important:
+
+If any command risks breaking the existing project, STOP and explain before continuing.
