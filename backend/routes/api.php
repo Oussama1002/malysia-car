@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\V1\AiAssistantController;
 use App\Http\Controllers\Api\V1\AiOverviewController;
 use App\Http\Controllers\Api\V1\AiPredictionController;
 use App\Http\Controllers\Api\V1\DocumentCenterController;
+use App\Http\Controllers\Api\V1\DocumentReaderController;
 use App\Http\Controllers\Api\V1\GeneratedDocumentController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\PermissionController;
@@ -178,6 +179,27 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:documents.generate');
         Route::post('invoices/{invoice}/generate-pdf', [GeneratedDocumentController::class, 'generateInvoice'])
             ->middleware('permission:documents.generate');
+
+        // ==================================================================
+        // Softnovation Document Reader (OCR-driven document ingestion)
+        // ADMIN / DIRECTEUR / AGENT_COMMERCIAL only — validation is RBAC-gated.
+        // ==================================================================
+        Route::get('document-reader/documents', [DocumentReaderController::class, 'index'])
+            ->middleware('permission:documents.view');
+        Route::get('document-reader/documents/{id}', [DocumentReaderController::class, 'show'])
+            ->middleware('permission:documents.view');
+        Route::post('document-reader/uploads', [DocumentReaderController::class, 'upload'])
+            ->middleware('permission:documents.upload');
+        Route::post('document-reader/documents/{id}/extract', [DocumentReaderController::class, 'extract'])
+            ->middleware('permission:documents.upload');
+        Route::post('document-reader/documents/{id}/validate', [DocumentReaderController::class, 'validateDocument'])
+            ->middleware(['permission:documents.upload', 'role:ADMIN,DIRECTEUR,AGENT_COMMERCIAL']);
+        Route::post('document-reader/documents/{id}/link', [DocumentReaderController::class, 'link'])
+            ->middleware(['permission:documents.upload', 'role:ADMIN,DIRECTEUR,AGENT_COMMERCIAL']);
+        Route::get('document-reader/documents/{id}/preview', [DocumentReaderController::class, 'preview'])
+            ->middleware('permission:documents.view');
+        Route::delete('document-reader/documents/{id}', [DocumentReaderController::class, 'destroy'])
+            ->middleware('permission:documents.delete');
 
         // ==================================================================
         // Phase 4 — Fleet

@@ -156,7 +156,17 @@
       "Bash(grep -E \"\\\\.php$\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx\\)$\")",
       "Bash(./node_modules/.bin/tsc --noEmit)",
-      "Bash(node node_modules/typescript/bin/tsc --noEmit)"
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(ls -la && echo \"---ROOT---\" && ls -la /c/xampp2/htdocs/driveflow | head -50)",
+      "Bash(php -l app/Models/ReaderDocument.php)",
+      "Bash(php -l app/Models/ReaderDocumentExtraction.php)",
+      "Bash(php -l app/Services/DocumentReader/DocumentReaderService.php)",
+      "Bash(php -l app/Services/DocumentReader/TesseractOcrProvider.php)",
+      "Bash(php -l app/Services/DocumentReader/DocumentParser.php)",
+      "PowerShell($files = @\\('backend/app/Models/ReaderDocument.php','backend/app/Models/ReaderDocumentExtraction.php','backend/app/Services/DocumentReader/DocumentReaderService.php','backend/app/Services/DocumentReader/TesseractOcrProvider.php','backend/app/Services/DocumentReader/DocumentParser.php','backend/app/Services/DocumentReader/OcrResult.php','backend/app/Services/DocumentReader/OcrProviderInterface.php','backend/app/Http/Controllers/Api/V1/DocumentReaderController.php','backend/database/migrations/2026_05_20_100000_create_document_reader_tables.php','backend/app/Providers/AppServiceProvider.php','backend/routes/api.php','backend/config/document_reader.php'\\); foreach \\($f in $files\\) { php -l $f })",
+      "Bash(bash -n deploy/pre-deploy-checklist.sh)",
+      "Bash(grep -nA 20 \"mysql.cnf\\\\|Credentials MySQL\\\\|TRUSTED_PROXIES\\\\|schedule:run\" deploy/runbook.md)",
+      "Bash(grep -nB 1 -A 20 \"Phase 2\\\\|Phase 3\" deploy/runbook.md)"
     ]
   }
 }

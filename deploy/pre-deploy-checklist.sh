@@ -61,6 +61,25 @@ command -v composer  >/dev/null 2>&1 && pass "composer trouvé" || fail "compose
 command -v mysqldump >/dev/null 2>&1 && pass "mysqldump trouvé" || fail "mysqldump introuvable — backups impossibles"
 command -v git       >/dev/null 2>&1 && pass "git trouvé"      || warn "git introuvable"
 
+# OCR pipeline — required by the Document Reader module (CIN/passport/permis/carte grise).
+TESS_BIN=$(command -v tesseract 2>/dev/null || echo "")
+if [[ -n "$TESS_BIN" ]]; then
+    TESS_VER=$("$TESS_BIN" --version 2>&1 | head -1 | awk '{print $2}')
+    pass "tesseract trouvé ($TESS_VER) — binaire: $TESS_BIN"
+    # Vérifier les langues installées (fra + ara recommandées pour le marché MA)
+    TESS_LANGS=$("$TESS_BIN" --list-langs 2>/dev/null | tail -n +2 | tr '\n' ' ')
+    for L in eng fra ara; do
+        echo " $TESS_LANGS " | grep -q " $L " \
+            && pass "Tesseract lang pack: $L" \
+            || warn "Tesseract lang pack manquant: $L — sudo apt install tesseract-ocr-${L}"
+    done
+else
+    warn "tesseract introuvable — le module Document Reader ne fonctionnera pas. Installer: sudo apt install tesseract-ocr tesseract-ocr-fra tesseract-ocr-ara"
+fi
+command -v pdftoppm >/dev/null 2>&1 \
+    && pass "pdftoppm trouvé (poppler-utils) — OCR PDF activé" \
+    || warn "pdftoppm introuvable — l'OCR des PDF échouera. Installer: sudo apt install poppler-utils"
+
 # ── B. Fichier d'options MySQL ────────────────────────────────────────────────
 section "B. Credentials MySQL (fichier sécurisé)"
 

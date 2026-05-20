@@ -77,6 +77,7 @@ import { RolesPermissionsPage } from '@/modules/settings/RolesPermissionsPage';
 import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
+import { DocumentReaderPage } from '@/modules/documents/DocumentReaderPage';
 import { RentalsPage } from '@/modules/rentals/RentalsPage';
 // Sous-location
 import { SubRentalsPage } from '@/modules/subRentals/SubRentalsPage';
@@ -702,6 +703,14 @@ export default function AppRoutes(): React.ReactElement {
               element={
                 <ModuleGate module="documents">
                   <DocumentsCenterPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/documents/reader"
+              element={
+                <ModuleGate module="documents">
+                  <DocumentReaderPage />
                 </ModuleGate>
               }
             />

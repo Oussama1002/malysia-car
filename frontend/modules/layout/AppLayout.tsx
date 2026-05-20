@@ -65,6 +65,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/notifications', module: 'notifications', labelKey: 'nav.notifications', icon: 'bell' },
       { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'doc' },
+      { to: '/documents/reader', module: 'documents', labelKey: 'nav.documentReader', icon: 'doc' },
       { to: '/audit', module: 'audit', labelKey: 'nav.audit', icon: 'audit' },
       { to: '/settings', module: 'settings', labelKey: 'nav.settings', icon: 'gear' },
     ],

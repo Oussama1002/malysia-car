@@ -7,6 +7,7 @@ import type {
   CompanyProfile,
 } from '@/services/customersApi';
 import type { Branch } from '@/services/adminApi';
+import { CustomerIdentityScanner, type ScannedIdentity } from '@/modules/customers/CustomerIdentityScanner';
 
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
@@ -159,6 +160,13 @@ export const CustomerForm: React.FC<{
       {type === 'PARTICULIER' ? (
         <section className="space-y-3">
           <SectionTitle>Identité particulier</SectionTitle>
+          {mode === 'create' ? (
+            <CustomerIdentityScanner
+              onPrefill={(scanned: ScannedIdentity) =>
+                setIndividual((prev) => ({ ...prev, ...scanned }))
+              }
+            />
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Prénom">
               <input
