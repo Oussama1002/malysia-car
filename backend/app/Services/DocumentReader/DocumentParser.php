@@ -85,12 +85,13 @@ class DocumentParser
         }
 
         // Moroccan CIN format: 1–2 uppercase letters + 5–7 digits (e.g., BV819234).
-        // Pick the LONGEST candidate to defeat Tesseract truncation. Always
+        // Pick the LONGEST candidate to defeat Tesseract truncation (often
+        // drops trailing digits → "BV819" instead of "BV819234"). Always
         // require the letter prefix — pure digit runs are dates / état-civil
         // numbers, never the CIN itself.
         $docNumber = $this->longestMatch('/\b[A-Z]{1,2}\d{5,8}\b/u', $text)
-            ?? $this->longestMatch('/\b[A-Z]{1,2}\d{4,8}\b/u', $text)
-            ?? $this->labelValue($text, ['CIN', 'N°\s*CIN', 'Card\s*No'], '[A-Z]{1,2}\d{4,8}');
+            ?? $this->longestMatch('/\b[A-Z]{1,2}\d{3,8}\b/u', $text)
+            ?? $this->labelValue($text, ['CIN', 'N°\s*CIN', 'Card\s*No'], '[A-Z]{1,2}\d{3,8}');
 
         // Date strategy: try label first, then classify any standalone date
         // by year (birth = before today-16y, expiry = after today).
