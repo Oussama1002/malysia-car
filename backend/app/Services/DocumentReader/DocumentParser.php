@@ -84,8 +84,13 @@ class DocumentParser
             }
         }
 
-        $docNumber = $this->firstMatch('/\b([A-Z]{1,2}\d{4,8})\b/u', $text)
-            ?? $this->labelValue($text, ['CIN', 'N°\s*CIN', 'N°', 'No', 'Numero', 'Card\s*No'], '[A-Z0-9]{4,15}');
+        // Moroccan CIN format: 1–2 uppercase letters + 5–7 digits (e.g., BV819234).
+        // Pick the LONGEST candidate to defeat Tesseract truncation. Always
+        // require the letter prefix — pure digit runs are dates / état-civil
+        // numbers, never the CIN itself.
+        $docNumber = $this->longestMatch('/\b[A-Z]{1,2}\d{5,8}\b/u', $text)
+            ?? $this->longestMatch('/\b[A-Z]{1,2}\d{4,8}\b/u', $text)
+            ?? $this->labelValue($text, ['CIN', 'N°\s*CIN', 'Card\s*No'], '[A-Z]{1,2}\d{4,8}');
 
         // Date strategy: try label first, then classify any standalone date
         // by year (birth = before today-16y, expiry = after today).
@@ -205,6 +210,26 @@ class DocumentParser
         }
 
         return null;
+    }
+
+    /**
+     * Return the LONGEST match for the given pattern, or null. Useful for IDs
+     * that Tesseract may truncate (`BV819` vs `BV819234`): if both shapes appear
+     * in the OCR output, we want the longer one.
+     */
+    private function longestMatch(string $pattern, string $text): ?string
+    {
+        if (! preg_match_all($pattern, $text, $matches)) {
+            return null;
+        }
+        $best = '';
+        foreach ($matches[0] as $candidate) {
+            if (strlen($candidate) > strlen($best)) {
+                $best = $candidate;
+            }
+        }
+
+        return $best !== '' ? $best : null;
     }
 
     /**
@@ -343,26 +368,33 @@ class DocumentParser
             'AGADIR', 'MARRAKECH', 'OUJDA', 'MEKNES', 'KENITRA', 'TETOUAN',
             'MEDIOUNA', 'TISSIR', 'TAMESNA',
             'ABDELGHANI', 'ABDELLAH', 'AHMED', 'HASSAN', 'MOHAMMED', 'MOHAMED',
-            'DRISS', 'HABIBA', 'BEN', 'BENT', 'OULAD',
-            'SCANNED', 'WITH', 'CAMERA', 'PHOTO',
+            'DRISS', 'HABIBA', 'OULAD',
+            'SCANNED', 'WITH', 'CAMERA', 'PHOTO', 'POLICE',
+            // Common Tesseract noise tokens seen on Moroccan CIN headers.
+            'MERS', 'RENE', 'OTHE', 'GATAR', 'QATAR',
         ];
         $lines = preg_split('/[\r\n]+/', $text) ?: [];
         $candidates = [];
         foreach ($lines as $line) {
-            if (! preg_match('/\b([A-ZÀ-Ö][A-Za-zÀ-ÖØ-öø-ÿ\'\-]{3,14})\b/u', $line, $m)) {
-                continue;
-            }
-            $token = mb_strtoupper($m[1]);
-            if (in_array($token, $stopwords, true)) {
-                continue;
-            }
-            // Require the line to be "mostly" that token — skip prose lines.
+            // Strip non-Latin so Arabic glyphs don't count toward token density.
             $clean = preg_replace('/[^A-Za-zÀ-ÖØ-öø-ÿ\'\-\s]/u', ' ', $line) ?? '';
-            $latinTokens = array_values(array_filter(
+            $bigTokens = array_values(array_filter(
+                preg_split('/\s+/', trim($clean)) ?: [],
+                fn ($t) => mb_strlen($t) >= 5,
+            ));
+            // Require an isolated line: at most one other ≥4-char Latin word.
+            $extras = array_values(array_filter(
                 preg_split('/\s+/', trim($clean)) ?: [],
                 fn ($t) => mb_strlen($t) >= 4,
             ));
-            if (count($latinTokens) === 0 || count($latinTokens) > 4) {
+            if (count($bigTokens) !== 1 || count($extras) > 2) {
+                continue;
+            }
+            $token = mb_strtoupper($bigTokens[0]);
+            if (! preg_match('/^[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þa-zà-öø-ÿ\'\-]{4,14}$/u', $token)) {
+                continue;
+            }
+            if (in_array($token, $stopwords, true)) {
                 continue;
             }
             if (! in_array($token, $candidates, true)) {
