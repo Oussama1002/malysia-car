@@ -91,7 +91,8 @@ const ScanSlot: React.FC<{
           setError("Aucun champ exploitable n'a pu être détecté. Vérifiez la netteté du document.");
         } else {
           onPrefill(cleaned);
-          setSuccess(`Champs détectés : ${Object.keys(cleaned).join(', ')}`);
+          const labels = Object.keys(cleaned).map(frenchFieldLabel);
+          setSuccess(`Champs détectés : ${labels.join(', ')}`);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Échec OCR';
@@ -218,6 +219,20 @@ function titleCase(value: unknown): string | undefined {
 function asString(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value.trim()) return undefined;
   return value.trim();
+}
+
+/** French display labels for the fields prefilled by the scanner. */
+function frenchFieldLabel(key: string): string {
+  const map: Record<string, string> = {
+    first_name: 'Prénom',
+    last_name: 'Nom',
+    national_id_number: 'CIN',
+    date_of_birth: 'Date de naissance',
+    nationality: 'Nationalité',
+    driving_license_number: 'N° de permis',
+    driving_license_expiry: 'Expiration permis',
+  };
+  return map[key] ?? key;
 }
 
 function mapIdCardFields(extracted: Record<string, unknown>): ScannedIdentity {

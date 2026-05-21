@@ -107,55 +107,15 @@ export const CustomerForm: React.FC<{
         </div>
       </div>
 
-      <section className="space-y-3">
-        <SectionTitle>Dossier</SectionTitle>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Code client (laisser vide pour auto)">
-            <input
-              className="df-input"
-              value={customerCode}
-              onChange={(e) => setCustomerCode(e.target.value.toUpperCase())}
-              placeholder="AUTO"
-            />
-          </Field>
-          <Field label="Agence">
-            <select className="df-input" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">—</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Statut">
-            <select
-              className="df-input"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as Customer['status'])}
-            >
-              <option value="active">Actif</option>
-              <option value="inactive">Inactif</option>
-              <option value="suspended">Suspendu</option>
-            </select>
-          </Field>
-          <Field label="Langue">
-            <select className="df-input" value={language} onChange={(e) => setLanguage(e.target.value)}>
-              <option value="fr">Français</option>
-              <option value="ar">العربية</option>
-              <option value="en">English</option>
-            </select>
-          </Field>
-          <Field label="Canal d'acquisition">
-            <input
-              className="df-input"
-              value={sourceChannel}
-              onChange={(e) => setSourceChannel(e.target.value)}
-              placeholder="web, agence, apporteur, …"
-            />
-          </Field>
-        </div>
-      </section>
+      {/*
+        Dossier metadata is intentionally not rendered:
+          - customer_code  → backend auto-generates when empty
+          - branch_id      → defaults to user's branch on the API
+          - status         → defaults to "active"
+          - preferred_language → defaults to "fr"
+          - source_channel → optional, omitted for a leaner form
+        The state still carries these values and they go out with the submit.
+      */}
 
       {type === 'PARTICULIER' ? (
         <section className="space-y-3">
