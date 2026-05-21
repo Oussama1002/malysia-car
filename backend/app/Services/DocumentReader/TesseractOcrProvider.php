@@ -104,12 +104,13 @@ class TesseractOcrProvider implements OcrProviderInterface
     {
         $prefix = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_ocr_'.bin2hex(random_bytes(6));
 
-        // 500 DPI is the sweet spot for ID-card sized regions inside a PDF:
-        // doubles small-glyph clarity (CIN trailing digits, "I" in ELHADI,
-        // birth date) vs the previous 300 DPI, without exploding render time.
+        // 400 DPI grayscale: balances clarity (better than the original 300 DPI
+        // for small CIN/license glyphs) vs render+OCR time. At 500 DPI a
+        // multi-page PDF can push the full extract beyond Nginx's 60s read
+        // timeout, so we stay at 400 and rely on Nginx config to allow ≥180s.
         $process = new Process([
             $this->pdftoppmBin,
-            '-r', '500',
+            '-r', '400',
             '-png',
             '-gray',
             $pdfPath,

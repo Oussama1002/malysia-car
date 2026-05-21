@@ -14,7 +14,7 @@ return [
         'bin' => env('TESSERACT_BIN', 'tesseract'),
         'pdftoppm_bin' => env('PDFTOPPM_BIN', 'pdftoppm'),
         'lang' => env('TESSERACT_LANG', 'eng+fra+ara'),
-        'timeout' => (int) env('TESSERACT_TIMEOUT', 120),
+        'timeout' => (int) env('TESSERACT_TIMEOUT', 180),
     ],
 
     'upload' => [

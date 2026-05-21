@@ -156,18 +156,62 @@ class DocumentParser
     private function parseDrivingLicense(string $text): array
     {
         $names = $this->extractNames($text);
-        $licenseNumber = $this->labelValue($text, ['N°\s*Permis', 'N°', 'License\s*No', 'No'], '[A-Z0-9\-/]{4,20}')
-            ?? $this->firstMatch('/\b(\d{2,3}[-\/]\d{4,8})\b/u', $text);
+        // Fallback to the heuristic when the license has no French labels —
+        // Moroccan permis 2010+ has Latin labels but the OCR sometimes drops
+        // them.
+        if (! isset($names['first_name']) || ! isset($names['last_name'])) {
+            $heuristic = $this->extractNamesHeuristic($text);
+            $names = array_filter(array_merge($heuristic, $names), fn ($v) => $v !== null && $v !== '');
+            if (isset($names['first_name']) || isset($names['last_name'])) {
+                $names['full_name'] = trim(($names['first_name'] ?? '').' '.($names['last_name'] ?? ''));
+            }
+        }
+
+        // EU/ICAO layout uses numbered fields: "5." = license number, "4a."/"4b."
+        // = issue/expiry dates, "9." = categories. Match those alongside the
+        // French labels.
+        $licenseNumber = $this->labelValue($text, [
+            'N°\s*Permis',
+            'N°\s*de\s*Permis',
+            'License\s*No',
+            'Driver\s*License\s*No',
+            '5\s*\.',
+        ], '[A-Z0-9\-\/]{4,20}')
+            ?? $this->firstMatch('/\b(\d{2,3}[-\/]\d{4,8})\b/u', $text)
+            ?? $this->longestMatch('/\b[A-Z]{0,2}\d{6,10}\b/u', $text);
 
         $categories = $this->extractCategories($text);
 
+        // Date classifier handles licenses that bury labels under OCR noise.
+        $classified = $this->classifyDatesByYear($text);
+        $birth = $this->extractDate($text, [
+            'Date\s+de\s+naissance',
+            'N[ée]\(?e\)?\s+le',
+            'Date\s+of\s+birth',
+            '3\s*\.',
+        ]) ?? $classified['birth'];
+        $issue = $this->extractDate($text, [
+            'Date\s+de\s+d[ée]livrance',
+            'Issued',
+            'D[ée]livr[ée]\s+le',
+            '4a\s*\.',
+        ]) ?? $classified['issue'];
+        $expiry = $this->extractDate($text, [
+            'Valable\s+jusqu',
+            'Expiry',
+            'Expir',
+            '4b\s*\.',
+        ]) ?? $classified['expiry'];
+
         return [
             'license_number' => $licenseNumber,
+            'first_name' => $names['first_name'] ?? null,
+            'last_name' => $names['last_name'] ?? null,
             'full_name' => $names['full_name'] ?? null,
-            'date_of_birth' => $this->extractDate($text, ['Date\s+de\s+naissance', 'N[ée]\s+le', 'Date\s+of\s+birth']),
+            'date_of_birth' => $birth,
             'categories' => $categories,
-            'issue_date' => $this->extractDate($text, ['Date\s+de\s+d[ée]livrance', 'Issued', 'D[ée]livr[ée]\s+le']),
-            'expiry_date' => $this->extractDate($text, ['Valable\s+jusqu', 'Expiry', 'Expir']),
+            'issue_date' => $issue,
+            'expiry_date' => $expiry,
         ];
     }
 
