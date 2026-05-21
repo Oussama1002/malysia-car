@@ -60,13 +60,25 @@ class TesseractOcrProvider implements OcrProviderInterface
 
     private function runTesseract(string $image, string $lang): string
     {
-        // `tesseract <image> stdout -l <lang> --psm 6`
+        // `tesseract <image> stdout -l <lang> --oem 1 --psm 4 \
+        //    -c preserve_interword_spaces=1 -c user_defined_dpi=400`
+        //
+        // --oem 1 = LSTM neural network only (much better than legacy on ID cards).
+        // --psm 4 = "single column of text of variable sizes" — closer to a CIN
+        //          layout than the default --psm 6 ("uniform block of text"),
+        //          which was merging French/Arabic columns and dropping glyphs.
+        // preserve_interword_spaces keeps the "Né le DD.MM.YYYY" spacing intact.
+        // user_defined_dpi hints Tesseract for accurate scaling when the image
+        //                  has no DPI metadata (most phone shots).
         $process = new Process([
             $this->tesseractBin,
             $image,
             'stdout',
             '-l', $lang,
-            '--psm', '6',
+            '--oem', '1',
+            '--psm', '4',
+            '-c', 'preserve_interword_spaces=1',
+            '-c', 'user_defined_dpi=400',
         ]);
         $process->setTimeout($this->timeoutSeconds);
 
@@ -92,10 +104,14 @@ class TesseractOcrProvider implements OcrProviderInterface
     {
         $prefix = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_ocr_'.bin2hex(random_bytes(6));
 
+        // 500 DPI is the sweet spot for ID-card sized regions inside a PDF:
+        // doubles small-glyph clarity (CIN trailing digits, "I" in ELHADI,
+        // birth date) vs the previous 300 DPI, without exploding render time.
         $process = new Process([
             $this->pdftoppmBin,
-            '-r', '300',
+            '-r', '500',
             '-png',
+            '-gray',
             $pdfPath,
             $prefix,
         ]);

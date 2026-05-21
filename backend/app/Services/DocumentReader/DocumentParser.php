@@ -281,9 +281,17 @@ class DocumentParser
             if (preg_match('/'.$label.'[^\n\r:]*[:\-]?[ \t]*'.$datePattern.'/iu', $text, $m)) {
                 return $this->canonicalizeDate($m['d']);
             }
-            // Next line
+            // Next line (label-only, value on the next non-empty line)
             if (preg_match('/'.$label.'[^\n\r]*[\r\n]+\s*'.$datePattern.'/iu', $text, $m)) {
                 return $this->canonicalizeDate($m['d']);
+            }
+            // Up to 3 lines below: handles cases where OCR fractures the row
+            // ("Né le … <garbage line> <garbage line> 06.10.2001").
+            if (preg_match('/'.$label.'[\s\S]{0,200}?'.$datePattern.'/iu', $text, $m)) {
+                $candidate = $this->canonicalizeDate($m['d']);
+                if ($candidate && (int) substr($candidate, 0, 4) <= (int) date('Y')) {
+                    return $candidate;
+                }
             }
         }
 
