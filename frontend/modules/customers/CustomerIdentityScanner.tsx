@@ -15,15 +15,27 @@ export interface ScannedIdentity {
   driving_license_expiry?: string;
 }
 
+/** A single uploaded-and-extracted reader document that the parent should
+ *  link to the newly-created customer / vehicle / contract on save. */
+export interface ScannedDocument {
+  documentId: string;
+  documentType: ReaderDocumentType;
+}
+
 /**
  * Two-slot dropzone (ID document + driving licence) that streams the file to
  * the Document Reader backend, runs OCR + parsing, then surfaces the extracted
  * fields back to the parent via `onPrefill`. The admin still reviews / edits
  * everything in the form before saving the customer.
+ *
+ * `onScanComplete` is invoked once per successful upload+extract with the
+ * underlying `reader_documents.id` so the parent can later attach it to the
+ * created entity (POST /document-reader/documents/{id}/link).
  */
 export const CustomerIdentityScanner: React.FC<{
   onPrefill: (data: ScannedIdentity) => void;
-}> = ({ onPrefill }) => {
+  onScanComplete?: (scan: ScannedDocument) => void;
+}> = ({ onPrefill, onScanComplete }) => {
   return (
     <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
       <div className="mb-1 text-xs font-black uppercase tracking-wider text-indigo-700">
@@ -40,6 +52,7 @@ export const CustomerIdentityScanner: React.FC<{
           allowedTypes={['cin', 'passport']}
           defaultType="cin"
           onPrefill={onPrefill}
+          onScanComplete={onScanComplete}
           mapFields={mapIdCardFields}
         />
         <ScanSlot
@@ -47,6 +60,7 @@ export const CustomerIdentityScanner: React.FC<{
           allowedTypes={['driving_license']}
           defaultType="driving_license"
           onPrefill={onPrefill}
+          onScanComplete={onScanComplete}
           mapFields={mapLicenseFields}
         />
       </div>
@@ -63,8 +77,9 @@ const ScanSlot: React.FC<{
   allowedTypes: ReaderDocumentType[];
   defaultType: ReaderDocumentType;
   onPrefill: (data: ScannedIdentity) => void;
+  onScanComplete?: (scan: ScannedDocument) => void;
   mapFields: Mapper;
-}> = ({ title, allowedTypes, defaultType, onPrefill, mapFields }) => {
+}> = ({ title, allowedTypes, defaultType, onPrefill, onScanComplete, mapFields }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -94,6 +109,10 @@ const ScanSlot: React.FC<{
           const labels = Object.keys(cleaned).map(frenchFieldLabel);
           setSuccess(`Champs détectés : ${labels.join(', ')}`);
         }
+        // Always emit the scan id so the parent can attach the file to the
+        // customer after creation — even if no fields were prefilled, the
+        // admin probably still wants the PDF stored under "Documents".
+        onScanComplete?.({ documentId: uploaded.data.id, documentType: docType });
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Échec OCR';
         setError(msg);
@@ -101,7 +120,7 @@ const ScanSlot: React.FC<{
         setLoading(false);
       }
     },
-    [docType, mapFields, onPrefill],
+    [docType, mapFields, onPrefill, onScanComplete],
   );
 
   return (

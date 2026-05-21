@@ -177,7 +177,7 @@ class DocumentReaderController extends Controller
         ]);
 
         $doc = $this->find($request, $id);
-        $doc = $this->reader->link($doc, $data['entity_type'], $data['entity_id']);
+        $doc = $this->reader->link($doc, $data['entity_type'], $data['entity_id'], $request->user());
 
         AuditLogger::record(
             'reader_document_linked',

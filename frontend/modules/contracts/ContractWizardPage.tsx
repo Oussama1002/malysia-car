@@ -15,9 +15,11 @@ import { documentsApi } from '@/services/documentsApi';
 import { createEnvelope, sendEnvelope } from '@/services/signatureApi';
 import { useAuthSession } from '@/modules/auth/AuthContext';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
+import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
 import { listBranches } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
+import { documentReaderApi } from '@/services/documentReaderApi';
 
 type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
 
@@ -136,7 +138,17 @@ export const ContractWizardPage: React.FC = () => {
   const qc = useQueryClient();
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
   const createCustomerMut = useMutation({
-    mutationFn: (p: CustomerCreatePayload) => createCustomer(p),
+    mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
+      const res = await createCustomer(vars.payload);
+      for (const scan of vars.scans) {
+        try {
+          await documentReaderApi.link(scan.documentId, 'customer', String(res.data.id));
+        } catch {
+          /* don't block on attachment failures */
+        }
+      }
+      return res;
+    },
     onSuccess: async (res) => {
       setNewClientError(null);
       setNewClientDrawerOpen(false);
@@ -745,9 +757,9 @@ export const ContractWizardPage: React.FC = () => {
           submitting={createCustomerMut.isPending}
           branches={branchesQ.data?.data ?? []}
           onCancel={() => setNewClientDrawerOpen(false)}
-          onSubmit={(payload) => {
+          onSubmit={(payload, scans) => {
             setNewClientError(null);
-            createCustomerMut.mutate(payload);
+            createCustomerMut.mutate({ payload, scans });
           }}
         />
       </DrawerPanel>

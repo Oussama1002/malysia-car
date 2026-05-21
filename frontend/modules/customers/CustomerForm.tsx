@@ -7,7 +7,11 @@ import type {
   CompanyProfile,
 } from '@/services/customersApi';
 import type { Branch } from '@/services/adminApi';
-import { CustomerIdentityScanner, type ScannedIdentity } from '@/modules/customers/CustomerIdentityScanner';
+import {
+  CustomerIdentityScanner,
+  type ScannedDocument,
+  type ScannedIdentity,
+} from '@/modules/customers/CustomerIdentityScanner';
 
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
@@ -16,8 +20,14 @@ export const CustomerForm: React.FC<{
   submitting: boolean;
   branches: Branch[];
   onCancel: () => void;
-  onSubmit: (payload: CustomerCreatePayload) => void;
+  /**
+   * `scannedDocuments` carries the reader_documents IDs of the files
+   * uploaded via the OCR scanner so the parent can attach them to the
+   * newly-created customer.
+   */
+  onSubmit: (payload: CustomerCreatePayload, scannedDocuments: ScannedDocument[]) => void;
 }> = ({ mode, initial, error, submitting, branches, onCancel, onSubmit }) => {
+  const [scannedDocs, setScannedDocs] = useState<ScannedDocument[]>([]);
   const [type, setType] = useState<CustomerType>(initial?.customer_type ?? 'PARTICULIER');
   const [customerCode, setCustomerCode] = useState(initial?.customer_code ?? '');
   const [status, setStatus] = useState<Customer['status']>(initial?.status ?? 'active');
@@ -76,7 +86,7 @@ export const CustomerForm: React.FC<{
         is_primary: true,
       });
     }
-    onSubmit(payload);
+    onSubmit(payload, scannedDocs);
   };
 
   return (
@@ -124,6 +134,11 @@ export const CustomerForm: React.FC<{
             <CustomerIdentityScanner
               onPrefill={(scanned: ScannedIdentity) =>
                 setIndividual((prev) => ({ ...prev, ...scanned }))
+              }
+              onScanComplete={(scan) =>
+                setScannedDocs((prev) =>
+                  prev.some((s) => s.documentId === scan.documentId) ? prev : [...prev, scan],
+                )
               }
             />
           ) : null}

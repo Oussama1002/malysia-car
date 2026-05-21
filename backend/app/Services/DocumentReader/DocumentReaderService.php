@@ -131,12 +131,57 @@ class DocumentReaderService
         });
     }
 
-    public function link(ReaderDocument $document, string $entityType, string $entityId): ReaderDocument
+    public function link(ReaderDocument $document, string $entityType, string $entityId, ?User $user = null): ReaderDocument
     {
         $document->update([
             'linked_entity_type' => $entityType,
             'linked_entity_id' => $entityId,
         ]);
+
+        // Also surface the original PDF/image in the central document center
+        // for that entity, so it appears under the customer/vehicle's
+        // "Documents" tab. We pick a category based on the OCR document type.
+        if (
+            $document->file
+            && in_array($entityType, DocumentService::ENTITY_TYPES, true)
+        ) {
+            $category = match ($document->document_type) {
+                ReaderDocument::TYPE_CIN => 'cin',
+                ReaderDocument::TYPE_PASSPORT => 'passport',
+                ReaderDocument::TYPE_DRIVING_LICENSE => 'driving_license',
+                ReaderDocument::TYPE_VEHICLE_REGISTRATION => 'vehicle_registration',
+                ReaderDocument::TYPE_RENTAL_CONTRACT => 'rental_contract',
+                default => 'identity_document',
+            };
+            $title = match ($document->document_type) {
+                ReaderDocument::TYPE_CIN => 'CIN',
+                ReaderDocument::TYPE_PASSPORT => 'Passeport',
+                ReaderDocument::TYPE_DRIVING_LICENSE => 'Permis de conduire',
+                ReaderDocument::TYPE_VEHICLE_REGISTRATION => 'Carte grise',
+                ReaderDocument::TYPE_RENTAL_CONTRACT => 'Contrat de location',
+                default => $document->file_name,
+            };
+            // Don't double-attach if the same file is linked again.
+            $exists = \App\Models\EntityAttachment::query()
+                ->where('entity_type', $entityType)
+                ->where('entity_id', $entityId)
+                ->where('file_id', $document->file_id)
+                ->exists();
+            if (! $exists) {
+                $this->documents->attachToEntity(
+                    $document->file,
+                    $entityType,
+                    $entityId,
+                    [
+                        'category' => $category,
+                        'title' => $title,
+                        'visibility' => 'internal',
+                        'status' => 'active',
+                    ],
+                    $user,
+                );
+            }
+        }
 
         return $document->fresh();
     }
