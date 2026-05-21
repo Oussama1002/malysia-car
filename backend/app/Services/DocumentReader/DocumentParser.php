@@ -116,7 +116,7 @@ class DocumentParser
             'document_type' => 'cin',
             'date_of_birth' => $birthDate,
             'nationality' => $this->labelValue($text, ['Nationalit[ée]', 'Nationality'], '[A-Za-z\s\-]+')
-                ?: ($this->containsAny($text, ['MAROC', 'MOROCCAN']) ? 'Marocaine' : null),
+                ?: ($this->containsAny($text, ['MAROC', 'MOROCCAN']) ? 'Maroc' : null),
             'address' => $this->labelValue($text, ['Adresse', 'Address'], '.+'),
             'issue_date' => $this->extractDate($text, ['Date\s+de\s+d[ée]livrance', 'Issued', 'D[ée]livr[ée]\s+le'])
                 ?? $classified['issue'],

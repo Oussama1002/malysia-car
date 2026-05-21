@@ -191,21 +191,35 @@ const ScanSlot: React.FC<{
 // Field mapping helpers
 // ---------------------------------------------------------------------------
 
-/** Best-effort 2-letter ISO conversion of the noisy nationality string. */
+/**
+ * Map noisy OCR nationality strings (Arabic gloss, ISO-3 codes, French
+ * adjectives, etc.) to the French country name we want displayed in the form.
+ * Falls back to the raw string capitalised if no known prefix matches.
+ */
 function normalizeNationality(raw: unknown): string | undefined {
   if (typeof raw !== 'string') return undefined;
   const v = raw.trim().toUpperCase();
   if (!v) return undefined;
-  if (v.length === 2) return v;
-  if (v.startsWith('MAR') || v.includes('MAROC')) return 'MA';
-  if (v.startsWith('FRA') || v.includes('FRANC')) return 'FR';
-  if (v.startsWith('ESP') || v.includes('SPAIN') || v.includes('ESPAG')) return 'ES';
-  if (v.startsWith('USA') || v.includes('UNITED STATES')) return 'US';
-  if (v.startsWith('GBR') || v.includes('BRITISH')) return 'GB';
-  if (v.startsWith('DZA') || v.includes('ALGER')) return 'DZ';
-  if (v.startsWith('TUN') || v.includes('TUNIS')) return 'TN';
-  // Fallback: keep first 3 letters so the admin sees something and can correct.
-  return v.slice(0, 3);
+
+  const table: Array<{ matches: (s: string) => boolean; label: string }> = [
+    { matches: (s) => s.startsWith('MAR') || s.includes('MAROC') || s === 'MA', label: 'Maroc' },
+    { matches: (s) => s.startsWith('FRA') || s.includes('FRANC') || s === 'FR', label: 'France' },
+    { matches: (s) => s.startsWith('ESP') || s.includes('SPAIN') || s.includes('ESPAG') || s === 'ES', label: 'Espagne' },
+    { matches: (s) => s.startsWith('USA') || s.includes('UNITED STATES') || s === 'US', label: 'États-Unis' },
+    { matches: (s) => s.startsWith('GBR') || s.includes('BRITISH') || s === 'GB', label: 'Royaume-Uni' },
+    { matches: (s) => s.startsWith('DZA') || s.includes('ALGER') || s === 'DZ', label: 'Algérie' },
+    { matches: (s) => s.startsWith('TUN') || s.includes('TUNIS') || s === 'TN', label: 'Tunisie' },
+    { matches: (s) => s.startsWith('DEU') || s.includes('ALLEMAGN') || s === 'DE', label: 'Allemagne' },
+    { matches: (s) => s.startsWith('ITA') || s.includes('ITAL') || s === 'IT', label: 'Italie' },
+    { matches: (s) => s.startsWith('NLD') || s.includes('PAYS-BAS') || s.includes('NETHERL') || s === 'NL', label: 'Pays-Bas' },
+    { matches: (s) => s.startsWith('BEL') || s.includes('BELG') || s === 'BE', label: 'Belgique' },
+    { matches: (s) => s.startsWith('PRT') || s.includes('PORTUG') || s === 'PT', label: 'Portugal' },
+  ];
+
+  for (const { matches, label } of table) {
+    if (matches(v)) return label;
+  }
+  return raw.trim().replace(/^./, (c) => c.toUpperCase());
 }
 
 function titleCase(value: unknown): string | undefined {

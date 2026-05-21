@@ -29,7 +29,7 @@ export const CustomerForm: React.FC<{
     initial?.individual_profile ?? {
       first_name: '',
       last_name: '',
-      nationality: 'MA',
+      nationality: 'Maroc',
     },
   );
   const [company, setCompany] = useState<Partial<CompanyProfile>>(initial?.company_profile ?? { legal_name: '' });
@@ -162,9 +162,10 @@ export const CustomerForm: React.FC<{
             <Field label="Nationalité">
               <input
                 className="df-input"
-                maxLength={2}
+                maxLength={60}
                 value={individual.nationality ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, nationality: e.target.value.toUpperCase() }))}
+                onChange={(e) => setIndividual((p) => ({ ...p, nationality: e.target.value }))}
+                placeholder="Maroc, France, …"
               />
             </Field>
             <Field label="Permis de conduire n°">
