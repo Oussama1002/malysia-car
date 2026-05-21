@@ -83,7 +83,14 @@ class DocumentParser
             'full_name' => $names['full_name'] ?? null,
             'document_number' => $docNumber,
             'document_type' => 'cin',
-            'date_of_birth' => $this->extractDate($text, ['Date\s+de\s+naissance', 'N[ée]\s+le', 'Date\s+of\s+birth']),
+            'date_of_birth' => $this->extractDate($text, [
+                'Date\s+de\s+naissance',
+                'N[ée]\(?e\)?\s+le',
+                'N[ée]e?\s+le',
+                'Nee\s+le',
+                'Date\s+of\s+birth',
+                'Born\s+on',
+            ]),
             'nationality' => $this->labelValue($text, ['Nationalit[ée]', 'Nationality'], '[A-Za-z\s\-]+')
                 ?: ($this->containsAny($text, ['MAROC', 'MOROCCAN']) ? 'Marocaine' : null),
             'address' => $this->labelValue($text, ['Adresse', 'Address'], '.+'),
@@ -107,7 +114,12 @@ class DocumentParser
                 ?? trim(($mrz['given_names'] ?? '').' '.($mrz['surname'] ?? '')) ?: null,
             'document_number' => $docNumber,
             'document_type' => 'passport',
-            'date_of_birth' => $this->extractDate($text, ['Date\s+of\s+birth', 'Date\s+de\s+naissance', 'Birth']),
+            'date_of_birth' => $this->extractDate($text, [
+                'Date\s+of\s+birth',
+                'Date\s+de\s+naissance',
+                'N[ée]\(?e\)?\s+le',
+                'Birth',
+            ]),
             'nationality' => $mrz['nationality'] ?? $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+'),
             'address' => null,
             'issue_date' => $this->extractDate($text, ['Date\s+of\s+issue', 'Date\s+de\s+d[ée]livrance']),
@@ -178,21 +190,39 @@ class DocumentParser
 
     /**
      * @param  list<string>  $labels  Regex-safe labels (without anchoring).
+     *
+     * Tolerant matcher: accepts the value on the SAME line OR the next non-empty
+     * line. Moroccan CINs typically print "Nom / لقب" then the value on the
+     * line below; this matches that layout. The label is also allowed to be
+     * followed by a slash + Arabic gloss (`Nom / لقب`, `Né(e) le /…`).
      */
     private function labelValue(string $text, array $labels, string $valuePattern): ?string
     {
         foreach ($labels as $label) {
-            $pattern = '/'.$label.'\s*[:\-]?\s*(?P<v>'.$valuePattern.')/iu';
-            if (preg_match($pattern, $text, $m)) {
-                $value = trim($m['v']);
-                // Trim trailing words that look like another label
-                $value = preg_replace('/\s{2,}.*$/u', '', $value) ?? $value;
+            // Same-line match, allowing an optional "/ <arabic/other>" tail
+            // between label and the colon/value.
+            $sameLine = '/'.$label.'[^\n\r:]*[:\-]?[ \t]*(?P<v>'.$valuePattern.')/iu';
+            if (preg_match($sameLine, $text, $m) && $this->cleanLabelValue($m['v']) !== '') {
+                return $this->cleanLabelValue($m['v']);
+            }
 
-                return $value !== '' ? $value : null;
+            // Next-line match: label on one line, value on the following non-empty line.
+            $nextLine = '/'.$label.'[^\n\r]*[\r\n]+\s*(?P<v>'.$valuePattern.')/iu';
+            if (preg_match($nextLine, $text, $m) && $this->cleanLabelValue($m['v']) !== '') {
+                return $this->cleanLabelValue($m['v']);
             }
         }
 
         return null;
+    }
+
+    private function cleanLabelValue(string $value): string
+    {
+        $value = trim($value);
+        // Drop trailing run of 2+ spaces and anything after — usually the next label.
+        $value = preg_replace('/\s{2,}.*$/u', '', $value) ?? $value;
+
+        return trim($value);
     }
 
     /**
@@ -200,9 +230,14 @@ class DocumentParser
      */
     private function extractDate(string $text, array $labels): ?string
     {
-        $pattern = '(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
+        $datePattern = '(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
         foreach ($labels as $label) {
-            if (preg_match('/'.$label.'\s*[:\-]?\s*'.$pattern.'/iu', $text, $m)) {
+            // Same line
+            if (preg_match('/'.$label.'[^\n\r:]*[:\-]?[ \t]*'.$datePattern.'/iu', $text, $m)) {
+                return $this->canonicalizeDate($m['d']);
+            }
+            // Next line
+            if (preg_match('/'.$label.'[^\n\r]*[\r\n]+\s*'.$datePattern.'/iu', $text, $m)) {
                 return $this->canonicalizeDate($m['d']);
             }
         }
@@ -237,12 +272,18 @@ class DocumentParser
     /** @return array{first_name?: string, last_name?: string, full_name?: string} */
     private function extractNames(string $text): array
     {
+        // Accept mixed case (some Tesseract passes output lowercase tails).
+        // 2+ letters, allow accented latin + dashes + apostrophes.
+        $nameValue = "[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,}(?:\\s+[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,})*";
+
         $out = [];
-        if (preg_match('/(?:Nom|Surname|Last\s*Name)\s*[:\-]?\s*(?P<v>[A-ZÉÈÊÀÂÎÔÛÇ\'\-\s]{2,})/u', $text, $m)) {
-            $out['last_name'] = $this->cleanName($m['v']);
+        $last = $this->labelValue($text, ['Nom', 'Surname', 'Last\s*Name'], $nameValue);
+        if ($last) {
+            $out['last_name'] = $this->cleanName($last);
         }
-        if (preg_match('/(?:Pr[ée]nom|Given\s*Names?|First\s*Name)\s*[:\-]?\s*(?P<v>[A-ZÉÈÊÀÂÎÔÛÇ\'\-\s]{2,})/u', $text, $m)) {
-            $out['first_name'] = $this->cleanName($m['v']);
+        $first = $this->labelValue($text, ['Pr[ée]nom', 'Pr[ée]noms', 'Given\s*Names?', 'First\s*Name'], $nameValue);
+        if ($first) {
+            $out['first_name'] = $this->cleanName($first);
         }
         if (isset($out['first_name']) || isset($out['last_name'])) {
             $out['full_name'] = trim(($out['first_name'] ?? '').' '.($out['last_name'] ?? ''));
@@ -254,8 +295,10 @@ class DocumentParser
     private function cleanName(string $value): string
     {
         $value = preg_replace('/\s{2,}.*$/u', '', $value) ?? $value;
+        // Strip digits / punctuation, keep accented letters + dash + apostrophe + space.
+        $value = preg_replace('/[^A-Za-zÀ-ÖØ-öø-ÿ\'\- ]/u', '', $value) ?? $value;
 
-        return trim(preg_replace('/[^A-ZÉÈÊÀÂÎÔÛÇ\'\-\s]/u', '', mb_strtoupper($value)) ?? $value);
+        return trim(mb_strtoupper($value));
     }
 
     /** @return list<string> */
