@@ -186,8 +186,10 @@ class DocumentParser
         $classified = $this->classifyDatesByYear($text);
         $birth = $this->extractDate($text, [
             'Date\s+de\s+naissance',
+            'Date\s+et\s*/?\s*Lieu\s+de\s+naissance', // Moroccan permis bilingual label
             'N[ée]\(?e\)?\s+le',
             'Date\s+of\s+birth',
+            'naissance',                               // fallback: just the key word
             '3\s*\.',
         ]) ?? $classified['birth'];
         $issue = $this->extractDate($text, [
@@ -259,6 +261,11 @@ class DocumentParser
         // Collapse exotic whitespace, normalize line endings, drop control chars.
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', ' ', $text) ?? $text;
+        // Strip Unicode invisible/directional formatting characters that OCR
+        // embeds when the source document has bidirectional (Arabic + Latin) text.
+        // LRM, RLM, zero-width spaces, directional overrides, BOM, etc. disrupt
+        // every regex that relies on word boundaries or start-of-line anchors.
+        $text = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{FEFF}]/u', '', $text) ?? $text;
         // Tesseract sometimes inserts a stray space INSIDE a date component
         // ("06/1 0/2001"). Collapse whitespace when it sits between two
         // digits or date separators to recover the original number.
@@ -370,19 +377,26 @@ class DocumentParser
         }
         // DMY → YMD
         if (strlen($parts[0]) <= 2 && strlen($parts[2]) === 4) {
-            return sprintf('%04d-%02d-%02d', (int) $parts[2], (int) $parts[1], (int) $parts[0]);
-        }
-        if (strlen($parts[0]) === 4) {
-            return sprintf('%04d-%02d-%02d', (int) $parts[0], (int) $parts[1], (int) $parts[2]);
-        }
-        if (strlen($parts[2]) === 2) {
+            $iso = sprintf('%04d-%02d-%02d', (int) $parts[2], (int) $parts[1], (int) $parts[0]);
+        } elseif (strlen($parts[0]) === 4) {
+            $iso = sprintf('%04d-%02d-%02d', (int) $parts[0], (int) $parts[1], (int) $parts[2]);
+        } elseif (strlen($parts[2]) === 2) {
             $year = (int) $parts[2];
             $year += $year < 50 ? 2000 : 1900;
-
-            return sprintf('%04d-%02d-%02d', $year, (int) $parts[1], (int) $parts[0]);
+            $iso = sprintf('%04d-%02d-%02d', $year, (int) $parts[1], (int) $parts[0]);
+        } else {
+            return null;
         }
 
-        return null;
+        // Reject dates with impossible month or day values — Tesseract sometimes
+        // misreads a digit ("06/40/2001" = 1→4) producing a logically invalid date
+        // that would silently fail in an HTML date input.
+        [, $mm, $dd] = explode('-', $iso);
+        if ((int) $mm < 1 || (int) $mm > 12 || (int) $dd < 1 || (int) $dd > 31) {
+            return null;
+        }
+
+        return $iso;
     }
 
     /** @return array{first_name?: string, last_name?: string, full_name?: string} */
@@ -455,6 +469,9 @@ class DocumentParser
         $rest = substr($text, $m[0][1] + strlen($m[0][0]));
         $lines = preg_split('/[\r\n]+/', $rest) ?: [];
         $checked = 0;
+        // Two-pass: collect clean lines (no lowercase) and noisy lines separately,
+        // prefer clean, fall back to uppercase island from noisy.
+        $noisyCandidate = null;
         foreach ($lines as $line) {
             if ($checked++ > $maxLinesAfter) {
                 break;
@@ -462,24 +479,35 @@ class DocumentParser
             if (trim($line) === '') {
                 continue;
             }
-            // Reject lines that contain any lowercase Latin — those are prose
-            // (labels, footnotes), not a name value.
-            if (preg_match('/[a-zà-öø-ÿ]/u', $line)) {
-                continue;
-            }
-            // Capture a uppercase Latin run with optional internal spaces / dashes /
-            // apostrophes. Trailing punctuation is allowed but trimmed off.
-            if (preg_match('/([A-ZÀ-Ö\'][A-ZÀ-Ö\s\'\-]{2,28}[A-ZÀ-Ö])/u', $line, $vm)) {
-                $value = trim(preg_replace('/\s{2,}/u', ' ', $vm[1]) ?? $vm[1]);
-                // Require ≥4 actual letters (so "EL F" or "A B C" don't count).
-                $letterCount = preg_match_all('/[A-ZÀ-Ö]/u', $value);
-                if ($letterCount >= 4) {
-                    return $value;
+            // Primary: lines with no lowercase Latin — highest confidence.
+            if (! preg_match('/[a-zà-öø-ÿ]/u', $line)) {
+                if (preg_match('/([A-ZÀ-Ö\'][A-ZÀ-Ö\s\'\-]{2,28}[A-ZÀ-Ö])/u', $line, $vm)) {
+                    $value = trim(preg_replace('/\s{2,}/u', ' ', $vm[1]) ?? $vm[1]);
+                    if (preg_match_all('/[A-ZÀ-Ö]/u', $value) >= 4) {
+                        return $value;
+                    }
+                }
+            } elseif ($noisyCandidate === null) {
+                // Secondary: line has lowercase noise (e.g. "oi f= OSSAMA 7 |").
+                // Extract the longest contiguous uppercase block ≥5 Latin chars.
+                // This handles Moroccan Permis where name lines contain OCR junk
+                // mixed with the actual uppercase name token.
+                if (preg_match_all('/[A-ZÀ-Ö]{2,}(?:\s[A-ZÀ-Ö]{2,})*/u', $line, $islands)) {
+                    $best = '';
+                    foreach ($islands[0] as $island) {
+                        if (mb_strlen($island) > mb_strlen($best)) {
+                            $best = $island;
+                        }
+                    }
+                    $best = trim(preg_replace('/\s{2,}/u', ' ', $best) ?? $best);
+                    if (preg_match_all('/[A-ZÀ-Ö]/u', $best) >= 5) {
+                        $noisyCandidate = $best;
+                    }
                 }
             }
         }
 
-        return null;
+        return $noisyCandidate;
     }
 
     private function cleanName(string $value): string
@@ -516,7 +544,11 @@ class DocumentParser
             'ABDELGHANI', 'ABDELLAH', 'AHMED', 'HASSAN', 'MOHAMMED', 'MOHAMED',
             'DRISS', 'HABIBA', 'OULAD',
             'SCANNED', 'WITH', 'CAMERA', 'PHOTO', 'POLICE',
-            // Common Tesseract noise tokens seen on Moroccan CIN headers.
+            // Field labels — Tesseract sometimes picks these up as name tokens
+            // when Arabic text flanks the label and strips adjacent whitespace.
+            'PRENOM', 'PRÉNOM', 'PRENOMS', 'PRÉNOMS', 'SURNAME', 'SIGNÉ', 'SIGNE',
+            'DELIVRE', 'DÉLIVRÉ', 'VALABLE', 'DELIVER',
+            // Common Tesseract noise tokens seen on Moroccan CIN/Permis headers.
             'MERS', 'RENE', 'OTHE', 'GATAR', 'QATAR',
         ];
         $lines = preg_split('/[\r\n]+/', $text) ?: [];
