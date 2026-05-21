@@ -74,8 +74,33 @@ class DocumentParser
     private function parseCin(string $text): array
     {
         $names = $this->extractNames($text);
+        // Moroccan CIN 2008/2020 doesn't print "Nom"/"Prénom" in French — names
+        // are bare tokens. Fall back to heuristic if label extraction missed them.
+        if (! isset($names['first_name']) || ! isset($names['last_name'])) {
+            $heuristic = $this->extractNamesHeuristic($text);
+            $names = array_filter(array_merge($heuristic, $names), fn ($v) => $v !== null && $v !== '');
+            if (isset($names['first_name']) || isset($names['last_name'])) {
+                $names['full_name'] = trim(($names['first_name'] ?? '').' '.($names['last_name'] ?? ''));
+            }
+        }
+
         $docNumber = $this->firstMatch('/\b([A-Z]{1,2}\d{4,8})\b/u', $text)
             ?? $this->labelValue($text, ['CIN', 'N°\s*CIN', 'N°', 'No', 'Numero', 'Card\s*No'], '[A-Z0-9]{4,15}');
+
+        // Date strategy: try label first, then classify any standalone date
+        // by year (birth = before today-16y, expiry = after today).
+        $birthDate = $this->extractDate($text, [
+            'Date\s+de\s+naissance',
+            'N[ée]\(?e\)?\s+le',
+            'N[ée]e?\s+le',
+            'Nee\s+le',
+            'Date\s+of\s+birth',
+            'Born\s+on',
+        ]);
+        $expiryDate = $this->extractDate($text, ['Valable\s+jusqu', 'Date\s+d[\'’]expiration', 'Expiry', 'Expir']);
+        $classified = $this->classifyDatesByYear($text);
+        $birthDate = $birthDate ?? $classified['birth'];
+        $expiryDate = $expiryDate ?? $classified['expiry'];
 
         return [
             'first_name' => $names['first_name'] ?? null,
@@ -83,19 +108,13 @@ class DocumentParser
             'full_name' => $names['full_name'] ?? null,
             'document_number' => $docNumber,
             'document_type' => 'cin',
-            'date_of_birth' => $this->extractDate($text, [
-                'Date\s+de\s+naissance',
-                'N[ée]\(?e\)?\s+le',
-                'N[ée]e?\s+le',
-                'Nee\s+le',
-                'Date\s+of\s+birth',
-                'Born\s+on',
-            ]),
+            'date_of_birth' => $birthDate,
             'nationality' => $this->labelValue($text, ['Nationalit[ée]', 'Nationality'], '[A-Za-z\s\-]+')
                 ?: ($this->containsAny($text, ['MAROC', 'MOROCCAN']) ? 'Marocaine' : null),
             'address' => $this->labelValue($text, ['Adresse', 'Address'], '.+'),
-            'issue_date' => $this->extractDate($text, ['Date\s+de\s+d[ée]livrance', 'Issued', 'D[ée]livr[ée]\s+le']),
-            'expiry_date' => $this->extractDate($text, ['Valable\s+jusqu', 'Date\s+d[\'’]expiration', 'Expiry', 'Expir']),
+            'issue_date' => $this->extractDate($text, ['Date\s+de\s+d[ée]livrance', 'Issued', 'D[ée]livr[ée]\s+le'])
+                ?? $classified['issue'],
+            'expiry_date' => $expiryDate,
         ];
     }
 
@@ -299,6 +318,109 @@ class DocumentParser
         $value = preg_replace('/[^A-Za-zÀ-ÖØ-öø-ÿ\'\- ]/u', '', $value) ?? $value;
 
         return trim(mb_strtoupper($value));
+    }
+
+    /**
+     * Heuristic fallback for cards without "Nom"/"Prénom" labels (Moroccan CIN
+     * 2008/2020). Walks the lines top-to-bottom and picks the first two
+     * isolated uppercase Latin tokens (4–15 chars) that aren't CIN boilerplate.
+     * On Moroccan CINs the first name is printed above the last name, so:
+     *   1st candidate → first_name
+     *   2nd candidate → last_name
+     *
+     * @return array{first_name?: string, last_name?: string}
+     */
+    private function extractNamesHeuristic(string $text): array
+    {
+        $stopwords = [
+            'ROYAUME', 'MAROC', 'CARTE', 'NATIONALE', 'IDENTITE', 'IDENTITÉ',
+            'BUREAU', 'NATIONAL', 'KINGDOM', 'MOROCCO', 'REPUBLIQUE', 'REPUBLIC',
+            'PASSEPORT', 'PASSPORT', 'PERMIS', 'CONDUIRE', 'LICENSE', 'LICENCE',
+            'ETAT', 'CIVIL', 'SEXE', 'ADRESSE', 'ADDRESS', 'VALIDE', 'VALABLE',
+            'JUSQU', 'EXPIRY', 'EXPIRE', 'BORN', 'DATE', 'NAISSANCE', 'BIRTH',
+            'NATIONALITE', 'NATIONALITY', 'MAROCAINE', 'MAROCAIN', 'FRANCAISE',
+            'FILS', 'FILLE', 'EPOUSE', 'CASABLANCA', 'RABAT', 'TANGER', 'FES',
+            'AGADIR', 'MARRAKECH', 'OUJDA', 'MEKNES', 'KENITRA', 'TETOUAN',
+            'MEDIOUNA', 'TISSIR', 'TAMESNA',
+            'ABDELGHANI', 'ABDELLAH', 'AHMED', 'HASSAN', 'MOHAMMED', 'MOHAMED',
+            'DRISS', 'HABIBA', 'BEN', 'BENT', 'OULAD',
+            'SCANNED', 'WITH', 'CAMERA', 'PHOTO',
+        ];
+        $lines = preg_split('/[\r\n]+/', $text) ?: [];
+        $candidates = [];
+        foreach ($lines as $line) {
+            if (! preg_match('/\b([A-ZÀ-Ö][A-Za-zÀ-ÖØ-öø-ÿ\'\-]{3,14})\b/u', $line, $m)) {
+                continue;
+            }
+            $token = mb_strtoupper($m[1]);
+            if (in_array($token, $stopwords, true)) {
+                continue;
+            }
+            // Require the line to be "mostly" that token — skip prose lines.
+            $clean = preg_replace('/[^A-Za-zÀ-ÖØ-öø-ÿ\'\-\s]/u', ' ', $line) ?? '';
+            $latinTokens = array_values(array_filter(
+                preg_split('/\s+/', trim($clean)) ?: [],
+                fn ($t) => mb_strlen($t) >= 4,
+            ));
+            if (count($latinTokens) === 0 || count($latinTokens) > 4) {
+                continue;
+            }
+            if (! in_array($token, $candidates, true)) {
+                $candidates[] = $token;
+            }
+            if (count($candidates) >= 2) {
+                break;
+            }
+        }
+
+        $out = [];
+        if (isset($candidates[0])) {
+            $out['first_name'] = $candidates[0];
+        }
+        if (isset($candidates[1])) {
+            $out['last_name'] = $candidates[1];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Pull every DD.MM.YYYY-shape date out of the text and bucket them by year
+     * vs today: future → expiry, past-by-≥16y → birth, in-between → issue.
+     * Used as a fallback when label-based date extraction fails.
+     *
+     * @return array{birth: ?string, issue: ?string, expiry: ?string}
+     */
+    private function classifyDatesByYear(string $text): array
+    {
+        $out = ['birth' => null, 'issue' => null, 'expiry' => null];
+        if (! preg_match_all(
+            '/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})\b/u',
+            $text,
+            $matches,
+        )) {
+            return $out;
+        }
+        $now = (int) date('Y');
+        foreach ($matches[1] as $raw) {
+            $iso = $this->canonicalizeDate($raw);
+            if (! $iso) {
+                continue;
+            }
+            $year = (int) substr($iso, 0, 4);
+            if ($year < 1900 || $year > $now + 40) {
+                continue;
+            }
+            if ($year > $now && $out['expiry'] === null) {
+                $out['expiry'] = $iso;
+            } elseif ($year <= $now - 16 && $out['birth'] === null) {
+                $out['birth'] = $iso;
+            } elseif ($out['issue'] === null) {
+                $out['issue'] = $iso;
+            }
+        }
+
+        return $out;
     }
 
     /** @return list<string> */
