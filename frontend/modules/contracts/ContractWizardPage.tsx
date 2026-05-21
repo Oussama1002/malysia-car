@@ -1,18 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 import { Icon, type IconName } from '@/modules/shared/components/Icon';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
 import { UploadZone } from '@/modules/shared/components/UploadZone';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import type { ContractType } from '@/services/dtos';
 import { contractsApi } from '@/services/contractsApi';
 import { documentsApi } from '@/services/documentsApi';
 import { createEnvelope, sendEnvelope } from '@/services/signatureApi';
 import { useAuthSession } from '@/modules/auth/AuthContext';
+import { CustomerForm } from '@/modules/customers/CustomerForm';
+import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
+import { listBranches } from '@/services/adminApi';
+import { ApiError } from '@/services/apiError';
 
 type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
 
@@ -125,7 +130,21 @@ export const ContractWizardPage: React.FC = () => {
   const [draftBusy, setDraftBusy] = useState(false);
   const [draftInfo, setDraftInfo] = useState<string | null>(null);
   const [draftContractId, setDraftContractId] = useState<string | null>(null);
+  const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
+  const [newClientError, setNewClientError] = useState<string | null>(null);
   const step = STEPS[stepIdx];
+  const qc = useQueryClient();
+  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
+  const createCustomerMut = useMutation({
+    mutationFn: (p: CustomerCreatePayload) => createCustomer(p),
+    onSuccess: async (res) => {
+      setNewClientError(null);
+      setNewClientDrawerOpen(false);
+      await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
+      patch('clientId', String(res.data.id));
+    },
+    onError: (e) => setNewClientError(e instanceof ApiError ? e.message : 'Erreur de création du client'),
+  });
 
   const clients = useQuery({
     queryKey: queryKeys.customers.all,
@@ -389,18 +408,30 @@ export const ContractWizardPage: React.FC = () => {
               <>
                 <div>
                   <label className="df-label">Rechercher un client</label>
-                  <select
-                    className="df-input"
-                    value={state.clientId ?? ''}
-                    onChange={(e) => patch('clientId', e.target.value || null)}
-                  >
-                    <option value="">— Sélectionner —</option>
-                    {(clients.data ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-stretch gap-2">
+                    <select
+                      className="df-input flex-1"
+                      value={state.clientId ?? ''}
+                      onChange={(e) => patch('clientId', e.target.value || null)}
+                    >
+                      <option value="">— Sélectionner —</option>
+                      {(clients.data ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="df-btn df-btn--primary whitespace-nowrap"
+                      onClick={() => {
+                        setNewClientError(null);
+                        setNewClientDrawerOpen(true);
+                      }}
+                    >
+                      + Nouveau client
+                    </button>
+                  </div>
                 </div>
 
                 {selectedClient && (
@@ -701,6 +732,25 @@ export const ContractWizardPage: React.FC = () => {
           </div>
         </aside>
       </section>
+
+      <DrawerPanel
+        open={newClientDrawerOpen}
+        title="Nouveau client"
+        onClose={() => setNewClientDrawerOpen(false)}
+        widthClass="max-w-2xl"
+      >
+        <CustomerForm
+          mode="create"
+          error={newClientError}
+          submitting={createCustomerMut.isPending}
+          branches={branchesQ.data?.data ?? []}
+          onCancel={() => setNewClientDrawerOpen(false)}
+          onSubmit={(payload) => {
+            setNewClientError(null);
+            createCustomerMut.mutate(payload);
+          }}
+        />
+      </DrawerPanel>
     </div>
   );
 };
