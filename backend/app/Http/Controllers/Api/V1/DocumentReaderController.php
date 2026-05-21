@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Jobs\ProcessDocumentOcrJob;
 use App\Models\ReaderDocument;
 use App\Services\AuditLogger;
 use App\Services\DocumentReader\DocumentReaderService;
@@ -69,6 +70,12 @@ class DocumentReaderController extends Controller
 
     public function upload(Request $request): JsonResponse
     {
+        // Large file + OCR-bound flows; outlive php.ini's 30s default so a
+        // long render doesn't get killed mid-request and bubble up as an HTML
+        // 500 page (which clients try to JSON.parse and choke on).
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
         $maxKb = (int) config('document_reader.upload.max_size_kb', 15 * 1024);
         $data = $request->validate([
             'file' => ['required', 'file', 'max:'.$maxKb, 'mimes:pdf,jpg,jpeg,png'],
@@ -102,30 +109,44 @@ class DocumentReaderController extends Controller
 
         $doc = $this->find($request, $id);
 
-        try {
-            $extraction = $this->reader->extract($doc, $data['document_type'] ?? null);
-        } catch (Throwable $e) {
+        // Fail fast with a clear JSON error if the OCR toolchain is missing.
+        $missing = $this->reader->missingBinaries();
+        if ($missing !== []) {
+            $hint = in_array('pdftoppm', $missing, true)
+                ? 'Installez Tesseract OCR et Poppler (pdftoppm), puis ajoutez-les au PATH.'
+                : 'Installez Tesseract OCR et ajoutez-le au PATH.';
+
             return ApiResponse::error(
-                $doc->fresh()->error_message ?: 'Échec de l\'extraction OCR.',
-                422,
-                ['detail' => $e->getMessage()],
+                'OCR indisponible : binaires manquants ('.implode(', ', $missing).'). '.$hint,
+                503,
+                ['missing' => $missing],
             );
         }
 
+        // Mark as processing before dispatching so the frontend can start
+        // polling immediately.
+        $doc->update(['status' => ReaderDocument::STATUS_PROCESSING]);
+
+        // Dispatch OCR to the background queue — the HTTP request returns 202
+        // in milliseconds regardless of how long Tesseract takes.
+        // Frontend polls GET /documents/{id} every 3 s until status ∈ {extracted, failed}.
+        ProcessDocumentOcrJob::dispatch($doc->fresh(), $data['document_type'] ?? null);
+
         AuditLogger::record(
-            'reader_document_extracted',
+            'reader_document_extract_queued',
             $request->user(),
             'reader_document',
             $doc->id,
             null,
-            ['document_type' => $doc->fresh()->document_type, 'extraction_id' => $extraction->id],
+            ['document_type' => $doc->document_type],
             'document_reader',
             false,
             $request,
-            'Document Reader — OCR exécuté',
+            'Document Reader — OCR mis en file d\'attente',
         );
 
-        return ApiResponse::success($this->serialize($doc->fresh()->load('latestExtraction'), withRawText: true));
+        // 202 Accepted: processing has started but is not yet complete.
+        return ApiResponse::success($this->serialize($doc->fresh()), null, null, 202);
     }
 
     public function validateDocument(Request $request, string $id): JsonResponse

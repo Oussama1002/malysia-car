@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { documentReaderApi, type ReaderDocumentType } from '@/services/documentReaderApi';
 
 /**
@@ -72,6 +72,34 @@ export const CustomerIdentityScanner: React.FC<{
 
 type Mapper = (extracted: Record<string, unknown>) => ScannedIdentity;
 
+/**
+ * Shows an elapsed-seconds counter while OCR is running so the admin knows
+ * it's still working and not frozen.
+ */
+const ElapsedTimer: React.FC<{ running: boolean }> = ({ running }) => {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    if (!running) {
+      setSecs(0);
+      return;
+    }
+    setSecs(0);
+    const t = setInterval(() => setSecs((s) => s + 1), 1_000);
+    return () => clearInterval(t);
+  }, [running]);
+  if (!running) return null;
+  return (
+    <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600">
+      {/* Spinning circle */}
+      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+      OCR en cours… {secs}s
+    </div>
+  );
+};
+
 const ScanSlot: React.FC<{
   title: string;
   allowedTypes: ReaderDocumentType[];
@@ -94,9 +122,27 @@ const ScanSlot: React.FC<{
       setError(null);
       setSuccess(null);
       try {
+        // 1. Upload the file — fast, just stores it.
         const uploaded = await documentReaderApi.upload(file, docType);
-        const extracted = await documentReaderApi.extract(uploaded.data.id, docType);
-        const fields = (extracted.data.extraction?.extracted_data ?? {}) as Record<string, unknown>;
+        const docId = uploaded.data.id;
+
+        // Register the document ID immediately so the parent can attach it
+        // to the customer even if OCR partially fails.
+        onScanComplete?.({ documentId: docId, documentType: docType });
+
+        // 2. Trigger OCR — returns 202 instantly, OCR runs in a background worker.
+        await documentReaderApi.extract(docId, docType);
+
+        // 3. Poll until the worker finishes (extracted | failed).
+        //    Each tick is 3 s; timeout after 5 min.
+        const done = await documentReaderApi.pollUntilDone(docId);
+
+        if (done.data.status === 'failed') {
+          setError(done.data.error_message ?? 'Échec OCR — vérifiez la netteté du document.');
+          return;
+        }
+
+        const fields = (done.data.extraction?.extracted_data ?? {}) as Record<string, unknown>;
         const mapped = mapFields(fields);
         // Drop empty values so we never blank out existing form data.
         const cleaned = Object.fromEntries(
@@ -105,14 +151,10 @@ const ScanSlot: React.FC<{
         if (Object.keys(cleaned).length === 0) {
           setError("Aucun champ exploitable n'a pu être détecté. Vérifiez la netteté du document.");
         } else {
-          onPrefill(cleaned);
+          onPrefill(cleaned as ScannedIdentity);
           const labels = Object.keys(cleaned).map(frenchFieldLabel);
           setSuccess(`Champs détectés : ${labels.join(', ')}`);
         }
-        // Always emit the scan id so the parent can attach the file to the
-        // customer after creation — even if no fields were prefilled, the
-        // admin probably still wants the PDF stored under "Documents".
-        onScanComplete?.({ documentId: uploaded.data.id, documentType: docType });
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Échec OCR';
         setError(msg);
@@ -155,21 +197,23 @@ const ScanSlot: React.FC<{
         }}
         className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-4 text-center text-[11px] transition ${
           dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 bg-slate-50'
-        }`}
+        } ${loading ? 'pointer-events-none opacity-70' : ''}`}
       >
         <div className="text-slate-700">Glisser-déposer ou</div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"
+            disabled={loading}
             onClick={() => inputRef.current?.click()}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700"
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             Choisir
           </button>
           <button
             type="button"
+            disabled={loading}
             onClick={() => cameraRef.current?.click()}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
           >
             Photo
           </button>
@@ -198,7 +242,7 @@ const ScanSlot: React.FC<{
           }}
         />
         <div className="mt-1 text-[10px] text-slate-500">PDF, JPG, PNG · 15 Mo max</div>
-        {loading ? <div className="mt-1 text-[11px] font-semibold text-indigo-600">OCR en cours…</div> : null}
+        <ElapsedTimer running={loading} />
         {error ? <div className="mt-1 text-[11px] font-semibold text-rose-600">{error}</div> : null}
         {success ? <div className="mt-1 text-[11px] font-semibold text-emerald-600">{success}</div> : null}
       </div>
@@ -269,22 +313,9 @@ function frenchFieldLabel(key: string): string {
 }
 
 function mapIdCardFields(extracted: Record<string, unknown>): ScannedIdentity {
-  const firstName = titleCase(extracted.first_name);
-  const lastName = titleCase(extracted.last_name);
-  const fullName = asString(extracted.full_name);
-  // If the parser only delivered a full_name, split it heuristically.
-  let derivedFirst = firstName;
-  let derivedLast = lastName;
-  if ((!derivedFirst || !derivedLast) && fullName) {
-    const parts = fullName.split(/\s+/);
-    if (parts.length >= 2) {
-      derivedFirst = derivedFirst ?? titleCase(parts[0]);
-      derivedLast = derivedLast ?? titleCase(parts.slice(1).join(' '));
-    }
-  }
+  // CIN / Passeport scan owns these three fields only — name/permis come from
+  // the Permis scan to avoid one document overwriting the other's values.
   return {
-    first_name: derivedFirst,
-    last_name: derivedLast,
     national_id_number: asString(extracted.document_number),
     date_of_birth: asString(extracted.date_of_birth),
     nationality: normalizeNationality(extracted.nationality),
@@ -306,13 +337,10 @@ function mapLicenseFields(extracted: Record<string, unknown>): ScannedIdentity {
       last = last ?? titleCase(parts.slice(1).join(' '));
     }
   }
+  // Permis owns name + permis fields only.
   return {
     first_name: first,
     last_name: last,
-    // Moroccan permis prints the CIN under "N°C.N.I.E." — surface it so a
-    // single Permis scan can fully populate the customer form.
-    national_id_number: asString(extracted.national_id_number),
-    date_of_birth: asString(extracted.date_of_birth),
     driving_license_number: asString(extracted.license_number),
     driving_license_expiry: asString(extracted.expiry_date),
   };

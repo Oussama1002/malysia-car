@@ -94,4 +94,29 @@ export const documentReaderApi = {
   previewUrl(id: string) {
     return `${getApiBase()}${endpoints.documentReader.preview(id)}`;
   },
+
+  /**
+   * Poll GET /documents/{id} every `intervalMs` until the document reaches a
+   * terminal status (extracted | validated | failed) or `timeoutMs` elapses.
+   *
+   * The backend returns 202 from the extract endpoint so the HTTP request
+   * never blocks while Tesseract is running — this poller is the mechanism
+   * by which the frontend learns when OCR finished.
+   */
+  async pollUntilDone(
+    id: string,
+    { intervalMs = 3_000, timeoutMs = 300_000 } = {},
+  ): Promise<{ data: ReaderDocument }> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const res = await documentReaderApi.get(id);
+      const { status } = res.data;
+      if (status === 'extracted' || status === 'validated' || status === 'failed') {
+        return res;
+      }
+      // Still processing — wait before next poll.
+      await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
+    }
+    throw new Error('OCR trop long — réessayez plus tard ou utilisez une image de meilleure qualité.');
+  },
 };
