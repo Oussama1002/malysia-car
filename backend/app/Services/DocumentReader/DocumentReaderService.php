@@ -30,6 +30,45 @@ class DocumentReaderService
     ) {}
 
     /**
+     * Return the list of OCR binaries that are NOT reachable on the host.
+     * The controller calls this before running OCR so it can return a clear
+     * JSON error instead of letting Symfony Process hang.
+     *
+     * @return list<string>
+     */
+    public function missingBinaries(): array
+    {
+        $cfg = (array) config('document_reader.tesseract', []);
+        $tesseract = (string) ($cfg['bin'] ?? 'tesseract');
+        $pdftoppm = (string) ($cfg['pdftoppm_bin'] ?? 'pdftoppm');
+
+        $missing = [];
+        if (! $this->binaryReachable($tesseract)) {
+            $missing[] = 'tesseract';
+        }
+        if (! $this->binaryReachable($pdftoppm)) {
+            $missing[] = 'pdftoppm';
+        }
+
+        return $missing;
+    }
+
+    private function binaryReachable(string $bin): bool
+    {
+        // Absolute / relative path → file_exists is authoritative.
+        if (str_contains($bin, DIRECTORY_SEPARATOR) || preg_match('#[\\\\/]#', $bin)) {
+            return is_file($bin) || is_file($bin.'.exe');
+        }
+
+        // Bare command → probe PATH.
+        $isWin = stripos(PHP_OS_FAMILY, 'Win') === 0;
+        $probe = $isWin ? "where {$bin}" : "command -v {$bin}";
+        $out = @shell_exec($probe.' 2>&1');
+
+        return is_string($out) && trim($out) !== '' && ! str_contains(strtolower($out), 'not found') && ! str_contains(strtolower($out), 'could not find');
+    }
+
+    /**
      * Persist the upload and create a pending `reader_documents` row.
      */
     public function ingest(UploadedFile $upload, User $user, ?string $hintedType = null): ReaderDocument
@@ -60,6 +99,9 @@ class DocumentReaderService
      */
     public function extract(ReaderDocument $document, ?string $hintedType = null): ReaderDocumentExtraction
     {
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
         $document->update(['status' => ReaderDocument::STATUS_PROCESSING]);
 
         $disk = Storage::disk(config('filesystems.default', 'local'));

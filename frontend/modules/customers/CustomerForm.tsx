@@ -12,6 +12,7 @@ import {
   type ScannedDocument,
   type ScannedIdentity,
 } from '@/modules/customers/CustomerIdentityScanner';
+import { COUNTRIES_FR } from '@/modules/customers/countries';
 
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
@@ -175,13 +176,21 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Nationalité">
-              <input
+              <select
                 className="df-input"
-                maxLength={60}
                 value={individual.nationality ?? ''}
                 onChange={(e) => setIndividual((p) => ({ ...p, nationality: e.target.value }))}
-                placeholder="Maroc, France, …"
-              />
+              >
+                <option value="">—</option>
+                {COUNTRIES_FR.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                {individual.nationality && !COUNTRIES_FR.includes(individual.nationality) ? (
+                  <option value={individual.nationality}>{individual.nationality}</option>
+                ) : null}
+              </select>
             </Field>
             <Field label="Permis de conduire n°">
               <input
