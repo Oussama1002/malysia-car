@@ -21,7 +21,7 @@ class TesseractOcrProvider implements OcrProviderInterface
         private readonly string $tesseractBin = 'tesseract',
         private readonly string $pdftoppmBin = 'pdftoppm',
         private readonly string $defaultLang = 'eng+fra+ara',
-        private readonly int $timeoutSeconds = 120,
+        private readonly int $timeoutSeconds = 570,
     ) {}
 
     public function name(): string
@@ -97,8 +97,23 @@ class TesseractOcrProvider implements OcrProviderInterface
     }
 
     /**
-     * Render every page of a PDF as a PNG (300 DPI) using poppler `pdftoppm`,
-     * then return the list of generated image paths.
+     * Render PDF pages as PNG using poppler `pdftoppm`, then return the list
+     * of generated image paths.
+     *
+     * Key constraints:
+     * - `-f 1 -l 1`        → first page only. CIN/Permis/Passeport are always
+     *                         single-sided. Phone-camera PDFs often embed the
+     *                         image at native sensor resolution (e.g. 56×42 in),
+     *                         so rendering all pages at 300 DPI produces a
+     *                         16 800×12 600 px PNG that stalls Tesseract for
+     *                         minutes. Multi-page rental contracts should be
+     *                         split into separate uploads.
+     * - `-scale-to 2480`   → cap the longest dimension at 2 480 px (≈ A4 at
+     *                         300 DPI). Regardless of the PDF's declared page
+     *                         size, Tesseract never sees a gigantic image.
+     * - `-r 150`           → render at 150 DPI as a starting point; the
+     *                         -scale-to cap is what actually controls output
+     *                         size for oversized pages.
      *
      * @return list<string>
      */
@@ -106,13 +121,12 @@ class TesseractOcrProvider implements OcrProviderInterface
     {
         $prefix = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_ocr_'.bin2hex(random_bytes(6));
 
-        // 300 DPI grayscale: fastest setting that still delivers reliable
-        // recognition on Moroccan CIN/Permis labels. Going higher (400/500)
-        // multiplies render+OCR time without proportional accuracy gains,
-        // and pushes us past the default Nginx 60s read timeout.
         $process = new Process([
             $this->pdftoppmBin,
-            '-r', '300',
+            '-f', '1',          // first page
+            '-l', '1',          // last page = first page (single page only)
+            '-r', '150',        // base DPI (overridden by -scale-to for large pages)
+            '-scale-to', '2480', // cap longest dimension at 2 480 px (~A4 @ 300 DPI)
             '-png',
             '-gray',
             $pdfPath,
