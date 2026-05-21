@@ -27,9 +27,12 @@ class ProcessDocumentOcrJob implements ShouldQueue
     /** Max time (seconds) the job may run before being force-killed. */
     public int $timeout = 600;
 
-    /** Never retry failed OCR — a second attempt on the same broken file
-     *  would just waste CPU and confuse the admin. */
-    public int $tries = 1;
+    /**
+     * Allow 2 attempts so that a worker restart mid-job (which increments the
+     * attempt counter without actually running the job) doesn't permanently
+     * fail a document. A genuine OCR failure on attempt 2 still marks it failed.
+     */
+    public int $tries = 2;
 
     public function __construct(
         private readonly ReaderDocument $document,
