@@ -244,6 +244,10 @@ class DocumentParser
         // Collapse exotic whitespace, normalize line endings, drop control chars.
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', ' ', $text) ?? $text;
+        // Tesseract sometimes inserts a stray space INSIDE a date component
+        // ("06/1 0/2001"). Collapse whitespace when it sits between two
+        // digits or date separators to recover the original number.
+        $text = preg_replace('/(?<=[\d\/\-.])[ \t]+(?=[\d\/\-.])/u', '', $text) ?? $text;
 
         return trim($text);
     }
@@ -369,16 +373,24 @@ class DocumentParser
     /** @return array{first_name?: string, last_name?: string, full_name?: string} */
     private function extractNames(string $text): array
     {
-        // Accept mixed case (some Tesseract passes output lowercase tails).
-        // 2+ letters, allow accented latin + dashes + apostrophes.
-        $nameValue = "[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,}(?:\\s+[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,})*";
+        // Single-line value: don't let `\s+` swallow newlines (the bug that
+        // produced "AtOSSAMAHom" by merging three different rows).
+        $nameValue = "[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,}(?:[ \\t]+[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,})*";
 
         $out = [];
         $last = $this->labelValue($text, ['Nom', 'Surname', 'Last\s*Name'], $nameValue);
+        if (! $last) {
+            // Moroccan permis layout: "Nom / الاسم" on one line, value 1–4
+            // lines below. Walk the lines and grab the first uppercase value.
+            $last = $this->valueAfterLabel($text, '(?:\bNom\b|\bHom\b|\bSurname\b|\bLast\s*Name\b)');
+        }
         if ($last) {
             $out['last_name'] = $this->cleanName($last);
         }
         $first = $this->labelValue($text, ['Pr[ée]nom', 'Pr[ée]noms', 'Given\s*Names?', 'First\s*Name'], $nameValue);
+        if (! $first) {
+            $first = $this->valueAfterLabel($text, '(?:\bPr[ée]noms?\b|\bGiven\s*Names?\b|\bFirst\s*Name\b)');
+        }
         if ($first) {
             $out['first_name'] = $this->cleanName($first);
         }
@@ -387,6 +399,48 @@ class DocumentParser
         }
 
         return $out;
+    }
+
+    /**
+     * Walk the lines AFTER a label and return the first one that "looks like"
+     * a name value: contains uppercase Latin letters (possibly with EL/AL/BEN
+     * style 2-letter prefixes joined by a space), no lowercase Latin, ≥4 letters
+     * total. Stops after `maxLinesAfter` lines so we don't drift into the next
+     * field on the card.
+     */
+    private function valueAfterLabel(string $text, string $labelPattern, int $maxLinesAfter = 6): ?string
+    {
+        if (! preg_match('/'.$labelPattern.'/iu', $text, $m, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+        $rest = substr($text, $m[0][1] + strlen($m[0][0]));
+        $lines = preg_split('/[\r\n]+/', $rest) ?: [];
+        $checked = 0;
+        foreach ($lines as $line) {
+            if ($checked++ > $maxLinesAfter) {
+                break;
+            }
+            if (trim($line) === '') {
+                continue;
+            }
+            // Reject lines that contain any lowercase Latin — those are prose
+            // (labels, footnotes), not a name value.
+            if (preg_match('/[a-zà-öø-ÿ]/u', $line)) {
+                continue;
+            }
+            // Capture a uppercase Latin run with optional internal spaces / dashes /
+            // apostrophes. Trailing punctuation is allowed but trimmed off.
+            if (preg_match('/([A-ZÀ-Ö\'][A-ZÀ-Ö\s\'\-]{2,28}[A-ZÀ-Ö])/u', $line, $vm)) {
+                $value = trim(preg_replace('/\s{2,}/u', ' ', $vm[1]) ?? $vm[1]);
+                // Require ≥4 actual letters (so "EL F" or "A B C" don't count).
+                $letterCount = preg_match_all('/[A-ZÀ-Ö]/u', $value);
+                if ($letterCount >= 4) {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function cleanName(string $value): string
