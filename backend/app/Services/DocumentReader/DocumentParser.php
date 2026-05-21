@@ -378,19 +378,17 @@ class DocumentParser
         $nameValue = "[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,}(?:[ \\t]+[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,})*";
 
         $out = [];
-        $last = $this->labelValue($text, ['Nom', 'Surname', 'Last\s*Name'], $nameValue);
-        if (! $last) {
-            // Moroccan permis layout: "Nom / الاسم" on one line, value 1–4
-            // lines below. Walk the lines and grab the first uppercase value.
-            $last = $this->valueAfterLabel($text, '(?:\bNom\b|\bHom\b|\bSurname\b|\bLast\s*Name\b)');
-        }
+        // valueAfterLabel runs FIRST: it skips OCR noise between the label and
+        // the real value (e.g., "Prénom\n\nAt\n\nOSSAMA" — the "At" is noise
+        // and we want OSSAMA). labelValue is the fallback for single-line
+        // layouts where the value is right after the colon.
+        $last = $this->valueAfterLabel($text, '(?:\bNom\b|\bHom\b|\bSurname\b|\bLast\s*Name\b)')
+            ?? $this->labelValue($text, ['Nom', 'Surname', 'Last\s*Name'], $nameValue);
         if ($last) {
             $out['last_name'] = $this->cleanName($last);
         }
-        $first = $this->labelValue($text, ['Pr[ée]nom', 'Pr[ée]noms', 'Given\s*Names?', 'First\s*Name'], $nameValue);
-        if (! $first) {
-            $first = $this->valueAfterLabel($text, '(?:\bPr[ée]noms?\b|\bGiven\s*Names?\b|\bFirst\s*Name\b)');
-        }
+        $first = $this->valueAfterLabel($text, '(?:\bPr[ée]noms?\b|\bGiven\s*Names?\b|\bFirst\s*Name\b)')
+            ?? $this->labelValue($text, ['Pr[ée]nom', 'Pr[ée]noms', 'Given\s*Names?', 'First\s*Name'], $nameValue);
         if ($first) {
             $out['first_name'] = $this->cleanName($first);
         }
