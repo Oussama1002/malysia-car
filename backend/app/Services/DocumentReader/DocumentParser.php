@@ -203,11 +203,26 @@ class DocumentParser
             '4b\s*\.',
         ]) ?? $classified['expiry'];
 
+        // Moroccan Permis prints the CIN under the "N°C.N.I.E." block (and
+        // again in the MRZ at the bottom). Pull both as a fallback for the
+        // customer scanner.
+        $cin = $this->valueAfterLabel($text, '(?:N°\s*C\.?N\.?I\.?E?\.?|C\.?N\.?I\.?E?\.?)', 4);
+        if ($cin) {
+            $cin = preg_replace('/\s+/', '', $cin) ?? $cin;
+            if (! preg_match('/^[A-Z]{1,2}\d{3,8}$/u', $cin)) {
+                $cin = null;
+            }
+        }
+        $cin = $cin
+            ?? $this->longestMatch('/\b[A-Z]{1,2}\d{5,8}\b/u', $text)
+            ?? $this->longestMatch('/\b[A-Z]{1,2}\d{3,8}\b/u', $text);
+
         return [
             'license_number' => $licenseNumber,
             'first_name' => $names['first_name'] ?? null,
             'last_name' => $names['last_name'] ?? null,
             'full_name' => $names['full_name'] ?? null,
+            'national_id_number' => $cin,
             'date_of_birth' => $birth,
             'categories' => $categories,
             'issue_date' => $issue,

@@ -244,17 +244,26 @@ function mapIdCardFields(extracted: Record<string, unknown>): ScannedIdentity {
 }
 
 function mapLicenseFields(extracted: Record<string, unknown>): ScannedIdentity {
+  // Prefer the parser's first_name/last_name (set directly by parseDrivingLicense
+  // when a "Nom"/"Prénom" label is present). Fall back to splitting full_name.
+  const directFirst = titleCase(extracted.first_name);
+  const directLast = titleCase(extracted.last_name);
   const fullName = asString(extracted.full_name);
-  const fromName = fullName
-    ? (() => {
-        const parts = fullName.split(/\s+/);
-        return parts.length >= 2
-          ? { first_name: titleCase(parts[0]), last_name: titleCase(parts.slice(1).join(' ')) }
-          : {};
-      })()
-    : {};
+  let first = directFirst;
+  let last = directLast;
+  if ((!first || !last) && fullName) {
+    const parts = fullName.split(/\s+/);
+    if (parts.length >= 2) {
+      first = first ?? titleCase(parts[0]);
+      last = last ?? titleCase(parts.slice(1).join(' '));
+    }
+  }
   return {
-    ...fromName,
+    first_name: first,
+    last_name: last,
+    // Moroccan permis prints the CIN under "N°C.N.I.E." — surface it so a
+    // single Permis scan can fully populate the customer form.
+    national_id_number: asString(extracted.national_id_number),
     date_of_birth: asString(extracted.date_of_birth),
     driving_license_number: asString(extracted.license_number),
     driving_license_expiry: asString(extracted.expiry_date),
