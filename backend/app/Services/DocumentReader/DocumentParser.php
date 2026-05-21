@@ -388,22 +388,19 @@ class DocumentParser
     /** @return array{first_name?: string, last_name?: string, full_name?: string} */
     private function extractNames(string $text): array
     {
-        // Single-line value: don't let `\s+` swallow newlines (the bug that
-        // produced "AtOSSAMAHom" by merging three different rows).
-        $nameValue = "[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,}(?:[ \\t]+[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,})*";
-
         $out = [];
         // valueAfterLabel runs FIRST: it skips OCR noise between the label and
-        // the real value (e.g., "Prénom\n\nAt\n\nOSSAMA" — the "At" is noise
-        // and we want OSSAMA). labelValue is the fallback for single-line
-        // layouts where the value is right after the colon.
-        $last = $this->valueAfterLabel($text, '(?:\bNom\b|\bHom\b|\bSurname\b|\bLast\s*Name\b)')
-            ?? $this->labelValue($text, ['Nom', 'Surname', 'Last\s*Name'], $nameValue);
+        // the real value. labelValue is the fallback for single-line layouts.
+        // labelValueName() (below) is used as a second fallback — unlike
+        // labelValue it collapses multiple spaces instead of cutting at them,
+        // so "EL  HADI" (OCR double-space) survives intact as "EL HADI".
+        $last = $this->valueAfterLabel($text, '(?:\b2\s*[\.\-]?\s*Nom\b|\bNom\b|\bHom\b|\bSurname\b|\bLast\s*Name\b)')
+            ?? $this->labelValueName($text, ['2\s*[\.\-]\s*Nom', 'Nom', 'Surname', 'Last\s*Name']);
         if ($last) {
             $out['last_name'] = $this->cleanName($last);
         }
-        $first = $this->valueAfterLabel($text, '(?:\bPr[ée]noms?\b|\bGiven\s*Names?\b|\bFirst\s*Name\b)')
-            ?? $this->labelValue($text, ['Pr[ée]nom', 'Pr[ée]noms', 'Given\s*Names?', 'First\s*Name'], $nameValue);
+        $first = $this->valueAfterLabel($text, '(?:\b1\s*[\.\-]?\s*Pr[ée]noms?\b|\bPr[ée]noms?\b|\bGiven\s*Names?\b|\bFirst\s*Name\b)')
+            ?? $this->labelValueName($text, ['1\s*[\.\-]\s*Pr[ée]noms?', 'Pr[ée]noms?', 'Given\s*Names?', 'First\s*Name']);
         if ($first) {
             $out['first_name'] = $this->cleanName($first);
         }
@@ -412,6 +409,35 @@ class DocumentParser
         }
 
         return $out;
+    }
+
+    /**
+     * Like labelValue() but for name fields: collapses multiple spaces instead
+     * of cutting at them, so "EL  HADI" (OCR double-space noise) → "EL HADI".
+     *
+     * @param  list<string>  $labels
+     */
+    private function labelValueName(string $text, array $labels): ?string
+    {
+        $nameValue = "[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,}(?:[ \\t]+[A-Za-zÀ-ÖØ-öø-ÿ'\\-]{2,})*";
+        foreach ($labels as $label) {
+            $sameLine = '/'.$label.'[^\n\r:]*[:\-]?[ \t]*(?P<v>'.$nameValue.')/iu';
+            if (preg_match($sameLine, $text, $m)) {
+                $v = trim(preg_replace('/[ \t]{2,}/', ' ', $m['v']) ?? $m['v']);
+                if ($v !== '') {
+                    return $v;
+                }
+            }
+            $nextLine = '/'.$label.'[^\n\r]*[\r\n]+[ \t]*(?P<v>'.$nameValue.')/iu';
+            if (preg_match($nextLine, $text, $m)) {
+                $v = trim(preg_replace('/[ \t]{2,}/', ' ', $m['v']) ?? $m['v']);
+                if ($v !== '') {
+                    return $v;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

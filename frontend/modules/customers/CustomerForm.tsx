@@ -214,24 +214,6 @@ export const CustomerForm: React.FC<{
                 onChange={(e) => setIndividual((p) => ({ ...p, profession: e.target.value }))}
               />
             </Field>
-            <Field label="Employeur">
-              <input
-                className="df-input"
-                value={individual.employer_name ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, employer_name: e.target.value }))}
-              />
-            </Field>
-            <Field label="Revenu mensuel (MAD)">
-              <input
-                type="number"
-                step="0.01"
-                className="df-input"
-                value={individual.monthly_income ?? ''}
-                onChange={(e) =>
-                  setIndividual((p) => ({ ...p, monthly_income: e.target.value ? Number(e.target.value) : null }))
-                }
-              />
-            </Field>
           </div>
         </section>
       ) : (
