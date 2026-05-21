@@ -91,11 +91,16 @@ trap '$ARTISAN up && echo "Mode maintenance désactivé par le trap derreur"' ER
 info "Backup de la base de données avant migration…"
 mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/pre_deploy_${TIMESTAMP}.sql.gz"
+# DB_DATABASE is read from backend/.env
+DB_NAME=$(grep -E '^DB_DATABASE=' "$BACKEND/.env" | cut -d= -f2 | tr -d '"' | tr -d ' ' || true)
+[[ -n "$DB_NAME" ]] || fail "DB_DATABASE introuvable dans backend/.env"
+
 mysqldump --defaults-file="$MYSQL_CNF" \
     --single-transaction \
     --routines \
     --triggers \
     --set-gtid-purged=OFF \
+    "$DB_NAME" \
     | gzip > "$BACKUP_FILE"
 [[ -f "$BACKUP_FILE" && -s "$BACKUP_FILE" ]] \
     && ok "Backup: $BACKUP_FILE ($(du -sh "$BACKUP_FILE" | cut -f1))" \
@@ -157,13 +162,16 @@ $ARTISAN up
 ok "Mode maintenance OFF"
 
 # ── PHP-FPM reload (vide opcache) ─────────────────────────────────────────────
-if systemctl is-active --quiet php8.2-fpm 2>/dev/null; then
-    # www-data ne peut pas reloader php-fpm sans sudo — ajouter dans sudoers:
-    # www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload php8.2-fpm
-    sudo systemctl reload php8.2-fpm 2>/dev/null \
-        && ok "PHP-FPM rechargé (opcache vidé)" \
-        || info "PHP-FPM reload ignoré (droits sudo manquants) — opcache non vidé"
-fi
+for FPM_VER in php8.3-fpm php8.2-fpm php-fpm; do
+    if systemctl is-active --quiet "$FPM_VER" 2>/dev/null; then
+        # www-data ne peut pas reloader php-fpm sans sudo — ajouter dans sudoers:
+        # www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload php8.3-fpm
+        sudo systemctl reload "$FPM_VER" 2>/dev/null \
+            && ok "PHP-FPM ($FPM_VER) rechargé (opcache vidé)" \
+            || info "PHP-FPM reload ignoré (droits sudo manquants) — opcache non vidé"
+        break
+    fi
+done
 
 # ── Nettoyage anciens backups (garder 10 derniers) ───────────────────────────
 info "Nettoyage des anciens backups DB…"
