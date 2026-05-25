@@ -30,7 +30,9 @@ const GROUPS: NavGroup[] = [
     labelKey: 'nav.group.operations',
     items: [
       { to: '/fleet', module: 'fleet', labelKey: 'nav.fleet', icon: 'car' },
-      { to: '/fleet/compliance', module: 'fleet', labelKey: 'nav.fleetCompliance', icon: 'shield' },
+      // 'Conformité véhicules' moved out of the sidebar — accessible via a
+      // dedicated button on /fleet (FleetListPage). Route still mounted in
+      // AppRoutes so deep links and the in-page button keep working.
       { to: '/fleet/analysis', module: 'fleet', labelKey: 'nav.fleetAnalysis', icon: 'coin' },
       { to: '/fleet/sub-rentals', module: 'subRentals', labelKey: 'nav.subRentals', icon: 'key' },
       { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },

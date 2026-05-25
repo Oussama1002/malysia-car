@@ -84,15 +84,29 @@ export const FleetListPage: React.FC = () => {
           {filterBtn('technical_expired', 'Visite technique expiree')}
           {filterBtn('compliance_ok', 'Conformite OK')}
         </div>
-        <div className="flex flex-wrap gap-3 text-xs font-semibold">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
           <Link className="rounded-lg bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700" to="/fleet/vehicles">
             + Nouveau vehicule
           </Link>
-          <Link className="text-indigo-600 hover:underline" to="/fleet/compliance">
-            Tableau conformite
+          {/*
+            Conformité véhicules entry-point. Moved here from the sidebar so the
+            Flotte module owns its sub-navigation in one place. The icon + filled
+            border style makes the action discoverable for users who used to
+            reach it via the sidebar.
+          */}
+          <Link
+            to="/fleet/compliance"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-indigo-700 hover:bg-indigo-100"
+            title="Tableau de conformité véhicules (assurance, visite technique, vignette)"
+          >
+            <span aria-hidden>🛡️</span>
+            Conformité véhicules
           </Link>
-          <span className="text-slate-300">|</span>
-          <Link className="text-indigo-600 hover:underline" to="/fleet/maintenance">
+          <Link
+            to="/fleet/maintenance"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-200 hover:text-indigo-700"
+          >
+            <span aria-hidden>🔧</span>
             Maintenance
           </Link>
         </div>
