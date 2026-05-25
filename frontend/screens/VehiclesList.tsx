@@ -168,6 +168,11 @@ const VehiclesList: React.FC = () => {
 
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  // Separate refs for camera-capture inputs. We can't reuse the file inputs
+  // because the `capture` attribute is sticky — adding/removing it via JS
+  // doesn't reliably switch the picker mode on iOS Safari.
+  const photoCameraRef = useRef<HTMLInputElement>(null);
+  const videoCameraRef = useRef<HTMLInputElement>(null);
   const selectedPhotoFiles = useRef<File[]>([]);
 
   useEffect(() => {
@@ -1174,12 +1179,34 @@ const VehiclesList: React.FC = () => {
                 {/* Photos */}
                 <div className="space-y-3">
                   <label className={labelCls}>Photos du véhicule</label>
-                  <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotos} />
-                  <button type="button" onClick={() => photoInputRef.current?.click()}
-                    className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all w-full justify-center font-bold text-sm">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    Ajouter des photos
-                  </button>
+                  {/*
+                    Two pickers:
+                      1. file input (no `capture`) → opens the gallery / file
+                         dialog on mobile, file picker on desktop.
+                      2. camera input (`capture="environment"`) → opens the
+                         rear camera directly on mobile so the user can snap
+                         a photo of the car without leaving the form. On
+                         desktop browsers without a camera the OS file dialog
+                         opens as a graceful fallback.
+                    Both feed the same handler (`handlePhotos`) so file
+                    handling stays in one place.
+                  */}
+                  <input ref={photoInputRef}   type="file" accept="image/*" multiple className="hidden" onChange={handlePhotos} />
+                  <input ref={photoCameraRef}  type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotos} />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button type="button" onClick={() => photoInputRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all justify-center font-bold text-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      Ajouter des photos
+                    </button>
+                    <button type="button" onClick={() => photoCameraRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-emerald-200 bg-emerald-50/40 rounded-2xl text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 transition-all justify-center font-bold text-sm"
+                      title="Ouvrir la caméra pour prendre une photo">
+                      {/* camera icon */}
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      Prendre une photo
+                    </button>
+                  </div>
                   {formData.photoPreviews.length > 0 && (
                     <div className="grid grid-cols-4 gap-3">
                       {formData.photoPreviews.map((src, i) => (
@@ -1197,12 +1224,23 @@ const VehiclesList: React.FC = () => {
                 {/* Vidéo */}
                 <div className="space-y-3">
                   <label className={labelCls}>Vidéo du véhicule (optionnel)</label>
-                  <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideo} />
-                  <button type="button" onClick={() => videoInputRef.current?.click()}
-                    className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all w-full justify-center font-bold text-sm">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    {formData.videoPreview ? 'Remplacer la vidéo' : 'Ajouter une vidéo'}
-                  </button>
+                  {/* See Photos block above — same gallery / camera split. */}
+                  <input ref={videoInputRef}   type="file" accept="video/*" className="hidden" onChange={handleVideo} />
+                  <input ref={videoCameraRef}  type="file" accept="video/*" capture="environment" className="hidden" onChange={handleVideo} />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button type="button" onClick={() => videoInputRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all justify-center font-bold text-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      {formData.videoPreview ? 'Remplacer la vidéo' : 'Ajouter une vidéo'}
+                    </button>
+                    <button type="button" onClick={() => videoCameraRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-emerald-200 bg-emerald-50/40 rounded-2xl text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 transition-all justify-center font-bold text-sm"
+                      title="Ouvrir la caméra pour filmer une vidéo">
+                      {/* video-camera icon */}
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /><circle cx="9" cy="13" r="1.5" fill="currentColor" /></svg>
+                      Filmer une vidéo
+                    </button>
+                  </div>
                   {formData.videoPreview && (
                     <video src={formData.videoPreview} controls className="w-full rounded-2xl border border-slate-100 max-h-48" />
                   )}
