@@ -1,8 +1,9 @@
 ﻿
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services/mockApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Vehicle, VehicleStatus } from '../types';
 
 interface VehicleModelOption { id: string; name: string; }
@@ -115,7 +116,55 @@ const VehiclesList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm());
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  // ── View mode (cards / table / analysis) ────────────────────────────────
+  // The 'analysis' mode merges the former /fleet/analysis page into this
+  // screen so the sidebar stays short and the dirigeant has one place for
+  // everything about the parc. Initial mode honours `?view=analysis` so the
+  // legacy /fleet/analysis route redirects cleanly into this view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialView = (searchParams.get('view') as 'cards' | 'table' | 'analysis' | null) ?? 'cards';
+  const [viewMode, setViewMode] = useState<'cards' | 'table' | 'analysis'>(initialView);
+  const switchView = (m: 'cards' | 'table' | 'analysis') => {
+    setViewMode(m);
+    // Keep URL in sync so the analyse view is shareable / bookmarkable.
+    const next = new URLSearchParams(searchParams);
+    if (m === 'cards') next.delete('view'); else next.set('view', m);
+    setSearchParams(next, { replace: true });
+  };
+
+  // ── Lazy-loaded analyse data ────────────────────────────────────────────
+  // Only fetched when the user opens the analyse view, so the page stays
+  // fast for users who never look at profitability.
+  type AnalyseRow = {
+    vehicleId: string;
+    registration: string | null;
+    status?: string | null;
+    availability?: string | null;
+    revenue?: number;
+    totalCost?: number;
+    profitability?: number;
+  };
+  type AnalyseData = {
+    kpis?: Record<string, number>;
+    vehicles?: AnalyseRow[];
+    mostProfitableVehicleIds?: string[];
+    leastProfitableVehicleIds?: string[];
+  };
+  const [analyse, setAnalyse] = useState<AnalyseData | null>(null);
+  const [analyseLoading, setAnalyseLoading] = useState(false);
+  const [analyseError, setAnalyseError] = useState<string | null>(null);
+  useEffect(() => {
+    if (viewMode !== 'analysis' || analyse !== null || analyseLoading || !getApiBase()) return;
+    setAnalyseLoading(true);
+    setAnalyseError(null);
+    apiClient<{ data: AnalyseData }>('/v1/fleet/analysis')
+      .then((r) => setAnalyse(r.data))
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        setAnalyseError(msg);
+      })
+      .finally(() => setAnalyseLoading(false));
+  }, [viewMode, analyse, analyseLoading]);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -520,17 +569,23 @@ const VehiclesList: React.FC = () => {
             PDF
           </button>
 
-          {/* View toggle */}
+          {/* View toggle — cards / table / analyse (rentabilité par véhicule) */}
           <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl">
-            <button onClick={() => setViewMode('cards')}
+            <button onClick={() => switchView('cards')}
               className={`p-2.5 rounded-xl transition-all ${viewMode === 'cards' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               title="Vue cartes">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
             </button>
-            <button onClick={() => setViewMode('table')}
+            <button onClick={() => switchView('table')}
               className={`p-2.5 rounded-xl transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               title="Vue liste">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+            </button>
+            <button onClick={() => switchView('analysis')}
+              className={`p-2.5 rounded-xl transition-all ${viewMode === 'analysis' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+              title="Analyse de parc (rentabilité, coûts, marge par véhicule)">
+              {/* bar-chart icon */}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6m6 13V11M3 19v-4m18 4h.01M3 5h.01M3 19h18" /></svg>
             </button>
           </div>
           <button onClick={() => handleOpenModal()}
@@ -654,6 +709,104 @@ const VehiclesList: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/*
+        Analyse view — rentabilité par véhicule.
+        Data comes from /v1/fleet/analysis (the endpoint that used to back the
+        standalone /fleet/analysis page). Fetched lazily on first switch.
+      */}
+      {viewMode === 'analysis' && (
+        <div className="space-y-6">
+          {analyseLoading && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+              Chargement de l'analyse de parc…
+            </div>
+          )}
+          {analyseError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 space-y-2">
+              <div className="font-semibold">Impossible de charger l'analyse de parc.</div>
+              <div className="font-mono text-xs">{analyseError}</div>
+              <button
+                type="button"
+                onClick={() => { setAnalyse(null); setAnalyseError(null); }}
+                className="mt-1 inline-flex items-center rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100"
+              >
+                Réessayer
+              </button>
+            </div>
+          )}
+          {analyse && (
+            <>
+              {/* KPI strip (rentabilité-focused — the operational KPIs are
+                  already shown at the top of the page so we don't duplicate). */}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[
+                  ['Total parc',       analyse.kpis?.totalVehicles],
+                  ['Utilisation %',    analyse.kpis?.utilizationRatePct],
+                  ['Sous-location',    analyse.kpis?.subRentedCount ?? 0],
+                  ['Indisponibles',    analyse.kpis?.vehiclesUnavailable],
+                ].map(([label, val]) => (
+                  <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">{String(label)}</div>
+                    <div className="mt-1 text-xl font-black text-slate-900">
+                      {val === undefined || val === null ? '—' : Number(val).toLocaleString('fr-MA')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Rentabilité table */}
+              <div className="rounded-[2rem] border border-slate-200 bg-white shadow-sm overflow-x-auto">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                  <div>
+                    <h2 className="text-base font-black text-slate-900">Rentabilité par véhicule</h2>
+                    <p className="text-xs text-slate-500">CA, coûts et marge — sur la durée de vie du véhicule.</p>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {(analyse.vehicles ?? []).length} véhicule(s)
+                  </span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      {['Immatriculation', 'Statut', 'Disponibilité', 'CA', 'Coûts', 'Marge', ''].map((h) => (
+                        <th key={h} className="px-5 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(analyse.vehicles ?? []).length === 0 && (
+                      <tr><td colSpan={7} className="px-5 py-10 text-center text-slate-400 font-medium">Aucune donnée de rentabilité disponible.</td></tr>
+                    )}
+                    {(analyse.vehicles ?? []).map((v, idx) => {
+                      const margin = Number(v.profitability ?? 0);
+                      return (
+                        <tr key={String(v.vehicleId)} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/40'}`}>
+                          <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">{v.registration ?? '—'}</td>
+                          <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.status ?? '—'}</td>
+                          <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.availability ?? '—'}</td>
+                          <td className="px-5 py-3 text-slate-800 whitespace-nowrap">{formatCurrencyMad(Number(v.revenue ?? 0))}</td>
+                          <td className="px-5 py-3 text-slate-800 whitespace-nowrap">{formatCurrencyMad(Number(v.totalCost ?? 0))}</td>
+                          <td className={`px-5 py-3 font-bold whitespace-nowrap ${margin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {formatCurrencyMad(margin)}
+                          </td>
+                          <td className="px-5 py-3 whitespace-nowrap">
+                            <Link to={`/fleet/${v.vehicleId}`} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">
+                              Fiche
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 

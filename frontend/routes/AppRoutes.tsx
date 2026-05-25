@@ -11,7 +11,6 @@ import { FleetListPage } from '@/modules/fleet/FleetListPage';
 import { FleetVehicleDetailPage } from '@/modules/fleet/FleetVehicleDetailPage';
 import { FleetMaintenanceDashboardPage } from '@/modules/fleet/FleetMaintenanceDashboardPage';
 import { FleetComplianceDashboardPage } from '@/modules/fleet/FleetComplianceDashboardPage';
-import { FleetAnalysisPage } from '@/modules/fleet/FleetAnalysisPage';
 import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
@@ -218,13 +217,15 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
+            {/*
+              Analyse de parc was merged into the Flotte page as a third
+              view-mode (cards / table / analyse). Old route kept as a
+              redirect so existing bookmarks and email links don't 404.
+              `?view=analysis` boots VehiclesList straight into the analyse view.
+            */}
             <Route
               path="/fleet/analysis"
-              element={
-                <ModuleGate module="fleet">
-                  <FleetAnalysisPage />
-                </ModuleGate>
-              }
+              element={<Navigate to="/fleet?view=analysis" replace />}
             />
             <Route
               path="/customers"
