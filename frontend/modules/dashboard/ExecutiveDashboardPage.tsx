@@ -22,6 +22,10 @@ import {
   type DashboardRange,
   type DashboardParams,
 } from '@/services/dashboardApi';
+import { notificationsApi, type NotificationDto } from '@/services/notificationsApi';
+import { maintenanceApi, type MaintenanceAlertDto } from '@/services/maintenanceApi';
+import { gpsApi } from '@/services/gpsApi';
+import type { GpsAlertDto } from '@/services/dtos';
 import { KpiCard } from '@/modules/shared/components/KpiCard';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
 import { Icon } from '@/modules/shared/components/Icon';
@@ -445,6 +449,9 @@ export const ExecutiveDashboardPage: React.FC = () => {
         </div>
       </section>
 
+      {/* ── Notifications & alerts center ───────────────────────────────── */}
+      <NotificationsAlertsSection />
+
       {/* ── Maintenance trend ─────────────────────────────────────────────── */}
       <section className="df-card">
         <div className="df-card__header">
@@ -473,5 +480,272 @@ export const ExecutiveDashboardPage: React.FC = () => {
       </section>
 
     </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Notifications & alerts center
+// ───────────────────────────────────────────────────────────────────────────
+// Aggregates three independent feeds in one place so the dirigeant doesn't
+// have to navigate to the bell icon, the fleet module, and the GPS module
+// separately:
+//   1. In-app notifications  → notificationsApi.list (paginated, all modules)
+//   2. Maintenance alerts    → maintenanceApi.alerts (vehicle-bound)
+//   3. GPS alerts            → gpsApi.alerts (speeding, geofence, offline…)
+//
+// Each feed query is independent — if one endpoint is down (e.g. GPS provider
+// outage) the others still render. Empty/error states are inline per tab.
+// ═══════════════════════════════════════════════════════════════════════════
+
+type AlertSource = 'notification' | 'maintenance' | 'gps';
+type AlertSeverity = 'critical' | 'high' | 'normal' | 'low';
+
+interface UnifiedAlert {
+  id: string;
+  source: AlertSource;
+  severity: AlertSeverity;
+  title: string;
+  body: string | null;
+  at: string | null;
+  linkTo: string | null;
+  read?: boolean;
+}
+
+const SOURCE_META: Record<AlertSource, { label: string; icon: string; color: string }> = {
+  notification: { label: 'Notifications',  icon: '🔔', color: '#5b5bf4' },
+  maintenance:  { label: 'Maintenance',    icon: '🔧', color: '#f59e0b' },
+  gps:          { label: 'GPS',            icon: '🛰️', color: '#22d3ee' },
+};
+
+const SEVERITY_TONE: Record<AlertSeverity, { bg: string; text: string; border: string; label: string }> = {
+  critical: { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-200',   label: 'Critique' },
+  high:     { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200',  label: 'Élevée'   },
+  normal:   { bg: 'bg-sky-50',    text: 'text-sky-700',    border: 'border-sky-200',    label: 'Normale'  },
+  low:      { bg: 'bg-slate-50',  text: 'text-slate-600',  border: 'border-slate-200',  label: 'Info'     },
+};
+
+/** Map any free-form severity string from the 3 backends into our 4 buckets. */
+function normalizeSeverity(raw: string | null | undefined): AlertSeverity {
+  const v = (raw ?? '').toLowerCase();
+  if (v === 'critical' || v === 'urgent') return 'critical';
+  if (v === 'high' || v === 'warning')    return 'high';
+  if (v === 'low' || v === 'info')        return 'low';
+  return 'normal';
+}
+
+const NotificationsAlertsSection: React.FC = () => {
+  const [tab, setTab] = useState<'all' | AlertSource>('all');
+
+  // ── 3 independent queries — failure of one does not poison the others ──
+  const notifQ = useQuery({
+    queryKey: ['dashboard', 'notifications'],
+    // Pull the 50 most recent across all modules — we filter/sort client-side.
+    queryFn:  () => notificationsApi.list({ per_page: 50 }),
+    staleTime: 30_000,
+    retry:     1,
+  });
+
+  const maintQ = useQuery({
+    queryKey: ['dashboard', 'maintenance-alerts'],
+    queryFn:  () => maintenanceApi.alerts(),
+    staleTime: 60_000,
+    retry:     1,
+  });
+
+  const gpsQ = useQuery({
+    queryKey: ['dashboard', 'gps-alerts'],
+    queryFn:  () => gpsApi.alerts(),
+    staleTime: 30_000,
+    retry:     1,
+  });
+
+  // ── Normalize every feed into the same shape so they can share one list ──
+  const unified: UnifiedAlert[] = useMemo(() => {
+    const items: UnifiedAlert[] = [];
+
+    (notifQ.data?.data ?? []).forEach((n: NotificationDto) => {
+      items.push({
+        id:       `notif-${n.id}`,
+        source:   'notification',
+        severity: normalizeSeverity(n.priority),
+        title:    n.title,
+        body:     n.body,
+        at:       n.created_at,
+        linkTo:   n.link_url,
+        read:     n.read_at != null,
+      });
+    });
+
+    (maintQ.data?.data?.alerts ?? []).forEach((a: MaintenanceAlertDto) => {
+      const reg = a.vehicle?.registration ? ` · ${a.vehicle.registration}` : '';
+      items.push({
+        id:       `maint-${a.id}`,
+        source:   'maintenance',
+        severity: normalizeSeverity(a.severity),
+        title:    `${a.title}${reg}`,
+        body:     a.description,
+        at:       a.triggeredAt,
+        linkTo:   a.vehicle?.id ? `/fleet/${a.vehicle.id}` : '/fleet',
+      });
+    });
+
+    (gpsQ.data ?? []).forEach((g: GpsAlertDto) => {
+      items.push({
+        id:       `gps-${g.id}`,
+        source:   'gps',
+        severity: normalizeSeverity(g.severity),
+        title:    g.type ? String(g.type) : 'Alerte GPS',
+        body:     g.message ?? null,
+        at:       g.at ?? null,
+        linkTo:   '/gps/alerts',
+      });
+    });
+
+    // Most recent first; null dates sink to the bottom.
+    return items.sort((a, b) => {
+      const ta = a.at ? Date.parse(a.at) : 0;
+      const tb = b.at ? Date.parse(b.at) : 0;
+      return tb - ta;
+    });
+  }, [notifQ.data, maintQ.data, gpsQ.data]);
+
+  const counts = useMemo(() => {
+    const c = { all: unified.length, notification: 0, maintenance: 0, gps: 0, critical: 0, unread: 0 };
+    unified.forEach((u) => {
+      c[u.source]++;
+      if (u.severity === 'critical') c.critical++;
+      if (u.source === 'notification' && u.read === false) c.unread++;
+    });
+    return c;
+  }, [unified]);
+
+  const filtered = tab === 'all' ? unified : unified.filter((u) => u.source === tab);
+
+  const anyLoading = notifQ.isLoading || maintQ.isLoading || gpsQ.isLoading;
+  const allFailed  = notifQ.isError && maintQ.isError && gpsQ.isError;
+
+  return (
+    <section className="df-card">
+      <div className="df-card__header">
+        <div>
+          <div className="df-card__hint">Centre opérationnel</div>
+          <h3 className="text-lg font-bold tracking-tight">Notifications &amp; alertes</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {counts.critical > 0 && (
+            <StatusChip label={`${counts.critical} critique${counts.critical > 1 ? 's' : ''}`} tone="danger" dot />
+          )}
+          {counts.unread > 0 && (
+            <StatusChip label={`${counts.unread} non lu${counts.unread > 1 ? 's' : ''}`} tone="brand" dot />
+          )}
+          <Link to="/notifications" className="df-btn df-btn--ghost df-btn--sm text-xs">
+            Tout voir →
+          </Link>
+        </div>
+      </div>
+
+      <div className="df-card__body">
+        {/* Source filter tabs */}
+        <div className="df-tabs mb-4 flex-wrap" role="tablist">
+          {(['all', 'notification', 'maintenance', 'gps'] as const).map((k) => {
+            const label = k === 'all' ? 'Tout' : SOURCE_META[k].label;
+            const count = k === 'all' ? counts.all : counts[k];
+            return (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                onClick={() => setTab(k)}
+                className={`df-tab ${tab === k ? 'df-tab--active' : ''}`}
+              >
+                {k !== 'all' && <span className="mr-1">{SOURCE_META[k as AlertSource].icon}</span>}
+                {label}
+                <span className="ml-2 rounded-full bg-[color:var(--df-surface-elev)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--df-text-muted)]">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* States */}
+        {anyLoading && filtered.length === 0 && (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="df-shimmer h-16 rounded-xl" />
+            ))}
+          </div>
+        )}
+
+        {allFailed && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            Impossible de charger les notifications et les alertes — vérifiez la connexion à l'API.
+          </div>
+        )}
+
+        {!anyLoading && !allFailed && filtered.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-[color:var(--df-border)] py-10 text-center text-sm text-[color:var(--df-text-muted)]">
+            <div className="mb-2 text-3xl">✨</div>
+            Aucune notification ni alerte à signaler.
+          </div>
+        )}
+
+        {/* Unified, scrollable list (cap height so the dashboard stays compact) */}
+        {filtered.length > 0 && (
+          <ul className="max-h-[28rem] divide-y divide-[color:var(--df-border)] overflow-y-auto">
+            {filtered.slice(0, 50).map((a) => {
+              const meta = SOURCE_META[a.source];
+              const tone = SEVERITY_TONE[a.severity];
+              const row = (
+                <li
+                  className={`flex items-start gap-3 py-3 transition ${
+                    a.linkTo ? 'cursor-pointer hover:bg-[color:var(--df-surface-elev)]' : ''
+                  } ${a.read === false ? 'bg-indigo-50/40' : ''}`}
+                >
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg"
+                    style={{ background: `color-mix(in srgb, ${meta.color} 12%, transparent)` }}
+                    title={meta.label}
+                  >
+                    {meta.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-bold text-[color:var(--df-text)]">{a.title}</span>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone.bg} ${tone.text} ${tone.border}`}
+                      >
+                        {tone.label}
+                      </span>
+                      {a.read === false && (
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-500" title="Non lue" />
+                      )}
+                    </div>
+                    {a.body && (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-[color:var(--df-text-muted)]">{a.body}</p>
+                    )}
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-[color:var(--df-text-faint)]">
+                      <span className="font-semibold uppercase tracking-wide">{meta.label}</span>
+                      {a.at && <span>· {formatDate(new Date(a.at))}</span>}
+                    </div>
+                  </div>
+                  {a.linkTo && <span className="self-center text-[color:var(--df-text-faint)]">→</span>}
+                </li>
+              );
+              return a.linkTo ? (
+                <Link key={a.id} to={a.linkTo} className="block px-1 no-underline">
+                  {row}
+                </Link>
+              ) : (
+                <div key={a.id} className="px-1">
+                  {row}
+                </div>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 };
