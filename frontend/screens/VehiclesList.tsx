@@ -497,6 +497,22 @@ const VehiclesList: React.FC = () => {
               value={search} onChange={e => setSearch(e.target.value)} />
             <svg className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
+          {/*
+            Conformité véhicules entry-point.
+            Moved out of the sidebar (AppLayout.tsx); the Flotte module owns
+            its sub-navigation in one place. Indigo filled style matches the
+            page's primary action language so the button is discoverable for
+            users who used to reach this page via the sidebar.
+          */}
+          <Link
+            to="/fleet/compliance"
+            title="Tableau de conformité véhicules (assurance, visite technique, vignette)"
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 whitespace-nowrap"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            Conformité
+          </Link>
+
           {/* PDF download */}
           <button onClick={downloadParcPDF}
             className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 whitespace-nowrap">
