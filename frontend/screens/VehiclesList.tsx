@@ -891,9 +891,25 @@ const VehiclesList: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-10">
 
               {/* ── Fiche Technique ── */}
+              {/*
+                Field order (top → bottom = most → least important for a Moroccan
+                rental fleet). Related fields are kept adjacent so they read like
+                pairs the operator already speaks (Marque ↔ Modèle, dates next to
+                their counterpart, admin numbers grouped).
+
+                Row 1 — Identity        : Immat (×2 wide)  · Année
+                Row 2 — Make/model      : Marque           · Modèle           · Catégorie
+                Row 3 — Classification  : Type             · Carburant        · Puissance (CV)
+                Row 4 — Mechanical/use  : Cylindres        · Index conteur Km · Mise en circulation
+                Row 5 — Admin dates     : Date immat.      · Date acquisition · Montant (DH)
+                Row 6 — Admin numbers   : N° Carte grise   · Châssis (VIN)    · Immat. www
+                Row 7 — Secondary       : N° police        · Gamme
+              */}
               <div className="space-y-6">
                 <h3 className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em]">Fiche Technique</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                  {/* Row 1 — Identity ─────────────────────────────────────── */}
 
                   {/* Immatriculation — 3 parts (col-span-2) */}
                   <div className="space-y-2 md:col-span-2">
@@ -929,58 +945,14 @@ const VehiclesList: React.FC = () => {
                     <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
                   </div>
 
-                  {/* Type */}
+                  {/* Année */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Type</label>
-                    <select className={selectCls} value={formData.vehicleType}
-                      onChange={e => setFormData(fd => ({ ...fd, vehicleType: e.target.value }))}>
-                      <option value="">— Choix type —</option>
-                      {VEHICLE_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <label className={labelCls}>Année</label>
+                    <input type="number" required className={inputCls} value={formData.year}
+                      onChange={e => setFormData(fd => ({ ...fd, year: parseInt(e.target.value) }))} />
                   </div>
 
-                  {/* Type de carburant */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Type de carburant</label>
-                    <select className={selectCls} value={formData.fuel}
-                      onChange={e => setFormData(fd => ({ ...fd, fuel: e.target.value }))}>
-                      <option value="">— Choix carburant —</option>
-                      {FUEL_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  </div>
-
-                  {/* N° police */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>N° police</label>
-                    <input className={inputCls} placeholder="ex: POL-2024-001" value={formData.numeroPolice}
-                      onChange={e => setFormData(fd => ({ ...fd, numeroPolice: e.target.value }))} />
-                  </div>
-
-                  {/* Nombre de cylindres */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Nombre de cylindre</label>
-                    <input type="number" min="1" max="16" className={inputCls} placeholder="ex: 4"
-                      value={formData.nombreCylindres}
-                      onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
-                  </div>
-
-
-                  {/* Gamme */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Gamme</label>
-                    <select className={selectCls} value={formData.gamme}
-                      onChange={e => setFormData(fd => ({ ...fd, gamme: e.target.value }))}>
-                      <option value="">— Choix gamme —</option>
-                      {GAMME_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Date d'acquisition */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Date d'acquisition</label>
-                    <input type="date" className={inputCls} value={formData.acquisitionDate}
-                      onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
-                  </div>
+                  {/* Row 2 — Make / Model / Category ──────────────────────── */}
 
                   {/* Marque */}
                   <div className="space-y-2">
@@ -1012,46 +984,7 @@ const VehiclesList: React.FC = () => {
                     )}
                   </div>
 
-                  {/* N° Carte grise */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>N° de la carte grise</label>
-                    <input required className={inputCls} value={formData.registrationCard}
-                      onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
-                  </div>
-
-                  {/* Puissance */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Puissance (CV)</label>
-                    <input type="number" min="1" className={inputCls} placeholder="ex: 90"
-                      value={formData.cv}
-                      onChange={e => setFormData(fd => ({ ...fd, cv: e.target.value }))} />
-                  </div>
-
-                  {/* Mise en circulation */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Mise en circulation</label>
-                    <input type="date" className={inputCls} value={formData.miseEnCirculation}
-                      onChange={e => setFormData(fd => ({ ...fd, miseEnCirculation: e.target.value }))} />
-                  </div>
-
-                  {/* Date immatriculation */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Date immatriculation</label>
-                    <input type="date" className={inputCls} value={formData.dateImmatriculation}
-                      onChange={e => setFormData(fd => ({ ...fd, dateImmatriculation: e.target.value }))} />
-                  </div>
-
-                  {/* Catégorie */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Catégorie</label>
-                    <select className={selectCls} value={formData.categorie}
-                      onChange={e => setFormData(fd => ({ ...fd, categorie: e.target.value }))}>
-                      <option value="">— Choix catégorie —</option>
-                      {CATEGORIE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Modèle */}
+                  {/* Modèle — kept directly after Marque (depends on it via brand_id) */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <label className={labelCls}>Modèle</label>
@@ -1083,7 +1016,105 @@ const VehiclesList: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Châssis */}
+                  {/* Catégorie */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Catégorie</label>
+                    <select className={selectCls} value={formData.categorie}
+                      onChange={e => setFormData(fd => ({ ...fd, categorie: e.target.value }))}>
+                      <option value="">— Choix catégorie —</option>
+                      {CATEGORIE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Row 3 — Classification / Engine ──────────────────────── */}
+
+                  {/* Type */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Type</label>
+                    <select className={selectCls} value={formData.vehicleType}
+                      onChange={e => setFormData(fd => ({ ...fd, vehicleType: e.target.value }))}>
+                      <option value="">— Choix type —</option>
+                      {VEHICLE_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Type de carburant */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Type de carburant</label>
+                    <select className={selectCls} value={formData.fuel}
+                      onChange={e => setFormData(fd => ({ ...fd, fuel: e.target.value }))}>
+                      <option value="">— Choix carburant —</option>
+                      {FUEL_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Puissance */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Puissance (CV)</label>
+                    <input type="number" min="1" className={inputCls} placeholder="ex: 90"
+                      value={formData.cv}
+                      onChange={e => setFormData(fd => ({ ...fd, cv: e.target.value }))} />
+                  </div>
+
+                  {/* Row 4 — Mechanical / use ────────────────────────────── */}
+
+                  {/* Nombre de cylindres */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Nombre de cylindre</label>
+                    <input type="number" min="1" max="16" className={inputCls} placeholder="ex: 4"
+                      value={formData.nombreCylindres}
+                      onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
+                  </div>
+
+                  {/* Index conteur / Km */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Index conteur (Km)</label>
+                    <input type="number" min="0" className={inputCls} placeholder="ex: 45000"
+                      value={formData.mileageKm}
+                      onChange={e => setFormData(fd => ({ ...fd, mileageKm: e.target.value }))} />
+                  </div>
+
+                  {/* Mise en circulation */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Mise en circulation</label>
+                    <input type="date" className={inputCls} value={formData.miseEnCirculation}
+                      onChange={e => setFormData(fd => ({ ...fd, miseEnCirculation: e.target.value }))} />
+                  </div>
+
+                  {/* Row 5 — Admin dates + amount ────────────────────────── */}
+
+                  {/* Date immatriculation */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Date immatriculation</label>
+                    <input type="date" className={inputCls} value={formData.dateImmatriculation}
+                      onChange={e => setFormData(fd => ({ ...fd, dateImmatriculation: e.target.value }))} />
+                  </div>
+
+                  {/* Date d'acquisition */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Date d'acquisition</label>
+                    <input type="date" className={inputCls} value={formData.acquisitionDate}
+                      onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
+                  </div>
+
+                  {/* Montant (prix d'acquisition) — placed next to its date */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Montant (DH)</label>
+                    <input type="number" min="0" className={inputCls} placeholder="ex: 150000"
+                      value={formData.montant}
+                      onChange={e => setFormData(fd => ({ ...fd, montant: e.target.value }))} />
+                  </div>
+
+                  {/* Row 6 — Admin numbers ───────────────────────────────── */}
+
+                  {/* N° Carte grise */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>N° de la carte grise</label>
+                    <input required className={inputCls} value={formData.registrationCard}
+                      onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
+                  </div>
+
+                  {/* Châssis (VIN) */}
                   <div className="space-y-2">
                     <label className={labelCls}>Chassis</label>
                     <input className={inputCls} placeholder="ex: VF1AA000..." value={formData.chassis}
@@ -1097,27 +1128,23 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, immatOnline: e.target.value }))} />
                   </div>
 
-                  {/* Index conteur / Km */}
+                  {/* Row 7 — Secondary ──────────────────────────────────── */}
+
+                  {/* N° police */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Index conteur (Km)</label>
-                    <input type="number" min="0" className={inputCls} placeholder="ex: 45000"
-                      value={formData.mileageKm}
-                      onChange={e => setFormData(fd => ({ ...fd, mileageKm: e.target.value }))} />
+                    <label className={labelCls}>N° police</label>
+                    <input className={inputCls} placeholder="ex: POL-2024-001" value={formData.numeroPolice}
+                      onChange={e => setFormData(fd => ({ ...fd, numeroPolice: e.target.value }))} />
                   </div>
 
-                  {/* Montant (prix d'acquisition) */}
+                  {/* Gamme */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Montant (DH)</label>
-                    <input type="number" min="0" className={inputCls} placeholder="ex: 150000"
-                      value={formData.montant}
-                      onChange={e => setFormData(fd => ({ ...fd, montant: e.target.value }))} />
-                  </div>
-
-                  {/* Année */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Année</label>
-                    <input type="number" required className={inputCls} value={formData.year}
-                      onChange={e => setFormData(fd => ({ ...fd, year: parseInt(e.target.value) }))} />
+                    <label className={labelCls}>Gamme</label>
+                    <select className={selectCls} value={formData.gamme}
+                      onChange={e => setFormData(fd => ({ ...fd, gamme: e.target.value }))}>
+                      <option value="">— Choix gamme —</option>
+                      {GAMME_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
                   </div>
 
                 </div>
