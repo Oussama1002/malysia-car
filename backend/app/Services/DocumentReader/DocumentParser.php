@@ -346,18 +346,22 @@ class DocumentParser
     private function extractDate(string $text, array $labels): ?string
     {
         $datePattern = '(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
+        // Use `#` as the delimiter (not `/`) so a label containing a literal
+        // slash — e.g. "Date et / Lieu de naissance" on the Moroccan permis —
+        // can't terminate the regex early and trigger
+        // "preg_match(): Unknown modifier '?'". Labels never contain `#`.
         foreach ($labels as $label) {
             // Same line
-            if (preg_match('/'.$label.'[^\n\r:]*[:\-]?[ \t]*'.$datePattern.'/iu', $text, $m)) {
+            if (preg_match('#'.$label.'[^\n\r:]*[:\-]?[ \t]*'.$datePattern.'#iu', $text, $m)) {
                 return $this->canonicalizeDate($m['d']);
             }
             // Next line (label-only, value on the next non-empty line)
-            if (preg_match('/'.$label.'[^\n\r]*[\r\n]+\s*'.$datePattern.'/iu', $text, $m)) {
+            if (preg_match('#'.$label.'[^\n\r]*[\r\n]+\s*'.$datePattern.'#iu', $text, $m)) {
                 return $this->canonicalizeDate($m['d']);
             }
             // Up to 3 lines below: handles cases where OCR fractures the row
             // ("Né le … <garbage line> <garbage line> 06.10.2001").
-            if (preg_match('/'.$label.'[\s\S]{0,200}?'.$datePattern.'/iu', $text, $m)) {
+            if (preg_match('#'.$label.'[\s\S]{0,200}?'.$datePattern.'#iu', $text, $m)) {
                 $candidate = $this->canonicalizeDate($m['d']);
                 if ($candidate && (int) substr($candidate, 0, 4) <= (int) date('Y')) {
                     return $candidate;
@@ -463,7 +467,9 @@ class DocumentParser
      */
     private function valueAfterLabel(string $text, string $labelPattern, int $maxLinesAfter = 6): ?string
     {
-        if (! preg_match('/'.$labelPattern.'/iu', $text, $m, PREG_OFFSET_CAPTURE)) {
+        // `#` delimiter (not `/`) so a label containing a literal slash can't
+        // break the pattern — see extractDate() for the same defensive choice.
+        if (! preg_match('#'.$labelPattern.'#iu', $text, $m, PREG_OFFSET_CAPTURE)) {
             return null;
         }
         $rest = substr($text, $m[0][1] + strlen($m[0][0]));
