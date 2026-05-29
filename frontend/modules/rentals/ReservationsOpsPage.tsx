@@ -234,7 +234,25 @@ export const ReservationsOpsPage: React.FC = () => {
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
   const timelineStatus = String(detail?.status ?? selected?.status ?? '');
-  const customerOptions = useMemo(() => (customersQ.data ?? []).map((c) => ({ id: String(c.id), label: `${c.name} (${c.kind})` })), [customersQ.data]);
+  // NOTE: endpoints.customers.list returns the raw API shape (display_name /
+  // customer_type / customer_code), NOT the mapped CustomerDto (name / kind).
+  // Reading c.name / c.kind here produced "undefined (undefined)" in the
+  // dropdown. Read the actual API fields with sensible fallbacks instead.
+  const customerOptions = useMemo(
+    () =>
+      (customersQ.data ?? []).map((raw) => {
+        const c = raw as unknown as {
+          id: string | number;
+          display_name?: string;
+          customer_code?: string;
+          customer_type?: string;
+        };
+        const name = c.display_name || c.customer_code || String(c.id);
+        const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
+        return { id: String(c.id), label: `${name} (${kind})` };
+      }),
+    [customersQ.data],
+  );
   const formSlotBlocked = Boolean(formAvailabilityQ.data && formAvailabilityQ.data.available === false);
   const confirmSlotBlocked = Boolean(confirmAvailabilityQ.data && confirmAvailabilityQ.data.available === false);
 

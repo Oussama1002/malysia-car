@@ -14,7 +14,7 @@ import { FleetComplianceDashboardPage } from '@/modules/fleet/FleetComplianceDas
 import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
-import { ContractsPage } from '@/modules/contracts/ContractsPage';
+import { ContractsModulePage } from '@/modules/contracts/ContractsModulePage';
 import { ContractWizardPage } from '@/modules/contracts/ContractWizardPage';
 import { ContractDetailPage } from '@/modules/contracts/ContractDetailPage';
 import { ContractTemplatesPage } from '@/modules/contracts/ContractTemplatesPage';
@@ -77,7 +77,6 @@ import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
 import { DocumentReaderPage } from '@/modules/documents/DocumentReaderPage';
-import { RentalsPage } from '@/modules/rentals/RentalsPage';
 // Sous-location
 import { SubRentalsPage } from '@/modules/subRentals/SubRentalsPage';
 import { SubRentalCreatePage } from '@/modules/subRentals/SubRentalCreatePage';
@@ -244,11 +243,16 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
 
+            {/*
+              /contracts is now the "Réservations" module shell: a tabbed page
+              hosting both the contracts list and the rental operations
+              (formerly /rentals). See ContractsModulePage.
+            */}
             <Route
               path="/contracts"
               element={
                 <ModuleGate module="contracts">
-                  <ContractsPage />
+                  <ContractsModulePage />
                 </ModuleGate>
               }
             />
@@ -716,15 +720,13 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
 
-            <Route
-              path="/rentals"
-              element={
-                <ModuleGate module="rentals">
-                  <RentalsPage />
-                </ModuleGate>
-              }
-            />
-            <Route path="/reservations" element={<Navigate to="/rentals" replace />} />
+            {/*
+              Réservations / Locations merged into the contracts module as a tab.
+              Both old entry points redirect into the Locations tab so bookmarks
+              and in-app links keep working.
+            */}
+            <Route path="/rentals" element={<Navigate to="/contracts?tab=locations" replace />} />
+            <Route path="/reservations" element={<Navigate to="/contracts?tab=locations" replace />} />
 
             {/* Sous-location */}
             <Route

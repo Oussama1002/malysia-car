@@ -37,8 +37,10 @@ const GROUPS: NavGroup[] = [
       { to: '/fleet/sub-rentals', module: 'subRentals', labelKey: 'nav.subRentals', icon: 'key' },
       { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },
       { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
+      // Réservations module = contracts list + rental operations as tabs.
+      // The standalone /rentals entry was merged in (redirects to the
+      // Locations tab); see ContractsModulePage + AppRoutes.
       { to: '/contracts', module: 'contracts', labelKey: 'nav.contracts', icon: 'doc' },
-      { to: '/rentals', module: 'rentals', labelKey: 'nav.rentals', icon: 'key' },
       { to: '/used-cars', module: 'usedCars', labelKey: 'nav.usedCars', icon: 'marketplace' },
     ],
   },
