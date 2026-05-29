@@ -412,11 +412,23 @@ class DocumentParser
             return null;
         }
 
-        // Reject dates with impossible month or day values — Tesseract sometimes
-        // misreads a digit ("06/40/2001" = 1→4) producing a logically invalid date
-        // that would silently fail in an HTML date input.
-        [, $mm, $dd] = explode('-', $iso);
-        if ((int) $mm < 1 || (int) $mm > 12 || (int) $dd < 1 || (int) $dd > 31) {
+        [$yyyy, $mm, $dd] = explode('-', $iso);
+        $mi = (int) $mm;
+        $di = (int) $dd;
+
+        // Salvage a common Tesseract digit confusion on Moroccan permis: the
+        // month's leading "1" read as "4", e.g. real 10/11/12 → 40/41/42
+        // ("06/10/2001" came through as "06/40/2001"). No valid month is 40-42,
+        // so mapping 4x→1x is unambiguous and safe.
+        if ($mi >= 40 && $mi <= 42) {
+            $mi -= 30;
+            $mm = sprintf('%02d', $mi);
+            $iso = $yyyy.'-'.$mm.'-'.$dd;
+        }
+
+        // Reject dates with impossible month or day values rather than emit a
+        // date an HTML date input would silently drop.
+        if ($mi < 1 || $mi > 12 || $di < 1 || $di > 31) {
             return null;
         }
 
