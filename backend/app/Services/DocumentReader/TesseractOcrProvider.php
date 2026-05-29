@@ -101,13 +101,15 @@ class TesseractOcrProvider implements OcrProviderInterface
      * of generated image paths.
      *
      * Key constraints:
-     * - `-f 1 -l 1`        → first page only. CIN/Permis/Passeport are always
-     *                         single-sided. Phone-camera PDFs often embed the
-     *                         image at native sensor resolution (e.g. 56×42 in),
-     *                         so rendering all pages at 300 DPI produces a
-     *                         16 800×12 600 px PNG that stalls Tesseract for
-     *                         minutes. Multi-page rental contracts should be
-     *                         split into separate uploads.
+     * - `-f 1 -l 2`        → first two pages. ID docs are recto/verso: the
+     *                         Moroccan permis prints "Fin de validité" (expiry)
+     *                         and the MRZ on the verso, so page 1 alone can
+     *                         never yield the expiry. We cap at 2 pages (not
+     *                         "all pages") because phone-camera PDFs often embed
+     *                         the image at native sensor resolution (e.g.
+     *                         56×42 in); combined with -scale-to each page stays
+     *                         bounded. Multi-page rental contracts should still
+     *                         be split into separate uploads.
      * - `-scale-to 2480`   → cap the longest dimension at 2 480 px (≈ A4 at
      *                         300 DPI). Regardless of the PDF's declared page
      *                         size, Tesseract never sees a gigantic image.
@@ -124,7 +126,12 @@ class TesseractOcrProvider implements OcrProviderInterface
         $process = new Process([
             $this->pdftoppmBin,
             '-f', '1',          // first page
-            '-l', '1',          // last page = first page (single page only)
+            '-l', '2',          // up to page 2 — ID docs are recto/verso. The
+                                // Moroccan permis prints "Fin de validité"
+                                // (expiry) and the MRZ on the verso, so page 1
+                                // alone can never yield the expiry date. Each
+                                // page is still capped by -scale-to, so two
+                                // pages stay bounded.
             '-r', '150',        // base DPI (overridden by -scale-to for large pages)
             '-scale-to', '2480', // cap longest dimension at 2 480 px (~A4 @ 300 DPI)
             '-png',

@@ -199,11 +199,31 @@ class DocumentParser
             '4a\s*\.',
         ]) ?? $classified['issue'];
         $expiry = $this->extractDate($text, [
+            'Fin\s+de\s+validit[ée]',   // Moroccan permis verso label
+            'Validit[ée]',
             'Valable\s+jusqu',
             'Expiry',
             'Expir',
             '4b\s*\.',
         ]) ?? $classified['expiry'];
+
+        // The verso MRZ (e.g. "D1LMA51<285342270820ELHADI<<<1") is printed in a
+        // high-contrast OCR font on a clean background — far more reliable than
+        // the watermarked, bilingual front side. Prefer its surname unless the
+        // front-side label already produced the same name (which keeps nicer
+        // spacing, e.g. "EL HADI" vs MRZ "ELHADI").
+        $mrzSurname = $this->extractMrzSurname($text);
+        if ($mrzSurname) {
+            $labelLast = $names['last_name'] ?? null;
+            $labelMatchesMrz = $labelLast
+                && mb_strtoupper(preg_replace('/\s+/', '', $labelLast) ?? '') === $mrzSurname;
+            if (! $labelMatchesMrz) {
+                $names['last_name'] = $this->cleanName($mrzSurname);
+            }
+            if (isset($names['first_name']) || isset($names['last_name'])) {
+                $names['full_name'] = trim(($names['first_name'] ?? '').' '.($names['last_name'] ?? ''));
+            }
+        }
 
         // Moroccan Permis prints the CIN under the "N°C.N.I.E." block (and
         // again in the MRZ at the bottom). Pull both as a fallback for the
@@ -403,6 +423,32 @@ class DocumentParser
         return $iso;
     }
 
+    /**
+     * Pull the surname from a Moroccan permis verso MRZ line such as
+     * "D1LMA51<285342270820ELHADI<<<1". The surname is the alphabetic run
+     * immediately before the "<<" filler. Returns null when no MRZ line is
+     * present (e.g. only the front side was scanned).
+     */
+    private function extractMrzSurname(string $text): ?string
+    {
+        foreach (preg_split('/[\r\n]+/', $text) ?: [] as $line) {
+            $compact = preg_replace('/\s+/', '', $line) ?? '';
+            // MRZ lines are long and composed only of A-Z, digits and '<',
+            // and contain the "<<" name filler.
+            if (mb_strlen($compact) < 18 || ! str_contains($compact, '<<')) {
+                continue;
+            }
+            if (! preg_match('/^[A-Z0-9<]+$/', $compact)) {
+                continue;
+            }
+            if (preg_match('/([A-Z]{2,})<<+/', $compact, $m)) {
+                return $m[1];
+            }
+        }
+
+        return null;
+    }
+
     /** @return array{first_name?: string, last_name?: string, full_name?: string} */
     private function extractNames(string $text): array
     {
@@ -474,30 +520,37 @@ class DocumentParser
         }
         $rest = substr($text, $m[0][1] + strlen($m[0][0]));
         $lines = preg_split('/[\r\n]+/', $rest) ?: [];
-        $checked = 0;
-        // Two-pass: collect clean lines (no lowercase) and noisy lines separately,
-        // prefer clean, fall back to uppercase island from noisy.
-        $noisyCandidate = null;
+
+        // The value sits closest to its label. We score two candidate kinds and
+        // let the CLOSEST win (tie → the cleaner one):
+        //   - "clean"  : a line with no lowercase Latin (highest confidence)
+        //   - "noisy"  : an uppercase island ≥5 chars buried in a junky line
+        //                (e.g. "oi f= OSSAMA 7 |" on a watermarked Permis)
+        // Closest-wins is what stops the first name drifting past the buried
+        // "OSSAMA" line to a clean but unrelated line further down (e.g. the
+        // birthplace "MEDIOUNA").
+        $cleanValue = null;
+        $cleanIdx = null;
+        $noisyValue = null;
+        $noisyIdx = null;
+        $idx = 0;
         foreach ($lines as $line) {
-            if ($checked++ > $maxLinesAfter) {
+            if ($idx > $maxLinesAfter) {
                 break;
             }
             if (trim($line) === '') {
+                $idx++;
                 continue;
             }
-            // Primary: lines with no lowercase Latin — highest confidence.
             if (! preg_match('/[a-zà-öø-ÿ]/u', $line)) {
-                if (preg_match('/([A-ZÀ-Ö\'][A-ZÀ-Ö\s\'\-]{2,28}[A-ZÀ-Ö])/u', $line, $vm)) {
+                if ($cleanValue === null && preg_match('/([A-ZÀ-Ö\'][A-ZÀ-Ö\s\'\-]{2,28}[A-ZÀ-Ö])/u', $line, $vm)) {
                     $value = trim(preg_replace('/\s{2,}/u', ' ', $vm[1]) ?? $vm[1]);
                     if (preg_match_all('/[A-ZÀ-Ö]/u', $value) >= 4) {
-                        return $value;
+                        $cleanValue = $value;
+                        $cleanIdx = $idx;
                     }
                 }
-            } elseif ($noisyCandidate === null) {
-                // Secondary: line has lowercase noise (e.g. "oi f= OSSAMA 7 |").
-                // Extract the longest contiguous uppercase block ≥5 Latin chars.
-                // This handles Moroccan Permis where name lines contain OCR junk
-                // mixed with the actual uppercase name token.
+            } elseif ($noisyValue === null) {
                 if (preg_match_all('/[A-ZÀ-Ö]{2,}(?:\s[A-ZÀ-Ö]{2,})*/u', $line, $islands)) {
                     $best = '';
                     foreach ($islands[0] as $island) {
@@ -507,13 +560,20 @@ class DocumentParser
                     }
                     $best = trim(preg_replace('/\s{2,}/u', ' ', $best) ?? $best);
                     if (preg_match_all('/[A-ZÀ-Ö]/u', $best) >= 5) {
-                        $noisyCandidate = $best;
+                        $noisyValue = $best;
+                        $noisyIdx = $idx;
                     }
                 }
             }
+            $idx++;
         }
 
-        return $noisyCandidate;
+        if ($cleanValue !== null && $noisyValue !== null) {
+            // Closest wins; on a tie prefer the clean (higher-confidence) line.
+            return $cleanIdx <= $noisyIdx ? $cleanValue : $noisyValue;
+        }
+
+        return $cleanValue ?? $noisyValue;
     }
 
     private function cleanName(string $value): string
