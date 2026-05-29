@@ -526,6 +526,17 @@ const SOURCE_META: Record<AlertSource, { label: string; icon: string; color: str
   gps:          { label: 'GPS',            icon: '🛰️', color: '#22d3ee' },
 };
 
+/**
+ * Build a " · Renault Clio · 1234-A-56" suffix from a vehicle, showing
+ * marque + modèle next to the matricule. Any missing part is skipped.
+ */
+function vehicleLabel(v: { registration?: string | null; brand?: string | null; model?: string | null } | null | undefined): string {
+  if (!v) return '';
+  const makeModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
+  const parts = [makeModel, v.registration].filter(Boolean) as string[];
+  return parts.length ? ` · ${parts.join(' · ')}` : '';
+}
+
 /** Whole days from now until `dateStr` (negative = already past). */
 function daysUntil(dateStr: string | null | undefined): number | null {
   if (!dateStr) return null;
@@ -611,7 +622,7 @@ const NotificationsAlertsSection: React.FC = () => {
 
     // Vehicle documents — assurance / visite technique / vignette expiry.
     (complianceQ.data?.data?.alerts ?? []).forEach((a: ComplianceAlertDto) => {
-      const reg = a.vehicle?.registration ? ` · ${a.vehicle.registration}` : '';
+      const reg = vehicleLabel(a.vehicle);
       const dleft = daysUntil(a.dueDate);
       // Expired (or expiring within 7 days) is critical; otherwise high.
       const sev: AlertSeverity =
@@ -655,7 +666,7 @@ const NotificationsAlertsSection: React.FC = () => {
     });
 
     (maintQ.data?.data?.alerts ?? []).forEach((a: MaintenanceAlertDto) => {
-      const reg = a.vehicle?.registration ? ` · ${a.vehicle.registration}` : '';
+      const reg = vehicleLabel(a.vehicle);
       items.push({
         id:       `maint-${a.id}`,
         source:   'maintenance',

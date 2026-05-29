@@ -34,7 +34,7 @@ export interface ComplianceAlertDto {
   dueDate: string | null;
   triggeredAt: string | null;
   payload: Record<string, unknown>;
-  vehicle: { id: string; registration: string | null } | null;
+  vehicle: { id: string; registration: string | null; brand?: string | null; model?: string | null } | null;
 }
 
 export const complianceApi = {

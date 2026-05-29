@@ -30,8 +30,10 @@ class MaintenanceMonitoringController extends Controller
                 'vehicle' => $a->vehicle ? [
                     'id' => $a->vehicle->id,
                     'registration' => $a->vehicle->registration_number,
-                    'brand' => $a->vehicle->brand_id,
-                    'model' => $a->vehicle->model_id,
+                    // Denormalised names (not the *_id FKs) so the UI can show
+                    // "Renault Clio · 1234-A-56" instead of opaque ids.
+                    'brand' => $a->vehicle->brand_name,
+                    'model' => $a->vehicle->model_name,
                 ] : null,
                 'payload' => $a->payload ?? [],
             ])
