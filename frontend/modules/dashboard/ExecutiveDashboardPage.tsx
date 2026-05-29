@@ -24,8 +24,10 @@ import {
 } from '@/services/dashboardApi';
 import { notificationsApi, type NotificationDto } from '@/services/notificationsApi';
 import { maintenanceApi, type MaintenanceAlertDto } from '@/services/maintenanceApi';
+import { complianceApi, type ComplianceAlertDto } from '@/services/complianceApi';
+import { contractsApi } from '@/services/contractsApi';
 import { gpsApi } from '@/services/gpsApi';
-import type { GpsAlertDto } from '@/services/dtos';
+import type { GpsAlertDto, ContractDto } from '@/services/dtos';
 import { KpiCard } from '@/modules/shared/components/KpiCard';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
 import { Icon } from '@/modules/shared/components/Icon';
@@ -211,6 +213,9 @@ export const ExecutiveDashboardPage: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* ── Notifications & alerts center (top priority) ─────────────────── */}
+      <NotificationsAlertsSection />
 
       {/* ── KPI grid ─────────────────────────────────────────────────────── */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -449,9 +454,6 @@ export const ExecutiveDashboardPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ── Notifications & alerts center ───────────────────────────────── */}
-      <NotificationsAlertsSection />
-
       {/* ── Maintenance trend ─────────────────────────────────────────────── */}
       <section className="df-card">
         <div className="df-card__header">
@@ -486,18 +488,23 @@ export const ExecutiveDashboardPage: React.FC = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // Notifications & alerts center
 // ───────────────────────────────────────────────────────────────────────────
-// Aggregates three independent feeds in one place so the dirigeant doesn't
-// have to navigate to the bell icon, the fleet module, and the GPS module
-// separately:
+// Aggregates five independent feeds in one place so the dirigeant sees, at the
+// top of the dashboard, everything that needs attention without navigating to
+// the bell icon, the fleet module, the compliance page, the contracts list and
+// the GPS module separately:
 //   1. In-app notifications  → notificationsApi.list (paginated, all modules)
-//   2. Maintenance alerts    → maintenanceApi.alerts (vehicle-bound)
-//   3. GPS alerts            → gpsApi.alerts (speeding, geofence, offline…)
+//   2. Vehicle documents     → complianceApi.alerts (assurance / visite tech /
+//                              vignette expirées, bientôt expirées, manquantes)
+//   3. Contracts             → contractsApi.list, computed expiry (échéance proche
+//                              ou dépassée) from endDate
+//   4. Maintenance alerts    → maintenanceApi.alerts (vehicle-bound)
+//   5. GPS alerts            → gpsApi.alerts (speeding, geofence, offline…)
 //
 // Each feed query is independent — if one endpoint is down (e.g. GPS provider
 // outage) the others still render. Empty/error states are inline per tab.
 // ═══════════════════════════════════════════════════════════════════════════
 
-type AlertSource = 'notification' | 'maintenance' | 'gps';
+type AlertSource = 'notification' | 'document' | 'contract' | 'maintenance' | 'gps';
 type AlertSeverity = 'critical' | 'high' | 'normal' | 'low';
 
 interface UnifiedAlert {
@@ -513,9 +520,19 @@ interface UnifiedAlert {
 
 const SOURCE_META: Record<AlertSource, { label: string; icon: string; color: string }> = {
   notification: { label: 'Notifications',  icon: '🔔', color: '#5b5bf4' },
+  document:     { label: 'Documents',      icon: '📄', color: '#e11d48' },
+  contract:     { label: 'Contrats',       icon: '📑', color: '#7c3aed' },
   maintenance:  { label: 'Maintenance',    icon: '🔧', color: '#f59e0b' },
   gps:          { label: 'GPS',            icon: '🛰️', color: '#22d3ee' },
 };
+
+/** Whole days from now until `dateStr` (negative = already past). */
+function daysUntil(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const t = Date.parse(dateStr);
+  if (Number.isNaN(t)) return null;
+  return Math.ceil((t - Date.now()) / 86_400_000);
+}
 
 const SEVERITY_TONE: Record<AlertSeverity, { bg: string; text: string; border: string; label: string }> = {
   critical: { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-200',   label: 'Critique' },
@@ -542,6 +559,22 @@ const NotificationsAlertsSection: React.FC = () => {
     // Pull the 50 most recent across all modules — we filter/sort client-side.
     queryFn:  () => notificationsApi.list({ per_page: 50 }),
     staleTime: 30_000,
+    retry:     1,
+  });
+
+  // Vehicle document compliance (assurance / visite technique / vignette).
+  const complianceQ = useQuery({
+    queryKey: ['dashboard', 'compliance-alerts'],
+    queryFn:  () => complianceApi.alerts(),
+    staleTime: 60_000,
+    retry:     1,
+  });
+
+  // Active contracts — we compute "expiring/expired" client-side from endDate.
+  const contractsQ = useQuery({
+    queryKey: ['dashboard', 'contracts-expiry'],
+    queryFn:  () => contractsApi.list({ status: 'active' }),
+    staleTime: 60_000,
     retry:     1,
   });
 
@@ -576,6 +609,51 @@ const NotificationsAlertsSection: React.FC = () => {
       });
     });
 
+    // Vehicle documents — assurance / visite technique / vignette expiry.
+    (complianceQ.data?.data?.alerts ?? []).forEach((a: ComplianceAlertDto) => {
+      const reg = a.vehicle?.registration ? ` · ${a.vehicle.registration}` : '';
+      const dleft = daysUntil(a.dueDate);
+      // Expired (or expiring within 7 days) is critical; otherwise high.
+      const sev: AlertSeverity =
+        a.severity === 'critical' || (dleft !== null && dleft <= 0) ? 'critical'
+        : a.severity === 'high' || (dleft !== null && dleft <= 7) ? 'high'
+        : normalizeSeverity(a.severity);
+      const due =
+        dleft === null ? '' :
+        dleft < 0 ? ` — expiré depuis ${Math.abs(dleft)} j` :
+        dleft === 0 ? ' — expire aujourd’hui' :
+        ` — expire dans ${dleft} j`;
+      items.push({
+        id:       `doc-${a.id}`,
+        source:   'document',
+        severity: sev,
+        title:    `${a.title}${reg}`,
+        body:     (a.description ?? '') + due || null,
+        at:       a.triggeredAt ?? a.dueDate,
+        linkTo:   a.vehicle?.id ? `/fleet/${a.vehicle.id}` : '/fleet/compliance',
+      });
+    });
+
+    // Contracts — expiring soon (≤30 days) or already past endDate.
+    (contractsQ.data ?? []).forEach((c: ContractDto) => {
+      const dleft = daysUntil(c.endDate);
+      if (dleft === null || dleft > 30) return; // only surface the ones needing attention
+      const sev: AlertSeverity = dleft < 0 ? 'critical' : dleft <= 7 ? 'high' : 'normal';
+      const label =
+        dleft < 0 ? `Contrat échu depuis ${Math.abs(dleft)} j` :
+        dleft === 0 ? 'Contrat expire aujourd’hui' :
+        `Contrat expire dans ${dleft} j`;
+      items.push({
+        id:       `contract-${c.id}`,
+        source:   'contract',
+        severity: sev,
+        title:    `${label} · ${c.reference ?? c.id}`,
+        body:     c.endDate ? `Échéance : ${c.endDate}` : null,
+        at:       c.endDate ?? c.createdAt ?? null,
+        linkTo:   `/contracts/${c.id}`,
+      });
+    });
+
     (maintQ.data?.data?.alerts ?? []).forEach((a: MaintenanceAlertDto) => {
       const reg = a.vehicle?.registration ? ` · ${a.vehicle.registration}` : '';
       items.push({
@@ -601,16 +679,20 @@ const NotificationsAlertsSection: React.FC = () => {
       });
     });
 
-    // Most recent first; null dates sink to the bottom.
+    // Severity first (critical → low), then most recent within each bucket.
+    const rank: Record<AlertSeverity, number> = { critical: 0, high: 1, normal: 2, low: 3 };
     return items.sort((a, b) => {
+      if (rank[a.severity] !== rank[b.severity]) return rank[a.severity] - rank[b.severity];
       const ta = a.at ? Date.parse(a.at) : 0;
       const tb = b.at ? Date.parse(b.at) : 0;
       return tb - ta;
     });
-  }, [notifQ.data, maintQ.data, gpsQ.data]);
+  }, [notifQ.data, complianceQ.data, contractsQ.data, maintQ.data, gpsQ.data]);
 
   const counts = useMemo(() => {
-    const c = { all: unified.length, notification: 0, maintenance: 0, gps: 0, critical: 0, unread: 0 };
+    const c: Record<'all' | AlertSource | 'critical' | 'unread', number> = {
+      all: unified.length, notification: 0, document: 0, contract: 0, maintenance: 0, gps: 0, critical: 0, unread: 0,
+    };
     unified.forEach((u) => {
       c[u.source]++;
       if (u.severity === 'critical') c.critical++;
@@ -621,8 +703,8 @@ const NotificationsAlertsSection: React.FC = () => {
 
   const filtered = tab === 'all' ? unified : unified.filter((u) => u.source === tab);
 
-  const anyLoading = notifQ.isLoading || maintQ.isLoading || gpsQ.isLoading;
-  const allFailed  = notifQ.isError && maintQ.isError && gpsQ.isError;
+  const anyLoading = notifQ.isLoading || complianceQ.isLoading || contractsQ.isLoading || maintQ.isLoading || gpsQ.isLoading;
+  const allFailed  = notifQ.isError && complianceQ.isError && contractsQ.isError && maintQ.isError && gpsQ.isError;
 
   return (
     <section className="df-card">
@@ -647,7 +729,7 @@ const NotificationsAlertsSection: React.FC = () => {
       <div className="df-card__body">
         {/* Source filter tabs */}
         <div className="df-tabs mb-4 flex-wrap" role="tablist">
-          {(['all', 'notification', 'maintenance', 'gps'] as const).map((k) => {
+          {(['all', 'notification', 'document', 'contract', 'maintenance', 'gps'] as const).map((k) => {
             const label = k === 'all' ? 'Tout' : SOURCE_META[k].label;
             const count = k === 'all' ? counts.all : counts[k];
             return (
