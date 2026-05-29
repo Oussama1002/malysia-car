@@ -337,10 +337,15 @@ function mapLicenseFields(extracted: Record<string, unknown>): ScannedIdentity {
       last = last ?? titleCase(parts.slice(1).join(' '));
     }
   }
-  // Permis owns name + permis fields only.
+  // The Permis carries the birth date on the front (and the parser repairs the
+  // common OCR misreads — 06/40/2001 → 06/10/2001, 06/10/2007 → 06/10/2001
+  // against the issue date). It's also the most reliable source we have when
+  // only the Permis is scanned, so forward it through. Empty values are dropped
+  // by the caller, so a missed-by-OCR date won't blank an existing one.
   return {
     first_name: first,
     last_name: last,
+    date_of_birth: asString(extracted.date_of_birth),
     driving_license_number: asString(extracted.license_number),
     driving_license_expiry: asString(extracted.expiry_date),
   };
