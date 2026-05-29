@@ -207,6 +207,20 @@ class DocumentParser
             '4b\s*\.',
         ]) ?? $classified['expiry'];
 
+        // Birth-year sanity vs issue date. Driving age in Morocco is 18 — at
+        // minimum 16 with provisional categories — so a birth year less than
+        // 16 years before the issue year is physically impossible. When that
+        // happens Tesseract has almost certainly misread a single digit (the
+        // observed case: "2001" → "2007", with the trailing 1 read as 7).
+        // Try a bounded digit-swap repair across known OCR confusions and only
+        // accept it when EXACTLY ONE swap yields a plausible year.
+        if ($birth && $issue) {
+            $repaired = $this->repairImplausibleBirthYear($birth, $issue);
+            if ($repaired !== null) {
+                $birth = $repaired;
+            }
+        }
+
         // The verso MRZ (e.g. "D1LMA51<285342270820ELHADI<<<1") is printed in a
         // high-contrast OCR font on a clean background — far more reliable than
         // the watermarked, bilingual front side. Prefer its surname unless the
@@ -433,6 +447,50 @@ class DocumentParser
         }
 
         return $iso;
+    }
+
+    /**
+     * Returns a repaired birth date when the OCR'd birth year is implausibly
+     * close to the issue year (driver too young), but exactly ONE common
+     * digit-confusion swap (7↔1, 4↔1, 8↔3, 6↔5, 0↔8) on the year yields a
+     * plausible year (≥16 years before the issue year). Single-candidate is
+     * required to avoid guessing; if zero or multiple swaps work, returns null
+     * and the original date stays untouched.
+     */
+    private function repairImplausibleBirthYear(string $birthIso, string $issueIso): ?string
+    {
+        $by = (int) substr($birthIso, 0, 4);
+        $iy = (int) substr($issueIso, 0, 4);
+        if ($iy - $by >= 16) {
+            return null; // already plausible
+        }
+
+        // Bidirectional common Tesseract digit confusions on small print.
+        $confusions = [
+            '7' => ['1'], '1' => ['7'],
+            '4' => ['1'], '8' => ['3', '0'],
+            '6' => ['5', '0'], '5' => ['6'],
+            '0' => ['8', '6'], '3' => ['8'],
+        ];
+
+        $year = substr($birthIso, 0, 4);
+        $rest = substr($birthIso, 4); // "-mm-dd"
+        $candidates = [];
+        for ($i = 0; $i < 4; $i++) {
+            $orig = $year[$i];
+            foreach ($confusions[$orig] ?? [] as $sub) {
+                $candYear = substr_replace($year, $sub, $i, 1);
+                $cy = (int) $candYear;
+                if ($cy >= 1900 && $iy - $cy >= 16 && $iy - $cy <= 90) {
+                    $candidates[$candYear] = true;
+                }
+            }
+        }
+        if (count($candidates) !== 1) {
+            return null;
+        }
+
+        return array_key_first($candidates).$rest;
     }
 
     /**

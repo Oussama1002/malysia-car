@@ -174,11 +174,6 @@ export const CustomerForm: React.FC<{
                 value={individual.date_of_birth ?? ''}
                 onChange={(e) => setIndividual((p) => ({ ...p, date_of_birth: e.target.value }))}
               />
-              {!individual.date_of_birth && (
-                <p className="mt-1 text-[11px] font-semibold text-amber-600">
-                  L'OCR ne lit pas toujours cette date — à saisir manuellement.
-                </p>
-              )}
             </Field>
             <Field label="Nationalité">
               <select
@@ -211,11 +206,6 @@ export const CustomerForm: React.FC<{
                 value={individual.driving_license_expiry ?? ''}
                 onChange={(e) => setIndividual((p) => ({ ...p, driving_license_expiry: e.target.value }))}
               />
-              {!individual.driving_license_expiry && (
-                <p className="mt-1 text-[11px] font-semibold text-amber-600">
-                  Souvent illisible au verso — à saisir manuellement.
-                </p>
-              )}
             </Field>
             <Field label="Profession">
               <input
