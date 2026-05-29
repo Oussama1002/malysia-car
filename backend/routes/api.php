@@ -69,6 +69,8 @@ use App\Http\Controllers\Api\V1\ComplianceAlertController;
 use App\Http\Controllers\Api\V1\VehicleRepairController;
 use App\Http\Controllers\Api\V1\VehicleMovementController;
 use App\Http\Controllers\Api\V1\FleetAnalysisController;
+use App\Http\Controllers\Api\V1\ContractSignatureRequestController;
+use App\Http\Controllers\Api\V1\PublicSignatureController;
 use App\Http\Controllers\Api\V1\FixedChargeController;
 use App\Http\Controllers\Api\V1\FixedChargePaymentController;
 use App\Http\Controllers\Api\V1\VehicleAccidentController;
@@ -94,6 +96,16 @@ Route::prefix('v1')->group(function () {
     Route::post('signatures/webhooks/provider', [SignatureWebhookController::class, 'handle']);
     // GPS provider webhook (public — provider API key/HMAC/IP controls)
     Route::post('gps/webhooks/{provider}', [GpsWebhookController::class, 'handle']);
+
+    // Public electronic-signature endpoints (tokenized, no auth).
+    // The opaque one-time token in the URL is the only capability; throttled
+    // to blunt token brute-forcing.
+    Route::middleware('throttle:30,1')->group(function () {
+        Route::get('public/signature/{token}', [PublicSignatureController::class, 'show']);
+        Route::get('public/signature/{token}/pdf', [PublicSignatureController::class, 'pdf']);
+        Route::post('public/signature/{token}/sign', [PublicSignatureController::class, 'sign']);
+        Route::post('public/signature/{token}/reject', [PublicSignatureController::class, 'reject']);
+    });
 
     // Public auth endpoints
     Route::post('auth/login', [AuthController::class, 'login'])
@@ -363,6 +375,12 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:contracts.terminate');
         Route::post('contracts/{contract}/generate-schedule', [ContractController::class, 'generateSchedule'])
             ->middleware('permission:contracts.generate_schedule');
+
+        // Electronic signature — create / list signing requests for a contract.
+        Route::get('contracts/{contract}/signature-requests', [ContractSignatureRequestController::class, 'index'])
+            ->middleware('permission:contracts.view');
+        Route::post('contracts/{contract}/signature-requests', [ContractSignatureRequestController::class, 'store'])
+            ->middleware('permission:contracts.update');
 
         // ==================================================================
         // Phase 6 — Credit applications

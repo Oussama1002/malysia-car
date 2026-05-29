@@ -5,6 +5,7 @@ import { SessionExpiredBanner } from '@/modules/auth/SessionExpiredBanner';
 import { LoginPage } from '@/modules/auth/LoginPage';
 import { ForgotPasswordPage } from '@/modules/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/modules/auth/ResetPasswordPage';
+import { PublicSignaturePage } from '@/modules/signature/PublicSignaturePage';
 import { AppLayout } from '@/modules/layout/AppLayout';
 import { ExecutiveDashboardPage } from '@/modules/dashboard/ExecutiveDashboardPage';
 import { FleetListPage } from '@/modules/fleet/FleetListPage';
@@ -139,6 +140,8 @@ export default function AppRoutes(): React.ReactElement {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        {/* Public, login-free electronic signature page (tokenized link). */}
+        <Route path="/sign/:token" element={<PublicSignaturePage />} />
 
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
