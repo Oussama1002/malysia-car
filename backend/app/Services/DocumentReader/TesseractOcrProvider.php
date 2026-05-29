@@ -133,9 +133,11 @@ class TesseractOcrProvider implements OcrProviderInterface
                                 // page is still capped by -scale-to, so two
                                 // pages stay bounded.
             '-r', '150',        // base DPI (overridden by -scale-to for large pages)
-            '-scale-to', '3500', // upscaled from 2480 → sharper small digits on the
-                                 // permis (the verso expiry / birth-date were being
-                                 // misread). Still bounded so Tesseract stays fast.
+            '-scale-to', '2480', // cap longest dimension at 2 480 px (~A4 @ 300 DPI).
+                                 // Tried 3500 to sharpen digits but it made the
+                                 // birth YEAR misread worse (2001→2007) without
+                                 // recovering the verso expiry — net regression,
+                                 // so kept at 2480.
             '-png',
             '-gray',
             $pdfPath,
