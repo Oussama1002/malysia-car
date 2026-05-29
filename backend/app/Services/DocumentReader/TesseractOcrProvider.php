@@ -5,6 +5,7 @@ namespace App\Services\DocumentReader;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 /**
  * Free, self-hosted Tesseract OCR provider.
@@ -22,6 +23,10 @@ class TesseractOcrProvider implements OcrProviderInterface
         private readonly string $pdftoppmBin = 'pdftoppm',
         private readonly string $defaultLang = 'eng+fra+ara',
         private readonly int $timeoutSeconds = 570,
+        // ImageMagick `convert` binary — used to suppress the pink Moroccan
+        // permis watermark before Tesseract sees the page. Best-effort: if it's
+        // missing on the host we silently fall back to the raw page render.
+        private readonly string $convertBin = 'convert',
     ) {}
 
     public function name(): string
@@ -45,6 +50,10 @@ class TesseractOcrProvider implements OcrProviderInterface
         try {
             $text = '';
             foreach ($imagePaths as $image) {
+                // Suppress the pink Moroccan permis watermark when ImageMagick
+                // is available. No-op for hosts without `convert` or for already
+                // grayscale inputs.
+                $this->preprocessImage($image);
                 $text .= $this->runTesseract($image, $lang)."\n\n";
             }
         } finally {
@@ -97,6 +106,49 @@ class TesseractOcrProvider implements OcrProviderInterface
     }
 
     /**
+     * Suppress the pink/red watermark on the Moroccan permis (and similar
+     * Moroccan ID documents) so the digits underneath become readable.
+     *
+     * Mechanism: split the RGB image into channels and keep only the RED
+     * channel as the new grayscale image. On these documents the watermark is
+     * a saturated pink (R ≈ 220-255, low G/B), while ink is dark (R ≈ 0-30).
+     * Reading the red channel maps the pink to near-white and ink to near-black
+     * — far higher text/background contrast than Tesseract's default Otsu
+     * binarisation can achieve from a grayscale render.
+     *
+     * Best-effort: if ImageMagick isn't installed, the call fails silently and
+     * Tesseract still gets the original colour PNG (no regression).
+     */
+    private function preprocessImage(string $imagePath): void
+    {
+        if (! is_file($imagePath)) {
+            return;
+        }
+        $process = new Process([
+            $this->convertBin,
+            $imagePath,
+            '-colorspace', 'sRGB',
+            '-channel', 'R',
+            '-separate',
+            '+channel',
+            // Light sharpening helps small digits survive the threshold.
+            '-sharpen', '0x1',
+            // Threshold ~60 % cleans residual watermark fragments without
+            // eating thin strokes in the digits.
+            '-level', '20%,90%',
+            $imagePath,
+        ]);
+        $process->setTimeout(60);
+
+        try {
+            $process->mustRun();
+        } catch (Throwable) {
+            // ImageMagick missing / version mismatch / weird input — fall back
+            // to the unprocessed image; Tesseract will still try.
+        }
+    }
+
+    /**
      * Render PDF pages as PNG using poppler `pdftoppm`, then return the list
      * of generated image paths.
      *
@@ -134,12 +186,12 @@ class TesseractOcrProvider implements OcrProviderInterface
                                 // pages stay bounded.
             '-r', '150',        // base DPI (overridden by -scale-to for large pages)
             '-scale-to', '2480', // cap longest dimension at 2 480 px (~A4 @ 300 DPI).
-                                 // Tried 3500 to sharpen digits but it made the
-                                 // birth YEAR misread worse (2001→2007) without
-                                 // recovering the verso expiry — net regression,
-                                 // so kept at 2480.
             '-png',
-            '-gray',
+            // Render in COLOUR (no -gray) so the preprocessing step can isolate
+            // the red channel: on the pink-watermarked Moroccan permis verso,
+            // dark text has near-zero red while the pink background is near-max
+            // red — separating red turns the digits into near-black on near-
+            // white, which Tesseract can actually read. See preprocessImage().
             $pdfPath,
             $prefix,
         ]);
