@@ -301,9 +301,14 @@ class DocumentParser
         // every regex that relies on word boundaries or start-of-line anchors.
         $text = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{FEFF}]/u', '', $text) ?? $text;
         // Tesseract sometimes inserts a stray space INSIDE a date component
-        // ("06/1 0/2001"). Collapse whitespace when it sits between two
-        // digits or date separators to recover the original number.
-        $text = preg_replace('/(?<=[\d\/\-.])[ \t]+(?=[\d\/\-.])/u', '', $text) ?? $text;
+        // ("06/1 0/2001"). Collapse 1-2 spaces only when the gap sits between a
+        // digit and another digit that's IMMEDIATELY followed by a date
+        // separator — i.e. we're plausibly inside a broken date, not between
+        // two unrelated numbers separated by wide whitespace. The earlier
+        // looser rule was gluing OCR noise like "Fe a ه77       06/10/2001"
+        // into "Fe a ه7706/10/2001", which then caused the date regex to
+        // greedy-match the bogus "7706/10/20" prefix and miss the real date.
+        $text = preg_replace('/(?<=\d)[ \t]{1,2}(?=\d[\/\-.])/u', '', $text) ?? $text;
 
         return trim($text);
     }
@@ -379,7 +384,10 @@ class DocumentParser
      */
     private function extractDate(string $text, array $labels): ?string
     {
-        $datePattern = '(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
+        // YMD year restricted to 19xx-21xx so OCR noise like "7706" (Tesseract
+        // glued the spurious "77" onto a real date) can't satisfy the YMD slot
+        // and starve the real DMY date that follows.
+        $datePattern = '(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|(?:19|20|21)\d{2}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
         // Use `#` as the delimiter (not `/`) so a label containing a literal
         // slash — e.g. "Date et / Lieu de naissance" on the Moroccan permis —
         // can't terminate the regex early and trigger
@@ -740,8 +748,12 @@ class DocumentParser
     private function classifyDatesByYear(string $text): array
     {
         $out = ['birth' => null, 'issue' => null, 'expiry' => null];
+        // No \b: when OCR glues stray digits onto a real date ("ه7706/10/2001")
+        // the leading word boundary kills every potential match inside the run.
+        // Same YMD year restriction as extractDate so noise like "7706" can't
+        // hijack the YMD slot.
         if (! preg_match_all(
-            '/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})\b/u',
+            '/(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|(?:19|20|21)\d{2}[\/\-.]\d{1,2}[\/\-.]\d{1,2})/u',
             $text,
             $matches,
         )) {
