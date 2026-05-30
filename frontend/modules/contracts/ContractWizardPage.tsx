@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
@@ -207,6 +207,7 @@ export const ContractWizardPage: React.FC = () => {
         insuranceExpiry: v.insurance_expiry,
         techControlExpiry: v.tech_control_expiry,
         vignetteExpiry: v.vignette_expiry,
+        ownershipStatus: v.ownership_status,
       }));
     },
   });
@@ -482,20 +483,11 @@ export const ContractWizardPage: React.FC = () => {
               <>
                 <div>
                   <label className="df-label">Véhicule disponible</label>
-                  <select
-                    className="df-input"
-                    value={state.vehicleId ?? ''}
-                    onChange={(e) => patch('vehicleId', e.target.value || null)}
-                  >
-                    <option value="">— Sélectionner —</option>
-                    {(vehicles.data ?? [])
-                      .filter((v) => v.status === 'AVAILABLE')
-                      .map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.brand} {v.model} · {v.registration} · {v.year}
-                        </option>
-                      ))}
-                  </select>
+                  <VehicleCombobox
+                    vehicles={vehicles.data ?? []}
+                    value={state.vehicleId}
+                    onChange={(id) => patch('vehicleId', id)}
+                  />
                 </div>
 
                 {selectedVehicle && (
@@ -865,6 +857,146 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ── Searchable vehicle picker ────────────────────────────────────────────────
+// Replaces the native <select> on the Véhicule step so the reviewer can type
+// a few letters of the brand/model/immat and pick from a filtered list.
+// Vehicles where ownership_status === 'sub_rented' are marked with an SL chip
+// because rental-back operations matter for pricing & contract type choice.
+const VehicleCombobox: React.FC<{
+  vehicles: FleetVehicleDto[];
+  value: string | number | null;
+  onChange: (id: string | null) => void;
+}> = ({ vehicles, value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const selected = useMemo(
+    () => vehicles.find((v) => String(v.id) === String(value)) ?? null,
+    [vehicles, value],
+  );
+
+  const isSubRented = (v: FleetVehicleDto) => v.ownershipStatus === 'sub_rented';
+
+  // Available list (status === AVAILABLE) — SL ones still appear here, just badged.
+  const pool = useMemo(
+    () => vehicles.filter((v) => String(v.status).toUpperCase() === 'AVAILABLE'),
+    [vehicles],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const matched = q
+      ? pool.filter((v) =>
+          `${v.brand} ${v.model} ${v.registration} ${v.year}`
+            .toLowerCase()
+            .includes(q),
+        )
+      : pool;
+    return matched.slice(0, 50); // cap render cost for very large fleets
+  }, [pool, query]);
+
+  // Close on outside click.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const displayValue = open
+    ? query
+    : selected
+    ? `${selected.brand} ${selected.model} · ${selected.registration}`
+    : '';
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        type="text"
+        role="combobox"
+        aria-expanded={open}
+        autoComplete="off"
+        spellCheck={false}
+        className="df-input"
+        placeholder="Tapez marque, modèle ou immatriculation…"
+        value={displayValue}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          // Typing clears the previously selected vehicle so the user knows
+          // they need to pick a new one from the list.
+          if (selected) onChange(null);
+        }}
+      />
+
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
+        >
+          {filtered.length === 0 ? (
+            <li className="px-4 py-3 text-sm text-slate-500">
+              {pool.length === 0 ? 'Aucun véhicule disponible.' : 'Aucun véhicule ne correspond à la recherche.'}
+            </li>
+          ) : (
+            filtered.map((v) => {
+              const sl = isSubRented(v);
+              const isSelected = selected?.id === v.id;
+              return (
+                <li
+                  key={v.id}
+                  role="option"
+                  aria-selected={isSelected}
+                  className={`flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 ${
+                    isSelected ? 'bg-indigo-50/60' : ''
+                  }`}
+                  onMouseDown={(e) => {
+                    // mousedown (not click) so the input doesn't blur and close us first.
+                    e.preventDefault();
+                    onChange(String(v.id));
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-slate-900">
+                      {v.brand} {v.model}
+                    </div>
+                    <div className="font-mono text-[11px] text-slate-500">
+                      {v.registration} · {v.year || '—'}
+                    </div>
+                  </div>
+                  {sl && (
+                    <span
+                      className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-700"
+                      title="Sous-location — véhicule loué auprès d’un tiers"
+                    >
+                      SL
+                    </span>
+                  )}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+
+      {selected && !open && isSubRented(selected) && (
+        <p className="mt-1 text-[11px] font-semibold text-amber-700">
+          ⚠️ Véhicule en sous-location (SL) — vérifiez les conditions de re-location.
+        </p>
+      )}
     </div>
   );
 };
