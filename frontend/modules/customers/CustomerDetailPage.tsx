@@ -58,7 +58,10 @@ const riskLabel: Record<RiskLevel, string> = {
 export const CustomerDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'identity' | 'kyc' | 'contracts' | 'payments' | 'documents' | 'notes' | 'risk' | 'audit'>('identity');
+  // Default tab = Documents so a freshly-created client (with the OCR-scanned
+  // CIN + Permis) shows its document dossier on first open instead of an
+  // empty-looking Identity card.
+  const [tab, setTab] = useState<'identity' | 'kyc' | 'contracts' | 'payments' | 'documents' | 'notes' | 'risk' | 'audit'>('documents');
   const [confirmBlacklist, setConfirmBlacklist] = useState<'add' | 'remove' | null>(null);
 
   const dossierQ = useQuery({
