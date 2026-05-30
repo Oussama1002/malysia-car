@@ -49,12 +49,27 @@ class TesseractOcrProvider implements OcrProviderInterface
 
         try {
             $text = '';
-            foreach ($imagePaths as $image) {
+            foreach ($imagePaths as $i => $image) {
                 // Suppress the pink Moroccan permis watermark when ImageMagick
                 // is available. No-op for hosts without `convert` or for already
                 // grayscale inputs.
                 $this->preprocessImage($image);
                 $text .= $this->runTesseract($image, $lang)."\n\n";
+
+                // Second, narrow OCR pass on the VERSO (page 2 of a PDF) with a
+                // digit-only character whitelist + sparse-text PSM. The default
+                // multilingual pass mangles the "Fin de validité 15/09/2030"
+                // line into letter garbage ("ECO" / "PR ET RTE") because the
+                // surrounding decoration looks letter-like. Constraining the
+                // recogniser to digits + date separators recovers the digits
+                // when they exist. Appended to $text so the date classifier
+                // picks up the new readings; front-side fields are unaffected.
+                if ($ext === 'pdf' && $i >= 1) {
+                    $digits = $this->runTesseractDigits($image);
+                    if ($digits !== '') {
+                        $text .= "\n--- verso digit pass ---\n".$digits."\n";
+                    }
+                }
             }
         } finally {
             if ($ext === 'pdf') {
@@ -100,6 +115,40 @@ class TesseractOcrProvider implements OcrProviderInterface
                 'Tesseract OCR failed: '.$e->getProcess()->getErrorOutput(),
                 previous: $e,
             );
+        }
+
+        return $process->getOutput();
+    }
+
+    /**
+     * Narrow OCR pass for the Moroccan permis verso: digits + date separators
+     * only, sparse-text PSM, English language (no Arabic/French dictionary
+     * pulling letters out of dates). Recovers dates like "15/09/2030" that the
+     * multilingual main pass turns into letter garbage ("ECO" / "PR ET RTE")
+     * because of the decorative background.
+     *
+     * Soft-fails: any error returns '' so the main extraction is never broken
+     * by this best-effort second pass.
+     */
+    private function runTesseractDigits(string $image): string
+    {
+        $process = new Process([
+            $this->tesseractBin,
+            $image,
+            'stdout',
+            '-l', 'eng',
+            '--oem', '1',
+            '--psm', '11',                 // sparse text — best for scattered numbers
+            '-c', 'tessedit_char_whitelist=0123456789/-. ',
+            '-c', 'user_defined_dpi=300',
+            '-c', 'tessedit_do_invert=0',
+        ]);
+        $process->setTimeout($this->timeoutSeconds);
+
+        try {
+            $process->mustRun();
+        } catch (Throwable) {
+            return '';
         }
 
         return $process->getOutput();
