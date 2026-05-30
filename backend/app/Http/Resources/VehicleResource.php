@@ -25,8 +25,12 @@ class VehicleResource extends JsonResource
             'vin' => $v->vin,
             'brand_id' => $v->brand_id,
             'model_id' => $v->model_id,
-            'brand' => $v->brand?->name,
-            'model' => $v->model?->model_name ?? $v->model?->name,
+            // Fall back to denormalized brand_name/model_name when no FK to
+            // vehicle_brands/vehicle_models is set (older imports / manual
+            // entries). Otherwise the API returned null and the contract
+            // wizard's dropdown showed only the registration.
+            'brand' => $v->brand?->name ?? $v->brand_name,
+            'model' => $v->model?->model_name ?? $v->model?->name ?? $v->model_name,
             'year' => $v->year ? (int) $v->year : null,
             'color' => $v->color,
             'fuel' => $v->fuel_type,
