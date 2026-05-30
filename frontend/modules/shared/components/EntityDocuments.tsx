@@ -195,14 +195,21 @@ const DocumentCard: React.FC<{ item: DocumentCenterItem; onDelete: (id: string) 
 
       {/* Actions */}
       <div className="mt-auto flex items-center gap-2 pt-4">
-        <a
+        <button
+          type="button"
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-indigo-700"
-          href={documentCenterApi.downloadUrl(item.id)}
-          target="_blank"
-          rel="noreferrer"
+          onClick={async () => {
+            // Plain <a href> doesn't carry the bearer token, so the download
+            // route returns 401. Fetch with auth, then pop a blob: URL.
+            try {
+              await documentCenterApi.openInNewTab(item.id);
+            } catch (e) {
+              window.alert(e instanceof Error ? e.message : 'Impossible d’ouvrir le document.');
+            }
+          }}
         >
           Ouvrir
-        </a>
+        </button>
         {item.source === 'upload' && (
           <button
             type="button"
