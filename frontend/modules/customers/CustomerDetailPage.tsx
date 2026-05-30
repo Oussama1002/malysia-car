@@ -184,10 +184,12 @@ export const CustomerDetailPage: React.FC = () => {
       {tab === 'contracts' && <ContractsTab contracts={contracts} />}
       {tab === 'payments' && <PaymentsTab payments={payments} />}
       {tab === 'documents' && (
-        <div className="space-y-4">
-          <EntityDocuments entityType="customer" entityId={customer.id} title="Référentiel central client" />
-          <DocumentsTab cases={kyc.cases} />
-        </div>
+        // Single authoritative listing: entity_attachments via the document
+        // centre, which already covers OCR-scanned CIN/Permis (linked at customer
+        // create time) AND any manually uploaded files. The previous KYC-only
+        // section below was confusingly showing a second "Aucun document" empty
+        // state for customers whose OCR docs aren't tied to a KYC case.
+        <EntityDocuments entityType="customer" entityId={customer.id} title="Documents du client" />
       )}
       {tab === 'notes' && <NotesTab customerId={customer.id} notes={notes} onChange={invalidate} />}
       {tab === 'audit' && (
