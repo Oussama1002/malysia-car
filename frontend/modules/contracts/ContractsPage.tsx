@@ -30,14 +30,14 @@ export const ContractsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Contrats</h1>
+          <h1 className="text-2xl font-black text-slate-900">Réservations</h1>
           <p className="text-slate-500">LLD, LOA, crédit auto, vente VO — liste.</p>
         </div>
         <Link
           to="/contracts/new"
           className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100"
         >
-          Nouveau (assistant)
+          Nouvelle réservation
         </Link>
       </div>
 
