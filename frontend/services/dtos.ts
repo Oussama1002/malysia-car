@@ -69,6 +69,7 @@ export interface FleetVehicleDto {
   registrationCard?: string;
   pricePerDay?: number;
   image?: string;
+  ownershipStatus?: string;
 }
 
 export type CustomerKind = 'PARTICULIER' | 'ENTREPRISE';

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { SearchableSelect, type SearchableSelectOption } from '@/modules/shared/components/SearchableSelect';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
@@ -176,9 +177,40 @@ export const ContractWizardPage: React.FC = () => {
         insuranceExpiry: v.insurance_expiry,
         techControlExpiry: v.tech_control_expiry,
         vignetteExpiry: v.vignette_expiry,
+        ownershipStatus: v.ownershipStatus ?? v.ownership_status ?? 'owned',
       }));
     },
   });
+
+  const availableVehicles = useMemo(
+    () => (vehicles.data ?? []).filter((v) => v.status === 'AVAILABLE'),
+    [vehicles.data],
+  );
+
+  const vehicleOptions = useMemo((): SearchableSelectOption[] => {
+    return availableVehicles.map((v) => {
+      const isSubRental = (v.ownershipStatus ?? '').toLowerCase() === 'sub_rented';
+      const brandModel = `${v.brand} ${v.model}`.trim();
+      return {
+        value: v.id,
+        displayText: isSubRental ? `${brandModel} · SL` : brandModel,
+        searchText: [v.brand, v.model, v.registration, String(v.year)].filter(Boolean).join(' '),
+        label: (
+          <span className="flex items-center gap-2">
+            <span>{brandModel}</span>
+            {isSubRental && (
+              <span title="Sous-location">
+                <StatusChip label="SL" tone="warning" className="!px-1.5 !py-0 !text-[10px]" />
+              </span>
+            )}
+            <span className="ms-auto font-mono text-[11px] font-normal text-[color:var(--df-text-muted)]">
+              {v.registration}
+            </span>
+          </span>
+        ),
+      };
+    });
+  }, [availableVehicles]);
 
   const selectedClient = clients.data?.find((c) => String(c.id) === String(state.clientId));
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
@@ -439,20 +471,13 @@ export const ContractWizardPage: React.FC = () => {
               <>
                 <div>
                   <label className="df-label">Véhicule disponible</label>
-                  <select
-                    className="df-input"
-                    value={state.vehicleId ?? ''}
-                    onChange={(e) => patch('vehicleId', e.target.value || null)}
-                  >
-                    <option value="">— Sélectionner —</option>
-                    {(vehicles.data ?? [])
-                      .filter((v) => v.status === 'AVAILABLE')
-                      .map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.brand} {v.model} · {v.registration} · {v.year}
-                        </option>
-                      ))}
-                  </select>
+                  <SearchableSelect
+                    options={vehicleOptions}
+                    value={state.vehicleId}
+                    onChange={(id) => patch('vehicleId', id)}
+                    placeholder="Marque, modèle, immatriculation…"
+                    emptyMessage="Aucun véhicule disponible"
+                  />
                 </div>
 
                 {selectedVehicle && (
@@ -462,7 +487,12 @@ export const ContractWizardPage: React.FC = () => {
                         <Icon name="car" size={22} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[15px] font-bold">{selectedVehicle.brand} {selectedVehicle.model}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-[15px] font-bold">{selectedVehicle.brand} {selectedVehicle.model}</div>
+                          {(selectedVehicle.ownershipStatus ?? '').toLowerCase() === 'sub_rented' && (
+                            <StatusChip label="SL · Sous-location" tone="warning" />
+                          )}
+                        </div>
                         <div className="font-mono text-[11px] text-[color:var(--df-text-muted)]">{selectedVehicle.registration}</div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-[12px] md:grid-cols-4">
                           <InfoBit label="Année" value={String(selectedVehicle.year)} />
