@@ -373,7 +373,9 @@ const KycTab: React.FC<{
   });
 
   const approveMut = useMutation({
-    mutationFn: (vars: { caseId: string; score: number }) => approveKycCase(vars.caseId, vars.score),
+    // score optional — UI now approves directly without prompting for it.
+    // Backend accepts `risk_score` as `sometimes`, so omitting it is fine.
+    mutationFn: (vars: { caseId: string; score?: number }) => approveKycCase(vars.caseId, vars.score),
     onSuccess: refetch,
   });
 
@@ -457,13 +459,7 @@ const KycTab: React.FC<{
               <button
                 type="button"
                 className="df-btn df-btn--primary"
-                onClick={() => {
-                  const s = window.prompt('Score de risque (0-100) ?', '80');
-                  if (s === null) return;
-                  const score = Number(s);
-                  if (Number.isNaN(score)) return;
-                  approveMut.mutate({ caseId: active.id, score });
-                }}
+                onClick={() => approveMut.mutate({ caseId: active.id })}
                 disabled={approveMut.isPending}
               >
                 ✓ Approuver
