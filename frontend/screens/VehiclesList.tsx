@@ -5,6 +5,7 @@ import { api } from '../services/mockApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Vehicle, VehicleStatus } from '../types';
+import { VehicleDocumentScanner } from '@/modules/fleet/VehicleDocumentScanner';
 
 interface VehicleModelOption { id: string; name: string; }
 interface VehicleBrandOption { id: string; name: string; models: VehicleModelOption[]; }
@@ -88,6 +89,8 @@ const emptyForm = () => ({
   immatOnline: '',
   montant: '' as string | number,
   carteGriseStatus: 'en_attente' as 'en_attente' | 'recue',
+  immatProvisoire: '',
+  immatProvisoireExpiry: '',
   // document photo previews
   docPhotos: {
     carteGrise: null as string | null,
@@ -891,6 +894,20 @@ const VehiclesList: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-10">
 
+              {/* ── OCR Scanner ── */}
+              <VehicleDocumentScanner
+                onPrefill={(data) => setFormData(fd => ({
+                  ...fd,
+                  ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
+                  ...(data.insuranceExpiry  ? { insuranceExpiry: data.insuranceExpiry }   : {}),
+                  ...(data.chassis          ? { chassis: data.chassis }                   : {}),
+                  ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
+                  ...(data.montant          ? { montant: data.montant }                   : {}),
+                  ...(data.immatProvisoire  ? { immatProvisoire: data.immatProvisoire }   : {}),
+                  ...(data.immatProvisoireExpiry ? { immatProvisoireExpiry: data.immatProvisoireExpiry } : {}),
+                }))}
+              />
+
               {/* ── Fiche Technique ── */}
               {/*
                 Field order (top → bottom = most → least important for a Moroccan
@@ -1148,6 +1165,19 @@ const VehiclesList: React.FC = () => {
                       <option value="">— Choix gamme —</option>
                       {GAMME_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
+                  </div>
+
+                  {/* Immatriculation provisoire / WW */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Immat. provisoire / WW</label>
+                    <input className={inputCls} placeholder="ex: WW-12345" value={formData.immatProvisoire}
+                      onChange={e => setFormData(fd => ({ ...fd, immatProvisoire: e.target.value }))} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className={labelCls}>Validité immat. provisoire</label>
+                    <input type="date" className={inputCls} value={formData.immatProvisoireExpiry}
+                      onChange={e => setFormData(fd => ({ ...fd, immatProvisoireExpiry: e.target.value }))} />
                   </div>
 
                 </div>
