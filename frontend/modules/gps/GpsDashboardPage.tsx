@@ -83,6 +83,15 @@ const MapController: React.FC<{ focus?: [number, number] }> = ({ focus }) => {
   return null;
 };
 
+const MapResizer: React.FC = () => {
+  const map = useMap();
+  React.useEffect(() => {
+    const t = setTimeout(() => map.invalidateSize(), 100);
+    return () => clearTimeout(t);
+  }, [map]);
+  return null;
+};
+
 export const GpsDashboardPage: React.FC = () => {
   const { theme } = useUIPrefs();
   const navigate = useNavigate();
@@ -184,8 +193,9 @@ export const GpsDashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="relative">
-            <div className="h-[560px] w-full">
+            <div className="h-[560px] w-full overflow-hidden rounded-2xl">
               <MapContainer center={CENTER} zoom={12} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+                <MapResizer />
                 <TileLayer
                   url={
                     theme === 'dark'
