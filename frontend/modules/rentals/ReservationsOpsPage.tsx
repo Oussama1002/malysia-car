@@ -6,6 +6,7 @@ import { opsApi, type RentalAvailabilityDto, type ReservationDto } from '@/servi
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
+import { ReservationCalendar } from '@/modules/rentals/ReservationCalendar';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -35,8 +36,6 @@ export const ReservationsOpsPage: React.FC = () => {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
-  const [availabilityRange, setAvailabilityRange] = useState({ vehicle_id: '', start_at: '', end_at: '' });
-  const [availabilityResult, setAvailabilityResult] = useState<{ available: boolean; reasons: string[] } | null>(null);
   const [pickupForm, setPickupForm] = useState({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
   const [returnForm, setReturnForm] = useState({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
   const [extensionForm, setExtensionForm] = useState({ new_end_at: '', additional_amount: '' });
@@ -281,42 +280,24 @@ export const ReservationsOpsPage: React.FC = () => {
         <p className="text-slate-500">Lifecycle complet location: disponibilité, handover, retour, dommage, extension, clôture.</p>
       </header>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-3">
-        <div className="text-sm font-black text-slate-900">Disponibilité / calendrier</div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-          <select
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
-            value={availabilityRange.vehicle_id}
-            onChange={(e) => setAvailabilityRange((s) => ({ ...s, vehicle_id: e.target.value }))}
-          >
-            <option value="">Véhicule…</option>
-            {vehicleOptions.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label} {v.status ? `(${v.status})` : ''}
-              </option>
-            ))}
-          </select>
-          <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availabilityRange.start_at} onChange={(e) => setAvailabilityRange((s) => ({ ...s, start_at: e.target.value }))} />
-          <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availabilityRange.end_at} onChange={(e) => setAvailabilityRange((s) => ({ ...s, end_at: e.target.value }))} />
-          <button
-            className="rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black text-white disabled:opacity-50"
-            disabled={!availabilityRange.vehicle_id || !availabilityRange.start_at || !availabilityRange.end_at}
-            onClick={async () => {
-              const r = await opsApi.rentalAvailability(availabilityRange.vehicle_id, availabilityRange.start_at, availabilityRange.end_at);
-              setAvailabilityResult(r);
-            }}
-          >
-            Vérifier disponibilité
-          </button>
-        </div>
-        {availabilityResult && (
-          <div className={`rounded-xl border p-3 text-sm ${availabilityResult.available ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
-            {availabilityResult.available ? 'Véhicule disponible' : `Indisponible : ${formatRentalConflict(availabilityResult)}`}
-          </div>
-        )}
-      </div>
+      {/* Google-Calendar-style visual of every reservation. Empty-slot clicks
+          pre-fill the "Nouvelle réservation" form below; event clicks open the
+          existing detail/lifecycle panel via setSelectedReservationId. */}
+      <ReservationCalendar
+        reservations={(reservationsQ.data ?? []) as ReservationDto[]}
+        vehicles={vehicleOptions}
+        customers={customerOptions}
+        onCreateAt={(startISO, endISO) => {
+          setForm((s) => ({ ...s, desired_start_at: startISO, desired_end_at: endISO }));
+          // Scroll the form into view so the user sees the dates landed.
+          window.requestAnimationFrame(() => {
+            document.getElementById('nouvelle-reservation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }}
+        onSelect={(id) => setSelectedReservationId(id)}
+      />
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
+      <div id="nouvelle-reservation" className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4 scroll-mt-4">
         <div className="text-sm font-black text-slate-900">Nouvelle réservation</div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => setForm((s) => ({ ...s, customer_id: e.target.value }))}>
