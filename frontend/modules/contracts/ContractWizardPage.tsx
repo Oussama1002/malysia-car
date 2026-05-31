@@ -122,7 +122,7 @@ const INITIAL: WizardState = {
   securityDepositMad: 0,
   residualValuePct: 38,
   notes: '',
-  payments: [{ id: crypto.randomUUID(), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
+  payments: [{ id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
   paymentTerms: '',
   expectedPaymentDay: 5,
 };
@@ -253,7 +253,7 @@ export const ContractWizardPage: React.FC = () => {
   function addPayment(): void {
     setState((s) => ({
       ...s,
-      payments: [...s.payments, { id: crypto.randomUUID(), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
+      payments: [...s.payments, { id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
     }));
   }
 
