@@ -87,6 +87,7 @@ const emptyForm = () => ({
   chassis: '',
   immatOnline: '',
   montant: '' as string | number,
+  carteGriseStatus: 'en_attente' as 'en_attente' | 'recue',
   // document photo previews
   docPhotos: {
     carteGrise: null as string | null,
@@ -1114,12 +1115,14 @@ const VehiclesList: React.FC = () => {
 
                   {/* Row 6 — Admin numbers ───────────────────────────────── */}
 
-                  {/* N° Carte grise */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>N° de la carte grise</label>
-                    <input required className={inputCls} value={formData.registrationCard}
-                      onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
-                  </div>
+                  {/* N° Carte grise — only shown when Reçue */}
+                  {formData.carteGriseStatus === 'recue' && (
+                    <div className="space-y-2">
+                      <label className={labelCls}>N° de la carte grise</label>
+                      <input className={inputCls} value={formData.registrationCard}
+                        onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
+                    </div>
+                  )}
 
                   {/* Châssis (VIN) */}
                   <div className="space-y-2">
@@ -1154,14 +1157,21 @@ const VehiclesList: React.FC = () => {
               <div className="space-y-6 pt-6 border-t border-slate-100">
                 <h3 className="text-xs font-black text-rose-500 uppercase tracking-[0.2em]">Conformité Administrative</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* Carte Grise — photo only (number entered in Fiche Technique) */}
+                  {/* Carte Grise — status + conditional fields */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Photo Carte Grise</label>
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.carteGrise}
-                      onFile={f => handleDocPhoto('carteGrise', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, carteGrise: null } }))}
-                    />
+                    <label className={labelCls}>Statut Carte Grise</label>
+                    <select className={selectCls} value={formData.carteGriseStatus}
+                      onChange={e => setFormData(fd => ({ ...fd, carteGriseStatus: e.target.value as 'en_attente' | 'recue' }))}>
+                      <option value="en_attente">En attente</option>
+                      <option value="recue">Reçue</option>
+                    </select>
+                    {formData.carteGriseStatus === 'recue' && (
+                      <DocPhotoUpload
+                        preview={formData.docPhotos.carteGrise}
+                        onFile={f => handleDocPhoto('carteGrise', f)}
+                        onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, carteGrise: null } }))}
+                      />
+                    )}
                   </div>
                   {/* Assurance */}
                   <div className="space-y-2">
