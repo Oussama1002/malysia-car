@@ -490,7 +490,7 @@ const VehiclesList: React.FC = () => {
 <p>DriveFlow — Édité le ${new Date().toLocaleDateString('fr-MA', { day:'2-digit', month:'long', year:'numeric' })} · ${rows.length} véhicule${rows.length !== 1 ? 's' : ''}</p>
 <table>
   <thead><tr>
-    <th>Immatriculation</th><th>Immat. www</th><th>Marque</th><th>Modèle</th>
+    <th>Immatriculation</th><th>Immat. provisoire / WW</th><th>Marque</th><th>Modèle</th>
     <th>Mise en circulation</th><th>Puissance (CV)</th><th>Carburant</th><th>Statut</th>
   </tr></thead>
   <tbody>${tableRows}</tbody>
@@ -680,7 +680,7 @@ const VehiclesList: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100">
-                {['Immatriculation', 'Immat. www', 'Marque', 'Modèle', 'Mise en circulation', 'Puissance (CV)', 'Carburant', 'Statut', ''].map(h => (
+                {['Immatriculation', 'Immat. provisoire / WW', 'Marque', 'Modèle', 'Mise en circulation', 'Puissance (CV)', 'Carburant', 'Statut', ''].map(h => (
                   <th key={h} className="px-5 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -920,7 +920,7 @@ const VehiclesList: React.FC = () => {
                 Row 3 — Classification  : Type             · Carburant        · Puissance (CV)
                 Row 4 — Mechanical/use  : Cylindres        · Index conteur Km · Mise en circulation
                 Row 5 — Admin dates     : Date immat.      · Date acquisition · Montant (DH)
-                Row 6 — Admin numbers   : N° Carte grise   · Châssis (VIN)    · Immat. www
+                Row 6 — Admin numbers   : N° Carte grise   · Châssis (VIN)    · Immat. provisoire / WW
                 Row 7 — Secondary       : N° police        · Gamme
               */}
               <div className="space-y-6">
@@ -929,7 +929,7 @@ const VehiclesList: React.FC = () => {
 
                   {/* Row 1 — Identity ─────────────────────────────────────── */}
 
-                  {/* Immatriculation + Immat. www — grouped (col-span-2) */}
+                  {/* Immatriculation + Immat. provisoire / WW — grouped (col-span-2) */}
                   <div className="space-y-4 md:col-span-2">
                     <div className="space-y-2">
                       <label className={labelCls}>Immat.</label>
@@ -964,7 +964,7 @@ const VehiclesList: React.FC = () => {
                       <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
                     </div>
                     <div className="space-y-2">
-                      <label className={labelCls}>Immat. www</label>
+                      <label className={labelCls}>Immat. provisoire / WW</label>
                       <input className={inputCls} placeholder="Immatriculation en ligne" value={formData.immatOnline}
                         onChange={e => setFormData(fd => ({ ...fd, immatOnline: e.target.value }))} />
                     </div>
