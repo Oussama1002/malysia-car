@@ -7,6 +7,7 @@ import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
 import { ReservationCalendar } from '@/modules/rentals/ReservationCalendar';
+import { Modal } from '@/modules/shared/components/Modal';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -42,6 +43,9 @@ export const ReservationsOpsPage: React.FC = () => {
   const [damageForm, setDamageForm] = useState({ damage_type: 'body', description: '', estimated_cost: '', responsible_party: 'customer' });
   const [billingForm, setBillingForm] = useState({ issue_date: '', due_date: '' });
   const [createError, setCreateError] = useState<string | null>(null);
+  const [newResOpen, setNewResOpen] = useState(false);
+  const [availCheckOpen, setAvailCheckOpen] = useState(false);
+  const [availForm, setAvailForm] = useState({ vehicle_id: '', start_at: '', end_at: '' });
 
   const reservationsQ = useQuery({
     queryKey: queryKeys.reservations,
@@ -82,6 +86,13 @@ export const ReservationsOpsPage: React.FC = () => {
     queryKey: ['rentalAvailability', 'form', form.vehicle_id, form.desired_start_at, form.desired_end_at],
     queryFn: async () => opsApi.rentalAvailability(form.vehicle_id, form.desired_start_at, form.desired_end_at),
     enabled: hasBackend() && !!form.vehicle_id && !!form.desired_start_at && !!form.desired_end_at,
+    staleTime: 10_000,
+  });
+
+  const availCheckQ = useQuery({
+    queryKey: ['rentalAvailability', 'check', availForm.vehicle_id, availForm.start_at, availForm.end_at],
+    queryFn: () => opsApi.rentalAvailability(availForm.vehicle_id, availForm.start_at, availForm.end_at),
+    enabled: availCheckOpen && !!availForm.vehicle_id && !!availForm.start_at && !!availForm.end_at,
     staleTime: 10_000,
   });
 
@@ -127,6 +138,7 @@ export const ReservationsOpsPage: React.FC = () => {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
       setForm((s) => ({ ...s, desired_start_at: '', desired_end_at: '', estimated_price: '' }));
+      setNewResOpen(false);
     },
     onError: (e: unknown) => {
       if (e instanceof ApiError && e.body && typeof e.body === 'object') {
@@ -275,90 +287,146 @@ export const ReservationsOpsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-xl font-black text-slate-900">Réservations</h2>
-        <p className="text-slate-500">Lifecycle complet location: disponibilité, handover, retour, dommage, extension, clôture.</p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-slate-900">Réservations</h2>
+          <p className="text-slate-500">Lifecycle complet location: disponibilité, handover, retour, dommage, extension, clôture.</p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            onClick={() => setAvailCheckOpen(true)}
+          >
+            🔍 Vérifier disponibilité
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700"
+            onClick={() => setNewResOpen(true)}
+          >
+            + Nouvelle réservation
+          </button>
+        </div>
       </header>
 
-      {/* Google-Calendar-style visual of every reservation. Empty-slot clicks
-          pre-fill the "Nouvelle réservation" form below; event clicks open the
-          existing detail/lifecycle panel via setSelectedReservationId. */}
       <ReservationCalendar
         reservations={(reservationsQ.data ?? []) as ReservationDto[]}
         vehicles={vehicleOptions}
         customers={customerOptions}
         onCreateAt={(startISO, endISO) => {
           setForm((s) => ({ ...s, desired_start_at: startISO, desired_end_at: endISO }));
-          // Scroll the form into view so the user sees the dates landed.
-          window.requestAnimationFrame(() => {
-            document.getElementById('nouvelle-reservation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          });
+          setNewResOpen(true);
         }}
         onSelect={(id) => setSelectedReservationId(id)}
       />
 
-      <div id="nouvelle-reservation" className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4 scroll-mt-4">
-        <div className="text-sm font-black text-slate-900">Nouvelle réservation</div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => setForm((s) => ({ ...s, customer_id: e.target.value }))}>
-            <option value="">Client…</option>
-            {customerOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
+      {/* Nouvelle réservation modal */}
+      <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => setForm((s) => ({ ...s, customer_id: e.target.value }))}>
+              <option value="">Client…</option>
+              {customerOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
+              <option value="">Véhicule…</option>
+              {vehicleOptions.map((v) => (
+                <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
+              ))}
+            </select>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_start_at} onChange={(e) => setForm((s) => ({ ...s, desired_start_at: e.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_end_at} onChange={(e) => setForm((s) => ({ ...s, desired_end_at: e.target.value }))} />
+            </div>
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup (optionnel)" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison (optionnel)" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold md:col-span-2" placeholder="Prix estimé (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
+          </div>
+          {formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
+            <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>
+          )}
+          {formSlotBlocked && formAvailabilityQ.data && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span className="font-black">Créneau indisponible.</span> {formatRentalConflict(formAvailabilityQ.data)}
+            </div>
+          )}
+          {formAvailabilityQ.data?.available && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">Créneau disponible pour ce véhicule.</div>
+          )}
+          {createError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{createError}</div>}
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => setNewResOpen(false)}>Annuler</button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 disabled:opacity-50"
+              disabled={!form.customer_id || !form.vehicle_id || !form.desired_start_at || !form.desired_end_at || createRes.isPending || formSlotBlocked}
+              onClick={() => createRes.mutate()}
+            >
+              {createRes.isPending ? 'Création…' : 'Créer réservation'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Vérifications de disponibilité modal */}
+      <Modal open={availCheckOpen} title="Vérifications de disponibilité" onClose={() => setAvailCheckOpen(false)} widthClass="max-w-lg">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">Sélectionnez un véhicule et une plage de dates pour vérifier la disponibilité en temps réel.</p>
+          <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={availForm.vehicle_id} onChange={(e) => setAvailForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
             <option value="">Véhicule…</option>
             {vehicleOptions.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label} {v.status ? `(${v.status})` : ''}
-              </option>
+              <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
             ))}
           </select>
-          <input
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
-            type="datetime-local"
-            value={form.desired_start_at}
-            onChange={(e) => setForm((s) => ({ ...s, desired_start_at: e.target.value }))}
-          />
-          <input
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
-            type="datetime-local"
-            value={form.desired_end_at}
-            onChange={(e) => setForm((s) => ({ ...s, desired_end_at: e.target.value }))}
-          />
-          <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup (optionnel)" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
-          <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison (optionnel)" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
-          <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold md:col-span-2" placeholder="Prix estimé (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
-        </div>
-        {formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
-          <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>
-        )}
-        {formSlotBlocked && formAvailabilityQ.data && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-black">Créneau indisponible.</span> {formatRentalConflict(formAvailabilityQ.data)}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availForm.start_at} onChange={(e) => setAvailForm((s) => ({ ...s, start_at: e.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availForm.end_at} onChange={(e) => setAvailForm((s) => ({ ...s, end_at: e.target.value }))} />
+            </div>
           </div>
-        )}
-        {formAvailabilityQ.data?.available && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">Créneau disponible pour ce véhicule.</div>
-        )}
-        {createError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{createError}</div>}
-        <button
-          className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 disabled:opacity-50"
-          disabled={
-            !form.customer_id ||
-            !form.vehicle_id ||
-            !form.desired_start_at ||
-            !form.desired_end_at ||
-            createRes.isPending ||
-            formSlotBlocked
-          }
-          onClick={() => createRes.mutate()}
-        >
-          {createRes.isPending ? 'Création…' : 'Créer réservation'}
-        </button>
-      </div>
+          {availCheckQ.isFetching && (
+            <div className="text-xs font-semibold text-slate-500">Vérification en cours…</div>
+          )}
+          {availCheckQ.data?.available === true && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm">
+              <div className="font-black text-emerald-800">✓ Véhicule disponible</div>
+              <div className="mt-1 text-emerald-700">Ce véhicule est libre sur la période sélectionnée.</div>
+            </div>
+          )}
+          {availCheckQ.data?.available === false && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm">
+              <div className="font-black text-rose-800">✗ Véhicule indisponible</div>
+              <div className="mt-1 text-rose-700">{formatRentalConflict(availCheckQ.data)}</div>
+            </div>
+          )}
+          {availCheckQ.data && availCheckQ.data.available && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="rounded-2xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white hover:bg-indigo-700"
+                onClick={() => {
+                  setForm((s) => ({ ...s, vehicle_id: availForm.vehicle_id, desired_start_at: availForm.start_at, desired_end_at: availForm.end_at }));
+                  setAvailCheckOpen(false);
+                  setNewResOpen(true);
+                }}
+              >
+                Créer une réservation sur ce créneau →
+              </button>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <SearchFilterBar placeholder="Filtrer…" value={q} onChange={setQ} />
 
