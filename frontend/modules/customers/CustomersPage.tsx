@@ -100,7 +100,7 @@ export const CustomersPage: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Clients & conformité</h1>
+          <h1 className="text-2xl font-black text-slate-900">Clients</h1>
           <p className="text-slate-500">Particuliers et entreprises — KYC, risque, blacklist.</p>
         </div>
         <button

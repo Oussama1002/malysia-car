@@ -1,8 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supplierAgencyApi, subRentalApi, type PaymentMethod } from '@/services/subRentalApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+
+const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWY'.split('');
+const PLATE_REGIONS = Array.from({ length: 99 }, (_, i) => i + 1);
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => CURRENT_YEAR - i);
+const COLOR_OPTIONS = ['Blanc', 'Noir', 'Gris', 'Argent', 'Rouge', 'Bleu', 'Vert', 'Beige', 'Marron', 'Orange', 'Jaune', 'Violet', 'Autre'];
+
+interface VehicleBrandOption { id: string; name: string; models: { id: string; name: string }[]; }
+
+function parsePlate(reg: string) {
+  const m = reg.match(/^(\d+)-([A-Z])-(\d+)$/);
+  if (m) return { platNum: m[1], platLetter: m[2], platRegion: Number(m[3]) };
+  return { platNum: reg, platLetter: 'A', platRegion: 1 };
+}
 
 type VehicleMode = 'existing' | 'temporary';
 
@@ -10,9 +24,11 @@ interface FormState {
   supplier_agency_id: string;
   vehicle_mode: VehicleMode;
   vehicle_id: string;
-  ext_registration: string;
-  ext_brand: string;
-  ext_model: string;
+  plat_num: string;
+  plat_letter: string;
+  plat_region: number;
+  ext_brand_id: string;
+  ext_model_id: string;
   ext_year: string;
   ext_color: string;
   ext_mileage: string;
@@ -28,10 +44,12 @@ const INITIAL: FormState = {
   supplier_agency_id: '',
   vehicle_mode: 'temporary',
   vehicle_id: '',
-  ext_registration: '',
-  ext_brand: '',
-  ext_model: '',
-  ext_year: '',
+  plat_num: '',
+  plat_letter: 'A',
+  plat_region: 1,
+  ext_brand_id: '',
+  ext_model_id: '',
+  ext_year: String(CURRENT_YEAR),
   ext_color: '',
   ext_mileage: '',
   start_date: '',
@@ -47,6 +65,14 @@ export const SubRentalCreatePage: React.FC = () => {
   const apiReady = !!getApiBase();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
+  const [brands, setBrands] = useState<VehicleBrandOption[]>([]);
+
+  useEffect(() => {
+    if (!apiReady) return;
+    apiClient<{ data: VehicleBrandOption[] }>('/v1/vehicle-brands')
+      .then((res) => setBrands(res.data))
+      .catch(() => setBrands([]));
+  }, [apiReady]);
 
   const agenciesQ = useQuery({
     queryKey: ['supplier-agencies', 'list-active'],
@@ -59,6 +85,9 @@ export const SubRentalCreatePage: React.FC = () => {
     queryFn: () => apiClient<{ data: Array<{ id: string; registration_number: string; brand?: { name: string }; model?: { name: string } }> }>('/v1/vehicles?per_page=200&availability_status=available'),
     enabled: apiReady && form.vehicle_mode === 'existing',
   });
+
+  const selectedBrand = brands.find((b) => b.id === form.ext_brand_id);
+  const modelOptions = selectedBrand?.models ?? [];
 
   const computedDays =
     form.start_date && form.end_date
@@ -104,10 +133,13 @@ export const SubRentalCreatePage: React.FC = () => {
     if (form.vehicle_mode === 'existing' && form.vehicle_id) {
       body.vehicle_id = form.vehicle_id;
     } else {
+      const registration = form.plat_num ? `${form.plat_num}-${form.plat_letter}-${form.plat_region}` : undefined;
+      const brandObj = brands.find((b) => b.id === form.ext_brand_id);
+      const modelObj = brandObj?.models.find((m) => m.id === form.ext_model_id);
       body.external_vehicle_identity = {
-        registration_number: form.ext_registration || undefined,
-        brand_name: form.ext_brand || undefined,
-        model_name: form.ext_model || undefined,
+        registration_number: registration,
+        brand_name: brandObj?.name || undefined,
+        model_name: modelObj?.name || undefined,
         year: form.ext_year ? parseInt(form.ext_year) : undefined,
         color: form.ext_color || undefined,
         mileage: form.ext_mileage ? parseFloat(form.ext_mileage) : undefined,
@@ -184,11 +216,80 @@ export const SubRentalCreatePage: React.FC = () => {
             ))
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {field('Immatriculation', <input className={inputCls} value={form.ext_registration} onChange={set('ext_registration')} placeholder="Ex: A-12345-B" />)}
-              {field('Marque', <input className={inputCls} value={form.ext_brand} onChange={set('ext_brand')} placeholder="Ex: Peugeot" />)}
-              {field('Modèle', <input className={inputCls} value={form.ext_model} onChange={set('ext_model')} placeholder="Ex: 208" />)}
-              {field('Année', <input className={inputCls} type="number" value={form.ext_year} onChange={set('ext_year')} placeholder="Ex: 2022" min="1990" max="2100" />)}
-              {field('Couleur', <input className={inputCls} value={form.ext_color} onChange={set('ext_color')} placeholder="Ex: Blanc" />)}
+              {/* Immatriculation — plate picker */}
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Immatriculation</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    placeholder="12345"
+                    value={form.plat_num}
+                    onChange={(e) => setForm((f) => ({ ...f, plat_num: e.target.value.replace(/\D/g, '') }))}
+                  />
+                  <span className="text-slate-300 font-black text-xl">–</span>
+                  <select
+                    className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    value={form.plat_letter}
+                    onChange={(e) => setForm((f) => ({ ...f, plat_letter: e.target.value }))}
+                  >
+                    {PLATE_LETTERS.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <span className="text-slate-300 font-black text-xl">–</span>
+                  <select
+                    className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    value={form.plat_region}
+                    onChange={(e) => setForm((f) => ({ ...f, plat_region: Number(e.target.value) }))}
+                  >
+                    {PLATE_REGIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                {form.plat_num && (
+                  <p className="text-[10px] text-slate-400 mt-1 ml-1 font-mono font-bold">
+                    {form.plat_num}-{form.plat_letter}-{form.plat_region}
+                  </p>
+                )}
+              </div>
+
+              {/* Marque — API dropdown */}
+              {field('Marque', (
+                <select
+                  className={inputCls}
+                  value={form.ext_brand_id}
+                  onChange={(e) => setForm((f) => ({ ...f, ext_brand_id: e.target.value, ext_model_id: '' }))}
+                >
+                  <option value="">— Sélectionner —</option>
+                  {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              ))}
+
+              {/* Modèle — filtered by brand */}
+              {field('Modèle', (
+                <select
+                  className={inputCls}
+                  value={form.ext_model_id}
+                  onChange={(e) => setForm((f) => ({ ...f, ext_model_id: e.target.value }))}
+                  disabled={!form.ext_brand_id}
+                >
+                  <option value="">— Sélectionner —</option>
+                  {modelOptions.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              ))}
+
+              {/* Année */}
+              {field('Année', (
+                <select className={inputCls} value={form.ext_year} onChange={set('ext_year')}>
+                  {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              ))}
+
+              {/* Couleur */}
+              {field('Couleur', (
+                <select className={inputCls} value={form.ext_color} onChange={set('ext_color')}>
+                  <option value="">— Sélectionner —</option>
+                  {COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              ))}
+
               {field('Kilométrage', <input className={inputCls} type="number" value={form.ext_mileage} onChange={set('ext_mileage')} placeholder="Ex: 45000" min="0" />)}
             </div>
           )}
