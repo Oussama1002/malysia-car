@@ -125,6 +125,19 @@ export const AppLayout: React.FC = () => {
   });
   const criticalMaintenanceCount = maintenanceQ.data?.data?.criticalAlertsCount ?? 0;
 
+  const carteGriseQ = useQuery({
+    queryKey: ['fleet', 'carte-grise-pending'],
+    queryFn: async () => {
+      const { apiClient: api, getApiBase: base } = await import('@/services/apiClient');
+      if (!base()) return [];
+      const res = await api<{ data: any[] }>('/v1/vehicles?per_page=200');
+      return res.data.filter((v: any) => !v.registration_card_number && !v.registrationCard && !v.registration_card);
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+  const carteGrisePending = carteGriseQ.data ?? [];
+
   const renderNavLink = (it: NavItem) => (
     <NavLink
       to={it.to}
@@ -326,6 +339,24 @@ export const AppLayout: React.FC = () => {
             <span className="hidden md:inline">{t('auth.logout')}</span>
           </button>
         </header>
+
+        {carteGrisePending.length > 0 && (
+          <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900 dark:bg-amber-950/40">
+            <span className="text-lg">⚠️</span>
+            <p className="flex-1 text-[12.5px] font-semibold text-amber-900 dark:text-amber-300">
+              {carteGrisePending.length === 1
+                ? `1 véhicule sans carte grise — ${(carteGrisePending[0] as any).registration ?? ''}`
+                : `${carteGrisePending.length} véhicules sans carte grise`}
+              {' '}· Statut <strong>En attente</strong> — uploadez le document pour lever cette alerte.
+            </p>
+            <NavLink
+              to="/fleet"
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-amber-700"
+            >
+              Voir le parc →
+            </NavLink>
+          </div>
+        )}
 
         <main className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">
