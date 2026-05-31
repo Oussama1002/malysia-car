@@ -911,38 +911,45 @@ const VehiclesList: React.FC = () => {
 
                   {/* Row 1 — Identity ─────────────────────────────────────── */}
 
-                  {/* Immatriculation — 3 parts (col-span-2) */}
-                  <div className="space-y-2 md:col-span-2">
-                    <label className={labelCls}>Immat.</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        required
-                        type="text"
-                        pattern="\d{1,5}"
-                        maxLength={5}
-                        className="flex-1 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
-                        placeholder="12345"
-                        value={formData.platNum}
-                        onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, '') }))}
-                      />
-                      <span className="text-slate-300 font-black text-xl">–</span>
-                      <select
-                        required
-                        className="w-20 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
-                        value={formData.platLetter}
-                        onChange={e => setFormData(fd => ({ ...fd, platLetter: e.target.value }))}>
-                        {PLATE_LETTERS.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                      <span className="text-slate-300 font-black text-xl">–</span>
-                      <select
-                        required
-                        className="w-24 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
-                        value={formData.platRegion}
-                        onChange={e => setFormData(fd => ({ ...fd, platRegion: Number(e.target.value) }))}>
-                        {PLATE_REGIONS.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
+                  {/* Immatriculation + Immat. www — grouped (col-span-2) */}
+                  <div className="space-y-4 md:col-span-2">
+                    <div className="space-y-2">
+                      <label className={labelCls}>Immat.</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          required
+                          type="text"
+                          pattern="\d{1,5}"
+                          maxLength={5}
+                          className="flex-1 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
+                          placeholder="12345"
+                          value={formData.platNum}
+                          onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, '') }))}
+                        />
+                        <span className="text-slate-300 font-black text-xl">–</span>
+                        <select
+                          required
+                          className="w-20 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
+                          value={formData.platLetter}
+                          onChange={e => setFormData(fd => ({ ...fd, platLetter: e.target.value }))}>
+                          {PLATE_LETTERS.map(l => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                        <span className="text-slate-300 font-black text-xl">–</span>
+                        <select
+                          required
+                          className="w-24 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
+                          value={formData.platRegion}
+                          onChange={e => setFormData(fd => ({ ...fd, platRegion: Number(e.target.value) }))}>
+                          {PLATE_REGIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                      <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
                     </div>
-                    <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
+                    <div className="space-y-2">
+                      <label className={labelCls}>Immat. www</label>
+                      <input className={inputCls} placeholder="Immatriculation en ligne" value={formData.immatOnline}
+                        onChange={e => setFormData(fd => ({ ...fd, immatOnline: e.target.value }))} />
+                    </div>
                   </div>
 
                   {/* Année */}
@@ -1119,13 +1126,6 @@ const VehiclesList: React.FC = () => {
                     <label className={labelCls}>Chassis</label>
                     <input className={inputCls} placeholder="ex: VF1AA000..." value={formData.chassis}
                       onChange={e => setFormData(fd => ({ ...fd, chassis: e.target.value }))} />
-                  </div>
-
-                  {/* Immat. en ligne */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Immat. www</label>
-                    <input className={inputCls} placeholder="Immatriculation en ligne" value={formData.immatOnline}
-                      onChange={e => setFormData(fd => ({ ...fd, immatOnline: e.target.value }))} />
                   </div>
 
                   {/* Row 7 — Secondary ──────────────────────────────────── */}
