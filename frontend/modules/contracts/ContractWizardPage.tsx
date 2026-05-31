@@ -20,8 +20,17 @@ import { createCustomer, type CustomerCreatePayload } from '@/services/customers
 import { listBranches } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { documentReaderApi } from '@/services/documentReaderApi';
+import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
 
 type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
+
+interface PaymentEntry {
+  id: string;
+  method: string;
+  amount: number | '';
+  reference: string;
+  chequeNumber: string;
+}
 
 interface Step {
   key: StepKey;
@@ -98,10 +107,8 @@ interface WizardState {
   securityDepositMad: number;
   residualValuePct: number;
   notes: string;
-  paymentMethod: string;
+  payments: PaymentEntry[];
   paymentTerms: string;
-  bankReference: string;
-  chequeNumber: string;
   expectedPaymentDay: number | '';
 }
 
@@ -115,10 +122,8 @@ const INITIAL: WizardState = {
   securityDepositMad: 0,
   residualValuePct: 38,
   notes: '',
-  paymentMethod: 'virement',
+  payments: [{ id: crypto.randomUUID(), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
   paymentTerms: '',
-  bankReference: '',
-  chequeNumber: '',
   expectedPaymentDay: 5,
 };
 
@@ -212,6 +217,23 @@ export const ContractWizardPage: React.FC = () => {
     },
   });
 
+  const customerDocs = useQuery({
+    queryKey: ['customer-docs', state.clientId],
+    queryFn: () => documentCenterApi.byEntity('customer', state.clientId!),
+    enabled: !!state.clientId,
+  });
+
+  const allClientDocs: DocumentCenterItem[] = [
+    ...(customerDocs.data?.data?.attachments ?? []),
+    ...(customerDocs.data?.data?.generated ?? []),
+  ];
+  const cinDoc = allClientDocs.find((d) =>
+    ['cin', 'national_id', 'identit', 'cni'].some((k) => d.category?.toLowerCase().includes(k) || d.title?.toLowerCase().includes(k))
+  );
+  const permisDoc = allClientDocs.find((d) =>
+    ['permis', 'driving', 'license', 'licence'].some((k) => d.category?.toLowerCase().includes(k) || d.title?.toLowerCase().includes(k))
+  );
+
   const selectedClient = clients.data?.find((c) => String(c.id) === String(state.clientId));
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
@@ -228,7 +250,23 @@ export const ContractWizardPage: React.FC = () => {
     setState((s) => ({ ...s, [k]: v }));
   }
 
+  function addPayment(): void {
+    setState((s) => ({
+      ...s,
+      payments: [...s.payments, { id: crypto.randomUUID(), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
+    }));
+  }
+
+  function removePayment(id: string): void {
+    setState((s) => ({ ...s, payments: s.payments.filter((p) => p.id !== id) }));
+  }
+
+  function updatePayment(id: string, key: keyof Omit<PaymentEntry, 'id'>, value: string | number | ''): void {
+    setState((s) => ({ ...s, payments: s.payments.map((p) => p.id === id ? { ...p, [key]: value } : p) }));
+  }
+
   function buildCreatePayload(status?: 'draft' | 'pending_approval') {
+    const primary = state.payments[0];
     return {
       type: state.type,
       clientId: state.clientId ?? '',
@@ -241,10 +279,10 @@ export const ContractWizardPage: React.FC = () => {
       allowedKm: state.kmInclMonth * state.durationMonths,
       depositAmount: state.securityDepositMad,
       notes: state.notes,
-      paymentMethod: state.paymentMethod,
+      paymentMethod: primary?.method ?? 'virement',
       paymentTerms: state.paymentTerms || undefined,
-      bankReference: state.bankReference || undefined,
-      chequeNumber: state.chequeNumber || undefined,
+      bankReference: state.payments.map((p) => p.reference).filter(Boolean).join(', ') || undefined,
+      chequeNumber: state.payments.map((p) => p.chequeNumber).filter(Boolean).join(', ') || undefined,
       expectedPaymentDay: state.expectedPaymentDay === '' ? undefined : Number(state.expectedPaymentDay),
       status,
     } as any;
@@ -628,35 +666,70 @@ export const ContractWizardPage: React.FC = () => {
                     </Field>
                   )}
                 </div>
-                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Mode de paiement">
-                    <select className="df-input" value={state.paymentMethod} onChange={(e) => patch('paymentMethod', e.target.value)}>
-                      <option value="virement">Virement</option>
-                      <option value="cheque">Chèque</option>
-                      <option value="espece">Espèce</option>
-                      <option value="carte">Carte</option>
-                      <option value="autre">Autre</option>
-                    </select>
-                  </Field>
-                  <Field label="Jour de paiement attendu (1–31)">
-                    <input
-                      type="number"
-                      className="df-input"
-                      min={1}
-                      max={31}
-                      value={state.expectedPaymentDay}
-                      onChange={(e) => patch('expectedPaymentDay', e.target.value === '' ? '' : Number(e.target.value))}
-                    />
-                  </Field>
-                  <Field label="Conditions de paiement">
-                    <input className="df-input" value={state.paymentTerms} onChange={(e) => patch('paymentTerms', e.target.value)} />
-                  </Field>
-                  <Field label="Référence virement">
-                    <input className="df-input" value={state.bankReference} onChange={(e) => patch('bankReference', e.target.value)} />
-                  </Field>
-                  <Field label="N° chèque">
-                    <input className="df-input" value={state.chequeNumber} onChange={(e) => patch('chequeNumber', e.target.value)} />
-                  </Field>
+                <div className="mt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="df-label mb-0">Modes de paiement</span>
+                    <button type="button" className="df-btn df-btn--subtle df-btn--sm" onClick={addPayment}>
+                      <Icon name="plus" size={13} /> Ajouter un mode
+                    </button>
+                  </div>
+                  {state.payments.map((p, i) => (
+                    <div key={p.id} className="rounded-xl border border-[color:var(--df-border)] p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] font-bold text-[color:var(--df-text-muted)]">Paiement {i + 1}</span>
+                        {state.payments.length > 1 && (
+                          <button type="button" className="df-btn df-btn--ghost df-btn--sm text-rose-600" onClick={() => removePayment(p.id)}>
+                            <Icon name="close" size={12} /> Supprimer
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <Field label="Mode">
+                          <select className="df-input" value={p.method} onChange={(e) => updatePayment(p.id, 'method', e.target.value)}>
+                            <option value="virement">Virement</option>
+                            <option value="cheque">Chèque</option>
+                            <option value="espece">Espèce</option>
+                            <option value="carte">Carte</option>
+                            <option value="autre">Autre</option>
+                          </select>
+                        </Field>
+                        <Field label="Montant (MAD) — optionnel">
+                          <input
+                            type="number"
+                            className="df-input"
+                            placeholder="—"
+                            value={p.amount}
+                            onChange={(e) => updatePayment(p.id, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
+                          />
+                        </Field>
+                        {(p.method === 'virement' || p.method === 'carte' || p.method === 'autre') && (
+                          <Field label="Référence">
+                            <input className="df-input" value={p.reference} onChange={(e) => updatePayment(p.id, 'reference', e.target.value)} />
+                          </Field>
+                        )}
+                        {p.method === 'cheque' && (
+                          <Field label="N° chèque">
+                            <input className="df-input" value={p.chequeNumber} onChange={(e) => updatePayment(p.id, 'chequeNumber', e.target.value)} />
+                          </Field>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 pt-2">
+                    <Field label="Jour de paiement attendu (1–31)">
+                      <input
+                        type="number"
+                        className="df-input"
+                        min={1}
+                        max={31}
+                        value={state.expectedPaymentDay}
+                        onChange={(e) => patch('expectedPaymentDay', e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                    </Field>
+                    <Field label="Conditions de paiement">
+                      <input className="df-input" value={state.paymentTerms} onChange={(e) => patch('paymentTerms', e.target.value)} />
+                    </Field>
+                  </div>
                 </div>
                 <AIHint
                   tone="brand"
@@ -667,10 +740,29 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'annex' && (
               <>
-                <UploadZone label="Pièce d'identité (CIN recto/verso)" />
-                <UploadZone label="Justificatif de revenus / attestation CNSS" />
-                <UploadZone label="Permis de conduire valide" />
-                {state.type === 'CREDIT_AUTO' && <UploadZone label="Bilans financiers (3 derniers exercices)" />}
+                <div className="space-y-3">
+                  <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Documents client</div>
+                  {cinDoc
+                    ? <ExistingDocRow doc={cinDoc} label="Pièce d'identité (CIN)" />
+                    : <UploadZone label="Pièce d'identité (CIN recto/verso)" />
+                  }
+                  {permisDoc
+                    ? <ExistingDocRow doc={permisDoc} label="Permis de conduire" />
+                    : <UploadZone label="Permis de conduire valide" />
+                  }
+                  <UploadZone label="Justificatif de revenus / attestation CNSS" />
+                  {state.type === 'CREDIT_AUTO' && <UploadZone label="Bilans financiers (3 derniers exercices)" />}
+                </div>
+                <div className="mt-5 space-y-3">
+                  <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Photos véhicule avant livraison</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <UploadZone label="Avant" hint="JPG / PNG" />
+                    <UploadZone label="Arrière" hint="JPG / PNG" />
+                    <UploadZone label="Côté gauche" hint="JPG / PNG" />
+                    <UploadZone label="Côté droit" hint="JPG / PNG" />
+                  </div>
+                  <UploadZone label="Intérieur / tableau de bord" hint="JPG / PNG" />
+                </div>
                 <AIHint tone="info" text="Tous les documents sont chiffrés et conformes Loi 09-08 sur la protection des données." />
               </>
             )}
@@ -833,6 +925,25 @@ const CheckRow: React.FC<{ done: boolean; label: string }> = ({ done, label }) =
     </span>
     <span className={done ? 'font-semibold' : 'text-[color:var(--df-text-muted)]'}>{label}</span>
   </li>
+);
+
+const ExistingDocRow: React.FC<{ doc: DocumentCenterItem; label: string }> = ({ doc, label }) => (
+  <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
+    <div className="flex items-center gap-2">
+      <Icon name="check" size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+      <div>
+        <div className="text-[12px] font-bold text-emerald-800 dark:text-emerald-300">{label}</div>
+        <div className="text-[11px] text-emerald-700 dark:text-emerald-400">{doc.title}{doc.createdAt ? ` · ${formatDate(new Date(doc.createdAt))}` : ''}</div>
+      </div>
+    </div>
+    <button
+      type="button"
+      className="df-btn df-btn--ghost df-btn--sm text-emerald-700 dark:text-emerald-400"
+      onClick={() => void documentCenterApi.openInNewTab(doc.id)}
+    >
+      <Icon name="download" size={12} /> Voir
+    </button>
+  </div>
 );
 
 const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: string }> = ({ state, client, vehicle }) => {
