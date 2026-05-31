@@ -384,11 +384,10 @@ export const RolesPermissionsPage: React.FC = () => {
                               >
                                 <input type="checkbox" checked={on} onChange={() => togglePerm(p.id)} />
                                 <span>
-                                  <span className="font-bold text-slate-800">{p.name}</span>
-                                  <span className="block text-xs text-slate-500">{p.code}</span>
-                                  <span className="block text-xs text-slate-400">
+                                  <span className="font-bold text-slate-800">
                                     {p.description ?? humanizePermissionCode(p.code)}
                                   </span>
+                                  <span className="block font-mono text-[10px] text-slate-400">{p.code}</span>
                                 </span>
                               </label>
                             );
