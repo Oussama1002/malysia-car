@@ -449,10 +449,9 @@ select.df-input { cursor: pointer; }
 
 /* --- Shell / sidebar / topbar --- */
 .df-shell {
-  height: 100dvh;
+  min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr;
-  overflow: hidden;
 }
 @media (min-width: 768px) {
   .df-shell { grid-template-columns: var(--df-sidebar-w) 1fr; }
@@ -460,7 +459,9 @@ select.df-input { cursor: pointer; }
 }
 
 .df-sidebar {
-  height: 100%;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   overflow-y: auto;
   background: var(--df-glass);
   backdrop-filter: blur(18px) saturate(140%);

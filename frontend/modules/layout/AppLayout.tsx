@@ -266,7 +266,7 @@ export const AppLayout: React.FC = () => {
       )}
 
       {/* Main column */}
-      <div className="flex min-w-0 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-col">
         {/* Top bar */}
         <header className="df-topbar flex items-center gap-3 px-4 md:px-6">
           <button
