@@ -904,7 +904,9 @@ const VehiclesList: React.FC = () => {
                   ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
                   ...(data.montant          ? { montant: data.montant }                   : {}),
                   ...(data.immatProvisoire  ? { immatProvisoire: data.immatProvisoire }   : {}),
-                  ...(data.immatProvisoireExpiry ? { immatProvisoireExpiry: data.immatProvisoireExpiry } : {}),
+                  ...(data.immatProvisoireExpiry  ? { immatProvisoireExpiry: data.immatProvisoireExpiry }   : {}),
+                  ...(data.techControlExpiry     ? { techControlExpiry: data.techControlExpiry }           : {}),
+                  ...(data.vignetteExpiry        ? { vignetteExpiry: data.vignetteExpiry }                 : {}),
                 }))}
               />
 
@@ -1214,22 +1216,12 @@ const VehiclesList: React.FC = () => {
                     <label className={labelCls}>Exp. Visite Tech.</label>
                     <input type="date" required className={inputCls} value={formData.techControlExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, techControlExpiry: e.target.value }))} />
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.visiteTech}
-                      onFile={f => handleDocPhoto('visiteTech', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, visiteTech: null } }))}
-                    />
                   </div>
                   {/* Vignette */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Vignette</label>
                     <input type="date" required className={inputCls} value={formData.vignetteExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, vignetteExpiry: e.target.value }))} />
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.vignette}
-                      onFile={f => handleDocPhoto('vignette', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, vignette: null } }))}
-                    />
                   </div>
                 </div>
               </div>

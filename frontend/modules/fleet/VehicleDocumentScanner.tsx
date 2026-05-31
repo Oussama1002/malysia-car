@@ -16,6 +16,10 @@ export interface ScannedVehicleData {
   // Immatriculation provisoire / WW
   immatProvisoire?: string;
   immatProvisoireExpiry?: string;
+  // Visite technique
+  techControlExpiry?: string;
+  // Vignette
+  vignetteExpiry?: string;
 }
 
 export const VehicleDocumentScanner: React.FC<{
@@ -46,6 +50,18 @@ export const VehicleDocumentScanner: React.FC<{
         description="N° provisoire, date validité"
         onPrefill={onPrefill}
         mapFields={mapImmatProvisoire}
+      />
+      <ScanSlot
+        title="Visite technique"
+        description="Date expiration, N° visite, centre contrôle"
+        onPrefill={onPrefill}
+        mapFields={mapVisiteTech}
+      />
+      <ScanSlot
+        title="Vignette"
+        description="Année / date expiration"
+        onPrefill={onPrefill}
+        mapFields={mapVignette}
       />
     </div>
   </div>
@@ -199,8 +215,20 @@ function mapFacture(d: Record<string, unknown>): ScannedVehicleData {
 
 function mapImmatProvisoire(d: Record<string, unknown>): ScannedVehicleData {
   return {
-    immatProvisoire:      str(d.provisional_number ?? d.numero_provisoire ?? d.registration_number ?? d.plate_number ?? d.ww_number),
+    immatProvisoire:       str(d.provisional_number ?? d.numero_provisoire ?? d.registration_number ?? d.plate_number ?? d.ww_number),
     immatProvisoireExpiry: str(d.validity_date ?? d.date_validite ?? d.expiry_date ?? d.date_expiration ?? d.valid_until),
+  };
+}
+
+function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
+  return {
+    techControlExpiry: str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_validite ?? d.valid_until ?? d.next_inspection),
+  };
+}
+
+function mapVignette(d: Record<string, unknown>): ScannedVehicleData {
+  return {
+    vignetteExpiry: str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_validite ?? d.year ?? d.annee ?? d.valid_until),
   };
 }
 
@@ -216,4 +244,6 @@ const FIELD_LABELS: Record<string, string> = {
   montant:               'Montant',
   immatProvisoire:       'N° provisoire',
   immatProvisoireExpiry: 'Validité',
+  techControlExpiry:     'Exp. visite tech.',
+  vignetteExpiry:        'Exp. vignette',
 };
