@@ -449,10 +449,9 @@ select.df-input { cursor: pointer; }
 
 /* --- Shell / sidebar / topbar --- */
 .df-shell {
-  height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
   overflow: hidden;
 }
 @media (min-width: 768px) {
@@ -461,7 +460,7 @@ select.df-input { cursor: pointer; }
 }
 
 .df-sidebar {
-  height: 100vh;
+  height: 100%;
   overflow-y: auto;
   background: var(--df-glass);
   backdrop-filter: blur(18px) saturate(140%);
