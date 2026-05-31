@@ -1208,11 +1208,6 @@ const VehiclesList: React.FC = () => {
                     <label className={labelCls}>Exp. Assurance</label>
                     <input type="date" required className={inputCls} value={formData.insuranceExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, insuranceExpiry: e.target.value }))} />
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.assurance}
-                      onFile={f => handleDocPhoto('assurance', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, assurance: null } }))}
-                    />
                   </div>
                   {/* Visite Tech */}
                   <div className="space-y-2">
