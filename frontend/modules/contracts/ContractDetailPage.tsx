@@ -12,6 +12,7 @@ import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { walletApi } from '@/services/walletApi';
+import { createPortal } from 'react-dom';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ export const ContractDetailPage: React.FC = () => {
         <div className="flex flex-wrap items-start gap-3">
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-right">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant</div>
-            <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad(c.amountMad)}</div>
+            <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad((raw?.baseAmount ?? raw?.amountMad ?? raw?.base_amount ?? 0) as number)}</div>
           </div>
           <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} />
           {/* Early return button — only for active contracts with a future end date */}
@@ -626,8 +627,6 @@ const SignatureTab: React.FC<{ contractId: string }> = ({ contractId }) => {
 };
 
 // ── Early Return Modal ─────────────────────────────────────────────────────────
-import { createPortal } from 'react-dom';
-
 const EarlyReturnModal: React.FC<{
   contractId: string;
   customerId: string;
