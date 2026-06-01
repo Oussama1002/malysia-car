@@ -127,6 +127,14 @@ const INITIAL: WizardState = {
   expectedPaymentDay: 5,
 };
 
+function friendlyError(e: unknown, fallback: string): string {
+  const raw = e instanceof Error ? e.message : String(e ?? '');
+  if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
+    return 'Ressource introuvable sur le serveur. Veuillez réessayer.';
+  }
+  return raw || fallback;
+}
+
 export const ContractWizardPage: React.FC = () => {
   const navigate = useNavigate();
   const { session } = useAuthSession();
@@ -311,7 +319,7 @@ export const ContractWizardPage: React.FC = () => {
       const id = await ensureDraftContract();
       setDraftInfo(`Brouillon sauvegardé (${id.slice(0, 8)}…).`);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Erreur de sauvegarde du brouillon');
+      setSaveError(friendlyError(e, 'Erreur de sauvegarde du brouillon'));
     } finally {
       setDraftBusy(false);
     }
@@ -327,7 +335,7 @@ export const ContractWizardPage: React.FC = () => {
       await documentsApi.downloadWithAuth(res.data.id, `contrat-brouillon-${id.slice(0, 8)}.pdf`);
       setDraftInfo('Brouillon PDF généré.');
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Erreur de génération PDF');
+      setSaveError(friendlyError(e, 'Erreur de génération PDF'));
     } finally {
       setDraftBusy(false);
     }
@@ -336,8 +344,10 @@ export const ContractWizardPage: React.FC = () => {
   async function submit(): Promise<void> {
     setSaving(true);
     setSaveError(null);
+    let createdId: string | null = null;
     try {
       const created = await contractsApi.create(buildCreatePayload('pending_approval'));
+      createdId = String(created.id);
 
       await contractsApi.generateSchedule(created.id, {
         start_date: new Date().toISOString().slice(0, 10),
@@ -366,18 +376,32 @@ export const ContractWizardPage: React.FC = () => {
       }
 
       if (signers.length > 0) {
-        const envelope = await createEnvelope({
-          subject: `Signature contrat ${state.type} - ${selectedClient.name}`,
-          provider: 'internal',
-          source_file_id: String(generatedDoc.data.id),
-          signers,
-        });
-        await sendEnvelope(envelope.data.id);
+        try {
+          const envelope = await createEnvelope({
+            subject: `Signature contrat ${state.type} - ${selectedClient.name}`,
+            provider: 'internal',
+            source_file_id: String(generatedDoc.data.id),
+            signers,
+          });
+          await sendEnvelope(envelope.data.id);
+        } catch (sigErr) {
+          // Signature step failed but contract is already created — navigate
+          // to the contract and let the user retry from the detail page.
+          console.warn('[ContractWizard] Signature envelope error (non-blocking):', sigErr);
+          navigate(`/contracts/${createdId}`);
+          return;
+        }
       }
 
-      navigate(`/contracts/${created.id}`);
+      navigate(`/contracts/${createdId}`);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Erreur inconnue');
+      const raw = e instanceof Error ? e.message : '';
+      // Hide raw Laravel model-not-found noise; show human-readable French
+      if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
+        setSaveError('Le contrat a été créé mais une ressource associée est introuvable sur le serveur. Vérifiez la fiche contrat.');
+      } else {
+        setSaveError(raw || 'Erreur inconnue lors de la création du contrat.');
+      }
     } finally {
       setSaving(false);
     }
