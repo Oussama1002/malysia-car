@@ -33,6 +33,23 @@ function hasBackend(): boolean {
 type ApiListResponse<T> = { data: T[]; meta?: unknown; links?: unknown };
 const FLOW = ['draft', 'reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested', 'return_scheduled', 'returned', 'inspection_pending', 'damage_pending', 'billing_pending', 'closed', 'cancelled'];
 
+const STATUS_FR: Record<string, string> = {
+  draft:               'Brouillon',
+  reserved:            'Réservé',
+  confirmed:           'Confirmé',
+  pickup_scheduled:    'Remise planifiée',
+  handed_over:         'Remis',
+  active:              'En cours',
+  extension_requested: 'Prolongation demandée',
+  return_scheduled:    'Retour planifié',
+  returned:            'Retourné',
+  inspection_pending:  'Inspection en attente',
+  damage_pending:      'Dommages en attente',
+  billing_pending:     'Facturation en attente',
+  closed:              'Clôturé',
+  cancelled:           'Annulé',
+};
+
 export const ReservationsOpsPage: React.FC = () => {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
@@ -452,7 +469,10 @@ export const ReservationsOpsPage: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <StatusBadge label={r.status} tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : 'info'} />
+                <StatusBadge
+                  label={STATUS_FR[r.status] ?? r.status}
+                  tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : r.status === 'active' ? 'brand' : 'info'}
+                />
                 <button
                   className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
                   onClick={(e) => { e.stopPropagation(); setSelectedReservationId(r.id); }}
@@ -503,7 +523,7 @@ export const ReservationsOpsPage: React.FC = () => {
               <div className="flex flex-wrap gap-2">
                 {FLOW.map((step) => (
                   <span key={step} className={`rounded-full px-3 py-1 text-[11px] font-bold ${step === timelineStatus ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    {step}
+                    {STATUS_FR[step] ?? step}
                   </span>
                 ))}
               </div>
