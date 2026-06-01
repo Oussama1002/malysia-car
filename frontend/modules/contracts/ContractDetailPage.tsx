@@ -11,6 +11,7 @@ import { ApiError, apiClient, endpoints } from '@/services/apiClient';
 import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
+import { walletApi } from '@/services/walletApi';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ export const ContractDetailPage: React.FC = () => {
   const { id } = useParams();
   const cid = id ?? '';
   const [tab, setTab] = useState('details');
+  const [showEarlyReturn, setShowEarlyReturn] = useState(false);
 
   const q = useQuery({
     queryKey: queryKeys.contracts.one(cid),
@@ -131,12 +133,22 @@ export const ContractDetailPage: React.FC = () => {
             <span className="font-semibold">{statusLabel}</span>
           </p>
         </div>
-        <div className="flex items-start gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-right">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant</div>
             <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad(c.amountMad)}</div>
           </div>
           <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} />
+          {/* Early return button — only for active contracts with a future end date */}
+          {(c.status === 'active' || c.status === 'approved') && computedEndDate && (
+            <button
+              type="button"
+              onClick={() => setShowEarlyReturn(true)}
+              className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              ↩ Retour anticipé
+            </button>
+          )}
         </div>
       </div>
 
@@ -254,6 +266,21 @@ export const ContractDetailPage: React.FC = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* ── EARLY RETURN MODAL ───────────────────────────────────────────── */}
+      {showEarlyReturn && customerId && (
+        <EarlyReturnModal
+          contractId={String(c.id ?? id)}
+          customerId={customerId}
+          contractNumber={raw?.contract_number ?? c.reference}
+          plannedEndDate={computedEndDate}
+          onClose={() => setShowEarlyReturn(false)}
+          onDone={() => {
+            setShowEarlyReturn(false);
+            q.refetch();
+          }}
+        />
       )}
     </div>
   );
@@ -596,4 +623,189 @@ const SignatureTab: React.FC<{ contractId: string }> = ({ contractId }) => {
       </div>
     </div>
   );
+};
+
+// ── Early Return Modal ─────────────────────────────────────────────────────────
+import { createPortal } from 'react-dom';
+
+const EarlyReturnModal: React.FC<{
+  contractId: string;
+  customerId: string;
+  contractNumber: string;
+  plannedEndDate: string | null;
+  onClose: () => void;
+  onDone: () => void;
+}> = ({ contractId, customerId, contractNumber, plannedEndDate, onClose, onDone }) => {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ credit: number; balanceAfter: number } | null>(null);
+
+  const previewQ = useQuery({
+    queryKey: ['early-return-preview', contractId],
+    queryFn: () => walletApi.previewEarlyReturn(customerId, contractId),
+  });
+
+  const preview = previewQ.data;
+
+  const confirm = async () => {
+    if (!reason.trim()) { setError('Le motif de retour anticipé est requis.'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await apiClient<any>(
+        `/v1/contracts/${contractId}/terminate`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason: reason.trim(), early_return: true }),
+        },
+      );
+      const credit = res?.data?.early_return_credit;
+      setSuccess({
+        credit: credit?.amount ?? 0,
+        balanceAfter: credit?.balance_after ?? 0,
+      });
+    } catch (e: any) {
+      setError(e?.message ?? 'Erreur lors de la résiliation.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const modal = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            <div className="font-black text-slate-900">Retour anticipé</div>
+            <div className="text-xs text-slate-500">Contrat {contractNumber}</div>
+          </div>
+          <button onClick={onClose} className="rounded-xl p-2 hover:bg-slate-100 transition-colors">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {success ? (
+            /* ── Success state ── */
+            <div className="text-center space-y-4">
+              <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-8 w-8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <div className="font-black text-slate-900 text-lg">Contrat résilié</div>
+                <p className="text-sm text-slate-500 mt-1">Le retour anticipé a été enregistré avec succès.</p>
+              </div>
+              {success.credit > 0 ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Avoir crédité</div>
+                  <div className="text-3xl font-black text-emerald-700 mt-1">{formatCurrencyMad(success.credit)}</div>
+                  <div className="text-xs text-emerald-600 mt-1">
+                    Nouveau solde portefeuille: <strong>{formatCurrencyMad(success.balanceAfter)}</strong>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    L'avoir est disponible immédiatement sur le portefeuille du client pour une prochaine réservation ou contrat.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                  Aucun avoir calculé (pas de jours restants ou loyer mensuel manquant).
+                </div>
+              )}
+              <button onClick={onDone} className="df-btn df-btn--primary w-full">
+                Fermer
+              </button>
+            </div>
+          ) : (
+            /* ── Confirmation form ── */
+            <>
+              {/* Preview */}
+              {previewQ.isLoading ? (
+                <div className="text-sm text-slate-500">Calcul de l'avoir en cours…</div>
+              ) : preview ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <div className="text-[11px] font-black uppercase tracking-widest text-amber-500">Simulation avoir</div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs text-slate-500">Date prévue fin</div>
+                      <div className="font-semibold text-slate-800">{preview.planned_end_date ? formatDate(preview.planned_end_date) : '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Retour aujourd'hui</div>
+                      <div className="font-semibold text-slate-800">{formatDate(preview.return_date)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Jours non utilisés</div>
+                      <div className="font-semibold text-slate-800">{preview.unused_days} jours</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Taux journalier</div>
+                      <div className="font-semibold text-slate-800">{formatCurrencyMad(preview.daily_rate)}/j</div>
+                    </div>
+                  </div>
+                  <div className="border-t border-amber-200 pt-3 flex items-center justify-between">
+                    <span className="text-sm font-black text-amber-900">Avoir à créditer</span>
+                    <span className="text-xl font-black text-emerald-700">{formatCurrencyMad(preview.credit_amount)}</span>
+                  </div>
+                  {preview.credit_amount === 0 && (
+                    <p className="text-xs text-amber-700">Aucun avoir (retour après la date prévue ou loyer mensuel non renseigné).</p>
+                  )}
+                  <div className="text-xs text-slate-500">
+                    Solde actuel: {formatCurrencyMad(preview.current_balance)} →
+                    après crédit: <strong>{formatCurrencyMad(preview.balance_after_credit)}</strong>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Info banner */}
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+                ℹ️ L'avoir sera crédité automatiquement sur le portefeuille du client.
+                Aucun remboursement en espèces ne sera effectué. Le solde peut être utilisé sur un futur contrat ou réservation.
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Motif du retour anticipé <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  placeholder="Ex: Client déménage, fin anticipée d'activité…"
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">{error}</div>
+              )}
+
+              <div className="flex gap-2">
+                <button type="button" onClick={onClose} className="flex-1 df-btn df-btn--ghost">Annuler</button>
+                <button
+                  type="button"
+                  onClick={confirm}
+                  disabled={busy}
+                  className="flex-1 rounded-xl bg-amber-600 px-4 py-2 text-sm font-black text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {busy ? 'Résiliation…' : 'Confirmer le retour anticipé'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modal, document.body);
 };

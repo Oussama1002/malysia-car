@@ -15,6 +15,7 @@ use App\Models\ContractInstallment;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
 use App\Services\RentalAvailabilityService;
+use App\Services\WalletService;
 use App\Support\PaymentMethodNormalizer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,7 @@ class ContractController extends Controller
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly RentalAvailabilityService $rentalAvailability,
+        private readonly WalletService $walletService,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -404,9 +406,16 @@ class ContractController extends Controller
     public function terminate(Request $request, Contract $contract): JsonResponse
     {
         $data = $request->validate([
-            'reason' => ['required', 'string', 'max:255'],
-            'note' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'reason'      => ['required', 'string', 'max:255'],
+            'note'        => ['sometimes', 'nullable', 'string', 'max:255'],
+            // early_return: if true, calculate unused days and credit wallet as avoir
+            'early_return' => ['sometimes', 'boolean'],
         ]);
+
+        $isEarlyReturn = ! empty($data['early_return'])
+            && $contract->end_date
+            && now()->lt(\Carbon\Carbon::parse($contract->end_date));
+
         $previousStatus = (string) $contract->status;
 
         $updated = DB::transaction(function () use ($contract, $data) {
@@ -430,6 +439,24 @@ class ContractController extends Controller
             return $contract->fresh();
         });
 
+        // Auto-credit wallet for early return (outside the contract transaction so
+        // a wallet failure does NOT roll back the termination).
+        $walletTx = null;
+        if ($isEarlyReturn) {
+            try {
+                $walletTx = $this->walletService->applyEarlyReturnCredit(
+                    contract: $updated,
+                    performedBy: (string) auth()->id(),
+                );
+            } catch (\Throwable $e) {
+                // Non-blocking: log but do not fail the terminate response
+                \Illuminate\Support\Facades\Log::warning('wallet.early_return_credit_failed', [
+                    'contract_id' => $updated->id,
+                    'error'       => $e->getMessage(),
+                ]);
+            }
+        }
+
         AuditLogger::statusChanged(
             subject: $updated,
             fromStatus: $previousStatus,
@@ -437,14 +464,19 @@ class ContractController extends Controller
             user: $request->user(),
             request: $request,
             legal: true,
-            label: 'Contrat résilié',
-            extra: ['reason' => $data['reason'] ?? null],
+            label: $isEarlyReturn ? 'Contrat résilié — retour anticipé' : 'Contrat résilié',
+            extra: [
+                'reason'          => $data['reason'] ?? null,
+                'early_return'    => $isEarlyReturn,
+                'wallet_credited' => $walletTx ? (float) $walletTx->amount : null,
+            ],
         );
         $this->notifications->notifyRoles(
             roleCodes: ['AGENT_COMMERCIAL', 'CONTENTIEUX', 'COMPTABLE', 'DIRECTEUR', 'ADMIN'],
             category: 'contract.terminated',
             title: 'Contrat resilie',
-            body: 'Le contrat '.$updated->contract_number.' a ete resilie.',
+            body: 'Le contrat '.$updated->contract_number.' a ete resilie.'.
+                ($walletTx ? ' Avoir '.number_format((float) $walletTx->amount, 2).' MAD credite.' : ''),
             module: 'contracts',
             priority: 'high',
             entity: $updated,
@@ -452,7 +484,16 @@ class ContractController extends Controller
             linkUrl: '/contracts/'.$updated->id,
         );
 
-        return ApiResponse::success((new ContractResource($updated))->resolve($request));
+        return ApiResponse::success(array_merge(
+            (new ContractResource($updated))->resolve($request),
+            [
+                'early_return_credit' => $walletTx ? [
+                    'amount'        => (float) $walletTx->amount,
+                    'balance_after' => (float) $walletTx->balance_after,
+                    'tx_id'         => $walletTx->id,
+                ] : null,
+            ]
+        ));
     }
 
     public function installments(Request $request, Contract $contract): JsonResponse

@@ -652,6 +652,18 @@ Route::prefix('v1')->group(function () {
         Route::get('customers/{customer}/statement', [CustomerBalanceController::class, 'statement'])
             ->middleware('permission:customer_balance.view');
 
+        // ── Customer Wallet / Avoir ──────────────────────────────────────────
+        Route::get('customers/{customer}/wallet', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'show'])
+            ->middleware('permission:customers.view');
+        Route::get('customers/{customer}/wallet/transactions', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'transactions'])
+            ->middleware('permission:customers.view');
+        Route::post('customers/{customer}/wallet/adjust', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'adjust'])
+            ->middleware('permission:customers.update'); // admin only — requires reason
+        Route::post('customers/{customer}/wallet/apply', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'apply'])
+            ->middleware('permission:customers.update');
+        Route::post('customers/{customer}/wallet/preview-early-return', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'previewEarlyReturn'])
+            ->middleware('permission:customers.view');
+
         Route::get('treasury/summary', [TreasuryController::class, 'summary'])
             ->middleware('permission:treasury.view');
         Route::get('treasury/bank-accounts', [TreasuryController::class, 'listAccounts'])
