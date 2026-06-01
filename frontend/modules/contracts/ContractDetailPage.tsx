@@ -33,12 +33,44 @@ function shortId(raw: string | number | undefined | null, prefix: string): strin
 /** French labels for contract statuses */
 const STATUS_FR: Record<string, string> = {
   draft: 'Brouillon',
+  pending: 'En attente',
   pending_approval: 'En attente d\'approbation',
+  pending_created: 'Créé · en attente',
+  pending_signature: 'En attente de signature',
   approved: 'Approuvé',
   active: 'Actif',
+  signed: 'Signé',
+  sent_for_signature: 'Envoyé pour signature',
   terminated: 'Résilié',
   expired: 'Expiré',
   cancelled: 'Annulé',
+  closed: 'Clôturé',
+  suspended: 'Suspendu',
+  completed: 'Terminé',
+  rejected: 'Rejeté',
+};
+
+const ACTION_FR: Record<string, string> = {
+  created:              'Création',
+  updated:              'Modification',
+  deleted:              'Suppression',
+  status_changed:       'Changement de statut',
+  approved:             'Approbation',
+  rejected:             'Rejet',
+  activated:            'Activation',
+  terminated:           'Résiliation',
+  signed:               'Signature',
+  sent_for_signature:   'Envoi pour signature',
+  schedule_generated:   'Échéancier généré',
+  pdf_generated:        'PDF généré',
+  payment_recorded:     'Paiement enregistré',
+  confirmed:            'Confirmation',
+  cancelled:            'Annulation',
+  handed_over:          'Remise véhicule',
+  returned:             'Retour véhicule',
+  extended:             'Prolongation',
+  damage_reported:      'Dommage signalé',
+  billing_closed:       'Facturation clôturée',
 };
 
 const PAYMENT_METHOD_FR: Record<string, string> = {
@@ -273,9 +305,9 @@ export const ContractDetailPage: React.FC = () => {
             <Timeline
               items={(history.length ? history : [{ id: 'mock', action: 'created', at: c.createdAt }]).map((h: any) => ({
                 id: String(h.id ?? h.at),
-                title: String(h.action ?? 'event'),
+                title: ACTION_FR[h.action] ?? String(h.action ?? 'event'),
                 at: String(h.at ?? c.createdAt),
-                meta: h.from_status || h.to_status ? `${h.from_status ?? '—'} → ${h.to_status ?? '—'}` : undefined,
+                meta: h.from_status || h.to_status ? `${STATUS_FR[h.from_status] ?? h.from_status ?? '—'} → ${STATUS_FR[h.to_status] ?? h.to_status ?? '—'}` : undefined,
                 tone: h.action === 'activated' ? 'success' : h.action === 'terminated' ? 'danger' : 'info',
               }))}
             />

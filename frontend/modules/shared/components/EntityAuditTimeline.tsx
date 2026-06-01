@@ -311,7 +311,7 @@ export const EntityAuditTimeline: React.FC<{
           <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-black text-slate-900">
-                {r.action_label ?? ACTION_LABELS[r.action] ?? r.action?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                {ACTION_LABELS[r.action] ?? ACTION_LABELS[r.action_label] ?? r.action_label?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) ?? r.action}
               </div>
               <div className="text-[10px] uppercase tracking-wide text-slate-400">
                 {formatDateTime(r.occurred_at)}
