@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
@@ -145,9 +145,36 @@ export const ContractWizardPage: React.FC = () => {
   const [draftBusy, setDraftBusy] = useState(false);
   const [draftInfo, setDraftInfo] = useState<string | null>(null);
   const [draftContractId, setDraftContractId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveRef = useRef(false);
   const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
   const [newClientError, setNewClientError] = useState<string | null>(null);
   const step = STEPS[stepIdx];
+
+  // Auto-save draft when the user reaches Step 6 (review), once per wizard session
+  useEffect(() => {
+    if (stepIdx !== 5) return;
+    if (autoSaveRef.current) return; // already triggered
+    if (!state.clientId || !state.vehicleId) return; // not enough data yet
+    autoSaveRef.current = true;
+    setAutoSaveStatus('saving');
+    (async () => {
+      try {
+        if (!draftContractId) {
+          const created = await contractsApi.create(buildCreatePayload('draft'));
+          setDraftContractId(String(created.id));
+        }
+        setAutoSaveStatus('saved');
+        // Reset after 4 s so the indicator fades away naturally
+        setTimeout(() => setAutoSaveStatus('idle'), 4000);
+      } catch {
+        setAutoSaveStatus('error');
+        autoSaveRef.current = false; // allow retry on re-entry
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIdx]);
+
   const qc = useQueryClient();
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
   const createCustomerMut = useMutation({
@@ -420,7 +447,32 @@ export const ContractWizardPage: React.FC = () => {
           <h1 className="mt-1 text-3xl font-black tracking-tight">Nouveau contrat</h1>
           <p className="text-[color:var(--df-text-muted)]">Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Auto-save indicator — visible on step 6 */}
+          {autoSaveStatus === 'saving' && (
+            <span className="flex items-center gap-1.5 text-xs text-slate-400 animate-pulse">
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              Sauvegarde…
+            </span>
+          )}
+          {autoSaveStatus === 'saved' && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-600">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Brouillon sauvegardé
+            </span>
+          )}
+          {autoSaveStatus === 'error' && (
+            <span className="flex items-center gap-1.5 text-xs text-red-500">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" d="M12 8v4m0 4h.01" />
+              </svg>
+              Échec sauvegarde
+            </span>
+          )}
           <button className="df-btn df-btn--ghost df-btn--sm" disabled={draftBusy} onClick={() => void handleDraftPdf()}>
             <Icon name="download" size={14} /> {draftBusy ? 'Traitement…' : 'Brouillon PDF'}
           </button>
