@@ -114,10 +114,14 @@ export const ReservationCalendar: React.FC<{
     return { start: ws, end: endOfDay(addDays(ws, 6 * 7 - 1)) };
   }, [view, anchor]);
 
+  /** Statuses that should never appear on the calendar */
+  const HIDDEN_STATUSES = new Set(['cancelled', 'closed']);
+
   const events = useMemo<NormalizedEvent[]>(() => {
     const out: NormalizedEvent[] = [];
     for (const r of reservations) {
       if (!r.desired_start_at || !r.desired_end_at) continue;
+      if (HIDDEN_STATUSES.has(r.status)) continue;           // skip cancelled / closed
       if (vehicleFilter && String(r.vehicle_id) !== vehicleFilter) continue;
       const s = new Date(r.desired_start_at);
       const e = new Date(r.desired_end_at);

@@ -405,11 +405,7 @@ export const ReservationsOpsPage: React.FC = () => {
         </div>
       )}
 
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-black text-slate-900">Réservations</h2>
-          <p className="text-slate-500">Lifecycle complet location: disponibilité, handover, retour, dommage, extension, clôture.</p>
-        </div>
+      <header className="flex items-center justify-end gap-2">
         <div className="flex gap-2 shrink-0">
           <button
             type="button"
