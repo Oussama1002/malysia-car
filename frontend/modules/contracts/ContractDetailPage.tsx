@@ -7,10 +7,48 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { TabsSection } from '@/modules/shared/components/TabsSection';
 import { contractsApi } from '@/services/contractsApi';
 import { contractSignatureApi, type SignatureRequestStatus } from '@/services/contractSignatureApi';
-import { ApiError } from '@/services/apiClient';
+import { ApiError, apiClient, endpoints } from '@/services/apiClient';
 import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Add N months to an ISO date string → ISO date string */
+function addMonths(isoDate: string, months: number): string {
+  const d = new Date(isoDate);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Return a short professional ID label from a raw UUID + prefix */
+function shortId(raw: string | number | undefined | null, prefix: string): string {
+  if (!raw) return '—';
+  const hex = String(raw).replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `${prefix}-${hex}`;
+}
+
+/** French labels for contract statuses */
+const STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon',
+  pending_approval: 'En attente d\'approbation',
+  approved: 'Approuvé',
+  active: 'Actif',
+  terminated: 'Résilié',
+  expired: 'Expiré',
+  cancelled: 'Annulé',
+};
+
+/** French labels for installment statuses */
+const INSTALLMENT_STATUS_FR: Record<string, { label: string; cls: string }> = {
+  pending:   { label: 'En attente',  cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  paid:      { label: 'Payé',        cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  overdue:   { label: 'En retard',   cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  cancelled: { label: 'Annulé',      cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  partial:   { label: 'Partiel',     cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+};
+
+// ── main component ────────────────────────────────────────────────────────────
 
 export const ContractDetailPage: React.FC = () => {
   const { id } = useParams();
@@ -25,6 +63,46 @@ export const ContractDetailPage: React.FC = () => {
 
   const c = q.data?.contract ?? null;
   const history = q.data?.history ?? [];
+
+  // Resolve raw IDs → names by fetching customer + vehicle
+  const raw = c as any;
+  const customerId: string | null = raw?.customerId ?? raw?.customer_id ?? null;
+  const vehicleId: string | null   = raw?.vehicleId  ?? raw?.vehicle_id  ?? null;
+
+  const customerQ = useQuery({
+    queryKey: ['customer-brief', customerId],
+    enabled: !!customerId,
+    queryFn: async () => {
+      const res = await apiClient<{ data: any }>(endpoints.customers.one(customerId!));
+      return res.data;
+    },
+  });
+
+  const vehicleQ = useQuery({
+    queryKey: ['vehicle-brief', vehicleId],
+    enabled: !!vehicleId,
+    queryFn: async () => {
+      const res = await apiClient<{ data: any }>(endpoints.fleet.one(vehicleId!));
+      return res.data;
+    },
+  });
+
+  const clientName: string = customerQ.data
+    ? (customerQ.data.display_name ?? customerQ.data.name ?? shortId(customerId, 'CLT'))
+    : shortId(customerId, 'CLT');
+
+  const vehicleName: string = vehicleQ.data
+    ? [vehicleQ.data.brand?.name ?? vehicleQ.data.brand, vehicleQ.data.model?.name ?? vehicleQ.data.model, vehicleQ.data.plate ?? vehicleQ.data.registration]
+        .filter(Boolean).join(' ')
+    : shortId(vehicleId, 'VHL');
+
+  // Compute end date if missing: startDate + duration_months
+  const durationMonths: number | null = raw?.durationMonths ?? raw?.duration_months ?? null;
+  const startDate: string | null = raw?.startDate ?? raw?.start_date ?? null;
+  const endDate: string | null   = raw?.endDate   ?? raw?.end_date   ?? null;
+  const computedEndDate: string | null =
+    endDate ?? (startDate && durationMonths ? addMonths(startDate, durationMonths) : null);
+
   if (!cid) return <div className="text-sm text-slate-600">Identifiant invalide.</div>;
   if (q.isLoading) return <div className="text-sm text-slate-500">Chargement…</div>;
   if (!c) {
@@ -38,6 +116,8 @@ export const ContractDetailPage: React.FC = () => {
     );
   }
 
+  const statusLabel = STATUS_FR[c.status] ?? c.status;
+
   return (
     <div className="space-y-6">
       <Link to="/contracts" className="text-sm font-semibold text-indigo-600">
@@ -47,7 +127,8 @@ export const ContractDetailPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-slate-900">{c.reference}</h1>
           <p className="text-sm text-slate-500">
-            {c.type} • {c.status}
+            {c.type} •{' '}
+            <span className="font-semibold">{statusLabel}</span>
           </p>
         </div>
         <div className="flex items-start gap-3">
@@ -63,30 +144,66 @@ export const ContractDetailPage: React.FC = () => {
         active={tab}
         onChange={setTab}
         tabs={[
-          { id: 'details', label: 'Détails' },
-          { id: 'schedule', label: 'Échéancier' },
+          { id: 'details',   label: 'Détails' },
+          { id: 'schedule',  label: 'Échéancier' },
           { id: 'documents', label: 'Documents' },
           { id: 'signature', label: 'Signature' },
-          { id: 'payments', label: 'Paiements' },
-          { id: 'legal', label: 'Contentieux' },
-          { id: 'history', label: 'Historique' },
+          { id: 'payments',  label: 'Paiements' },
+          { id: 'legal',     label: 'Contentieux' },
+          { id: 'history',   label: 'Historique' },
         ]}
       />
 
+      {/* ── DÉTAILS ───────────────────────────────────────────────────────── */}
       {tab === 'details' && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Période */}
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="text-xs font-black uppercase tracking-widest text-slate-400">Période</div>
             <div className="mt-2 text-sm font-semibold text-slate-800">
-              {formatDate(c.startDate)} → {c.endDate ? formatDate(c.endDate) : '—'}
+              {startDate ? formatDate(startDate) : '—'}
+              {' → '}
+              {computedEndDate ? formatDate(computedEndDate) : '—'}
             </div>
+            {durationMonths && (
+              <div className="mt-1 text-xs text-slate-500">{durationMonths} mois</div>
+            )}
           </div>
+
+          {/* Parties / véhicule */}
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="text-xs font-black uppercase tracking-widest text-slate-400">Parties / véhicule</div>
-            <div className="mt-2 text-sm text-slate-700">
-              Client #{(c as { customerId?: string }).customerId ?? c.clientId ?? '—'} • Véhicule #{c.vehicleId ?? '—'}
+            <div className="mt-2 space-y-1 text-sm text-slate-700">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Client</span>
+                {customerId ? (
+                  <Link
+                    to={`/customers/${customerId}`}
+                    className="font-semibold text-indigo-700 hover:underline"
+                  >
+                    {clientName}
+                  </Link>
+                ) : (
+                  <span className="font-semibold">—</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Véhicule</span>
+                {vehicleId ? (
+                  <Link
+                    to={`/fleet/${vehicleId}`}
+                    className="font-semibold text-indigo-700 hover:underline"
+                  >
+                    {vehicleName}
+                  </Link>
+                ) : (
+                  <span className="font-semibold">—</span>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Paiement */}
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm md:col-span-2">
             <div className="text-xs font-black uppercase tracking-widest text-slate-400">Paiement</div>
             <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-slate-700 md:grid-cols-2">
@@ -100,6 +217,24 @@ export const ContractDetailPage: React.FC = () => {
         </div>
       )}
 
+      {/* ── ÉCHÉANCIER ────────────────────────────────────────────────────── */}
+      {tab === 'schedule' && <ScheduleTab contractId={String(c.id ?? id)} />}
+
+      {/* ── DOCUMENTS ────────────────────────────────────────────────────── */}
+      {tab === 'documents' && (
+        <EntityDocuments entityType="contract" entityId={String(c.id ?? id)} title="Documents du contrat" />
+      )}
+
+      {/* ── SIGNATURE ────────────────────────────────────────────────────── */}
+      {tab === 'signature' && <SignatureTab contractId={String(c.id ?? id)} />}
+
+      {/* ── PAIEMENTS ────────────────────────────────────────────────────── */}
+      {tab === 'payments' && <PaymentsTab contractId={String(c.id ?? id)} />}
+
+      {/* ── CONTENTIEUX ──────────────────────────────────────────────────── */}
+      {tab === 'legal' && <LegalTab />}
+
+      {/* ── HISTORIQUE ───────────────────────────────────────────────────── */}
       {tab === 'history' && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -109,39 +244,236 @@ export const ContractDetailPage: React.FC = () => {
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="mb-3 text-sm font-black text-slate-900">Historique métier</div>
             <Timeline
-            items={(history.length ? history : [{ id: 'mock', action: 'created', at: c.createdAt }]).map((h: any) => ({
-              id: String(h.id ?? h.at),
-              title: String(h.action ?? 'event'),
-              at: String(h.at ?? c.createdAt),
-              meta: h.from_status || h.to_status ? `${h.from_status ?? '—'} → ${h.to_status ?? '—'}` : undefined,
-              tone: h.action === 'activated' ? 'success' : h.action === 'terminated' ? 'danger' : 'info',
-            }))}
-          />
+              items={(history.length ? history : [{ id: 'mock', action: 'created', at: c.createdAt }]).map((h: any) => ({
+                id: String(h.id ?? h.at),
+                title: String(h.action ?? 'event'),
+                at: String(h.at ?? c.createdAt),
+                meta: h.from_status || h.to_status ? `${h.from_status ?? '—'} → ${h.to_status ?? '—'}` : undefined,
+                tone: h.action === 'activated' ? 'success' : h.action === 'terminated' ? 'danger' : 'info',
+              }))}
+            />
           </div>
-        </div>
-      )}
-
-      {tab === 'documents' && (
-        <EntityDocuments entityType="contract" entityId={String(c.id ?? id)} title="Documents du contrat" />
-      )}
-
-      {tab === 'signature' && <SignatureTab contractId={String(c.id ?? id)} />}
-
-      {tab !== 'details' && tab !== 'history' && tab !== 'documents' && tab !== 'signature' && (
-        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm text-sm text-slate-600">
-          À brancher: {tab} (API + UI).
         </div>
       )}
     </div>
   );
 };
 
+// ── Échéancier tab ─────────────────────────────────────────────────────────────
+const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
+  const q = useQuery({
+    queryKey: ['contract-installments', contractId],
+    queryFn: async () => contractsApi.installments(contractId),
+  });
+
+  const installments = (q.data ?? []) as any[];
+
+  const totalDue  = installments.reduce((s, i) => s + Number(i.amount_due  ?? i.amountDue  ?? 0), 0);
+  const totalPaid = installments.reduce((s, i) => s + Number(i.amount_paid ?? i.amountPaid ?? 0), 0);
+  const remaining = totalDue - totalPaid;
+
+  return (
+    <div className="space-y-4">
+      {/* Summary row */}
+      <div className="grid grid-cols-3 gap-4">
+        <SummaryCard label="Total dû" value={formatCurrencyMad(totalDue)} tone="neutral" />
+        <SummaryCard label="Total payé" value={formatCurrencyMad(totalPaid)} tone="success" />
+        <SummaryCard label="Reste à payer" value={formatCurrencyMad(remaining)} tone={remaining > 0 ? 'warn' : 'success'} />
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <div className="text-sm font-black text-slate-900">Tableau de bord des échéances</div>
+        </div>
+        {q.isLoading ? (
+          <div className="p-6 text-sm text-slate-500">Chargement de l'échéancier…</div>
+        ) : installments.length === 0 ? (
+          <div className="p-6 text-sm text-slate-500">Aucune échéance générée pour ce contrat.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                  <th className="px-5 py-3 text-left">#</th>
+                  <th className="px-5 py-3 text-left">Date échéance</th>
+                  <th className="px-5 py-3 text-right">Montant dû</th>
+                  <th className="px-5 py-3 text-right">Payé</th>
+                  <th className="px-5 py-3 text-right">Reste</th>
+                  <th className="px-5 py-3 text-left">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {installments.map((inst: any, idx: number) => {
+                  const due    = Number(inst.amount_due  ?? inst.amountDue  ?? 0);
+                  const paid   = Number(inst.amount_paid ?? inst.amountPaid ?? 0);
+                  const rest   = due - paid;
+                  const status = inst.status ?? (paid >= due ? 'paid' : new Date(inst.due_date ?? inst.dueDate ?? '') < new Date() ? 'overdue' : 'pending');
+                  const s      = INSTALLMENT_STATUS_FR[status] ?? { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+                  return (
+                    <tr key={inst.id ?? idx} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3 font-mono text-xs text-slate-400">{idx + 1}</td>
+                      <td className="px-5 py-3 font-semibold text-slate-700">
+                        {inst.due_date ?? inst.dueDate ? formatDate(inst.due_date ?? inst.dueDate) : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-right font-semibold text-slate-800">{formatCurrencyMad(due)}</td>
+                      <td className="px-5 py-3 text-right text-emerald-700 font-semibold">{formatCurrencyMad(paid)}</td>
+                      <td className="px-5 py-3 text-right font-bold text-slate-700">{formatCurrencyMad(rest)}</td>
+                      <td className="px-5 py-3">
+                        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${s.cls}`}>{s.label}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Paiements tab ──────────────────────────────────────────────────────────────
+const PaymentsTab: React.FC<{ contractId: string }> = ({ contractId }) => {
+  const q = useQuery({
+    queryKey: ['contract-installments-payments', contractId],
+    queryFn: async () => contractsApi.installments(contractId),
+  });
+
+  const all = (q.data ?? []) as any[];
+  const paid    = all.filter((i: any) => (i.status ?? '') === 'paid' || Number(i.amount_paid ?? i.amountPaid ?? 0) > 0);
+  const pending = all.filter((i: any) => (i.status ?? '') !== 'paid' && Number(i.amount_paid ?? i.amountPaid ?? 0) === 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div className="mb-4 text-sm font-black text-slate-900">Paiements reçus</div>
+        {q.isLoading ? (
+          <p className="text-sm text-slate-500">Chargement…</p>
+        ) : paid.length === 0 ? (
+          <p className="text-sm text-slate-500">Aucun paiement enregistré pour ce contrat.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {paid.map((inst: any, idx: number) => {
+              const amount = Number(inst.amount_paid ?? inst.amountPaid ?? inst.amount_due ?? 0);
+              const date   = inst.paid_at ?? inst.paidAt ?? inst.due_date ?? inst.dueDate;
+              return (
+                <li key={inst.id ?? idx} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-800">Échéance {idx + 1}</div>
+                      <div className="text-xs text-slate-500">{date ? formatDate(date) : '—'}</div>
+                    </div>
+                  </div>
+                  <div className="font-black text-emerald-700">{formatCurrencyMad(amount)}</div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {pending.length > 0 && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-6">
+          <div className="mb-3 text-sm font-black text-amber-800">
+            {pending.length} échéance{pending.length > 1 ? 's' : ''} en attente
+          </div>
+          <ul className="space-y-2">
+            {pending.slice(0, 5).map((inst: any, idx: number) => {
+              const due  = Number(inst.amount_due ?? inst.amountDue ?? 0);
+              const date = inst.due_date ?? inst.dueDate;
+              const overdue = date && new Date(date) < new Date();
+              return (
+                <li key={inst.id ?? idx} className="flex items-center justify-between text-sm">
+                  <span className={`font-semibold ${overdue ? 'text-rose-700' : 'text-amber-800'}`}>
+                    {date ? formatDate(date) : `Échéance ${idx + 1}`}
+                    {overdue && ' · En retard'}
+                  </span>
+                  <span className="font-bold text-slate-800">{formatCurrencyMad(due)}</span>
+                </li>
+              );
+            })}
+            {pending.length > 5 && (
+              <li className="text-xs text-slate-500">+ {pending.length - 5} autres…</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Contentieux tab ────────────────────────────────────────────────────────────
+const LegalTab: React.FC = () => (
+  <div className="space-y-4">
+    <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h18M3 18h18" />
+          </svg>
+        </div>
+        <div>
+          <div className="font-black text-slate-900">Aucun dossier contentieux</div>
+          <p className="mt-1 text-sm text-slate-500">
+            Ce contrat ne présente aucune procédure contentieuse active.
+            Les litiges, impayés récurrents et mises en demeure apparaîtront ici si un dossier est ouvert.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="mb-4 text-sm font-black text-slate-900">Indicateurs de risque</div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
+        <RiskCard label="Retards de paiement" value="0" icon="✅" />
+        <RiskCard label="Litiges enregistrés" value="0" icon="✅" />
+        <RiskCard label="Mises en demeure" value="0" icon="✅" />
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm opacity-60">
+      <div className="mb-1 text-sm font-black text-slate-900">Ouvrir un dossier contentieux</div>
+      <p className="text-sm text-slate-500 mb-4">Fonctionnalité disponible prochainement. Permet d'initier une procédure de recouvrement ou de résiliation pour faute.</p>
+      <button disabled className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-bold text-slate-500 cursor-not-allowed">
+        Initier une procédure
+      </button>
+    </div>
+  </div>
+);
+
+// ── small shared sub-components ────────────────────────────────────────────────
+const SummaryCard: React.FC<{ label: string; value: string; tone: 'neutral' | 'success' | 'warn' }> = ({ label, value, tone }) => {
+  const cls = tone === 'success' ? 'text-emerald-700' : tone === 'warn' ? 'text-amber-700' : 'text-slate-800';
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm text-center">
+      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</div>
+      <div className={`mt-1 text-lg font-black ${cls}`}>{value}</div>
+    </div>
+  );
+};
+
+const RiskCard: React.FC<{ label: string; value: string; icon: string }> = ({ label, value, icon }) => (
+  <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+    <span className="text-lg">{icon}</span>
+    <div>
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="font-black text-slate-900">{value}</div>
+    </div>
+  </div>
+);
+
 // ── Signature tab: send for signature + track status ──────────────────────
 const STATUS_LABEL: Record<SignatureRequestStatus, { label: string; cls: string }> = {
   sent_for_signature: { label: 'En attente de signature', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  signed: { label: 'Signé', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  rejected: { label: 'Refusé', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  expired: { label: 'Expiré', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  signed:   { label: 'Signé',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  rejected: { label: 'Refusé',  cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  expired:  { label: 'Expiré',  cls: 'bg-slate-100 text-slate-600 border-slate-200' },
 };
 
 const SignatureTab: React.FC<{ contractId: string }> = ({ contractId }) => {
