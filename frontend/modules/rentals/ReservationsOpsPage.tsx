@@ -245,11 +245,25 @@ export const ReservationsOpsPage: React.FC = () => {
       if (selectedReservationId) await qc.invalidateQueries({ queryKey: ['reservation', selectedReservationId] });
     },
   });
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [billingSuccess, setBillingSuccess] = useState<string | null>(null);
   const closeBillingM = useMutation({
     mutationFn: async (id: string) => opsApi.closeBilling(id, { issue_date: billingForm.issue_date || undefined, due_date: billingForm.due_date || undefined }),
-    onSuccess: async () => {
-      if (selectedReservationId) await qc.invalidateQueries({ queryKey: ['reservation', selectedReservationId] });
+    onSuccess: async (data) => {
+      setBillingError(null);
+      const invNum = data?.invoice_number ?? data?.data?.invoice_number ?? '';
+      setBillingSuccess(invNum ? `Facture ${invNum} générée.` : 'Clôture effectuée.');
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      if (selectedReservationId) await qc.invalidateQueries({ queryKey: ['reservation', selectedReservationId] });
+      // Close modal after short delay so user can read the success message
+      setTimeout(() => {
+        setSelectedReservationId(null);
+        setBillingSuccess(null);
+        setBillingForm({ issue_date: '', due_date: '' });
+      }, 1800);
+    },
+    onError: (e: unknown) => {
+      setBillingError(e instanceof Error ? e.message : 'Erreur lors de la clôture.');
     },
   });
 
@@ -453,7 +467,7 @@ export const ReservationsOpsPage: React.FC = () => {
             <div
               key={r.id}
               className="p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer hover:bg-slate-50 transition-colors"
-              onClick={() => setSelectedReservationId(r.id)}
+              onClick={() => { setSelectedReservationId(r.id); setBillingError(null); setBillingSuccess(null); }}
             >
               <div>
                 <div className="text-xs font-black text-slate-400 uppercase tracking-widest">{r.reservation_number}</div>
@@ -497,7 +511,7 @@ export const ReservationsOpsPage: React.FC = () => {
       <Modal
         open={!!selectedReservationId}
         title={selected?.reservation_number ?? 'Détail réservation'}
-        onClose={() => setSelectedReservationId(null)}
+        onClose={() => { setSelectedReservationId(null); setBillingError(null); setBillingSuccess(null); }}
         widthClass="max-w-2xl"
       >
         {reservationDetailQ.isLoading ? (
@@ -613,14 +627,42 @@ export const ReservationsOpsPage: React.FC = () => {
             {/* Close billing */}
             <div>
               <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Clôture & facturation</div>
-              <div className="grid grid-cols-2 gap-2">
-                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date émission" value={billingForm.issue_date} onChange={(e) => setBillingForm((s) => ({ ...s, issue_date: e.target.value }))} />
-                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date échéance" value={billingForm.due_date} onChange={(e) => setBillingForm((s) => ({ ...s, due_date: e.target.value }))} />
-                <button className="col-span-2 rounded-xl bg-violet-700 px-3 py-2 text-xs font-black text-white disabled:opacity-50 hover:bg-violet-800 transition-colors"
-                  onClick={() => closeBillingM.mutate(selectedReservationId)} disabled={closeBillingM.isPending}>
-                  Clôturer & générer facture
-                </button>
-              </div>
+              {billingSuccess ? (
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4 shrink-0">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  {billingSuccess}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date émission" value={billingForm.issue_date} onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, issue_date: e.target.value })); }} />
+                  <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date échéance" value={billingForm.due_date} onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, due_date: e.target.value })); }} />
+                  {billingError && (
+                    <div className="col-span-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                      {billingError}
+                    </div>
+                  )}
+                  <button
+                    className="col-span-2 rounded-xl bg-violet-700 px-3 py-2 text-xs font-black text-white disabled:opacity-50 hover:bg-violet-800 transition-colors flex items-center justify-center gap-2"
+                    onClick={() => {
+                      if (!selectedReservationId) return;
+                      setBillingError(null);
+                      closeBillingM.mutate(selectedReservationId);
+                    }}
+                    disabled={closeBillingM.isPending || !selectedReservationId}
+                  >
+                    {closeBillingM.isPending ? (
+                      <>
+                        <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                        </svg>
+                        Clôture en cours…
+                      </>
+                    ) : 'Clôturer & générer facture'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Summary counts */}
