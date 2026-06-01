@@ -41,6 +41,18 @@ const STATUS_FR: Record<string, string> = {
   cancelled: 'Annulé',
 };
 
+const PAYMENT_METHOD_FR: Record<string, string> = {
+  virement:      'Virement bancaire',
+  bank_transfer: 'Virement bancaire',
+  cheque:        'Chèque',
+  espece:        'Espèce',
+  cash:          'Espèce',
+  carte:         'Carte bancaire',
+  card:          'Carte bancaire',
+  autre:         'Autre',
+  other:         'Autre',
+};
+
 /** French labels for installment statuses */
 const INSTALLMENT_STATUS_FR: Record<string, { label: string; cls: string }> = {
   pending:   { label: 'En attente',  cls: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -128,7 +140,9 @@ export const ContractDetailPage: React.FC = () => {
       </Link>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">{c.reference}</h1>
+          <h1 className="text-2xl font-black text-slate-900">
+            {c.reference ?? shortId(c.id, 'CTR')}
+          </h1>
           <p className="text-sm text-slate-500">
             {c.type} •{' '}
             <span className="font-semibold">{statusLabel}</span>
@@ -220,7 +234,7 @@ export const ContractDetailPage: React.FC = () => {
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm md:col-span-2">
             <div className="text-xs font-black uppercase tracking-widest text-slate-400">Paiement</div>
             <div className="mt-2 grid grid-cols-1 gap-2 text-sm text-slate-700 md:grid-cols-2">
-              <div><span className="text-slate-500">Mode:</span> {c.paymentMethod ?? '—'}</div>
+              <div><span className="text-slate-500">Mode:</span> {PAYMENT_METHOD_FR[c.paymentMethod ?? ''] ?? c.paymentMethod ?? '—'}</div>
               <div><span className="text-slate-500">Échéance jour:</span> {c.expectedPaymentDay ?? '—'}</div>
               <div className="md:col-span-2"><span className="text-slate-500">Conditions:</span> {c.paymentTerms ?? '—'}</div>
               <div><span className="text-slate-500">Réf. virement:</span> {c.bankReference ?? '—'}</div>
