@@ -38,6 +38,128 @@ function uuidPrefix(key: string): string {
   return key.replace(/_id$/, '').slice(0, 3).toUpperCase();
 }
 
+/** French translations for known status/enum values that come from the backend in English */
+const VALUE_TRANSLATIONS: Record<string, string> = {
+  // Generic statuses
+  draft:                    'Brouillon',
+  pending:                  'En attente',
+  pending_approval:         'En attente d\'approbation',
+  pending_created:          'Créé · en attente',
+  'pending created':        'Créé · en attente',
+  approved:                 'Approuvé',
+  active:                   'Actif',
+  inactive:                 'Inactif',
+  completed:                'Terminé',
+  cancelled:                'Annulé',
+  rejected:                 'Rejeté',
+  expired:                  'Expiré',
+  terminated:               'Résilié',
+  closed:                   'Clôturé',
+  suspended:                'Suspendu',
+  blocked:                  'Bloqué',
+  // Contract
+  pending_signature:        'En attente de signature',
+  signed:                   'Signé',
+  sent_for_signature:       'Envoyé pour signature',
+  // Reservation / rental
+  reserved:                 'Réservé',
+  confirmed:                'Confirmé',
+  pickup_scheduled:         'Remise planifiée',
+  handed_over:              'Remis',
+  extension_requested:      'Prolongation demandée',
+  return_scheduled:         'Retour planifié',
+  returned:                 'Retourné',
+  inspection_pending:       'Inspection en attente',
+  damage_pending:           'Dommages en attente',
+  billing_pending:          'Facturation en attente',
+  // KYC
+  under_review:             'En cours de vérification',
+  incomplete:               'Incomplet',
+  // Document
+  processing:               'Traitement en cours',
+  extracted:                'Extrait',
+  validated:                'Validé',
+  failed:                   'Échoué',
+  // Boolean-like
+  'true':                   'Oui',
+  'false':                  'Non',
+  '1':                      'Oui',
+  '0':                      'Non',
+  // Contract types
+  LLD:                      'Location Longue Durée',
+  LOA:                      'Location avec Option d\'Achat',
+  CREDIT_AUTO:              'Crédit Automobile',
+  VENTE_VO:                 'Vente VO',
+  LOCATION_COURTE:          'Location Courte Durée',
+  // Payment methods
+  virement:                 'Virement',
+  cheque:                   'Chèque',
+  espece:                   'Espèce',
+  cash:                     'Espèce',
+  carte:                    'Carte bancaire',
+  bank_transfer:            'Virement bancaire',
+  // Ownership
+  owned:                    'Propriété',
+  leased:                   'Loué',
+  sub_rented:               'Sous-location',
+  // Missions
+  planned:                  'Planifié',
+  in_progress:              'En cours',
+  done:                     'Terminé',
+  // Damage
+  open:                     'Ouvert',
+  // Handover
+  pickup:                   'Remise',
+  return:                   'Retour',
+  // Misc
+  enabled:                  'Activé',
+  disabled:                 'Désactivé',
+};
+
+/** French labels for audit action types */
+const ACTION_LABELS: Record<string, string> = {
+  created:                  'Création',
+  updated:                  'Modification',
+  deleted:                  'Suppression',
+  status_changed:           'Changement de statut',
+  approved:                 'Approbation',
+  rejected:                 'Rejet',
+  activated:                'Activation',
+  terminated:               'Résiliation',
+  signed:                   'Signature',
+  sent_for_signature:       'Envoi pour signature',
+  schedule_generated:       'Échéancier généré',
+  pdf_generated:            'PDF généré',
+  payment_recorded:         'Paiement enregistré',
+  confirmed:                'Confirmation',
+  cancelled:                'Annulation',
+  handed_over:              'Remise véhicule',
+  returned:                 'Retour véhicule',
+  extended:                 'Prolongation',
+  damage_reported:          'Dommage signalé',
+  billing_closed:           'Facturation clôturée',
+  wallet_credited:          'Crédit portefeuille',
+  wallet_debited:           'Débit portefeuille',
+  wallet_adjusted:          'Ajustement portefeuille',
+  kyc_submitted:            'KYC soumis',
+  kyc_approved:             'KYC approuvé',
+  kyc_rejected:             'KYC rejeté',
+  document_uploaded:        'Document téléversé',
+  document_validated:       'Document validé',
+  financial_action:         'Action financière',
+  login:                    'Connexion',
+  logout:                   'Déconnexion',
+};
+
+/** Translate a raw backend value to French if a translation exists */
+function translateValue(s: string): string {
+  // Exact match (case-sensitive first, then lowercase)
+  if (VALUE_TRANSLATIONS[s]) return VALUE_TRANSLATIONS[s];
+  const lower = s.toLowerCase();
+  if (VALUE_TRANSLATIONS[lower]) return VALUE_TRANSLATIONS[lower];
+  return s;
+}
+
 /** Format a raw field value into a human-friendly string */
 function formatValue(key: string, raw: unknown): string {
   if (raw === null || raw === undefined || raw === '') return '—';
@@ -54,7 +176,6 @@ function formatValue(key: string, raw: unknown): string {
     try {
       const d = new Date(s);
       if (!isNaN(d.getTime())) {
-        // If it has a time component other than midnight, show full datetime
         return s.includes('T') && !s.endsWith('T00:00:00.000000Z') && !s.endsWith('T00:00:00Z')
           ? formatDateTime(d)
           : formatDate(d);
@@ -67,7 +188,8 @@ function formatValue(key: string, raw: unknown): string {
     return `${s.slice(0, 12)}…`;
   }
 
-  return s;
+  // Known status / enum → French translation
+  return translateValue(s);
 }
 
 function toComparable(value: unknown): string {
@@ -188,7 +310,9 @@ export const EntityAuditTimeline: React.FC<{
           />
           <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-black text-slate-900">{r.action_label ?? r.action}</div>
+              <div className="text-sm font-black text-slate-900">
+                {r.action_label ?? ACTION_LABELS[r.action] ?? r.action?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+              </div>
               <div className="text-[10px] uppercase tracking-wide text-slate-400">
                 {formatDateTime(r.occurred_at)}
               </div>
