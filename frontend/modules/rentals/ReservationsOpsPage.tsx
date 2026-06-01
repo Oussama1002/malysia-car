@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, endpoints, getApiBase, apiClient } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
@@ -316,8 +317,94 @@ export const ReservationsOpsPage: React.FC = () => {
     );
   }
 
+  // ── Reservations starting today or yesterday that still need a contract ──
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const urgentReservations = useMemo(() => {
+    const PRE_HANDOVER = ['reserved', 'confirmed', 'pickup_scheduled'];
+    return (reservationsQ.data ?? []).filter((r) => {
+      if (!PRE_HANDOVER.includes(r.status)) return false;
+      const start = new Date(r.desired_start_at);
+      start.setHours(0, 0, 0, 0);
+      return start.getTime() === today.getTime() || start.getTime() === yesterday.getTime();
+    });
+  }, [reservationsQ.data]);
+
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const visibleUrgent = urgentReservations.filter((r) => !dismissedIds.has(r.id));
+
   return (
     <div className="space-y-6">
+
+      {/* ── Urgent contract alert banner ─────────────────────────────────── */}
+      {visibleUrgent.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔔</span>
+            <div>
+              <div className="font-black text-amber-900">
+                {visibleUrgent.length} réservation{visibleUrgent.length > 1 ? 's' : ''} sans contrat — départ aujourd'hui ou hier
+              </div>
+              <div className="text-xs text-amber-700">Générez le contrat avant la remise des clés.</div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {visibleUrgent.map((r) => {
+              const clientLabel = customerOptions.find((c) => c.id === r.customer_id)?.label.split(' (')[0]
+                ?? `CLT-${r.customer_id.slice(0, 8).toUpperCase()}`;
+              const vehicleLabel = vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
+                ?? `VHL-${r.vehicle_id.slice(0, 8).toUpperCase()}`;
+              const startDate = new Date(r.desired_start_at);
+              const isToday = startDate.toDateString() === new Date().toDateString();
+              return (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${isToday ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {isToday ? "Aujourd'hui" : 'Hier'}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-black text-slate-700 truncate">{r.reservation_number}</div>
+                      <div className="text-xs text-slate-500 truncate">{clientLabel} · {vehicleLabel}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedReservationId(r.id); setBillingError(null); setBillingSuccess(null); }}
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Voir détail
+                    </button>
+                    <Link
+                      to={`/contracts/new?from_reservation=${r.id}`}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
+                    >
+                      📄 Générer contrat
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setDismissedIds((s) => new Set([...s, r.id]))}
+                      className="rounded-lg p-1.5 text-amber-400 hover:text-amber-700 hover:bg-amber-100"
+                      title="Ignorer"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-black text-slate-900">Réservations</h2>

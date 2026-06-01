@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
@@ -110,6 +110,8 @@ interface WizardState {
   payments: PaymentEntry[];
   paymentTerms: string;
   expectedPaymentDay: number | '';
+  startDate: string | null;
+  endDate: string | null;
 }
 
 const INITIAL: WizardState = {
@@ -125,6 +127,8 @@ const INITIAL: WizardState = {
   payments: [{ id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
   paymentTerms: '',
   expectedPaymentDay: 5,
+  startDate: null,
+  endDate: null,
 };
 
 function friendlyError(e: unknown, fallback: string): string {
@@ -135,8 +139,17 @@ function friendlyError(e: unknown, fallback: string): string {
   return raw || fallback;
 }
 
+/** Calculate the number of full months between two ISO date strings. */
+function monthsBetween(start: string, end: string): number {
+  const s = new Date(start);
+  const e = new Date(end);
+  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  return Math.max(1, months);
+}
+
 export const ContractWizardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { session } = useAuthSession();
   const [stepIdx, setStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
@@ -149,7 +162,69 @@ export const ContractWizardPage: React.FC = () => {
   const autoSaveRef = useRef(false);
   const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
   const [newClientError, setNewClientError] = useState<string | null>(null);
+  const [prefillBanner, setPrefillBanner] = useState<string | null>(null);
+  const [prefillLoading, setPrefillLoading] = useState(false);
+  const prefillDoneRef = useRef(false);
   const step = STEPS[stepIdx];
+
+  // Pre-fill wizard from a reservation when ?from_reservation=UUID is present
+  useEffect(() => {
+    const reservationId = searchParams.get('from_reservation');
+    if (!reservationId || prefillDoneRef.current) return;
+    prefillDoneRef.current = true;
+    setPrefillLoading(true);
+    (async () => {
+      try {
+        const res = await apiClient<{ data: { reservation: any } }>(`/v1/reservations/${reservationId}`);
+        const r = res.data?.reservation ?? res.data ?? res;
+        const startDate: string | null = r.desired_start_at
+          ? String(r.desired_start_at).slice(0, 10)
+          : null;
+        const endDate: string | null = r.desired_end_at
+          ? String(r.desired_end_at).slice(0, 10)
+          : null;
+        const durationMonths =
+          startDate && endDate ? monthsBetween(startDate, endDate) : 0;
+        // Normalise payment method to wizard options
+        const methodMap: Record<string, string> = {
+          virement: 'virement',
+          bank_transfer: 'virement',
+          cheque: 'cheque',
+          chèque: 'cheque',
+          espece: 'espece',
+          cash: 'espece',
+          carte: 'carte',
+          card: 'carte',
+        };
+        const rawMethod = String(r.payment_method ?? '').toLowerCase();
+        const paymentMethod = methodMap[rawMethod] ?? 'virement';
+
+        setState((prev) => ({
+          ...prev,
+          clientId: r.customer_id ?? null,
+          vehicleId: r.vehicle_id ?? null,
+          startDate,
+          endDate,
+          durationMonths,
+          monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths)) : prev.monthlyRentMad,
+          payments: [{ id: String(Date.now()), method: paymentMethod, amount: '', reference: '', chequeNumber: '' }],
+        }));
+
+        // Record the reservation number for the banner
+        const rsvNumber: string = r.reservation_number ?? `RSV-${String(reservationId).slice(0, 8).toUpperCase()}`;
+        setPrefillBanner(rsvNumber);
+
+        // Advance past client (0) and vehicle (1) steps to type (2) — both are already set
+        setStepIdx(2);
+      } catch (e) {
+        // Non-blocking: just log, don't block the wizard
+        console.warn('[ContractWizard] Pre-fill from reservation failed:', e);
+      } finally {
+        setPrefillLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-save draft when the user reaches Step 6 (review), once per wizard session
   useEffect(() => {
@@ -307,8 +382,8 @@ export const ContractWizardPage: React.FC = () => {
       clientId: state.clientId ?? '',
       vehicleId: state.vehicleId ?? undefined,
       amountMad: totalAmount,
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: undefined,
+      startDate: state.startDate ?? new Date().toISOString().slice(0, 10),
+      endDate: state.endDate ?? undefined,
       durationMonths: state.durationMonths,
       monthlyPayment: state.monthlyRentMad,
       allowedKm: state.kmInclMonth * state.durationMonths,
@@ -436,6 +511,38 @@ export const ContractWizardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Pre-fill loading indicator */}
+      {prefillLoading && (
+        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+          <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          Chargement des informations de la réservation…
+        </div>
+      )}
+
+      {/* Pre-fill success banner */}
+      {prefillBanner && !prefillLoading && (
+        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Pré-rempli depuis la réservation <span className="font-mono">{prefillBanner}</span> — vérifiez les informations et complétez le contrat.
+          </div>
+          <button
+            type="button"
+            className="ml-4 shrink-0 text-emerald-600 hover:text-emerald-800 dark:text-emerald-400"
+            onClick={() => setPrefillBanner(null)}
+            aria-label="Fermer"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
