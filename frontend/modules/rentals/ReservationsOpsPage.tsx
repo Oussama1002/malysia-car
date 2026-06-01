@@ -430,11 +430,14 @@ export const ReservationsOpsPage: React.FC = () => {
 
       <SearchFilterBar placeholder="Filtrer…" value={q} onChange={setQ} />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]">
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
           {rows.map((r) => (
-            <div key={r.id} className={`p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer ${selectedReservationId === r.id ? 'bg-indigo-50' : ''}`} onClick={() => setSelectedReservationId(r.id)}>
+            <div
+              key={r.id}
+              className="p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+              onClick={() => setSelectedReservationId(r.id)}
+            >
               <div>
                 <div className="text-xs font-black text-slate-400 uppercase tracking-widest">{r.reservation_number}</div>
                 <div className="mt-1 text-sm font-bold text-slate-900">
@@ -451,9 +454,15 @@ export const ReservationsOpsPage: React.FC = () => {
               <div className="flex items-center gap-3">
                 <StatusBadge label={r.status} tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : 'info'} />
                 <button
+                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setSelectedReservationId(r.id); }}
+                >
+                  Détail →
+                </button>
+                <button
                   className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
                   disabled={createMission.isPending}
-                  onClick={() => createMission.mutate(r.id)}
+                  onClick={(e) => { e.stopPropagation(); createMission.mutate(r.id); }}
                 >
                   Créer mission
                 </button>
@@ -463,75 +472,146 @@ export const ReservationsOpsPage: React.FC = () => {
           {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
         </div>
       </div>
-      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm p-5 space-y-4">
-        <div className="text-sm font-black text-slate-900">Détail réservation</div>
-        {!selectedReservationId ? (
-          <div className="text-sm text-slate-500">Sélectionnez une réservation pour afficher la timeline et les actions.</div>
-        ) : reservationDetailQ.isLoading ? (
-          <div className="text-sm text-slate-500">Chargement…</div>
-        ) : (
-          <>
-            <div className="text-xs font-mono font-black text-slate-500">
-              {selected?.reservation_number ?? `RSV-${selectedReservationId.slice(0, 8).toUpperCase()}`}
+
+      {/* ── Détail réservation popup ── */}
+      <Modal
+        open={!!selectedReservationId}
+        title={selected?.reservation_number ?? 'Détail réservation'}
+        onClose={() => setSelectedReservationId(null)}
+        widthClass="max-w-2xl"
+      >
+        {reservationDetailQ.isLoading ? (
+          <div className="py-8 text-center text-sm text-slate-500">Chargement…</div>
+        ) : selectedReservationId ? (
+          <div className="space-y-5">
+
+            {/* Summary row */}
+            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
+              <div className="font-bold text-slate-900">
+                {customerOptions.find((c) => c.id === selected?.customer_id)?.label.split(' (')[0] ?? '—'}
+                <span className="mx-2 text-slate-300">·</span>
+                {vehicleOptions.find((v) => v.id === selected?.vehicle_id)?.label ?? '—'}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {selected ? `${new Date(selected.desired_start_at).toLocaleString('fr-MA')} → ${new Date(selected.desired_end_at).toLocaleString('fr-MA')}` : '—'}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {FLOW.map((step) => (
-                <span key={step} className={`rounded-full px-2 py-1 text-[11px] font-bold ${step === timelineStatus ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  {step}
-                </span>
-              ))}
+
+            {/* Status timeline */}
+            <div>
+              <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Statut</div>
+              <div className="flex flex-wrap gap-2">
+                {FLOW.map((step) => (
+                  <span key={step} className={`rounded-full px-3 py-1 text-[11px] font-bold ${step === timelineStatus ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    {step}
+                  </span>
+                ))}
+              </div>
             </div>
-            {confirmAvailabilityQ.isFetching && <div className="text-xs text-slate-500">Vérification disponibilité avant confirmation…</div>}
+
+            {/* Availability notices */}
+            {confirmAvailabilityQ.isFetching && <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>}
             {confirmSlotBlocked && confirmAvailabilityQ.data && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
                 <span className="font-black">Confirmation bloquée.</span> {formatRentalConflict(confirmAvailabilityQ.data)}
               </div>
             )}
             {confirmAvailabilityQ.data?.available && detail?.status === 'reserved' && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">Véhicule disponible sur la période de cette réservation.</div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">Véhicule disponible sur la période.</div>
             )}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
-                onClick={() => selectedReservationId && confirmRes.mutate(selectedReservationId)}
-                disabled={confirmRes.isPending || !selectedReservationId || confirmSlotBlocked}
-              >
-                Confirmer
-              </button>
-              <button className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white disabled:opacity-50" onClick={() => cancelRes.mutate(selectedReservationId)} disabled={cancelRes.isPending}>Annuler</button>
-              <button className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50" onClick={() => pickupM.mutate(selectedReservationId)} disabled={pickupM.isPending}>Handover pickup</button>
-              <button className="rounded-xl bg-cyan-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50" onClick={() => returnM.mutate(selectedReservationId)} disabled={returnM.isPending}>Handover return</button>
+
+            {/* Primary actions */}
+            <div>
+              <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <button className="rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-indigo-700 transition-colors"
+                  onClick={() => selectedReservationId && confirmRes.mutate(selectedReservationId)}
+                  disabled={confirmRes.isPending || confirmSlotBlocked}>
+                  ✓ Confirmer
+                </button>
+                <button className="rounded-xl bg-slate-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-slate-800 transition-colors"
+                  onClick={() => cancelRes.mutate(selectedReservationId)} disabled={cancelRes.isPending}>
+                  ✕ Annuler
+                </button>
+                <button className="rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-emerald-700 transition-colors"
+                  onClick={() => pickupM.mutate(selectedReservationId)} disabled={pickupM.isPending}>
+                  ↑ Pickup
+                </button>
+                <button className="rounded-xl bg-cyan-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-cyan-700 transition-colors"
+                  onClick={() => returnM.mutate(selectedReservationId)} disabled={returnM.isPending}>
+                  ↓ Retour
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Pickup km" value={pickupForm.odometer} onChange={(e) => setPickupForm((s) => ({ ...s, odometer: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Pickup fuel %" value={pickupForm.fuel_level} onChange={(e) => setPickupForm((s) => ({ ...s, fuel_level: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs col-span-2" placeholder="Pickup condition/signature" value={pickupForm.condition_notes} onChange={(e) => setPickupForm((s) => ({ ...s, condition_notes: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Return km" value={returnForm.odometer} onChange={(e) => setReturnForm((s) => ({ ...s, odometer: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Return fuel %" value={returnForm.fuel_level} onChange={(e) => setReturnForm((s) => ({ ...s, fuel_level: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs col-span-2" placeholder="Return condition/signature" value={returnForm.condition_notes} onChange={(e) => setReturnForm((s) => ({ ...s, condition_notes: e.target.value }))} />
+
+            {/* Pickup / Return forms */}
+            <div>
+              <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Handover pickup</div>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Km départ" value={pickupForm.odometer} onChange={(e) => setPickupForm((s) => ({ ...s, odometer: e.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Carburant %" value={pickupForm.fuel_level} onChange={(e) => setPickupForm((s) => ({ ...s, fuel_level: e.target.value }))} />
+                <input className="col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Observations / signature" value={pickupForm.condition_notes} onChange={(e) => setPickupForm((s) => ({ ...s, condition_notes: e.target.value }))} />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="datetime-local" value={extensionForm.new_end_at} onChange={(e) => setExtensionForm((s) => ({ ...s, new_end_at: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Additional amount" value={extensionForm.additional_amount} onChange={(e) => setExtensionForm((s) => ({ ...s, additional_amount: e.target.value }))} />
-              <button className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50" onClick={() => extensionM.mutate(selectedReservationId)} disabled={extensionM.isPending || !extensionForm.new_end_at}>Extension</button>
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" value={damageForm.damage_type} onChange={(e) => setDamageForm((s) => ({ ...s, damage_type: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs col-span-2" placeholder="Damage description" value={damageForm.description} onChange={(e) => setDamageForm((s) => ({ ...s, description: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Estimated cost" value={damageForm.estimated_cost} onChange={(e) => setDamageForm((s) => ({ ...s, estimated_cost: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Responsible party" value={damageForm.responsible_party} onChange={(e) => setDamageForm((s) => ({ ...s, responsible_party: e.target.value }))} />
-              <button className="col-span-2 rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50" onClick={() => damageM.mutate(selectedReservationId)} disabled={damageM.isPending}>Damage report</button>
+            <div>
+              <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Handover retour</div>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Km retour" value={returnForm.odometer} onChange={(e) => setReturnForm((s) => ({ ...s, odometer: e.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Carburant %" value={returnForm.fuel_level} onChange={(e) => setReturnForm((s) => ({ ...s, fuel_level: e.target.value }))} />
+                <input className="col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Observations / signature" value={returnForm.condition_notes} onChange={(e) => setReturnForm((s) => ({ ...s, condition_notes: e.target.value }))} />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" value={billingForm.issue_date} onChange={(e) => setBillingForm((s) => ({ ...s, issue_date: e.target.value }))} />
-              <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" value={billingForm.due_date} onChange={(e) => setBillingForm((s) => ({ ...s, due_date: e.target.value }))} />
-              <button className="col-span-2 rounded-xl bg-violet-700 px-3 py-2 text-xs font-black text-white disabled:opacity-50" onClick={() => closeBillingM.mutate(selectedReservationId)} disabled={closeBillingM.isPending}>Close billing & generate invoice</button>
+
+            {/* Extension */}
+            <div>
+              <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Prolongation</div>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="datetime-local" value={extensionForm.new_end_at} onChange={(e) => setExtensionForm((s) => ({ ...s, new_end_at: e.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Montant additionnel" value={extensionForm.additional_amount} onChange={(e) => setExtensionForm((s) => ({ ...s, additional_amount: e.target.value }))} />
+                <button className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50 hover:bg-amber-700 transition-colors"
+                  onClick={() => extensionM.mutate(selectedReservationId)} disabled={extensionM.isPending || !extensionForm.new_end_at}>
+                  Appliquer prolongation
+                </button>
+              </div>
             </div>
-            <div className="text-xs text-slate-500">
-              Handovers: {(reservationDetailQ.data?.handover_reports ?? []).length} · Extensions: {(reservationDetailQ.data?.extensions ?? []).length} · Damages: {(reservationDetailQ.data?.damage_reports ?? []).length}
+
+            {/* Damage report */}
+            <div>
+              <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Rapport de dommages</div>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Type de dommage" value={damageForm.damage_type} onChange={(e) => setDamageForm((s) => ({ ...s, damage_type: e.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Partie responsable" value={damageForm.responsible_party} onChange={(e) => setDamageForm((s) => ({ ...s, responsible_party: e.target.value }))} />
+                <input className="col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Description" value={damageForm.description} onChange={(e) => setDamageForm((s) => ({ ...s, description: e.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Coût estimé (MAD)" value={damageForm.estimated_cost} onChange={(e) => setDamageForm((s) => ({ ...s, estimated_cost: e.target.value }))} />
+                <button className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50 hover:bg-rose-700 transition-colors"
+                  onClick={() => damageM.mutate(selectedReservationId)} disabled={damageM.isPending}>
+                  Enregistrer dommage
+                </button>
+              </div>
             </div>
-          </>
-        )}
-      </div>
-      </div>
+
+            {/* Close billing */}
+            <div>
+              <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Clôture & facturation</div>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date émission" value={billingForm.issue_date} onChange={(e) => setBillingForm((s) => ({ ...s, issue_date: e.target.value }))} />
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date échéance" value={billingForm.due_date} onChange={(e) => setBillingForm((s) => ({ ...s, due_date: e.target.value }))} />
+                <button className="col-span-2 rounded-xl bg-violet-700 px-3 py-2 text-xs font-black text-white disabled:opacity-50 hover:bg-violet-800 transition-colors"
+                  onClick={() => closeBillingM.mutate(selectedReservationId)} disabled={closeBillingM.isPending}>
+                  Clôturer & générer facture
+                </button>
+              </div>
+            </div>
+
+            {/* Summary counts */}
+            <div className="flex gap-4 text-xs text-slate-400 border-t border-slate-100 pt-3">
+              <span>Handovers : <strong className="text-slate-600">{(reservationDetailQ.data?.handover_reports ?? []).length}</strong></span>
+              <span>Prolongations : <strong className="text-slate-600">{(reservationDetailQ.data?.extensions ?? []).length}</strong></span>
+              <span>Dommages : <strong className="text-slate-600">{(reservationDetailQ.data?.damage_reports ?? []).length}</strong></span>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 };
