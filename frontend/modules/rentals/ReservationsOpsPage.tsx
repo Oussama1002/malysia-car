@@ -438,7 +438,11 @@ export const ReservationsOpsPage: React.FC = () => {
               <div>
                 <div className="text-xs font-black text-slate-400 uppercase tracking-widest">{r.reservation_number}</div>
                 <div className="mt-1 text-sm font-bold text-slate-900">
-                  Client <span className="font-mono">{r.customer_id.slice(0, 8)}</span> · Véhicule <span className="font-mono">{r.vehicle_id.slice(0, 8)}</span>
+                  {customerOptions.find((c) => c.id === r.customer_id)?.label.split(' (')[0]
+                    ?? <span className="font-mono text-xs">CLT-{r.customer_id.slice(0, 8).toUpperCase()}</span>}
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  {vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
+                    ?? <span className="font-mono text-xs">VHL-{r.vehicle_id.slice(0, 8).toUpperCase()}</span>}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
                   {new Date(r.desired_start_at).toLocaleString('fr-MA')} → {new Date(r.desired_end_at).toLocaleString('fr-MA')}
@@ -467,7 +471,9 @@ export const ReservationsOpsPage: React.FC = () => {
           <div className="text-sm text-slate-500">Chargement…</div>
         ) : (
           <>
-            <div className="text-xs text-slate-500 font-mono">{selectedReservationId}</div>
+            <div className="text-xs font-mono font-black text-slate-500">
+              {selected?.reservation_number ?? `RSV-${selectedReservationId.slice(0, 8).toUpperCase()}`}
+            </div>
             <div className="flex flex-wrap gap-2">
               {FLOW.map((step) => (
                 <span key={step} className={`rounded-full px-2 py-1 text-[11px] font-bold ${step === timelineStatus ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
