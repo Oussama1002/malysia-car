@@ -1,8 +1,9 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { auditApi } from '@/services/auditApi';
-import { formatDate } from '@/modules/shared/formatters';
+import { formatDate, formatDateTime } from '@/modules/shared/formatters';
 
+/** Fields that are purely technical — never surfaced in the diff view */
 const HIDDEN_AUDIT_FIELDS = new Set([
   'id',
   'company_id',
@@ -10,7 +11,64 @@ const HIDDEN_AUDIT_FIELDS = new Set([
   'created_at',
   'updated_at',
   'deleted_at',
+  'sha256',          // file integrity hash — not human-readable
+  'storage_path',    // internal disk path
+  'disk',            // storage driver name
+  'password',
+  'remember_token',
+  'two_factor_secret',
 ]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.Z+-]+)?$/;
+const HEX_HASH_RE = /^[0-9a-f]{32,}$/i;
+
+/** Derive a short prefix from a field key name */
+function uuidPrefix(key: string): string {
+  const k = key.toLowerCase();
+  if (k.includes('customer'))    return 'CLT';
+  if (k.includes('vehicle'))     return 'VHL';
+  if (k.includes('contract'))    return 'CTR';
+  if (k.includes('reservation')) return 'RSV';
+  if (k.includes('invoice'))     return 'INV';
+  if (k.includes('document'))    return 'DOC';
+  if (k.includes('user'))        return 'USR';
+  if (k.includes('company'))     return 'CMP';
+  if (k.includes('branch'))      return 'BRN';
+  return key.replace(/_id$/, '').slice(0, 3).toUpperCase();
+}
+
+/** Format a raw field value into a human-friendly string */
+function formatValue(key: string, raw: unknown): string {
+  if (raw === null || raw === undefined || raw === '') return '—';
+  const s = typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
+
+  // UUID → short professional ID
+  if (UUID_RE.test(s.trim())) {
+    const prefix = uuidPrefix(key);
+    return `${prefix}-${s.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+  }
+
+  // ISO date/datetime → localized string with time
+  if (ISO_DATE_RE.test(s.trim())) {
+    try {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        // If it has a time component other than midnight, show full datetime
+        return s.includes('T') && !s.endsWith('T00:00:00.000000Z') && !s.endsWith('T00:00:00Z')
+          ? formatDateTime(d)
+          : formatDate(d);
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Long hex string (SHA-like) → truncate
+  if (HEX_HASH_RE.test(s.trim()) && s.length > 20) {
+    return `${s.slice(0, 12)}…`;
+  }
+
+  return s;
+}
 
 function toComparable(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -18,26 +76,78 @@ function toComparable(value: unknown): string {
   return String(value);
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  status:               'Statut',
+  customer_id:          'Client',
+  vehicle_id:           'Véhicule',
+  contract_id:          'Contrat',
+  reservation_id:       'Réservation',
+  document_id:          'Document',
+  invoice_id:           'Facture',
+  user_id:              'Utilisateur',
+  assigned_user_id:     'Assigné à',
+  start_date:           'Date de début',
+  end_date:             'Date de fin',
+  desired_start_at:     'Début souhaité',
+  desired_end_at:       'Fin souhaitée',
+  activation_date:      'Date d\'activation',
+  closure_date:         'Date de clôture',
+  signed_at:            'Signé le',
+  terminated_reason:    'Motif résiliation',
+  monthly_payment:      'Mensualité',
+  base_amount:          'Montant de base',
+  down_payment_amount:  'Apport',
+  deposit_amount:       'Caution',
+  duration_months:      'Durée (mois)',
+  allowed_km:           'Km autorisés',
+  excess_km_rate:       'Tarif km excédent',
+  payment_method:       'Mode de paiement',
+  payment_terms:        'Conditions paiement',
+  bank_reference:       'Réf. virement',
+  cheque_number:        'N° chèque',
+  notes:                'Notes',
+  legal_status:         'Statut légal',
+  signature_status:     'Statut signature',
+  estimated_price:      'Prix estimé',
+  reservation_type:     'Type réservation',
+  handover_type:        'Type remise',
+  fuel_level:           'Niveau carburant',
+  odometer:             'Kilométrage',
+  condition_notes:      'État / observations',
+};
+
 function formatFieldLabel(field: string): string {
-  return field.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  return FIELD_LABELS[field] ?? field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function summarizeChanges(beforeData?: Record<string, unknown> | null, afterData?: Record<string, unknown> | null): string[] {
+interface DiffLine {
+  label: string;
+  before: string;
+  after: string;
+}
+
+function summarizeChanges(
+  beforeData?: Record<string, unknown> | null,
+  afterData?: Record<string, unknown> | null,
+): DiffLine[] {
   const before = beforeData ?? {};
-  const after = afterData ?? {};
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
-  const lines: string[] = [];
+  const after  = afterData  ?? {};
+  const keys   = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const lines: DiffLine[] = [];
 
   keys.forEach((key) => {
     if (HIDDEN_AUDIT_FIELDS.has(key)) return;
-    const previous = toComparable(before[key]);
-    const next = toComparable(after[key]);
-    if (previous !== next) {
-      lines.push(`${formatFieldLabel(key)}: ${previous || '—'} -> ${next || '—'}`);
-    }
+    const rawBefore = toComparable(before[key]);
+    const rawAfter  = toComparable(after[key]);
+    if (rawBefore === rawAfter) return;
+    lines.push({
+      label:  formatFieldLabel(key),
+      before: formatValue(key, before[key]),
+      after:  formatValue(key, after[key]),
+    });
   });
 
-  return lines.slice(0, 8);
+  return lines.slice(0, 10);
 }
 
 /**
@@ -80,7 +190,7 @@ export const EntityAuditTimeline: React.FC<{
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-black text-slate-900">{r.action_label ?? r.action}</div>
               <div className="text-[10px] uppercase tracking-wide text-slate-400">
-                {formatDate(r.occurred_at)}
+                {formatDateTime(r.occurred_at)}
               </div>
             </div>
             <div className="mt-1 text-xs text-slate-500">
@@ -92,25 +202,41 @@ export const EntityAuditTimeline: React.FC<{
                 </span>
               )}
             </div>
-            {(r.before_data || r.after_data) && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-[11px] font-semibold text-indigo-600">
-                  Voir les changements
-                </summary>
-                <ul className="mt-2 space-y-1 text-[11px] text-slate-600">
-                  {summarizeChanges(
-                    r.before_data as Record<string, unknown> | null,
-                    r.after_data as Record<string, unknown> | null,
-                  ).map((line) => (
-                    <li key={line}>- {line}</li>
-                  ))}
-                  {summarizeChanges(
-                    r.before_data as Record<string, unknown> | null,
-                    r.after_data as Record<string, unknown> | null,
-                  ).length === 0 && <li>- Changement enregistré.</li>}
-                </ul>
-              </details>
-            )}
+            {(r.before_data || r.after_data) && (() => {
+              const diffs = summarizeChanges(
+                r.before_data as Record<string, unknown> | null,
+                r.after_data as Record<string, unknown> | null,
+              );
+              return (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-indigo-600">
+                    Voir les changements ({diffs.length || 'aucun détail'})
+                  </summary>
+                  {diffs.length > 0 ? (
+                    <table className="mt-2 w-full border-collapse text-[11px]">
+                      <thead>
+                        <tr className="border-b border-slate-100">
+                          <th className="py-1 pr-2 text-left font-bold text-slate-400 w-1/3">Champ</th>
+                          <th className="py-1 pr-2 text-left font-bold text-slate-400 w-1/3">Avant</th>
+                          <th className="py-1 text-left font-bold text-slate-400 w-1/3">Après</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {diffs.map((d) => (
+                          <tr key={d.label} className="border-b border-slate-50">
+                            <td className="py-1 pr-2 font-semibold text-slate-600">{d.label}</td>
+                            <td className="py-1 pr-2 font-mono text-slate-400">{d.before}</td>
+                            <td className="py-1 font-mono font-semibold text-slate-800">{d.after}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-slate-400">Changement enregistré (aucun champ visible).</p>
+                  )}
+                </details>
+              );
+            })()}
           </div>
         </li>
       ))}
