@@ -1,23 +1,62 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   allocatePayment,
   createPayment,
   listPayments,
+  listInvoices,
   PAYMENT_METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
+  PAYMENT_TYPE_LABEL,
   paymentStatusTone,
   type Payment,
   type PaymentCreatePayload,
   type PaymentListParams,
   type PaymentMethod,
   type PaymentStatus,
+  type PaymentType,
+  type Invoice,
 } from '@/services/financeApi';
+import { apiClient } from '@/services/apiClient';
+import { endpoints } from '@/services/endpoints';
+import { queryKeys } from '@/services/queryKeys';
 import { ApiError } from '@/services/apiError';
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+
+/* ── Types used by data loading ─────────────────────────────────────── */
+
+interface CustomerMin {
+  id: string;
+  full_name?: string | null;
+  customer_code?: string | null;
+}
+interface ContractMin {
+  id: string | number;
+  reference: string;
+  type: string;
+  status: string;
+}
+interface ReservationMin {
+  id: string;
+  reservation_number: string;
+  status: string;
+}
+interface InvoiceMin {
+  id: string;
+  invoice_number: string;
+  status: string;
+  total_amount_mad: number;
+}
+
+interface ApiListResponse<T> {
+  data: T[];
+  meta?: unknown;
+}
+
+/* ── Page ────────────────────────────────────────────────────────────── */
 
 export const PaymentsPage: React.FC = () => {
   const qc = useQueryClient();
@@ -61,7 +100,7 @@ export const PaymentsPage: React.FC = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Paiements</h1>
-          <p className="text-slate-500">Encaissements, allocations, décaissements.</p>
+          <p className="text-slate-500">Encaissements clients et allocations.</p>
         </div>
         <button
           type="button"
@@ -75,10 +114,11 @@ export const PaymentsPage: React.FC = () => {
         </button>
       </header>
 
+      {/* ── Filters ──────────────────────────────────────────────── */}
       <div className="df-card">
-        <div className="df-card__body grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+        <div className="df-card__body grid gap-3 md:grid-cols-3 lg:grid-cols-4">
           <input
-            placeholder="Rechercher (numéro, référence)…"
+            placeholder="Rechercher (numéro, référence)..."
             className="df-input md:col-span-2"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -86,7 +126,13 @@ export const PaymentsPage: React.FC = () => {
           <select
             className="df-input"
             value={filters.status ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, status: (e.target.value || undefined) as PaymentStatus | undefined, page: 1 }))}
+            onChange={(e) =>
+              setFilters((f) => ({
+                ...f,
+                status: (e.target.value || undefined) as PaymentStatus | undefined,
+                page: 1,
+              }))
+            }
           >
             <option value="">Statut: tous</option>
             {(Object.entries(PAYMENT_STATUS_LABEL) as [PaymentStatus, string][]).map(([k, l]) => (
@@ -98,7 +144,13 @@ export const PaymentsPage: React.FC = () => {
           <select
             className="df-input"
             value={filters.payment_method ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, payment_method: (e.target.value || undefined) as PaymentMethod | undefined, page: 1 }))}
+            onChange={(e) =>
+              setFilters((f) => ({
+                ...f,
+                payment_method: (e.target.value || undefined) as PaymentMethod | undefined,
+                page: 1,
+              }))
+            }
           >
             <option value="">Mode: tous</option>
             {(Object.entries(PAYMENT_METHOD_LABEL) as [PaymentMethod, string][]).map(([k, l]) => (
@@ -107,18 +159,10 @@ export const PaymentsPage: React.FC = () => {
               </option>
             ))}
           </select>
-          <select
-            className="df-input"
-            value={filters.payment_direction ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, payment_direction: (e.target.value || undefined) as 'incoming' | 'outgoing' | undefined, page: 1 }))}
-          >
-            <option value="">Sens: tous</option>
-            <option value="incoming">Entrant</option>
-            <option value="outgoing">Sortant</option>
-          </select>
         </div>
       </div>
 
+      {/* ── Table ────────────────────────────────────────────────── */}
       <DataTable<Payment>
         loading={listQ.isLoading}
         rows={rows}
@@ -138,9 +182,15 @@ export const PaymentsPage: React.FC = () => {
           {
             key: 'customer',
             header: 'Client',
-            render: (r) => r.customer?.full_name ?? '—',
+            render: (r) => r.customer?.full_name ?? r.customer?.customer_code ?? '—',
           },
-          { key: 'method', header: 'Mode', render: (r) => PAYMENT_METHOD_LABEL[r.payment_method] },
+          {
+            key: 'type',
+            header: 'Type',
+            render: (r) =>
+              r.payment_type ? (PAYMENT_TYPE_LABEL[r.payment_type] ?? r.payment_type) : '—',
+          },
+          { key: 'method', header: 'Mode', render: (r) => PAYMENT_METHOD_LABEL[r.payment_method] ?? r.payment_method },
           { key: 'date', header: 'Date', render: (r) => formatDate(r.payment_date) },
           { key: 'amount', header: 'Montant', render: (r) => formatCurrencyMad(Number(r.amount)) },
           {
@@ -177,6 +227,7 @@ export const PaymentsPage: React.FC = () => {
         ]}
       />
 
+      {/* ── Pagination ───────────────────────────────────────────── */}
       {meta && meta.last_page > 1 && (
         <div className="flex items-center justify-center gap-2">
           <button
@@ -184,22 +235,23 @@ export const PaymentsPage: React.FC = () => {
             disabled={(filters.page ?? 1) <= 1}
             onClick={() => setFilters((f) => ({ ...f, page: Math.max(1, (f.page ?? 1) - 1) }))}
           >
-            ← Précédent
+            &larr; Précédent
           </button>
           <span className="text-xs font-semibold text-slate-600">
-            Page {meta.current_page} / {meta.last_page} · {meta.total} paiements
+            Page {meta.current_page} / {meta.last_page} &middot; {meta.total} paiements
           </span>
           <button
             className="df-btn df-btn--ghost disabled:opacity-40"
             disabled={(filters.page ?? 1) >= meta.last_page}
             onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
           >
-            Suivant →
+            Suivant &rarr;
           </button>
         </div>
       )}
 
-      <DrawerPanel open={createOpen} title="Nouveau paiement" onClose={() => setCreateOpen(false)}>
+      {/* ── Create drawer ────────────────────────────────────────── */}
+      <DrawerPanel open={createOpen} title="Nouveau paiement client" onClose={() => setCreateOpen(false)}>
         <PaymentForm
           submitting={createMut.isPending}
           error={error}
@@ -211,6 +263,7 @@ export const PaymentsPage: React.FC = () => {
         />
       </DrawerPanel>
 
+      {/* ── Allocate drawer ──────────────────────────────────────── */}
       <DrawerPanel
         open={!!allocateOpenPayment}
         title={`Allouer ${allocateOpenPayment?.payment_number ?? ''}`}
@@ -222,15 +275,17 @@ export const PaymentsPage: React.FC = () => {
             submitting={allocateMut.isPending}
             error={error}
             onCancel={() => setAllocateOpenPayment(null)}
-            onSubmit={(allocs) =>
-              allocateMut.mutate({ id: allocateOpenPayment.id, allocations: allocs })
-            }
+            onSubmit={(allocs) => allocateMut.mutate({ id: allocateOpenPayment.id, allocations: allocs })}
           />
         )}
       </DrawerPanel>
     </div>
   );
 };
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/* Payment creation form                                                   */
+/* ════════════════════════════════════════════════════════════════════════ */
 
 const PaymentForm: React.FC<{
   submitting: boolean;
@@ -240,134 +295,282 @@ const PaymentForm: React.FC<{
 }> = ({ submitting, error, onCancel, onSubmit }) => {
   const [form, setForm] = useState<PaymentCreatePayload>({
     customer_id: '',
-    payment_method: 'bank_transfer',
-    payment_direction: 'incoming',
+    payment_method: 'cash',
+    payment_type: undefined,
     amount: 0,
     payment_date: new Date().toISOString().slice(0, 10),
   });
+
+  /* ── Load catalogue data ──────────────────────────────────────── */
+
+  const customersQ = useQuery({
+    queryKey: queryKeys.customers.all,
+    queryFn: async () =>
+      (await apiClient<ApiListResponse<CustomerMin>>(endpoints.customers.list)).data,
+  });
+
+  const contractsQ = useQuery({
+    queryKey: queryKeys.contracts.all,
+    queryFn: async () =>
+      (await apiClient<ApiListResponse<ContractMin>>(endpoints.contracts.list)).data,
+  });
+
+  const reservationsQ = useQuery({
+    queryKey: queryKeys.reservations,
+    queryFn: async () =>
+      (await apiClient<ApiListResponse<ReservationMin>>(endpoints.reservations.list)).data,
+  });
+
+  const invoicesQ = useQuery({
+    queryKey: ['invoices', 'all'],
+    queryFn: async () => {
+      const r = await listInvoices({ per_page: 200 });
+      return r.data;
+    },
+  });
+
+  const customers = customersQ.data ?? [];
+  const contracts = contractsQ.data ?? [];
+  const reservations = reservationsQ.data ?? [];
+  const invoices = invoicesQ.data ?? [];
+
+  /* Filter contracts/reservations/invoices by selected customer */
+  const filteredContracts = useMemo(() => {
+    if (!form.customer_id) return contracts;
+    return contracts.filter(
+      (c) =>
+        (c as unknown as { customerId?: string; clientId?: string; customer_id?: string }).customerId === form.customer_id ||
+        (c as unknown as { customerId?: string; clientId?: string; customer_id?: string }).clientId === form.customer_id ||
+        (c as unknown as { customerId?: string; clientId?: string; customer_id?: string }).customer_id === form.customer_id,
+    );
+  }, [contracts, form.customer_id]);
+
+  const filteredReservations = useMemo(() => {
+    if (!form.customer_id) return reservations;
+    return reservations.filter((r) => r.id && (r as unknown as { customer_id?: string }).customer_id === form.customer_id);
+  }, [reservations, form.customer_id]);
+
+  const filteredInvoices = useMemo(() => {
+    if (!form.customer_id) return invoices;
+    return invoices.filter(
+      (inv) => (inv as unknown as { customer_id?: string }).customer_id === form.customer_id,
+    );
+  }, [invoices, form.customer_id]);
+
+  const set = <K extends keyof PaymentCreatePayload>(field: K, value: PaymentCreatePayload[K]) =>
+    setForm((f) => ({ ...f, [field]: value }));
+
   return (
     <form
-      className="space-y-3"
+      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(form);
+        onSubmit({
+          ...form,
+          payment_direction: 'incoming',
+        });
       }}
     >
       {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+
+      {/* ── Client ───────────────────────────────────────────── */}
       <div>
-        <label className="text-xs font-bold uppercase text-slate-500">ID client</label>
-        <input
-          className="df-input mt-1"
+        <label className="text-xs font-bold uppercase text-slate-500">Client *</label>
+        <select
+          className="df-input mt-1 w-full"
           value={form.customer_id}
-          onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
+          onChange={(e) => set('customer_id', e.target.value)}
           required
-        />
+        >
+          <option value="">-- Sélectionner un client --</option>
+          {customers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.customer_code ? `${c.customer_code} — ` : ''}
+              {c.full_name ?? c.id}
+            </option>
+          ))}
+        </select>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+
+      {/* ── Contrat / Réservation / Facture ──────────────────── */}
+      <div className="grid gap-3 md:grid-cols-3">
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Mode</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Contrat</label>
           <select
-            className="df-input mt-1"
-            value={form.payment_method}
-            onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
+            className="df-input mt-1 w-full"
+            value={form.contract_id ?? ''}
+            onChange={(e) => set('contract_id', e.target.value || undefined)}
           >
-            {(Object.entries(PAYMENT_METHOD_LABEL) as [PaymentMethod, string][]).map(([k, l]) => (
-              <option key={k} value={k}>
-                {l}
+            <option value="">-- Aucun --</option>
+            {filteredContracts.map((c) => (
+              <option key={String(c.id)} value={String(c.id)}>
+                {c.reference} ({c.type})
               </option>
             ))}
           </select>
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Sens</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Réservation</label>
           <select
-            className="df-input mt-1"
-            value={form.payment_direction}
-            onChange={(e) => setForm({ ...form, payment_direction: e.target.value as 'incoming' | 'outgoing' })}
+            className="df-input mt-1 w-full"
+            value={form.reservation_id ?? ''}
+            onChange={(e) => set('reservation_id', e.target.value || undefined)}
           >
-            <option value="incoming">Entrant</option>
-            <option value="outgoing">Sortant</option>
+            <option value="">-- Aucune --</option>
+            {filteredReservations.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.reservation_number} ({r.status})
+              </option>
+            ))}
           </select>
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Montant</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Facture</label>
+          <select
+            className="df-input mt-1 w-full"
+            value={form.invoice_id ?? ''}
+            onChange={(e) => set('invoice_id', e.target.value || undefined)}
+          >
+            <option value="">-- Aucune --</option>
+            {filteredInvoices.map((inv) => (
+              <option key={inv.id} value={inv.id}>
+                {inv.invoice_number} ({formatCurrencyMad(Number(inv.total_amount_mad))})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* ── Type paiement ────────────────────────────────────── */}
+      <div>
+        <label className="text-xs font-bold uppercase text-slate-500">Type paiement</label>
+        <select
+          className="df-input mt-1 w-full"
+          value={form.payment_type ?? ''}
+          onChange={(e) => set('payment_type', (e.target.value || undefined) as PaymentType | undefined)}
+        >
+          <option value="">-- Sélectionner --</option>
+          {(Object.entries(PAYMENT_TYPE_LABEL) as [PaymentType, string][]).map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* ── Mode paiement ────────────────────────────────────── */}
+      <div>
+        <label className="text-xs font-bold uppercase text-slate-500">Mode paiement *</label>
+        <select
+          className="df-input mt-1 w-full"
+          value={form.payment_method}
+          onChange={(e) => set('payment_method', e.target.value as PaymentMethod)}
+          required
+        >
+          {(Object.entries(PAYMENT_METHOD_LABEL) as [PaymentMethod, string][]).map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* ── Montant + Date ───────────────────────────────────── */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Montant (MAD) *</label>
           <input
             type="number"
             min="0"
             step="0.01"
-            className="df-input mt-1"
+            className="df-input mt-1 w-full"
             value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+            onChange={(e) => set('amount', Number(e.target.value))}
             required
           />
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Date paiement *</label>
           <input
             type="date"
-            className="df-input mt-1"
+            className="df-input mt-1 w-full"
             value={form.payment_date}
-            onChange={(e) => setForm({ ...form, payment_date: e.target.value })}
+            onChange={(e) => set('payment_date', e.target.value)}
             required
           />
         </div>
       </div>
+
+      {/* ── Référence ────────────────────────────────────────── */}
       <div>
-        <label className="text-xs font-bold uppercase text-slate-500">Référence externe</label>
+        <label className="text-xs font-bold uppercase text-slate-500">Référence</label>
         <input
-          className="df-input mt-1"
+          className="df-input mt-1 w-full"
           value={form.external_reference ?? ''}
-          onChange={(e) => setForm({ ...form, external_reference: e.target.value })}
+          onChange={(e) => set('external_reference', e.target.value)}
+          placeholder="Référence externe, n° reçu..."
         />
       </div>
+
+      {/* ── Chèque fields ────────────────────────────────────── */}
       {form.payment_method === 'check' && (
         <div className="grid gap-3 md:grid-cols-3">
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">N° chèque</label>
             <input
-              className="df-input mt-1"
+              className="df-input mt-1 w-full"
               value={form.check_number ?? ''}
-              onChange={(e) => setForm({ ...form, check_number: e.target.value })}
+              onChange={(e) => set('check_number', e.target.value)}
             />
           </div>
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">Banque</label>
             <input
-              className="df-input mt-1"
+              className="df-input mt-1 w-full"
               value={form.check_bank ?? ''}
-              onChange={(e) => setForm({ ...form, check_bank: e.target.value })}
+              onChange={(e) => set('check_bank', e.target.value)}
             />
           </div>
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
             <input
               type="date"
-              className="df-input mt-1"
+              className="df-input mt-1 w-full"
               value={form.check_date ?? ''}
-              onChange={(e) => setForm({ ...form, check_date: e.target.value })}
+              onChange={(e) => set('check_date', e.target.value)}
             />
           </div>
         </div>
       )}
+
+      {/* ── Notes ────────────────────────────────────────────── */}
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Notes</label>
         <textarea
-          className="df-input mt-1"
+          className="df-input mt-1 w-full"
+          rows={3}
           value={form.notes ?? ''}
-          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          onChange={(e) => set('notes', e.target.value)}
+          placeholder="Commentaires ou informations complémentaires..."
         />
       </div>
-      <div className="flex justify-end gap-2">
+
+      {/* ── Actions ──────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
         <button type="button" className="df-btn df-btn--ghost" onClick={onCancel}>
           Annuler
         </button>
         <button type="submit" className="df-btn df-btn--primary" disabled={submitting}>
-          Enregistrer
+          {submitting ? 'Enregistrement...' : 'Enregistrer le paiement'}
         </button>
       </div>
     </form>
   );
 };
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/* Allocate form                                                           */
+/* ════════════════════════════════════════════════════════════════════════ */
 
 const AllocateForm: React.FC<{
   payment: Payment;
@@ -402,7 +605,7 @@ const AllocateForm: React.FC<{
     >
       {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
       <div className="text-sm text-slate-600">
-        Paiement {payment.payment_number} · Non alloué{' '}
+        Paiement {payment.payment_number} &middot; Non alloué{' '}
         <b>{formatCurrencyMad(Number(payment.amount_unallocated))}</b>
       </div>
       {rows.map((r, idx) => (
@@ -446,7 +649,7 @@ const AllocateForm: React.FC<{
             className="df-btn df-btn--ghost md:col-span-1"
             onClick={() => setRows(rows.filter((_, i) => i !== idx))}
           >
-            ✕
+            &times;
           </button>
         </div>
       ))}
@@ -458,7 +661,7 @@ const AllocateForm: React.FC<{
         + Ajouter une ligne
       </button>
       <div className="text-xs text-slate-500">
-        Total alloué: <b>{formatCurrencyMad(total)}</b> · Reste:{' '}
+        Total alloué: <b>{formatCurrencyMad(total)}</b> &middot; Reste:{' '}
         <b className={remaining < 0 ? 'text-rose-600' : ''}>{formatCurrencyMad(remaining)}</b>
       </div>
       <div className="flex justify-end gap-2">
