@@ -21,7 +21,7 @@ class PaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = Payment::query()->with(['customer', 'bankAccount', 'allocations']);
+        $q = Payment::query()->with(['customer.individualProfile', 'customer.companyProfile', 'bankAccount', 'allocations']);
 
         if ($status = $request->query('status')) {
             $q->where('status', $status);
@@ -60,7 +60,7 @@ class PaymentController extends Controller
 
     public function show(Payment $payment): JsonResponse
     {
-        $payment->load(['customer', 'bankAccount', 'allocations.invoice', 'allocations.installment']);
+        $payment->load(['customer.individualProfile', 'customer.companyProfile', 'bankAccount', 'allocations.invoice', 'allocations.installment']);
 
         return ApiResponse::success($payment);
     }

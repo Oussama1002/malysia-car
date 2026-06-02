@@ -32,9 +32,16 @@ class Customer extends Model
         'assigned_to_user_id',
     ];
 
+    protected $appends = ['full_name'];
+
     protected $casts = [
         'is_blacklisted' => 'boolean',
     ];
+
+    public function getFullNameAttribute(): string
+    {
+        return $this->displayName();
+    }
 
     public function individualProfile(): HasOne
     {

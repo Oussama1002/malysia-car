@@ -30,8 +30,10 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 
 interface CustomerMin {
   id: string;
-  full_name?: string | null;
+  display_name?: string | null;
   customer_code?: string | null;
+  individual_profile?: { first_name?: string | null; last_name?: string | null } | null;
+  company_profile?: { legal_name?: string | null; trade_name?: string | null } | null;
 }
 interface ContractMin {
   id: string | number;
@@ -383,12 +385,18 @@ const PaymentForm: React.FC<{
           required
         >
           <option value="">-- Sélectionner un client --</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.customer_code ? `${c.customer_code} — ` : ''}
-              {c.full_name ?? c.id}
-            </option>
-          ))}
+          {customers.map((c) => {
+            const name = c.display_name
+              ?? (c.individual_profile ? `${c.individual_profile.first_name ?? ''} ${c.individual_profile.last_name ?? ''}`.trim() : null)
+              ?? c.company_profile?.trade_name
+              ?? c.company_profile?.legal_name
+              ?? '—';
+            return (
+              <option key={c.id} value={c.id}>
+                {c.customer_code ?? '—'} — {name}
+              </option>
+            );
+          })}
         </select>
       </div>
 
