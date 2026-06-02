@@ -637,6 +637,52 @@ export const ReservationsOpsPage: React.FC = () => {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">Véhicule disponible sur la période.</div>
             )}
 
+            {/* ── Generate contract alert when start date is today ── */}
+            {(() => {
+              if (!selected) return null;
+              const startD = new Date(selected.desired_start_at);
+              startD.setHours(0, 0, 0, 0);
+              const nowD = new Date();
+              nowD.setHours(0, 0, 0, 0);
+              const isStartToday = startD.getTime() === nowD.getTime();
+              const isStartPast  = startD.getTime() < nowD.getTime();
+              const PRE_CONTRACT = ['reserved', 'confirmed', 'pickup_scheduled', 'draft'];
+              const needsContract = PRE_CONTRACT.includes(selected.status);
+              if (!needsContract || (!isStartToday && !isStartPast)) return null;
+              const clientLabel = customerOptions.find((c) => c.id === selected.customer_id)?.label.split(' (')[0] ?? '—';
+              const vehicleLabel = vehicleOptions.find((v) => v.id === selected.vehicle_id)?.label ?? '—';
+              const price = selected.estimated_price ? `${Number(selected.estimated_price).toLocaleString('fr-MA')} MAD` : '—';
+              return (
+                <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">⚠️</span>
+                    <div>
+                      <div className="text-sm font-black text-amber-900">
+                        {isStartToday ? 'Départ prévu aujourd\'hui' : 'Départ dépassé'} — contrat requis
+                      </div>
+                      <div className="mt-1 text-xs text-amber-700">
+                        Un contrat doit être généré avant la remise des clés. Toutes les informations de la réservation seront pré-remplies automatiquement.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs rounded-lg bg-white/60 px-3 py-2">
+                    <div><span className="font-bold text-slate-500">Client :</span> <span className="font-semibold text-slate-800">{clientLabel}</span></div>
+                    <div><span className="font-bold text-slate-500">Véhicule :</span> <span className="font-semibold text-slate-800">{vehicleLabel}</span></div>
+                    <div><span className="font-bold text-slate-500">Début :</span> <span className="font-semibold text-slate-800">{new Date(selected.desired_start_at).toLocaleDateString('fr-MA')}</span></div>
+                    <div><span className="font-bold text-slate-500">Fin :</span> <span className="font-semibold text-slate-800">{new Date(selected.desired_end_at).toLocaleDateString('fr-MA')}</span></div>
+                    <div><span className="font-bold text-slate-500">Prix estimé :</span> <span className="font-semibold text-slate-800">{price}</span></div>
+                    <div><span className="font-bold text-slate-500">N° résa :</span> <span className="font-semibold text-slate-800">{selected.reservation_number}</span></div>
+                  </div>
+                  <Link
+                    to={`/contracts/new?from_reservation=${selected.id}`}
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white shadow-md hover:bg-amber-700 transition-colors"
+                  >
+                    📄 Générer le contrat maintenant
+                  </Link>
+                </div>
+              );
+            })()}
+
             {/* Primary actions */}
             <div>
               <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</div>
@@ -652,13 +698,22 @@ export const ReservationsOpsPage: React.FC = () => {
                 </button>
                 <button className="rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-emerald-700 transition-colors"
                   onClick={() => pickupM.mutate(selectedReservationId)} disabled={pickupM.isPending}>
-                  ↑ Pickup
+                  ↑ Remise
                 </button>
                 <button className="rounded-xl bg-cyan-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-cyan-700 transition-colors"
                   onClick={() => returnM.mutate(selectedReservationId)} disabled={returnM.isPending}>
                   ↓ Retour
                 </button>
               </div>
+              {/* Always-visible Generate Contract button */}
+              {selected && !['cancelled', 'closed'].includes(selected.status) && (
+                <Link
+                  to={`/contracts/new?from_reservation=${selected.id}`}
+                  className="mt-2 inline-flex items-center gap-2 rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-black text-amber-800 hover:bg-amber-100 transition-colors"
+                >
+                  📄 Générer contrat depuis cette réservation
+                </Link>
+              )}
             </div>
 
             {/* Pickup / Return forms */}

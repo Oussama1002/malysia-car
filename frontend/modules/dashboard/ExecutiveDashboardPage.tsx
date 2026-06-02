@@ -27,6 +27,9 @@ import { maintenanceApi, type MaintenanceAlertDto } from '@/services/maintenance
 import { complianceApi, type ComplianceAlertDto } from '@/services/complianceApi';
 import { contractsApi } from '@/services/contractsApi';
 import { gpsApi } from '@/services/gpsApi';
+import { opsApi, type ReservationDto } from '@/services/opsApi';
+import { apiClient, endpoints, getApiBase } from '@/services/apiClient';
+import { queryKeys } from '@/services/queryKeys';
 import type { GpsAlertDto, ContractDto } from '@/services/dtos';
 import { KpiCard } from '@/modules/shared/components/KpiCard';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
@@ -73,9 +76,66 @@ export const ExecutiveDashboardPage: React.FC = () => {
     enabled: realDashboard,
   });
 
+  // ── Reservations starting today that still need a contract ────────────
+  const reservationsQ = useQuery({
+    queryKey: queryKeys.reservations,
+    queryFn: async () => opsApi.reservations(),
+    staleTime: 120_000,
+    enabled: !!getApiBase(),
+  });
+
+  const todayReservations = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const PRE_CONTRACT = ['draft', 'reserved', 'confirmed', 'pickup_scheduled'];
+    return ((reservationsQ.data ?? []) as ReservationDto[]).filter((r) => {
+      if (!PRE_CONTRACT.includes(r.status)) return false;
+      const start = new Date(r.desired_start_at);
+      start.setHours(0, 0, 0, 0);
+      return start.getTime() === now.getTime();
+    });
+  }, [reservationsQ.data]);
+
+  // Shared banner component for today's reservations needing contracts
+  const TodayReservationsBanner = todayReservations.length > 0 ? (
+    <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 shadow-sm">
+      <div className="flex items-center gap-3 mb-3">
+        <span className="text-2xl">🔔</span>
+        <div>
+          <div className="text-sm font-black text-amber-900">
+            {todayReservations.length} réservation{todayReservations.length > 1 ? 's' : ''} — départ aujourd'hui, contrat à générer
+          </div>
+          <div className="text-xs text-amber-700">
+            Cliquez sur « Générer contrat » pour créer le contrat avec les informations pré-remplies.
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {todayReservations.map((r) => (
+          <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-xs font-black text-slate-700">{r.reservation_number}</div>
+              <div className="text-xs text-slate-500">
+                {new Date(r.desired_start_at).toLocaleDateString('fr-MA')} → {new Date(r.desired_end_at).toLocaleDateString('fr-MA')}
+                {r.estimated_price ? <span className="ml-2 font-semibold text-slate-700">{Number(r.estimated_price).toLocaleString('fr-MA')} MAD</span> : null}
+              </div>
+            </div>
+            <Link
+              to={`/contracts/new?from_reservation=${r.id}`}
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors shadow-sm"
+            >
+              📄 Générer contrat
+            </Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   if (!realDashboard) {
     return (
       <div className="space-y-8">
+        {TodayReservationsBanner}
         <section className="df-card df-card--elev relative overflow-hidden p-8 md:p-12">
           <div className="df-grid-bg pointer-events-none absolute inset-0 opacity-30" />
           <div className="relative mx-auto max-w-xl text-center">
@@ -137,6 +197,8 @@ export const ExecutiveDashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
+
+      {TodayReservationsBanner}
 
       {/* ── Hero / welcome band ─────────────────────────────────────────── */}
       <section className="df-card df-card--elev relative overflow-hidden p-6 md:p-8">

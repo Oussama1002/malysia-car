@@ -199,14 +199,29 @@ export const ContractWizardPage: React.FC = () => {
         const rawMethod = String(r.payment_method ?? '').toLowerCase();
         const paymentMethod = methodMap[rawMethod] ?? 'virement';
 
+        // Map reservation_type to contract type
+        const typeMap: Record<string, ContractType> = {
+          SHORT_RENTAL: 'LOCATION_COURTE',
+          short_rental: 'LOCATION_COURTE',
+          LONG_RENTAL:  'LLD',
+          long_rental:  'LLD',
+          LLD:          'LLD',
+          LOA:          'LOA',
+          CREDIT_AUTO:  'CREDIT_AUTO',
+          VENTE_VO:     'VENTE_VO',
+        };
+        const contractType: ContractType = typeMap[r.reservation_type ?? ''] ?? 'LOCATION_COURTE';
+
         setState((prev) => ({
           ...prev,
           clientId: r.customer_id ?? null,
           vehicleId: r.vehicle_id ?? null,
+          type: contractType,
           startDate,
           endDate,
           durationMonths,
           monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths)) : prev.monthlyRentMad,
+          securityDepositMad: r.deposit_amount ? Number(r.deposit_amount) : prev.securityDepositMad,
           payments: [{ id: String(Date.now()), method: paymentMethod, amount: '', reference: '', chequeNumber: '' }],
         }));
 
