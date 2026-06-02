@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -85,10 +85,12 @@ export const AppLayout: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { session, logout } = useAuthSession();
   const navigate = useNavigate();
+  const loc = useLocation();
   const { theme, sidebarCollapsed, toggleSidebar } = useUIPrefs();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [financeOpen, setFinanceOpen] = useState(true);
   const crumb = useBreadcrumb();
 
   useCommandPaletteShortcut(() => setCmdOpen(true));
@@ -105,6 +107,14 @@ export const AppLayout: React.FC = () => {
       }),
     })).filter((g) => g.items.length > 0);
   }, [session?.user.role]);
+
+  useEffect(() => {
+    // Auto-open Finance group when user navigates inside it.
+    const finance = groups.find((g) => g.key === 'finance');
+    if (!finance) return;
+    const inFinance = finance.items.some((it) => loc.pathname === it.to || loc.pathname.startsWith(it.to + '/'));
+    if (inFinance) setFinanceOpen(true);
+  }, [groups, loc.pathname]);
 
   const unreadQ = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -165,12 +175,38 @@ export const AppLayout: React.FC = () => {
       <nav className="flex-1 overflow-y-auto px-3 py-1">
         {groups.map((g) => (
           <div key={g.key} className="mb-3">
-            {!sidebarCollapsed && <div className="df-nav-section">{t(g.labelKey)}</div>}
-            <div className="flex flex-col gap-0.5">
-              {g.items.map((it) => (
-                <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
-              ))}
-            </div>
+            {g.key === 'finance' && !sidebarCollapsed ? (
+              <>
+                <button
+                  type="button"
+                  className="df-nav-section flex w-full items-center justify-between"
+                  onClick={() => setFinanceOpen((v) => !v)}
+                >
+                  <span>{t(g.labelKey)}</span>
+                  <Icon
+                    name="chevron-right"
+                    size={12}
+                    className={`transition-transform ${financeOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {financeOpen && (
+                  <div className="flex flex-col gap-0.5 ps-2">
+                    {g.items.map((it) => (
+                      <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {!sidebarCollapsed && <div className="df-nav-section">{t(g.labelKey)}</div>}
+                <div className="flex flex-col gap-0.5">
+                  {g.items.map((it) => (
+                    <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ))}
       </nav>
