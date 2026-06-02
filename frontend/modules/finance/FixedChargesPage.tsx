@@ -102,7 +102,7 @@ export const FixedChargesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-black text-[color:var(--df-text)]">Charges fixes</h1>
+        <h1 className="text-2xl font-black text-[color:var(--df-text)]">Depenses</h1>
         <p className="text-sm text-[color:var(--df-text-muted)]">Suivi des charges récurrentes et échéances.</p>
       </header>
 

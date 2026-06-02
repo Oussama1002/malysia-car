@@ -31,8 +31,8 @@ function load(): { theme: Theme; density: Density; sidebarCollapsed: boolean } {
   } catch {
     /* ignore */
   }
-  const mql = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)');
-  return { theme: mql && mql.matches ? 'dark' : 'light', density: 'comfort', sidebarCollapsed: false };
+  // Default theme: always light unless the user explicitly chose otherwise.
+  return { theme: 'light', density: 'comfort', sidebarCollapsed: false };
 }
 
 function applyDom(theme: Theme, density: Density) {
