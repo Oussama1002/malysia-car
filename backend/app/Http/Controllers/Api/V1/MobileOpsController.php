@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Models\FieldMissionIssue;
+use App\Models\FieldMissionSignature;
+use App\Models\FieldVehicleInspection;
 use App\Models\Mission;
 use App\Models\MissionChecklistItem;
 use App\Models\MissionPhoto;
@@ -13,27 +16,21 @@ use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Phase 3 — Mobile Ops.
+ * Mobile Ops — field agent workflow.
  *
- * Layered on top of the existing `MissionController` to provide a *role-aware*
- * surface under `/api/v1/mobile-ops/*`. The classic `/api/v1/missions/*` routes
- * stay unchanged for back-office consumers (GESTIONNAIRE_FLOTTE dashboards,
- * reporting); this controller adds the field-agent and customer-portal
- * journeys plus mission audit + notifications.
- *
- * Row-scoping rules (enforced inside the controller, not in middleware):
- *   - AGENT_LIVRAISON  → can only see/act on missions where assigned_user_id
- *                         matches their user_id.
- *   - GESTIONNAIRE_FLOTTE → sees all active missions in their tenant.
- *   - CLIENT_PORTAL    → can ONLY hit `customerTracking()`; calls to mission
- *                         endpoints return 404 (mission directory is internal).
- *   - ADMIN / DIRECTEUR → unrestricted.
+ * Role-aware surface under `/api/v1/mobile-ops/*`. Row-scoping rules:
+ *   - AGENT_LIVRAISON  → own assigned missions only
+ *   - GESTIONNAIRE_FLOTTE → all active missions in tenant
+ *   - ADMIN / DIRECTEUR → unrestricted
  */
 class MobileOpsController extends Controller
 {
+    private const ACTIVE_STATUSES = ['pending', 'assigned', 'accepted', 'in_progress', 'arrived'];
+
     public function __construct(private NotificationService $notifications)
     {
     }
@@ -41,32 +38,36 @@ class MobileOpsController extends Controller
     /* =================== Listing =================== */
 
     /**
-     * `GET /api/v1/mobile-ops/my-missions`
-     *
-     * Returns the missions visible to the caller per the rules above.
-     * AGENT_LIVRAISON gets only their assigned missions; GESTIONNAIRE_FLOTTE
-     * gets all active ones; admins get the full list.
+     * GET /api/v1/mobile-ops/my-missions
      */
     public function myMissions(Request $request): JsonResponse
     {
         $user = $request->user();
-        $role = (string) ($user->role ?? '');
+        $role = $this->userRole($user);
 
-        $query = Mission::query()->orderByDesc('updated_at');
+        $query = Mission::query()
+            ->with([
+                'vehicle:id,registration_number',
+                'assignedAgent:id,email',
+                'client:id,customer_code,customer_type',
+            ])
+            ->withCount(['photos', 'inspections', 'issues'])
+            ->orderByDesc('updated_at');
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
+        }
+        if ($type = $request->query('mission_type')) {
+            $query->where('mission_type', $type);
         }
 
         if ($role === 'AGENT_LIVRAISON') {
             $query->where('assigned_user_id', (string) $user->id);
         } elseif ($role === 'GESTIONNAIRE_FLOTTE') {
-            // Default monitoring view: only active work unless caller asks for all.
             if (! $request->query('include_all')) {
-                $query->whereIn('status', ['planned', 'in_progress']);
+                $query->whereIn('status', self::ACTIVE_STATUSES);
             }
         } elseif (! in_array($role, ['ADMIN', 'DIRECTEUR'], true)) {
-            // No other internal role should be hitting this endpoint.
             abort(403);
         }
 
@@ -81,56 +82,293 @@ class MobileOpsController extends Controller
         ]);
     }
 
-    /* =================== Detail / lifecycle =================== */
+    /* =================== Detail =================== */
 
     /**
-     * `GET /api/v1/mobile-ops/missions/{mission}`
-     *
-     * Returns a single mission with checklist + photos. Enforces assignment
-     * for AGENT_LIVRAISON (404 — never 403, to avoid leaking the mission's
-     * existence).
+     * GET /api/v1/mobile-ops/missions/{mission}
      */
     public function show(Request $request, Mission $mission): JsonResponse
     {
         $this->ensureAssignedOrManager($request, $mission);
-        $mission->load(['checklistItems', 'photos']);
+        $mission->load([
+            'checklistItems',
+            'photos',
+            'inspections',
+            'signatures',
+            'issues',
+            'vehicle:id,registration_number',
+            'assignedAgent:id,email',
+            'client:id,customer_code,customer_type',
+        ]);
+
+        return ApiResponse::success($mission);
+    }
+
+    /* =================== Lifecycle transitions =================== */
+
+    /**
+     * POST /api/v1/mobile-ops/missions/{mission}/accept
+     *
+     * assigned → accepted
+     */
+    public function accept(Request $request, Mission $mission): JsonResponse
+    {
+        $this->ensureAssignedAgent($request, $mission);
+
+        if (! in_array($mission->status, ['assigned', 'pending'], true)) {
+            return ApiResponse::error('La mission ne peut pas être acceptée dans son état actuel.', 422);
+        }
+
+        $prev = $mission->status;
+        $mission->status = 'accepted';
+        $mission->accepted_at = now();
+        $mission->save();
+
+        AuditLogger::statusChanged($mission, $prev, 'accepted', $request->user(), $request, 'mobile_ops', false, 'Mission acceptée');
+        $this->notifyManagers($mission, 'mission_accepted', 'Mission acceptée',
+            "L'agent a accepté la mission {$mission->mission_number}.");
 
         return ApiResponse::success($mission);
     }
 
     /**
-     * `POST /api/v1/mobile-ops/missions/{mission}/start`
+     * POST /api/v1/mobile-ops/missions/{mission}/start
+     *
+     * accepted (or assigned) → in_progress
      */
     public function start(Request $request, Mission $mission): JsonResponse
     {
         $this->ensureAssignedAgent($request, $mission);
 
-        $previousStatus = (string) $mission->status;
+        if (! in_array($mission->status, ['planned', 'assigned', 'accepted'], true)) {
+            return ApiResponse::error('La mission ne peut pas être démarrée dans son état actuel.', 422);
+        }
+
+        $prev = $mission->status;
         $mission->status = 'in_progress';
         $mission->actual_start_at = now();
         $mission->save();
 
-        AuditLogger::statusChanged(
-            $mission,
-            $previousStatus,
-            'in_progress',
-            $request->user(),
-            $request,
-            'mobile_ops',
-            false,
-            'Mission démarrée',
-        );
-
-        $this->notifyManagers($mission, 'mission_started', 'Mission démarrée', sprintf(
-            'L\'agent a démarré la mission %s.',
-            $mission->mission_type ?? ''
-        ));
+        AuditLogger::statusChanged($mission, $prev, 'in_progress', $request->user(), $request, 'mobile_ops', false, 'Mission démarrée');
+        $this->notifyManagers($mission, 'mission_started', 'Mission démarrée',
+            "L'agent a démarré la mission {$mission->mission_number}.");
 
         return ApiResponse::success($mission);
     }
 
     /**
-     * `POST /api/v1/mobile-ops/missions/{mission}/checklist`
+     * POST /api/v1/mobile-ops/missions/{mission}/arrive
+     *
+     * in_progress → arrived
+     */
+    public function arrive(Request $request, Mission $mission): JsonResponse
+    {
+        $this->ensureAssignedAgent($request, $mission);
+
+        if (! in_array($mission->status, ['in_progress', 'accepted'], true)) {
+            return ApiResponse::error('La mission n\'est pas en cours.', 422);
+        }
+
+        $prev = $mission->status;
+        $mission->status = 'arrived';
+        $mission->arrived_at = now();
+        $mission->save();
+
+        AuditLogger::statusChanged($mission, $prev, 'arrived', $request->user(), $request, 'mobile_ops', false, 'Agent arrivé sur site');
+        $this->notifyManagers($mission, 'mission_arrived', 'Agent arrivé',
+            "L'agent est arrivé pour la mission {$mission->mission_number}.");
+
+        return ApiResponse::success($mission);
+    }
+
+    /**
+     * POST /api/v1/mobile-ops/missions/{mission}/complete
+     *
+     * arrived/in_progress → completed/failed
+     */
+    public function complete(Request $request, Mission $mission): JsonResponse
+    {
+        $this->ensureAssignedAgent($request, $mission);
+
+        if (! in_array($mission->status, ['in_progress', 'arrived'], true)) {
+            return ApiResponse::error('La mission n\'est pas en cours.', 422);
+        }
+
+        $data = $request->validate([
+            'status' => ['nullable', 'string', 'in:completed,failed'],
+            'notes' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $prev = $mission->status;
+        $mission->status = $data['status'] ?? 'completed';
+        $mission->actual_end_at = now();
+        if (isset($data['notes'])) {
+            $mission->notes = $data['notes'];
+        }
+        $mission->save();
+
+        $label = $mission->status === 'completed' ? 'Mission terminée' : 'Mission en échec';
+        AuditLogger::statusChanged($mission, $prev, $mission->status, $request->user(), $request, 'mobile_ops', false, $label);
+        $this->notifyManagers($mission, 'mission_completed', $label,
+            "Mission {$mission->mission_number} clôturée ({$mission->status}).");
+
+        return ApiResponse::success($mission);
+    }
+
+    /* =================== Inspection =================== */
+
+    /**
+     * POST /api/v1/mobile-ops/missions/{mission}/inspection
+     */
+    public function submitInspection(Request $request, Mission $mission): JsonResponse
+    {
+        $this->ensureAssignedAgent($request, $mission);
+
+        $data = $request->validate([
+            'inspection_type' => ['required', 'string', 'in:check_in,check_out'],
+            'odometer_km' => ['nullable', 'integer', 'min:0'],
+            'fuel_level' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'exterior_condition' => ['nullable', 'string', 'in:good,minor_damage,major_damage'],
+            'interior_condition' => ['nullable', 'string', 'in:good,minor_damage,major_damage'],
+            'damage_notes' => ['nullable', 'string', 'max:5000'],
+            'gps_lat' => ['nullable', 'numeric'],
+            'gps_lng' => ['nullable', 'numeric'],
+        ]);
+
+        $inspection = FieldVehicleInspection::create([
+            'mission_id' => $mission->id,
+            'vehicle_id' => $mission->vehicle_id,
+            'inspection_type' => $data['inspection_type'],
+            'odometer_km' => $data['odometer_km'] ?? null,
+            'fuel_level' => $data['fuel_level'] ?? null,
+            'exterior_condition' => $data['exterior_condition'] ?? 'good',
+            'interior_condition' => $data['interior_condition'] ?? 'good',
+            'damage_notes' => $data['damage_notes'] ?? null,
+            'gps_lat' => $data['gps_lat'] ?? null,
+            'gps_lng' => $data['gps_lng'] ?? null,
+            'inspected_by' => $request->user()->id,
+        ]);
+
+        AuditLogger::created($inspection, $request->user(), null, 'mobile_ops', $request, false, 'Inspection véhicule');
+
+        return ApiResponse::success($inspection, null, null, 201);
+    }
+
+    /* =================== Issue reporting =================== */
+
+    /**
+     * POST /api/v1/mobile-ops/missions/{mission}/issues
+     */
+    public function reportIssue(Request $request, Mission $mission): JsonResponse
+    {
+        $this->ensureAssignedAgent($request, $mission);
+
+        $data = $request->validate([
+            'issue_type' => ['required', 'string', 'in:vehicle_damage,customer_absent,wrong_address,mechanical,other'],
+            'severity' => ['required', 'string', 'in:low,medium,high,critical'],
+            'description' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $issue = FieldMissionIssue::create([
+            'mission_id' => $mission->id,
+            'issue_type' => $data['issue_type'],
+            'severity' => $data['severity'],
+            'description' => $data['description'],
+            'reported_by' => $request->user()->id,
+        ]);
+
+        AuditLogger::created($issue, $request->user(), null, 'mobile_ops', $request, false, 'Problème signalé');
+
+        // Critical issues get high-priority notification
+        if ($data['severity'] === 'critical') {
+            $this->notifyManagers($mission, 'mission_critical_issue', 'Problème critique signalé',
+                "Problème critique sur mission {$mission->mission_number}: {$data['description']}", 'high');
+        }
+
+        return ApiResponse::success($issue, null, null, 201);
+    }
+
+    /**
+     * PATCH /api/v1/mobile-ops/missions/{mission}/issues/{issue}
+     *
+     * Manager-only: resolve an issue.
+     */
+    public function resolveIssue(Request $request, Mission $mission, FieldMissionIssue $issue): JsonResponse
+    {
+        $role = $this->userRole($request->user());
+        if (! in_array($role, ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'], true)) {
+            abort(404);
+        }
+
+        $data = $request->validate([
+            'resolution_notes' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $issue->resolved_at = now();
+        $issue->resolution_notes = $data['resolution_notes'];
+        $issue->save();
+
+        AuditLogger::updated($issue, $request->user(), null, 'mobile_ops', $request, false, 'Problème résolu');
+
+        return ApiResponse::success($issue);
+    }
+
+    /* =================== Photos =================== */
+
+    /**
+     * POST /api/v1/mobile-ops/missions/{mission}/photos
+     */
+    public function uploadPhotos(Request $request, Mission $mission): JsonResponse
+    {
+        $this->ensureAssignedAgent($request, $mission);
+
+        $files = $request->file('file') ?? $request->file('files');
+        if (! $files) {
+            return ApiResponse::error('No file uploaded', 422);
+        }
+        if (! is_array($files)) {
+            $files = [$files];
+        }
+
+        $request->validate([
+            'phase' => ['nullable', 'string', 'max:50'],
+            'label' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $phase = $request->input('phase');
+        $label = $request->input('label');
+        $disk = 'local';
+        $dir = 'mission-photos/' . $mission->id;
+        $created = [];
+
+        DB::transaction(function () use ($mission, $files, $phase, $label, $disk, $dir, $request, &$created) {
+            foreach ($files as $file) {
+                $name = Str::uuid()->toString() . '.' . ($file->getClientOriginalExtension() ?: 'bin');
+                $path = $file->storeAs($dir, $name, $disk);
+                $row = MissionPhoto::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'mission_id' => $mission->id,
+                    'phase' => $phase,
+                    'label' => $label,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'size_bytes' => $file->getSize(),
+                    'storage_disk' => $disk,
+                    'storage_path' => $path,
+                    'uploaded_by' => $request->user()?->id,
+                ]);
+                AuditLogger::created($row, $request->user(), null, 'mobile_ops', $request, false, 'Photo mission');
+                $created[] = ['photo' => $row, 'document_ref' => 'mph-' . $row->id];
+            }
+        });
+
+        return ApiResponse::success($created, null, null, 201);
+    }
+
+    /* =================== Checklist =================== */
+
+    /**
+     * POST /api/v1/mobile-ops/missions/{mission}/checklist
      */
     public function addChecklistItem(Request $request, Mission $mission): JsonResponse
     {
@@ -158,106 +396,65 @@ class MobileOpsController extends Controller
         return ApiResponse::success($row, null, null, 201);
     }
 
+    /* =================== Signature =================== */
+
     /**
-     * `POST /api/v1/mobile-ops/missions/{mission}/photos`
+     * POST /api/v1/mobile-ops/missions/{mission}/signature
      *
-     * Multipart upload. Accepts EITHER a single `file` or `file[]` array.
-     * Categorises by `phase` (front, rear, left, right, interior, odometer,
-     * damage, fuel, documents) — matches the Phase 3 brief.
+     * Accepts either a base64 data URL (from canvas) or a file upload.
+     * Creates a proper FieldMissionSignature record with legal metadata.
      */
-    public function uploadPhotos(Request $request, Mission $mission): JsonResponse
+    public function captureSignature(Request $request, Mission $mission): JsonResponse
     {
         $this->ensureAssignedAgent($request, $mission);
 
-        $files = $request->file('file');
-        if (! $files) {
-            $files = $request->file('files');
-        }
-        if (! $files) {
-            return ApiResponse::error('No file uploaded', 422);
-        }
-        if (! is_array($files)) {
-            $files = [$files];
-        }
-
         $request->validate([
-            'phase' => ['nullable', 'string', 'max:50'],
-            'label' => ['nullable', 'string', 'max:120'],
+            'signer_name' => ['required', 'string', 'max:255'],
+            'data_url' => ['required_without:file', 'nullable', 'string'],
+            'file' => ['required_without:data_url', 'nullable', 'file', 'max:5120', 'mimes:png,jpg,jpeg,svg,pdf'],
+            'gps_lat' => ['nullable', 'numeric'],
+            'gps_lng' => ['nullable', 'numeric'],
         ]);
 
-        $phase = $request->input('phase');
-        $label = $request->input('label');
         $disk = 'local';
-        $dir = 'mission-photos/'.$mission->id;
-        $created = [];
+        $dir = 'mission-signatures/' . $mission->id;
 
-        DB::transaction(function () use ($mission, $files, $phase, $label, $disk, $dir, $request, &$created) {
-            foreach ($files as $file) {
-                $name = Str::uuid()->toString().'.'.($file->getClientOriginalExtension() ?: 'bin');
-                $path = $file->storeAs($dir, $name, $disk);
-                $row = MissionPhoto::query()->create([
-                    'id' => (string) Str::uuid(),
-                    'mission_id' => $mission->id,
-                    'phase' => $phase,
-                    'label' => $label,
-                    'original_filename' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getClientMimeType(),
-                    'size_bytes' => $file->getSize(),
-                    'storage_disk' => $disk,
-                    'storage_path' => $path,
-                    'uploaded_by' => $request->user()?->id,
-                ]);
-                AuditLogger::created($row, $request->user(), null, 'mobile_ops', $request, false, 'Photo mission');
-                $created[] = [
-                    'photo' => $row,
-                    'document_ref' => 'mph-'.$row->id,
-                ];
+        // Handle base64 data URL from canvas
+        if ($dataUrl = $request->input('data_url')) {
+            // data:image/png;base64,iVBOR...
+            $parts = explode(',', $dataUrl, 2);
+            $decoded = base64_decode($parts[1] ?? $parts[0]);
+            if (! $decoded) {
+                return ApiResponse::error('Invalid signature data.', 422);
             }
-        });
+            $filename = Str::uuid()->toString() . '.png';
+            $path = $dir . '/' . $filename;
+            Storage::disk($disk)->put($path, $decoded);
+        } else {
+            // File upload fallback
+            $file = $request->file('file');
+            $filename = Str::uuid()->toString() . '.' . ($file->getClientOriginalExtension() ?: 'png');
+            $path = $file->storeAs($dir, $filename, $disk);
+        }
 
-        return ApiResponse::success($created, null, null, 201);
-    }
-
-    /**
-     * `POST /api/v1/mobile-ops/missions/{mission}/customer-signature`
-     *
-     * Stores the captured client signature as a `MissionPhoto` with
-     * `phase='customer_signature'`, then links its UUID into
-     * `missions.customer_signature_file_id` so downstream PDF generation can
-     * find it. Treated as legally significant in the audit trail.
-     */
-    public function customerSignature(Request $request, Mission $mission): JsonResponse
-    {
-        $this->ensureAssignedAgent($request, $mission);
-
-        $request->validate([
-            'file' => ['required', 'file', 'max:5120', 'mimes:png,jpg,jpeg,svg,pdf'],
-            'signed_by_name' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $file = $request->file('file');
-        $disk = 'local';
-        $dir = 'mission-signatures/'.$mission->id;
-        $name = Str::uuid()->toString().'.'.($file->getClientOriginalExtension() ?: 'png');
-        $path = $file->storeAs($dir, $name, $disk);
-
-        $photo = DB::transaction(function () use ($mission, $file, $disk, $path, $request) {
-            $photo = MissionPhoto::query()->create([
-                'id' => (string) Str::uuid(),
+        $signature = DB::transaction(function () use ($mission, $request, $disk, $path) {
+            $sig = FieldMissionSignature::create([
                 'mission_id' => $mission->id,
-                'phase' => 'customer_signature',
-                'label' => $request->input('signed_by_name'),
-                'original_filename' => $file->getClientOriginalName(),
-                'mime_type' => $file->getClientMimeType(),
-                'size_bytes' => $file->getSize(),
+                'signer_name' => $request->input('signer_name'),
+                'signed_at' => now(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'gps_lat' => $request->input('gps_lat'),
+                'gps_lng' => $request->input('gps_lng'),
                 'storage_disk' => $disk,
                 'storage_path' => $path,
-                'uploaded_by' => $request->user()?->id,
             ]);
-            $mission->customer_signature_file_id = $photo->id;
+
+            // Also set on mission for backward compat
+            $mission->customer_signature_file_id = $sig->id;
             $mission->save();
 
-            return $photo;
+            return $sig;
         });
 
         AuditLogger::legalAction(
@@ -266,8 +463,8 @@ class MobileOpsController extends Controller
             $request->user(),
             null,
             [
-                'signature_file_id' => $photo->id,
-                'signed_by_name' => $request->input('signed_by_name'),
+                'signature_id' => $signature->id,
+                'signer_name' => $request->input('signer_name'),
             ],
             $request,
             'Signature client capturée',
@@ -276,67 +473,36 @@ class MobileOpsController extends Controller
 
         return ApiResponse::success([
             'mission_id' => $mission->id,
-            'signature_file_id' => $photo->id,
-            'document_ref' => 'mph-'.$photo->id,
+            'signature_id' => $signature->id,
+            'signer_name' => $signature->signer_name,
+            'signed_at' => $signature->signed_at,
         ], null, null, 201);
     }
 
     /**
-     * `POST /api/v1/mobile-ops/missions/{mission}/complete`
+     * POST /api/v1/mobile-ops/missions/{mission}/customer-signature
+     *
+     * Legacy endpoint — delegates to captureSignature with file upload.
      */
-    public function complete(Request $request, Mission $mission): JsonResponse
+    public function customerSignature(Request $request, Mission $mission): JsonResponse
     {
-        $this->ensureAssignedAgent($request, $mission);
-
-        $data = $request->validate([
-            'status' => ['nullable', 'string', 'in:completed,failed'],
-            'notes' => ['nullable', 'string', 'max:5000'],
-        ]);
-
-        $previous = (string) $mission->status;
-        $mission->status = $data['status'] ?? 'completed';
-        $mission->actual_end_at = now();
-        if (isset($data['notes'])) {
-            $mission->notes = $data['notes'];
+        // If called with the old file-only contract, translate to new endpoint
+        if ($request->hasFile('file') && ! $request->has('signer_name')) {
+            $request->merge(['signer_name' => $request->input('signed_by_name', 'Client')]);
         }
-        $mission->save();
 
-        AuditLogger::statusChanged(
-            $mission,
-            $previous,
-            $mission->status,
-            $request->user(),
-            $request,
-            'mobile_ops',
-            false,
-            $mission->status === 'completed' ? 'Mission terminée' : 'Mission en échec',
-        );
-
-        $this->notifyManagers($mission, 'mission_completed', 'Mission terminée', sprintf(
-            'Mission %s clôturée avec statut %s.',
-            $mission->mission_type ?? '',
-            $mission->status,
-        ));
-
-        return ApiResponse::success($mission);
+        return $this->captureSignature($request, $mission);
     }
 
-    /* =================== Customer-facing tracking =================== */
+    /* =================== Customer tracking =================== */
 
     /**
-     * `GET /api/v1/mobile-ops/customer-tracking`
-     *
-     * Customer-safe view: returns ONLY the caller's own reservations with a
-     * minimal status payload. No agent identity, no internal notes, no
-     * checklist contents, no photo URLs — the portal user must never see
-     * operational detail. Internal staff (ADMIN/DIRECTEUR) can pass
-     * `?customer_id=...` to inspect a specific customer's view as part of
-     * support workflows.
+     * GET /api/v1/mobile-ops/customer-tracking
      */
     public function customerTracking(Request $request): JsonResponse
     {
         $user = $request->user();
-        $role = (string) ($user->role ?? '');
+        $role = $this->userRole($user);
 
         if ($role === 'CLIENT_PORTAL') {
             $customerId = (string) ($user->customer_id ?? '');
@@ -367,7 +533,6 @@ class MobileOpsController extends Controller
                 'reservation_status' => $r->status ?? null,
                 'reservation_start' => $r->start_at ?? $r->getAttribute('start_date') ?? null,
                 'reservation_end' => $r->end_at ?? $r->getAttribute('end_date') ?? null,
-                // Mission summary — minimal & customer-safe.
                 'mission_status' => $mission?->status,
                 'mission_type' => $mission?->mission_type,
                 'eta' => $mission?->scheduled_start_at,
@@ -380,17 +545,22 @@ class MobileOpsController extends Controller
         return ApiResponse::success($rows);
     }
 
-    /* =================== Internal helpers =================== */
+    /* =================== Helpers =================== */
 
-    /**
-     * AGENT_LIVRAISON must be the assignee. Managers (ADMIN/DIRECTEUR/
-     * GESTIONNAIRE_FLOTTE) can also act on a mission (e.g. cover for a sick
-     * agent). Anything else → 404 (no leaking existence).
-     */
+    private function userRole($user): string
+    {
+        // Support both `role` attribute and `primaryRoleCode()` method
+        if (method_exists($user, 'primaryRoleCode')) {
+            return (string) $user->primaryRoleCode();
+        }
+
+        return (string) ($user->role ?? '');
+    }
+
     private function ensureAssignedAgent(Request $request, Mission $mission): void
     {
         $user = $request->user();
-        $role = (string) ($user->role ?? '');
+        $role = $this->userRole($user);
         if (in_array($role, ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'], true)) {
             return;
         }
@@ -400,15 +570,10 @@ class MobileOpsController extends Controller
         abort(404);
     }
 
-    /**
-     * Read-only managers (GESTIONNAIRE_FLOTTE) can inspect any mission. For
-     * AGENT_LIVRAISON the assignment check still applies. CLIENT_PORTAL must
-     * never reach mission detail — they go through `customerTracking` only.
-     */
     private function ensureAssignedOrManager(Request $request, Mission $mission): void
     {
         $user = $request->user();
-        $role = (string) ($user->role ?? '');
+        $role = $this->userRole($user);
         if (in_array($role, ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'], true)) {
             return;
         }
@@ -418,11 +583,7 @@ class MobileOpsController extends Controller
         abort(404);
     }
 
-    /**
-     * Best-effort manager notification: GESTIONNAIRE_FLOTTE in the same tenant.
-     * Never throws — notification failures must not break mission lifecycle.
-     */
-    private function notifyManagers(Mission $mission, string $category, string $title, string $body): void
+    private function notifyManagers(Mission $mission, string $category, string $title, string $body, string $priority = 'normal'): void
     {
         try {
             $this->notifications->notifyRoles(
@@ -431,7 +592,7 @@ class MobileOpsController extends Controller
                 title: $title,
                 body: $body,
                 module: 'mobile_ops',
-                priority: 'normal',
+                priority: $priority,
                 channels: ['in_app'],
                 entity: $mission,
             );

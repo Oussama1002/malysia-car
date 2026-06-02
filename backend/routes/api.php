@@ -505,6 +505,32 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:missions.complete');
         Route::get('mobile-ops/customer-tracking', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'customerTracking'])
             ->middleware('permission:mobile_ops.customer_tracking');
+        Route::post('mobile-ops/missions/{mission}/accept', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'accept'])
+            ->middleware('permission:missions.start');
+        Route::post('mobile-ops/missions/{mission}/arrive', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'arrive'])
+            ->middleware('permission:missions.start');
+        Route::post('mobile-ops/missions/{mission}/inspection', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'submitInspection'])
+            ->middleware('permission:missions.add_checklist');
+        Route::post('mobile-ops/missions/{mission}/issues', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'reportIssue'])
+            ->middleware('permission:missions.add_checklist');
+        Route::patch('mobile-ops/missions/{mission}/issues/{issue}', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'resolveIssue'])
+            ->middleware('permission:missions.complete');
+        Route::post('mobile-ops/missions/{mission}/signature', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'captureSignature'])
+            ->middleware('permission:missions.customer_signature');
+
+        // Admin / Manager field ops endpoints
+        Route::middleware('role:ADMIN,DIRECTEUR,GESTIONNAIRE_FLOTTE')->group(function () {
+            Route::get('mobile-ops/admin/missions', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'index'])
+                ->middleware('permission:missions.view');
+            Route::post('mobile-ops/admin/missions', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'store'])
+                ->middleware('permission:missions.start');
+            Route::post('mobile-ops/admin/missions/{mission}/assign', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'assign'])
+                ->middleware('permission:missions.start');
+            Route::post('mobile-ops/admin/missions/{mission}/cancel', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'cancel'])
+                ->middleware('permission:missions.complete');
+            Route::get('mobile-ops/admin/missions/{mission}/proof', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'proof'])
+                ->middleware('permission:missions.view');
+        });
 
         // ==================================================================
         // Phase 3 — Customers & KYC
