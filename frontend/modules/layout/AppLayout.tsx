@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import { AppBreadcrumbs } from '@/modules/layout/AppBreadcrumbs';
 import { notificationsApi } from '@/services/notificationsApi';
 import { maintenanceApi } from '@/services/maintenanceApi';
 import { isExperimentalEnabled, isModuleHiddenInDemo } from '@/config/runtimeFlags';
+import { resolveNotificationRoute } from '@/modules/notifications/NotificationsPage';
 
 type NavItem = { to: string; module: ModuleKey; labelKey: string; icon: IconName };
 type NavGroup = { key: string; labelKey: string; items: NavItem[] };
@@ -95,6 +96,8 @@ export const AppLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement | null>(null);
   const crumb = useBreadcrumb();
 
   useCommandPaletteShortcut(() => setCmdOpen(true));
@@ -118,6 +121,12 @@ export const AppLayout: React.FC = () => {
     refetchInterval: 30000,
   });
   const unreadCount = unreadQ.data?.data?.unread ?? 0;
+  const notifPreviewQ = useQuery({
+    queryKey: ['notifications', 'preview'],
+    queryFn: () => notificationsApi.list({ per_page: 6, include_deliveries: false }),
+    refetchInterval: 30000,
+  });
+  const notifPreview = notifPreviewQ.data?.data ?? [];
   const maintenanceQ = useQuery({
     queryKey: ['fleet', 'maintenance', 'alerts', 'badge'],
     queryFn: () => maintenanceApi.alerts(),
@@ -154,6 +163,19 @@ export const AppLayout: React.FC = () => {
       )}
     </NavLink>
   );
+
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent): void {
+      if (!notifRef.current) return;
+      if (!notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    }
+    if (notifOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [notifOpen]);
 
   const Sidebar = (
     <aside className="df-sidebar">
@@ -316,14 +338,68 @@ export const AppLayout: React.FC = () => {
             })}
           </div>
 
-          <button type="button" className="df-btn df-btn--subtle df-btn--sm df-btn--icon relative" aria-label="Notifications" onClick={() => navigate('/notifications')}>
-            <Icon name="bell" size={16} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -end-1.5 min-w-4 rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-[color:var(--df-surface-solid)]">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
+          <div className="relative" ref={notifRef}>
+            <button
+              type="button"
+              className="df-btn df-btn--subtle df-btn--sm df-btn--icon relative"
+              aria-label="Notifications"
+              onClick={() => setNotifOpen((s) => !s)}
+            >
+              <Icon name="bell" size={16} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -end-1.5 min-w-4 rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-[color:var(--df-surface-solid)]">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+            {notifOpen && (
+              <div className="absolute end-0 top-full z-50 mt-2 w-[360px] max-w-[92vw] rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-2 shadow-2xl">
+                <div className="flex items-center justify-between px-2 py-1.5">
+                  <div className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">Notifications</div>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-[color:var(--df-brand-600)] hover:underline"
+                    onClick={() => {
+                      setNotifOpen(false);
+                      navigate('/notifications');
+                    }}
+                  >
+                    Voir toutes les notif
+                  </button>
+                </div>
+                <div className="max-h-[380px] overflow-auto">
+                  {notifPreviewQ.isLoading ? (
+                    <div className="px-3 py-4 text-xs text-[color:var(--df-text-muted)]">Chargement…</div>
+                  ) : notifPreview.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-[color:var(--df-text-muted)]">Aucune notification.</div>
+                  ) : (
+                    notifPreview.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        className={`w-full rounded-xl px-3 py-2.5 text-left transition hover:bg-[color:var(--df-surface-elev)] ${n.read_at ? '' : 'bg-indigo-50/70 dark:bg-indigo-950/30'}`}
+                        onClick={() => {
+                          setNotifOpen(false);
+                          const target = resolveNotificationRoute(n) ?? '/notifications';
+                          navigate(target);
+                        }}
+                      >
+                        <div className="truncate text-[12.5px] font-bold">{n.title}</div>
+                        {n.body && (
+                          <div className="mt-0.5 line-clamp-2 text-[11px] text-[color:var(--df-text-muted)]">
+                            {n.body}
+                          </div>
+                        )}
+                        <div className="mt-1 text-[10px] text-[color:var(--df-text-faint)]">
+                          {new Date(n.created_at).toLocaleString('fr-MA')}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
             )}
-          </button>
+          </div>
 
           <button
             type="button"

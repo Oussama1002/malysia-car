@@ -54,6 +54,7 @@ export const NotificationsPage: React.FC = () => {
   const items: NotificationDto[] = q.data?.data ?? [];
   const modules = Array.from(new Set(items.map((n) => n.module).filter(Boolean))) as string[];
   const unreadTotal = unreadQ.data?.data?.unread ?? 0;
+  const queryError = q.error instanceof ApiError ? q.error.message : q.error ? 'Impossible de charger les notifications.' : null;
 
   const markRead = useMutation({
     mutationFn: (id: string) => notificationsApi.markRead(id),
@@ -126,6 +127,11 @@ export const NotificationsPage: React.FC = () => {
       {listError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{listError}</div>
       )}
+      {queryError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {queryError}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => setListFilter('all')} className={`df-btn text-xs ${listFilter === 'all' ? 'df-btn--primary' : 'df-btn--ghost'}`}>Toutes</button>
@@ -149,6 +155,10 @@ export const NotificationsPage: React.FC = () => {
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />
           ))}
+        </div>
+      ) : q.isError ? (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-12 text-center text-sm text-rose-700">
+          Chargement impossible. Vérifiez vos permissions `notifications.view` ou la disponibilité de l’API.
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-2xl border border-slate-100 bg-white p-12 text-center text-sm text-slate-500">
