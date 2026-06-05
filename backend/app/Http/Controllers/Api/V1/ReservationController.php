@@ -7,10 +7,12 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\Mission;
+use App\Models\Payment;
 use App\Models\RentalDamageReport;
 use App\Models\RentalExtension;
 use App\Models\RentalHandoverReport;
 use App\Models\Reservation;
+use App\Models\ReservationDriver;
 use App\Services\AuditLogger;
 use App\Services\RentalAvailabilityService;
 use App\Support\PaymentMethodNormalizer;
@@ -121,6 +123,8 @@ class ReservationController extends Controller
 
     public function show(Reservation $reservation): JsonResponse
     {
+        $reservation->load(['customer', 'vehicle.brand', 'vehicle.model']);
+
         $handoverReports = RentalHandoverReport::query()
             ->where('reservation_id', $reservation->id)
             ->orderBy('performed_at')
@@ -133,12 +137,56 @@ class ReservationController extends Controller
             ->where('reservation_id', $reservation->id)
             ->orderByDesc('created_at')
             ->get();
+        $drivers = ReservationDriver::query()
+            ->where('reservation_id', $reservation->id)
+            ->orderByRaw("FIELD(driver_type, 'primary', 'secondary')")
+            ->get();
+        $payments = Payment::query()
+            ->where('reservation_id', $reservation->id)
+            ->orderByDesc('payment_date')
+            ->get();
+        $invoices = Invoice::query()
+            ->where('customer_id', $reservation->customer_id)
+            ->where(function ($q) use ($reservation) {
+                $q->whereHas('lines', fn ($lq) => $lq->where('metadata->reservation_id', $reservation->id));
+            })
+            ->with('lines')
+            ->orderByDesc('issue_date')
+            ->get();
+
+        // Audit trail from audit_log table
+        $history = DB::table('audit_log')
+            ->where('entity_type', 'reservation')
+            ->where('entity_id', $reservation->id)
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get();
+
+        // Customer/vehicle summary for header
+        $customer = $reservation->customer;
+        $vehicle = $reservation->vehicle;
+        $vehicleName = $vehicle
+            ? trim(($vehicle->brand?->name ?? $vehicle->brand_name ?? '') . ' ' . ($vehicle->model?->model_name ?? $vehicle->model?->name ?? $vehicle->model_name ?? ''))
+            : null;
 
         return ApiResponse::success([
             'reservation' => $reservation,
+            'customer_name' => $customer?->display_name ?? $customer?->customer_code ?? null,
+            'vehicle_name' => $vehicleName,
+            'vehicle_registration' => $vehicle?->registration_number ?? null,
             'handover_reports' => $handoverReports,
             'extensions' => $extensions,
             'damage_reports' => $damages,
+            'drivers' => $drivers,
+            'payments' => $payments,
+            'invoices' => $invoices,
+            'history' => $history,
+            'totals' => [
+                'estimated_price' => (float) ($reservation->estimated_price ?? 0),
+                'extensions_total' => (float) $extensions->where('status', 'applied')->sum('additional_amount'),
+                'damages_total' => (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0),
+                'paid' => (float) $payments->sum('amount'),
+            ],
         ]);
     }
 
@@ -484,6 +532,74 @@ class ReservationController extends Controller
 
         return ApiResponse::success($invoice->fresh('lines'), null, null, 201);
     }
+
+    // ── Driver CRUD ──────────────────────────────────────────────────────
+
+    public function storeDriver(Request $request, Reservation $reservation): JsonResponse
+    {
+        $data = $request->validate([
+            'driver_type'              => ['sometimes', 'string', 'in:primary,secondary'],
+            'first_name'               => ['required', 'string', 'max:100'],
+            'last_name'                => ['required', 'string', 'max:100'],
+            'phone'                    => ['nullable', 'string', 'max:30'],
+            'email'                    => ['nullable', 'email', 'max:255'],
+            'cin_passport'             => ['nullable', 'string', 'max:50'],
+            'license_number'           => ['nullable', 'string', 'max:50'],
+            'license_expiry'           => ['nullable', 'date'],
+            'relationship'             => ['nullable', 'string', 'max:50'],
+            'is_contract_signer'       => ['nullable', 'boolean'],
+            'is_financially_responsible' => ['nullable', 'boolean'],
+        ]);
+
+        $driver = ReservationDriver::query()->create([
+            'id'             => (string) Str::uuid(),
+            'reservation_id' => $reservation->id,
+            ...$data,
+        ]);
+
+        return ApiResponse::success($driver, null, null, 201);
+    }
+
+    public function updateDriver(Request $request, Reservation $reservation, string $driverId): JsonResponse
+    {
+        $driver = ReservationDriver::query()
+            ->where('reservation_id', $reservation->id)
+            ->where('id', $driverId)
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'driver_type'              => ['sometimes', 'string', 'in:primary,secondary'],
+            'first_name'               => ['sometimes', 'string', 'max:100'],
+            'last_name'                => ['sometimes', 'string', 'max:100'],
+            'phone'                    => ['nullable', 'string', 'max:30'],
+            'email'                    => ['nullable', 'email', 'max:255'],
+            'cin_passport'             => ['nullable', 'string', 'max:50'],
+            'license_number'           => ['nullable', 'string', 'max:50'],
+            'license_expiry'           => ['nullable', 'date'],
+            'relationship'             => ['nullable', 'string', 'max:50'],
+            'is_contract_signer'       => ['nullable', 'boolean'],
+            'is_financially_responsible' => ['nullable', 'boolean'],
+        ]);
+
+        $driver->fill($data);
+        $driver->save();
+
+        return ApiResponse::success($driver);
+    }
+
+    public function destroyDriver(Request $request, Reservation $reservation, string $driverId): JsonResponse
+    {
+        $driver = ReservationDriver::query()
+            ->where('reservation_id', $reservation->id)
+            ->where('id', $driverId)
+            ->firstOrFail();
+
+        $driver->delete();
+
+        return ApiResponse::success(null, null, 'Driver removed.');
+    }
+
+    // ── Status transitions ─────────────────────────────────────────────
 
     private function transitionReservation(Reservation $reservation, string $to, ?Request $request = null): void
     {

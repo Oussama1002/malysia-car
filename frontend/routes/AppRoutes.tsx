@@ -16,6 +16,7 @@ import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
 import { ContractsModulePage } from '@/modules/contracts/ContractsModulePage';
+import { ReservationDetailPage } from '@/modules/rentals/ReservationDetailPage';
 import { ContractWizardPage } from '@/modules/contracts/ContractWizardPage';
 import { ContractDetailPage } from '@/modules/contracts/ContractDetailPage';
 import { ContractTemplatesPage } from '@/modules/contracts/ContractTemplatesPage';
@@ -739,6 +740,14 @@ export default function AppRoutes(): React.ReactElement {
               Both old entry points redirect into the Locations tab so bookmarks
               and in-app links keep working.
             */}
+            <Route
+              path="/reservations/:id"
+              element={
+                <ModuleGate module="contracts">
+                  <ReservationDetailPage />
+                </ModuleGate>
+              }
+            />
             <Route path="/rentals" element={<Navigate to="/contracts?tab=locations" replace />} />
             <Route path="/reservations" element={<Navigate to="/contracts?tab=locations" replace />} />
 
