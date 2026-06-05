@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/services/queryKeys';
 import { Timeline } from '@/modules/shared/components/Timeline';
@@ -98,9 +98,13 @@ const INSTALLMENT_STATUS_FR: Record<string, { label: string; cls: string }> = {
 
 export const ContractDetailPage: React.FC = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const cid = id ?? '';
   const [tab, setTab] = useState('details');
   const [showEarlyReturn, setShowEarlyReturn] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const q = useQuery({
     queryKey: queryKeys.contracts.one(cid),
@@ -210,6 +214,7 @@ export const ContractDetailPage: React.FC = () => {
           { id: 'payments',  label: 'Paiements' },
           { id: 'legal',     label: 'Contentieux' },
           { id: 'history',   label: 'Historique' },
+          { id: 'actions',   label: 'Actions' },
         ]}
       />
 
@@ -281,7 +286,12 @@ export const ContractDetailPage: React.FC = () => {
 
       {/* ── DOCUMENTS ────────────────────────────────────────────────────── */}
       {tab === 'documents' && (
-        <EntityDocuments entityType="contract" entityId={String(c.id ?? id)} title="Documents du contrat" />
+        <div className="space-y-6">
+          <EntityDocuments entityType="contract" entityId={String(c.id ?? id)} title="Documents du contrat" />
+          {customerId && (
+            <EntityDocuments entityType="customer" entityId={customerId} title="Documents du client (CIN, Permis, etc.)" />
+          )}
+        </div>
       )}
 
       {/* ── SIGNATURE ────────────────────────────────────────────────────── */}
@@ -311,6 +321,61 @@ export const ContractDetailPage: React.FC = () => {
                 tone: h.action === 'activated' ? 'success' : h.action === 'terminated' ? 'danger' : 'info',
               }))}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ── ACTIONS ─────────────────────────────────────────────────────── */}
+      {tab === 'actions' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-rose-100 bg-white p-6 shadow-sm">
+            <div className="text-sm font-black text-rose-700">Zone dangereuse</div>
+            <p className="mt-2 text-sm text-slate-600">
+              La suppression d'un contrat est irréversible. Les échéances et l'historique associés seront également supprimés.
+            </p>
+            {deleteError && (
+              <div className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{deleteError}</div>
+            )}
+            {!deleteConfirm ? (
+              <button
+                type="button"
+                className="mt-4 rounded-xl border border-rose-300 bg-rose-50 px-5 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 transition-colors"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                Supprimer ce contrat
+              </button>
+            ) : (
+              <div className="mt-4 flex items-center gap-3">
+                <span className="text-sm font-semibold text-rose-700">Confirmer la suppression ?</span>
+                <button
+                  type="button"
+                  className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                  disabled={deleteLoading}
+                  onClick={async () => {
+                    setDeleteLoading(true);
+                    setDeleteError(null);
+                    try {
+                      await contractsApi.destroy(cid);
+                      navigate('/contracts');
+                    } catch (e) {
+                      setDeleteError(e instanceof ApiError ? e.message : 'Erreur lors de la suppression');
+                      setDeleteConfirm(false);
+                    } finally {
+                      setDeleteLoading(false);
+                    }
+                  }}
+                >
+                  {deleteLoading ? 'Suppression...' : 'Oui, supprimer'}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                  onClick={() => setDeleteConfirm(false)}
+                >
+                  Annuler
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

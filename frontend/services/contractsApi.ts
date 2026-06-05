@@ -105,6 +105,10 @@ export const contractsApi = {
     return res.data;
   },
 
+  async destroy(id: number | string): Promise<void> {
+    await apiClient(endpoints.contracts.one(id), { method: 'DELETE' });
+  },
+
   async installments(id: number | string): Promise<unknown[]> {
     const res = await apiClient<{ data: unknown[] }>(endpoints.contracts.installments(id));
     return res.data;

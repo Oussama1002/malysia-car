@@ -496,6 +496,23 @@ class ContractController extends Controller
         ));
     }
 
+    public function destroy(Request $request, Contract $contract): JsonResponse
+    {
+        if (in_array($contract->status, ['active', 'signed'], true)) {
+            return ApiResponse::error('Impossible de supprimer un contrat actif ou signé. Résiliez-le d\'abord.', 422);
+        }
+
+        AuditLogger::deleted($contract, $request->user(), request: $request, label: 'Contrat supprimé');
+
+        DB::transaction(function () use ($contract) {
+            ContractInstallment::query()->where('contract_id', $contract->id)->delete();
+            ContractHistory::query()->where('contract_id', $contract->id)->delete();
+            $contract->delete();
+        });
+
+        return ApiResponse::message('Contrat supprimé.');
+    }
+
     public function installments(Request $request, Contract $contract): JsonResponse
     {
         $rows = $contract->installments()->get();

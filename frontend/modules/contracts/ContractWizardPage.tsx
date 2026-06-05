@@ -820,6 +820,18 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'terms' && (
               <>
+                {/* Date & heure de création (auto, non modifiable) */}
+                <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Date & heure de création">
+                    <input
+                      type="datetime-local"
+                      className="df-input bg-slate-50 text-slate-500"
+                      value={new Date().toISOString().slice(0, 16)}
+                      disabled
+                    />
+                  </Field>
+                </div>
+
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Field label="Durée (mois)">
                     <input
