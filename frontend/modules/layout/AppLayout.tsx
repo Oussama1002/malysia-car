@@ -40,7 +40,7 @@ const GROUPS: NavGroup[] = [
       // Réservations module = contracts list + rental operations as tabs.
       // The standalone /rentals entry was merged in (redirects to the
       // Locations tab); see ContractsModulePage + AppRoutes.
-      { to: '/contracts', module: 'contracts', labelKey: 'nav.contracts', icon: 'doc' },
+      { to: '/contracts', module: 'contracts', labelKey: 'nav.contractsSidebar', icon: 'doc' },
       { to: '/used-cars', module: 'usedCars', labelKey: 'nav.usedCars', icon: 'marketplace' },
     ],
   },

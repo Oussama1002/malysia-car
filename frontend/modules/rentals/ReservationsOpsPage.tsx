@@ -424,6 +424,54 @@ export const ReservationsOpsPage: React.FC = () => {
         </div>
       </header>
 
+      <SearchFilterBar placeholder="Filtrer réservations…" value={q} onChange={setQ} />
+
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+        <div className="divide-y divide-slate-100">
+          {rows.map((r) => (
+            <div
+              key={r.id}
+              className="p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+              onClick={() => { setSelectedReservationId(r.id); setBillingError(null); setBillingSuccess(null); }}
+            >
+              <div>
+                <div className="text-xs font-black text-slate-400 uppercase tracking-widest">{r.reservation_number}</div>
+                <div className="mt-1 text-sm font-bold text-slate-900">
+                  {customerOptions.find((c) => c.id === r.customer_id)?.label.split(' (')[0]
+                    ?? <span className="font-mono text-xs">CLT-{r.customer_id.slice(0, 8).toUpperCase()}</span>}
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  {vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
+                    ?? <span className="font-mono text-xs">VHL-{r.vehicle_id.slice(0, 8).toUpperCase()}</span>}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {new Date(r.desired_start_at).toLocaleString('fr-MA')} → {new Date(r.desired_end_at).toLocaleString('fr-MA')}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <StatusBadge
+                  label={STATUS_FR[r.status] ?? r.status}
+                  tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : r.status === 'active' ? 'brand' : 'info'}
+                />
+                <button
+                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setSelectedReservationId(r.id); }}
+                >
+                  Détail →
+                </button>
+                <button
+                  className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+                  disabled={createMission.isPending}
+                  onClick={(e) => { e.stopPropagation(); createMission.mutate(r.id); }}
+                >
+                  Créer mission
+                </button>
+              </div>
+            </div>
+          ))}
+          {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
+        </div>
+      </div>
+
       <ReservationCalendar
         reservations={(reservationsQ.data ?? []) as ReservationDto[]}
         vehicles={vehicleOptions}
@@ -541,54 +589,6 @@ export const ReservationsOpsPage: React.FC = () => {
           )}
         </div>
       </Modal>
-
-      <SearchFilterBar placeholder="Filtrer…" value={q} onChange={setQ} />
-
-      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-        <div className="divide-y divide-slate-100">
-          {rows.map((r) => (
-            <div
-              key={r.id}
-              className="p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer hover:bg-slate-50 transition-colors"
-              onClick={() => { setSelectedReservationId(r.id); setBillingError(null); setBillingSuccess(null); }}
-            >
-              <div>
-                <div className="text-xs font-black text-slate-400 uppercase tracking-widest">{r.reservation_number}</div>
-                <div className="mt-1 text-sm font-bold text-slate-900">
-                  {customerOptions.find((c) => c.id === r.customer_id)?.label.split(' (')[0]
-                    ?? <span className="font-mono text-xs">CLT-{r.customer_id.slice(0, 8).toUpperCase()}</span>}
-                  <span className="mx-1.5 text-slate-300">·</span>
-                  {vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
-                    ?? <span className="font-mono text-xs">VHL-{r.vehicle_id.slice(0, 8).toUpperCase()}</span>}
-                </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {new Date(r.desired_start_at).toLocaleString('fr-MA')} → {new Date(r.desired_end_at).toLocaleString('fr-MA')}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatusBadge
-                  label={STATUS_FR[r.status] ?? r.status}
-                  tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : r.status === 'active' ? 'brand' : 'info'}
-                />
-                <button
-                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
-                  onClick={(e) => { e.stopPropagation(); setSelectedReservationId(r.id); }}
-                >
-                  Détail →
-                </button>
-                <button
-                  className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
-                  disabled={createMission.isPending}
-                  onClick={(e) => { e.stopPropagation(); createMission.mutate(r.id); }}
-                >
-                  Créer mission
-                </button>
-              </div>
-            </div>
-          ))}
-          {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
-        </div>
-      </div>
 
       {/* ── Détail réservation popup ── */}
       <Modal
