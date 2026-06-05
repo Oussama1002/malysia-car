@@ -25,11 +25,11 @@ type TabKey = (typeof TABS)[number]['key'];
 
 export const ContractsModulePage: React.FC = () => {
   const [params, setParams] = useSearchParams();
-  const active: TabKey = params.get('tab') === 'locations' ? 'locations' : 'contrats';
+  const active: TabKey = params.get('tab') === 'contrats' ? 'contrats' : 'locations';
 
   const setTab = (k: TabKey) => {
     const next = new URLSearchParams(params);
-    if (k === 'contrats') next.delete('tab');
+    if (k === 'locations') next.delete('tab');
     else next.set('tab', k);
     setParams(next, { replace: true });
   };
