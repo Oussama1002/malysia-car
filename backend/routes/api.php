@@ -369,6 +369,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:contracts.update');
         Route::patch('contracts/{contract}', [ContractController::class, 'update'])
             ->middleware('permission:contracts.update');
+        Route::delete('contracts/{contract}', [ContractController::class, 'destroy'])
+            ->middleware('permission:contracts.delete');
         Route::post('contracts/{contract}/approve', [ContractController::class, 'approve'])
             ->middleware('permission:contracts.approve');
         Route::post('contracts/{contract}/activate', [ContractController::class, 'activate'])
