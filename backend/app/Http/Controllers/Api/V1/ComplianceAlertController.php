@@ -20,7 +20,7 @@ class ComplianceAlertController extends Controller
         }
 
         $rows = ComplianceAlert::query()
-            ->with('vehicle')
+            ->with(['vehicle.brand', 'vehicle.model'])
             ->where('status', 'open')
             ->orderByDesc('severity')
             ->orderBy('due_date')
@@ -38,8 +38,8 @@ class ComplianceAlertController extends Controller
                 'vehicle' => $a->vehicle ? [
                     'id' => $a->vehicle->id,
                     'registration' => $a->vehicle->registration_number,
-                    'brand' => $a->vehicle->brand_name,
-                    'model' => $a->vehicle->model_name,
+                    'brand' => $a->vehicle->brand?->name ?? $a->vehicle->brand_name,
+                    'model' => $a->vehicle->model?->model_name ?? $a->vehicle->model?->name ?? $a->vehicle->model_name,
                 ] : null,
             ])
             ->values();
