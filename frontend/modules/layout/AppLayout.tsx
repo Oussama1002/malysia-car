@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -30,12 +30,17 @@ const GROUPS: NavGroup[] = [
     labelKey: 'nav.group.operations',
     items: [
       { to: '/fleet', module: 'fleet', labelKey: 'nav.fleet', icon: 'car' },
-      { to: '/fleet/compliance', module: 'fleet', labelKey: 'nav.fleetCompliance', icon: 'shield' },
+      // 'Conformité véhicules' AND 'Analyse de parc' moved out of the sidebar —
+      // both are now reached via toggles/buttons on /fleet (VehiclesList). The
+      // /fleet/compliance route is kept for deep links; /fleet/analysis now
+      // redirects to /fleet (see AppRoutes).
       { to: '/fleet/sub-rentals', module: 'subRentals', labelKey: 'nav.subRentals', icon: 'key' },
       { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },
       { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
+      // Réservations module = contracts list + rental operations as tabs.
+      // The standalone /rentals entry was merged in (redirects to the
+      // Locations tab); see ContractsModulePage + AppRoutes.
       { to: '/contracts', module: 'contracts', labelKey: 'nav.contracts', icon: 'doc' },
-      { to: '/rentals', module: 'rentals', labelKey: 'nav.rentals', icon: 'key' },
       { to: '/used-cars', module: 'usedCars', labelKey: 'nav.usedCars', icon: 'marketplace' },
     ],
   },
@@ -64,6 +69,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/notifications', module: 'notifications', labelKey: 'nav.notifications', icon: 'bell' },
       { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'doc' },
+      { to: '/documents/reader', module: 'documents', labelKey: 'nav.documentReader', icon: 'doc' },
       { to: '/audit', module: 'audit', labelKey: 'nav.audit', icon: 'audit' },
       { to: '/settings', module: 'settings', labelKey: 'nav.settings', icon: 'gear' },
     ],
@@ -85,12 +91,10 @@ export const AppLayout: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { session, logout } = useAuthSession();
   const navigate = useNavigate();
-  const loc = useLocation();
   const { theme, sidebarCollapsed, toggleSidebar } = useUIPrefs();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  const [financeOpen, setFinanceOpen] = useState(true);
   const crumb = useBreadcrumb();
 
   useCommandPaletteShortcut(() => setCmdOpen(true));
@@ -108,14 +112,6 @@ export const AppLayout: React.FC = () => {
     })).filter((g) => g.items.length > 0);
   }, [session?.user.role]);
 
-  useEffect(() => {
-    // Auto-open Finance group when user navigates inside it.
-    const finance = groups.find((g) => g.key === 'finance');
-    if (!finance) return;
-    const inFinance = finance.items.some((it) => loc.pathname === it.to || loc.pathname.startsWith(it.to + '/'));
-    if (inFinance) setFinanceOpen(true);
-  }, [groups, loc.pathname]);
-
   const unreadQ = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => notificationsApi.unreadCount(),
@@ -128,6 +124,19 @@ export const AppLayout: React.FC = () => {
     refetchInterval: 60000,
   });
   const criticalMaintenanceCount = maintenanceQ.data?.data?.criticalAlertsCount ?? 0;
+
+  const carteGriseQ = useQuery({
+    queryKey: ['fleet', 'carte-grise-pending'],
+    queryFn: async () => {
+      const { apiClient: api, getApiBase: base } = await import('@/services/apiClient');
+      if (!base()) return [];
+      const res = await api<{ data: any[] }>('/v1/vehicles?per_page=200');
+      return res.data.filter((v: any) => !v.registration_card_number && !v.registrationCard && !v.registration_card);
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+  const carteGrisePending = carteGriseQ.data ?? [];
 
   const renderNavLink = (it: NavItem) => (
     <NavLink
@@ -175,38 +184,12 @@ export const AppLayout: React.FC = () => {
       <nav className="flex-1 overflow-y-auto px-3 py-1">
         {groups.map((g) => (
           <div key={g.key} className="mb-3">
-            {g.key === 'finance' && !sidebarCollapsed ? (
-              <>
-                <button
-                  type="button"
-                  className="df-nav-section flex w-full items-center justify-between"
-                  onClick={() => setFinanceOpen((v) => !v)}
-                >
-                  <span>{t(g.labelKey)}</span>
-                  <Icon
-                    name="chevron-right"
-                    size={12}
-                    className={`transition-transform ${financeOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {financeOpen && (
-                  <div className="flex flex-col gap-0.5 ps-2">
-                    {g.items.map((it) => (
-                      <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {!sidebarCollapsed && <div className="df-nav-section">{t(g.labelKey)}</div>}
-                <div className="flex flex-col gap-0.5">
-                  {g.items.map((it) => (
-                    <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
-                  ))}
-                </div>
-              </>
-            )}
+            {!sidebarCollapsed && <div className="df-nav-section">{t(g.labelKey)}</div>}
+            <div className="flex flex-col gap-0.5">
+              {g.items.map((it) => (
+                <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
+              ))}
+            </div>
           </div>
         ))}
       </nav>
@@ -356,6 +339,24 @@ export const AppLayout: React.FC = () => {
             <span className="hidden md:inline">{t('auth.logout')}</span>
           </button>
         </header>
+
+        {carteGrisePending.length > 0 && (
+          <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900 dark:bg-amber-950/40">
+            <span className="text-lg">⚠️</span>
+            <p className="flex-1 text-[12.5px] font-semibold text-amber-900 dark:text-amber-300">
+              {carteGrisePending.length === 1
+                ? `1 véhicule sans carte grise — ${(carteGrisePending[0] as any).registration ?? ''}`
+                : `${carteGrisePending.length} véhicules sans carte grise`}
+              {' '}· Statut <strong>En attente</strong> — uploadez le document pour lever cette alerte.
+            </p>
+            <NavLink
+              to="/fleet"
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-amber-700"
+            >
+              Voir le parc →
+            </NavLink>
+          </div>
+        )}
 
         <main className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">

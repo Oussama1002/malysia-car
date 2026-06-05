@@ -120,9 +120,9 @@ export const EntityDocuments: React.FC<{
       ) : rows.length === 0 ? (
         <EmptyState title="Aucun document" description="Ajoutez un fichier pour construire le dossier documentaire de cette entité." />
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((d) => (
-            <DocumentRow key={d.id} item={d} onDelete={(id) => deleteM.mutate(id)} />
+            <DocumentCard key={d.id} item={d} onDelete={(id) => deleteM.mutate(id)} />
           ))}
         </div>
       )}
@@ -130,33 +130,97 @@ export const EntityDocuments: React.FC<{
   );
 };
 
-const DocumentRow: React.FC<{ item: DocumentCenterItem; onDelete: (id: string) => void }> = ({ item, onDelete }) => {
+/** French label + tone + emoji for each known document category. */
+const CATEGORY_META: Record<string, { label: string; icon: string; tone: string }> = {
+  cin:                  { label: 'CIN',                       icon: '🆔', tone: 'bg-indigo-50 text-indigo-700' },
+  passport:             { label: 'Passeport',                 icon: '📕', tone: 'bg-sky-50 text-sky-700' },
+  driving_license:      { label: 'Permis de conduire',        icon: '🚗', tone: 'bg-emerald-50 text-emerald-700' },
+  vehicle_registration: { label: 'Carte grise',               icon: '📋', tone: 'bg-amber-50 text-amber-700' },
+  rental_contract:      { label: 'Contrat de location',       icon: '📑', tone: 'bg-violet-50 text-violet-700' },
+  proof_of_address:     { label: 'Justificatif de domicile',  icon: '🏠', tone: 'bg-slate-100 text-slate-700' },
+  payslip:              { label: 'Fiche de paie',             icon: '💶', tone: 'bg-teal-50 text-teal-700' },
+  identity_document:    { label: "Pièce d'identité",          icon: '🆔', tone: 'bg-indigo-50 text-indigo-700' },
+  insurance:            { label: 'Assurance',                 icon: '🛡️', tone: 'bg-blue-50 text-blue-700' },
+  general:              { label: 'Document',                  icon: '📄', tone: 'bg-slate-100 text-slate-700' },
+};
+
+const DocumentCard: React.FC<{ item: DocumentCenterItem; onDelete: (id: string) => void }> = ({ item, onDelete }) => {
+  const meta = CATEGORY_META[item.category ?? ''] ?? {
+    label: item.category ? item.category.replace(/_/g, ' ') : 'Document',
+    icon: '📄',
+    tone: 'bg-slate-100 text-slate-700',
+  };
   const expired = item.expiryDate ? new Date(item.expiryDate) < new Date() : false;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2">
-      <div>
-        <div className="text-sm font-semibold text-slate-900">{item.title || item.category || item.id}</div>
-        <div className="text-xs text-slate-500">
-          {item.category ?? '—'} · {item.entityType ?? '—'} #{item.entityId ?? '—'}
-          {item.issueDate ? ` · Émis: ${formatDate(item.issueDate)}` : ''}
-          {item.expiryDate ? ` · Expire: ${formatDate(item.expiryDate)}` : ''}
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
+    <article className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
+      {/* Header: category icon + label, optional status pill */}
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${meta.tone}`}>
+          <span aria-hidden>{meta.icon}</span>
+          {meta.label}
+        </span>
         {item.expiryDate && (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${expired ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${expired ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
             {expired ? 'Expiré' : 'Valide'}
           </span>
         )}
-        <a className="text-xs font-bold text-indigo-600 hover:underline" href={documentCenterApi.downloadUrl(item.id)} target="_blank" rel="noreferrer">
+      </div>
+
+      {/* Title */}
+      <h4 className="line-clamp-2 text-base font-black text-slate-900">
+        {item.title || meta.label}
+      </h4>
+
+      {/* Metadata — only human-meaningful bits, no UUIDs */}
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        {item.issueDate && (
+          <div>
+            <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Émis le</dt>
+            <dd className="font-semibold text-slate-700">{formatDate(item.issueDate)}</dd>
+          </div>
+        )}
+        {item.expiryDate && (
+          <div>
+            <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Expire le</dt>
+            <dd className={`font-semibold ${expired ? 'text-rose-700' : 'text-slate-700'}`}>{formatDate(item.expiryDate)}</dd>
+          </div>
+        )}
+        {item.createdAt && !item.issueDate && (
+          <div className="col-span-2">
+            <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Ajouté le</dt>
+            <dd className="font-semibold text-slate-700">{formatDate(item.createdAt)}</dd>
+          </div>
+        )}
+      </dl>
+
+      {/* Actions */}
+      <div className="mt-auto flex items-center gap-2 pt-4">
+        <button
+          type="button"
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-indigo-700"
+          onClick={async () => {
+            // Plain <a href> doesn't carry the bearer token, so the download
+            // route returns 401. Fetch with auth, then pop a blob: URL.
+            try {
+              await documentCenterApi.openInNewTab(item.id);
+            } catch (e) {
+              window.alert(e instanceof Error ? e.message : 'Impossible d’ouvrir le document.');
+            }
+          }}
+        >
           Ouvrir
-        </a>
+        </button>
         {item.source === 'upload' && (
-          <button type="button" className="text-xs font-bold text-red-600 hover:underline" onClick={() => onDelete(item.id)}>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:border-rose-200"
+            onClick={() => onDelete(item.id)}
+            title="Supprimer ce document"
+          >
             Supprimer
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { queryKeys } from '@/services/queryKeys';
 import { Icon } from '@/modules/shared/components/Icon';
@@ -75,11 +75,48 @@ function makeVehicleIcon(color: string, pulse = false): L.DivIcon {
   });
 }
 
+const CASA_NEIGHBORHOODS = [
+  'Maarif', 'Gauthier', 'Anfa', 'Bourgogne', 'Hay Hassani', 'Sidi Bernoussi',
+  'Ain Chock', 'Ain Sebaa', 'Ben M\'sik', 'Derb Sultan', 'Salmia', 'Oulfa',
+  'Sbata', 'Hay Mohammadi', 'Nassim', '2 Mars', 'Racine', 'Polo',
+];
+
+const FAKE_CLIENT_NAMES = [
+  'Ahmed Benali', 'Khalid Razi', 'Youssef El Idrissi', 'Omar Tazi', 'Hassan Bouazzaoui',
+  'Rachid Lahlou', 'Mehdi Chraibi', 'Karim Alaoui', 'Samir Berrada', 'Nabil Ouali',
+];
+
+function fakeGpsData(id: number | string, status: string) {
+  let seed = 0;
+  const s = String(id);
+  for (let i = 0; i < s.length; i++) seed = (seed * 31 + s.charCodeAt(i)) & 0xffffffff;
+  seed = Math.abs(seed);
+  const isMoving = ['RENTED', 'IN_DELIVERY', 'UNDER_LOA', 'UNDER_CREDIT'].includes(status);
+  const speed = isMoving ? (seed % 90) + 10 : 0;
+  const fuel = ((seed >>> 3) % 70) + 25;
+  const neighborhood = CASA_NEIGHBORHOODS[seed % CASA_NEIGHBORHOODS.length];
+  const clientName = isMoving ? FAKE_CLIENT_NAMES[(seed >>> 4) % FAKE_CLIENT_NAMES.length] : null;
+  const now = new Date();
+  const minOffset = (seed % 18);
+  now.setMinutes(now.getMinutes() - minOffset);
+  const lastUpdate = now.toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' });
+  return { speed, fuel, neighborhood, clientName, lastUpdate };
+}
+
 const MapController: React.FC<{ focus?: [number, number] }> = ({ focus }) => {
   const map = useMap();
   React.useEffect(() => {
     if (focus) map.flyTo(focus, 15, { duration: 0.7 });
   }, [focus, map]);
+  return null;
+};
+
+const MapResizer: React.FC = () => {
+  const map = useMap();
+  React.useEffect(() => {
+    const t = setTimeout(() => map.invalidateSize(), 100);
+    return () => clearTimeout(t);
+  }, [map]);
   return null;
 };
 
@@ -184,8 +221,9 @@ export const GpsDashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="relative">
-            <div className="h-[560px] w-full">
+            <div className="h-[560px] w-full overflow-hidden rounded-2xl">
               <MapContainer center={CENTER} zoom={12} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+                <MapResizer />
                 <TileLayer
                   url={
                     theme === 'dark'
@@ -198,23 +236,19 @@ export const GpsDashboardPage: React.FC = () => {
                 {filtered.map((v) => {
                   const pos = fakeCoords(v.id);
                   const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+                  const isSelected = selectedId === v.id;
                   return (
                     <Marker
                       key={v.id}
                       position={pos}
-                      icon={makeVehicleIcon(meta.color, ['IN_DELIVERY', 'RENTED'].includes(v.status))}
+                      icon={makeVehicleIcon(isSelected ? '#5b5bf4' : meta.color, ['IN_DELIVERY', 'RENTED'].includes(v.status))}
                       eventHandlers={{
-                        click: () => { setSelectedId(v.id); setFocus(pos); },
+                        click: () => {
+                          setSelectedId(isSelected ? null : v.id);
+                          if (!isSelected) setFocus(pos);
+                        },
                       }}
-                    >
-                      <Popup>
-                        <div style={{ minWidth: 120 }}>
-                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700 }}>
-                            {v.registration}
-                          </div>
-                        </div>
-                      </Popup>
-                    </Marker>
+                    />
                   );
                 })}
                 {geofences.slice(0, 3).map((g, i) => (
@@ -227,6 +261,17 @@ export const GpsDashboardPage: React.FC = () => {
                 ))}
               </MapContainer>
             </div>
+
+            {/* Vehicle info card overlay */}
+            {selected && (
+              <div className="pointer-events-auto absolute bottom-4 left-4 z-[1000] w-72">
+                <VehicleInfoCard
+                  vehicle={selected}
+                  onClose={() => setSelectedId(null)}
+                  onNavigate={navigate}
+                />
+              </div>
+            )}
 
             {/* Map overlay — legend */}
             <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2">
@@ -324,6 +369,185 @@ export const GpsDashboardPage: React.FC = () => {
         </aside>
       </section>
 
+    </div>
+  );
+};
+
+const VehicleInfoCard: React.FC<{
+  vehicle: FleetVehicleDto;
+  onClose: () => void;
+  onNavigate: ReturnType<typeof useNavigate>;
+}> = ({ vehicle: v, onClose, onNavigate }) => {
+  const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+  const gps = fakeGpsData(v.id, v.status);
+
+  const fuelColor = gps.fuel >= 50 ? '#10b981' : gps.fuel >= 25 ? '#f59e0b' : '#ef4444';
+
+  return (
+    <div
+      className="rounded-2xl border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-md overflow-hidden"
+      style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+    >
+      {/* Header: photo + identity */}
+      <div className="relative">
+        {v.image ? (
+          <img src={v.image} alt={`${v.brand} ${v.model}`} className="h-28 w-full object-cover" />
+        ) : (
+          <div className="flex h-28 w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.2" className="h-12 w-12">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 14v4h3m13-4v4h-3M4 14l1.8-5.2A2 2 0 0 1 7.7 7.4h8.6a2 2 0 0 1 1.9 1.4L20 14M4 14h16M7.5 17.5h.01m9 0h.01" />
+            </svg>
+          </div>
+        )}
+        {/* Close button */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60"
+          aria-label="Fermer"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        {/* Status badge */}
+        <div
+          className="absolute bottom-2 left-3 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white"
+          style={{ background: meta.color }}
+        >
+          {meta.label}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="px-3 pb-3 pt-2.5 space-y-2.5">
+        {/* Vehicle title */}
+        <div>
+          <div className="text-[15px] font-black text-slate-900">{v.brand} {v.model} {v.version ?? ''}</div>
+          <div className="font-mono text-[11px] font-bold text-slate-500">{v.registration}</div>
+        </div>
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-2 gap-1.5">
+          {/* Client */}
+          <div className="col-span-2 flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <span className="text-[11px] text-slate-500">Client</span>
+            <span className="ml-auto text-[11px] font-bold text-slate-800">{gps.clientName ?? '—'}</span>
+          </div>
+
+          {/* Position */}
+          <div className="col-span-2 flex items-center gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="text-[11px] text-slate-500">Position</span>
+            <span className="ml-auto text-[11px] font-bold text-slate-800">Casablanca — {gps.neighborhood}</span>
+          </div>
+
+          {/* Speed */}
+          <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Vitesse</div>
+              <div className="text-[12px] font-black text-slate-800">{gps.speed} km/h</div>
+            </div>
+          </div>
+
+          {/* Fuel */}
+          <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l9-3 9 3M3 6v13l9 3 9-3V6" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Carburant</div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-1.5 flex-1 rounded-full bg-slate-200 overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${gps.fuel}%`, background: fuelColor }} />
+                </div>
+                <span className="text-[11px] font-black" style={{ color: fuelColor }}>{gps.fuel}%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Km */}
+          <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+              <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" d="M12 8v4l3 3" />
+            </svg>
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Kilométrage</div>
+              <div className="text-[12px] font-black text-slate-800">
+                {v.mileageKm ? v.mileageKm.toLocaleString('fr-MA') : '—'} km
+              </div>
+            </div>
+          </div>
+
+          {/* Last update */}
+          <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+              <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" d="M12 6v6l4 2" />
+            </svg>
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Mise à jour</div>
+              <div className="text-[12px] font-black text-slate-800">{gps.lastUpdate}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+          <button
+            type="button"
+            onClick={() => onNavigate(`/fleet?id=${v.id}`)}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-indigo-700 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 14v4h3m13-4v4h-3M4 14l1.8-5.2A2 2 0 0 1 7.7 7.4h8.6a2 2 0 0 1 1.9 1.4L20 14M4 14h16" />
+            </svg>
+            Voir véhicule
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate(`/gps?trip=${v.id}`)}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-200 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            Voir trajet
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Fonctionnalité à venir"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-[11px] font-bold text-slate-400 cursor-not-allowed"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+              <rect x="5" y="11" width="14" height="10" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 018 0v4" />
+            </svg>
+            Immobiliser
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (v.assignedClientId) onNavigate(`/customers/${v.assignedClientId}`);
+            }}
+            disabled={!v.assignedClientId}
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Conducteur
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

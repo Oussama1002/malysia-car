@@ -7,7 +7,7 @@ export interface MaintenanceAlertDto {
   title: string;
   description: string | null;
   triggeredAt: string | null;
-  vehicle: { id: string; registration: string | null } | null;
+  vehicle: { id: string; registration: string | null; brand?: string | null; model?: string | null } | null;
   payload: Record<string, unknown>;
 }
 

@@ -8,8 +8,8 @@ export const RentalsPage: React.FC = () => {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-2xl font-black text-slate-900">Rental Operations</h1>
-        <p className="text-slate-500">Production workflow: availability, handover, return, damage, extension, billing.</p>
+        <h1 className="text-2xl font-black text-slate-900">Réservations</h1>
+        <p className="text-slate-500">Gestion des réservations : disponibilité, remise, retour, dommages, prolongation et clôture.</p>
       </header>
       {hasBackend ? <ReservationsOpsPage /> : (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">

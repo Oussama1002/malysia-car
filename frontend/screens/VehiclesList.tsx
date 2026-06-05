@@ -1,9 +1,11 @@
-
+﻿
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services/mockApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Vehicle, VehicleStatus } from '../types';
+import { VehicleDocumentScanner } from '@/modules/fleet/VehicleDocumentScanner';
 
 interface VehicleModelOption { id: string; name: string; }
 interface VehicleBrandOption { id: string; name: string; models: VehicleModelOption[]; }
@@ -11,6 +13,9 @@ interface VehicleBrandOption { id: string; name: string; models: VehicleModelOpt
 const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWY'.split('');
 const PLATE_REGIONS = Array.from({ length: 99 }, (_, i) => i + 1);
 const FUEL_OPTIONS = ['Diesel', 'Essence', 'Hybride', 'Électrique', 'GPL'];
+const GAMME_OPTIONS = ['CLASS', 'SPORT', 'MINI', 'UTL', 'AUTO MINI', 'SPORT 4x4', 'V.Citadines', 'V.Berlines', 'V.Compactes', 'V. 4x4', 'V.Luxe'];
+const CATEGORIE_OPTIONS = ['Particulier', 'Utilitaire', 'Commercial', 'Tourisme', 'Moto'];
+const VEHICLE_TYPE_OPTIONS = ['Berline', 'SUV', 'Citadine', 'Break', 'Coupé', 'Cabriolet', 'Monospace', 'Pick-up', 'Van', 'Camion'];
 
 const DocPhotoUpload: React.FC<{
   preview: string | null;
@@ -71,6 +76,21 @@ const emptyForm = () => ({
   cv: '' as string | number,
   mileageKm: '' as string | number,
   fuel: 'Diesel',
+  // new fields
+  vehicleType: '',
+  numeroPolice: '',
+  nombreCylindres: '' as string | number,
+  gamme: '',
+  acquisitionDate: '',
+  miseEnCirculation: '',
+  dateImmatriculation: '',
+  categorie: '',
+  chassis: '',
+  immatOnline: '',
+  montant: '' as string | number,
+  carteGriseStatus: 'en_attente' as 'en_attente' | 'recue',
+  immatProvisoire: '',
+  immatProvisoireExpiry: '',
   // document photo previews
   docPhotos: {
     carteGrise: null as string | null,
@@ -100,9 +120,63 @@ const VehiclesList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm());
+  // ── View mode (cards / table / analysis) ────────────────────────────────
+  // The 'analysis' mode merges the former /fleet/analysis page into this
+  // screen so the sidebar stays short and the dirigeant has one place for
+  // everything about the parc. Initial mode honours `?view=analysis` so the
+  // legacy /fleet/analysis route redirects cleanly into this view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialView = (searchParams.get('view') as 'cards' | 'table' | 'analysis' | null) ?? 'cards';
+  const [viewMode, setViewMode] = useState<'cards' | 'table' | 'analysis'>(initialView);
+  const switchView = (m: 'cards' | 'table' | 'analysis') => {
+    setViewMode(m);
+    // Keep URL in sync so the analyse view is shareable / bookmarkable.
+    const next = new URLSearchParams(searchParams);
+    if (m === 'cards') next.delete('view'); else next.set('view', m);
+    setSearchParams(next, { replace: true });
+  };
+
+  // ── Lazy-loaded analyse data ────────────────────────────────────────────
+  // Only fetched when the user opens the analyse view, so the page stays
+  // fast for users who never look at profitability.
+  type AnalyseRow = {
+    vehicleId: string;
+    registration: string | null;
+    status?: string | null;
+    availability?: string | null;
+    revenue?: number;
+    totalCost?: number;
+    profitability?: number;
+  };
+  type AnalyseData = {
+    kpis?: Record<string, number>;
+    vehicles?: AnalyseRow[];
+    mostProfitableVehicleIds?: string[];
+    leastProfitableVehicleIds?: string[];
+  };
+  const [analyse, setAnalyse] = useState<AnalyseData | null>(null);
+  const [analyseLoading, setAnalyseLoading] = useState(false);
+  const [analyseError, setAnalyseError] = useState<string | null>(null);
+  useEffect(() => {
+    if (viewMode !== 'analysis' || analyse !== null || analyseLoading || !getApiBase()) return;
+    setAnalyseLoading(true);
+    setAnalyseError(null);
+    apiClient<{ data: AnalyseData }>('/v1/fleet/analysis')
+      .then((r) => setAnalyse(r.data))
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        setAnalyseError(msg);
+      })
+      .finally(() => setAnalyseLoading(false));
+  }, [viewMode, analyse, analyseLoading]);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  // Separate refs for camera-capture inputs. We can't reuse the file inputs
+  // because the `capture` attribute is sticky — adding/removing it via JS
+  // doesn't reliably switch the picker mode on iOS Safari.
+  const photoCameraRef = useRef<HTMLInputElement>(null);
+  const videoCameraRef = useRef<HTMLInputElement>(null);
   const selectedPhotoFiles = useRef<File[]>([]);
 
   useEffect(() => {
@@ -180,6 +254,17 @@ const VehiclesList: React.FC = () => {
         cv: (v as any).cv ?? '',
         mileageKm: (v as any).mileageKm ?? '',
         fuel: (v as any).fuel ?? 'Diesel',
+        vehicleType: (v as any).vehicleType ?? '',
+        numeroPolice: (v as any).numeroPolice ?? '',
+        nombreCylindres: (v as any).nombreCylindres ?? '',
+        gamme: (v as any).gamme ?? '',
+        acquisitionDate: (v as any).acquisitionDate ?? '',
+        miseEnCirculation: (v as any).miseEnCirculation ?? '',
+        dateImmatriculation: (v as any).dateImmatriculation ?? '',
+        categorie: (v as any).categorie ?? '',
+        chassis: (v as any).chassisNumber ?? '',
+        immatOnline: (v as any).immatOnline ?? '',
+        montant: (v as any).purchaseCostMad ?? '',
         docPhotos: emptyForm().docPhotos,
         photoPreviews: [],
         videoPreview: '',
@@ -208,6 +293,17 @@ const VehiclesList: React.FC = () => {
         vignette_expiry: formData.vignetteExpiry || undefined,
         daily_rental_price: formData.pricePerDay || undefined,
         status: formData.status,
+        vehicle_type: formData.vehicleType || undefined,
+        numero_police: formData.numeroPolice || undefined,
+        nombre_cylindres: formData.nombreCylindres !== '' ? Number(formData.nombreCylindres) : undefined,
+        gamme: formData.gamme || undefined,
+        acquisition_date: formData.acquisitionDate || undefined,
+        mise_en_circulation: formData.miseEnCirculation || undefined,
+        date_immatriculation: formData.dateImmatriculation || undefined,
+        categorie: formData.categorie || undefined,
+        chassis: formData.chassis || undefined,
+        immat_online: formData.immatOnline || undefined,
+        purchase_price: formData.montant !== '' ? Number(formData.montant) : undefined,
       };
       if (formData.brand_id) body.brand_id = formData.brand_id;
       if (formData.model_id) body.model_id = formData.model_id;
@@ -274,7 +370,7 @@ const VehiclesList: React.FC = () => {
       setNewBrandName('');
       setAddingBrand(false);
     } catch (err: any) {
-      alert(err?.message ?? 'Impossible d’ajouter la marque');
+      alert(err?.message ?? "Impossible d'ajouter la marque");
     }
   };
 
@@ -305,7 +401,7 @@ const VehiclesList: React.FC = () => {
       setNewModelName('');
       setAddingModel(false);
     } catch (err: any) {
-      alert(err?.message ?? 'Impossible d’ajouter le modèle');
+      alert(err?.message ?? "Impossible d'ajouter le modèle");
     }
   };
 
@@ -362,6 +458,50 @@ const VehiclesList: React.FC = () => {
     isExpiringSoon(v.insuranceExpiry) || isExpiringSoon(v.techControlExpiry) || isExpiringSoon(v.vignetteExpiry)
   );
 
+  const downloadParcPDF = () => {
+    const rows = filteredVehicles.map(v => [
+      v.registration,
+      (v as any).immatOnline || '—',
+      v.brand || '—',
+      v.model || '—',
+      (v as any).miseEnCirculation ? new Date((v as any).miseEnCirculation).toLocaleDateString('fr-MA') : '—',
+      (v as any).cv ?? '—',
+      (v as any).fuel || '—',
+      v.status === 'AVAILABLE' ? 'Disponible' : v.status === 'RENTED' ? 'Louée' : 'Maintenance',
+    ]);
+
+    const tableRows = rows.map(r =>
+      `<tr>${r.map((cell, i) => `<td style="padding:7px 12px;border-bottom:1px solid #e2e8f0;font-family:monospace;${i === 0 ? 'font-weight:700;' : ''}${i === 7 ? 'color:#4f46e5;font-weight:700;' : ''}">${cell}</td>`).join('')}</tr>`
+    ).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Parc Automobile — DriveFlow</title>
+<style>
+  body{margin:0;padding:24px;font-family:Arial,sans-serif;font-size:12px;color:#1e293b}
+  h1{font-size:18px;font-weight:900;margin:0 0 4px}
+  p{margin:0 0 16px;color:#64748b;font-size:11px}
+  table{width:100%;border-collapse:collapse}
+  thead tr{background:#f8fafc;border-bottom:2px solid #e2e8f0}
+  th{padding:8px 12px;text-align:left;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8}
+  tr:last-child td{border-bottom:none}
+  @media print{body{padding:12px}@page{margin:15mm}}
+</style></head><body>
+<h1>Parc Automobile</h1>
+<p>DriveFlow — Édité le ${new Date().toLocaleDateString('fr-MA', { day:'2-digit', month:'long', year:'numeric' })} · ${rows.length} véhicule${rows.length !== 1 ? 's' : ''}</p>
+<table>
+  <thead><tr>
+    <th>Immatriculation</th><th>Immat. provisoire / WW</th><th>Marque</th><th>Modèle</th>
+    <th>Mise en circulation</th><th>Puissance (CV)</th><th>Carburant</th><th>Statut</th>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+</table>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
   const inputCls = 'w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold';
   const selectCls = inputCls;
   const labelCls = 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1';
@@ -414,6 +554,48 @@ const VehiclesList: React.FC = () => {
               className="pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl w-full md:w-64 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium text-sm"
               value={search} onChange={e => setSearch(e.target.value)} />
             <svg className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          </div>
+          {/*
+            Conformité véhicules entry-point.
+            Moved out of the sidebar (AppLayout.tsx); the Flotte module owns
+            its sub-navigation in one place. Indigo filled style matches the
+            page's primary action language so the button is discoverable for
+            users who used to reach this page via the sidebar.
+          */}
+          <Link
+            to="/fleet/compliance"
+            title="Tableau de conformité véhicules (assurance, visite technique, vignette)"
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 whitespace-nowrap"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            Conformité
+          </Link>
+
+          {/* PDF download */}
+          <button onClick={downloadParcPDF}
+            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 whitespace-nowrap">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            PDF
+          </button>
+
+          {/* View toggle — cards / table / analyse (rentabilité par véhicule) */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl">
+            <button onClick={() => switchView('cards')}
+              className={`p-2.5 rounded-xl transition-all ${viewMode === 'cards' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+              title="Vue cartes">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+            </button>
+            <button onClick={() => switchView('table')}
+              className={`p-2.5 rounded-xl transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+              title="Vue liste">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+            </button>
+            <button onClick={() => switchView('analysis')}
+              className={`p-2.5 rounded-xl transition-all ${viewMode === 'analysis' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+              title="Analyse de parc (rentabilité, coûts, marge par véhicule)">
+              {/* bar-chart icon */}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6m6 13V11M3 19v-4m18 4h.01M3 5h.01M3 19h18" /></svg>
+            </button>
           </div>
           <button onClick={() => handleOpenModal()}
             className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 whitespace-nowrap">
@@ -492,8 +674,153 @@ const VehiclesList: React.FC = () => {
         ))}
       </div>
 
+      {/* Table view */}
+      {viewMode === 'table' && (
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100">
+                {['Immatriculation', 'Immat. provisoire / WW', 'Marque', 'Modèle', 'Mise en circulation', 'Puissance (CV)', 'Carburant', 'Statut', ''].map(h => (
+                  <th key={h} className="px-5 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredVehicles.length === 0 && (
+                <tr><td colSpan={9} className="px-5 py-10 text-center text-slate-400 font-medium">Aucun véhicule</td></tr>
+              )}
+              {filteredVehicles.map((v, idx) => (
+                <tr key={v.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/40'}`}>
+                  <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">{v.registration}</td>
+                  <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{(v as any).immatOnline || '—'}</td>
+                  <td className="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">{v.brand || '—'}</td>
+                  <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.model || '—'}</td>
+                  <td className="px-5 py-3 text-slate-600 whitespace-nowrap">
+                    {(v as any).miseEnCirculation ? new Date((v as any).miseEnCirculation).toLocaleDateString('fr-MA') : '—'}
+                  </td>
+                  <td className="px-5 py-3 text-slate-600 text-center whitespace-nowrap">{(v as any).cv ?? '—'}</td>
+                  <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{(v as any).fuel || '—'}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border ${getStatusColor(v.status)}`}>
+                      {v.status === 'AVAILABLE' ? 'Disponible' : v.status === 'RENTED' ? 'Louée' : 'Maintenance'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <Link to={`/fleet/${v.id}`} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">Fiche</Link>
+                      <button onClick={() => handleOpenModal(v)} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">Éditer</button>
+                      <button onClick={() => handleDelete(v.id)} className="p-1.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/*
+        Analyse view — rentabilité par véhicule.
+        Data comes from /v1/fleet/analysis (the endpoint that used to back the
+        standalone /fleet/analysis page). Fetched lazily on first switch.
+      */}
+      {viewMode === 'analysis' && (
+        <div className="space-y-6">
+          {analyseLoading && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+              Chargement de l'analyse de parc…
+            </div>
+          )}
+          {analyseError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 space-y-2">
+              <div className="font-semibold">Impossible de charger l'analyse de parc.</div>
+              <div className="font-mono text-xs">{analyseError}</div>
+              <button
+                type="button"
+                onClick={() => { setAnalyse(null); setAnalyseError(null); }}
+                className="mt-1 inline-flex items-center rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100"
+              >
+                Réessayer
+              </button>
+            </div>
+          )}
+          {analyse && (
+            <>
+              {/* KPI strip (rentabilité-focused — the operational KPIs are
+                  already shown at the top of the page so we don't duplicate). */}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[
+                  ['Total parc',       analyse.kpis?.totalVehicles],
+                  ['Utilisation %',    analyse.kpis?.utilizationRatePct],
+                  ['Sous-location',    analyse.kpis?.subRentedCount ?? 0],
+                  ['Indisponibles',    analyse.kpis?.vehiclesUnavailable],
+                ].map(([label, val]) => (
+                  <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">{String(label)}</div>
+                    <div className="mt-1 text-xl font-black text-slate-900">
+                      {val === undefined || val === null ? '—' : Number(val).toLocaleString('fr-MA')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Rentabilité table */}
+              <div className="rounded-[2rem] border border-slate-200 bg-white shadow-sm overflow-x-auto">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                  <div>
+                    <h2 className="text-base font-black text-slate-900">Rentabilité par véhicule</h2>
+                    <p className="text-xs text-slate-500">CA, coûts et marge — sur la durée de vie du véhicule.</p>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {(analyse.vehicles ?? []).length} véhicule(s)
+                  </span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      {['Immatriculation', 'Statut', 'Disponibilité', 'CA', 'Coûts', 'Marge', ''].map((h) => (
+                        <th key={h} className="px-5 py-3 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(analyse.vehicles ?? []).length === 0 && (
+                      <tr><td colSpan={7} className="px-5 py-10 text-center text-slate-400 font-medium">Aucune donnée de rentabilité disponible.</td></tr>
+                    )}
+                    {(analyse.vehicles ?? []).map((v, idx) => {
+                      const margin = Number(v.profitability ?? 0);
+                      return (
+                        <tr key={String(v.vehicleId)} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/40'}`}>
+                          <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">{v.registration ?? '—'}</td>
+                          <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.status ?? '—'}</td>
+                          <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.availability ?? '—'}</td>
+                          <td className="px-5 py-3 text-slate-800 whitespace-nowrap">{formatCurrencyMad(Number(v.revenue ?? 0))}</td>
+                          <td className="px-5 py-3 text-slate-800 whitespace-nowrap">{formatCurrencyMad(Number(v.totalCost ?? 0))}</td>
+                          <td className={`px-5 py-3 font-bold whitespace-nowrap ${margin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {formatCurrencyMad(margin)}
+                          </td>
+                          <td className="px-5 py-3 whitespace-nowrap">
+                            <Link to={`/fleet/${v.vehicleId}`} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">
+                              Fiche
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+      {viewMode === 'cards' && <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
         {filteredVehicles.map(v => (
           <div key={v.id} className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-200/60 group hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-500 flex flex-col">
             <div className="relative h-64 overflow-hidden">
@@ -549,7 +876,7 @@ const VehiclesList: React.FC = () => {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
 
       {/* Modal */}
       {isModalOpen && (
@@ -567,101 +894,82 @@ const VehiclesList: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-10">
 
+              {/* ── OCR Scanner ── */}
+              <VehicleDocumentScanner
+                onPrefill={(data) => setFormData(fd => ({
+                  ...fd,
+                  ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
+                  ...(data.insuranceExpiry  ? { insuranceExpiry: data.insuranceExpiry }   : {}),
+                  ...(data.chassis          ? { chassis: data.chassis }                   : {}),
+                  ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
+                  ...(data.montant          ? { montant: data.montant }                   : {}),
+                  ...(data.immatProvisoire  ? { immatProvisoire: data.immatProvisoire }   : {}),
+                  ...(data.immatProvisoireExpiry  ? { immatProvisoireExpiry: data.immatProvisoireExpiry }   : {}),
+                  ...(data.techControlExpiry     ? { techControlExpiry: data.techControlExpiry }           : {}),
+                  ...(data.vignetteExpiry        ? { vignetteExpiry: data.vignetteExpiry }                 : {}),
+                }))}
+              />
+
               {/* ── Fiche Technique ── */}
+              {/*
+                Field order (top → bottom = most → least important for a Moroccan
+                rental fleet). Related fields are kept adjacent so they read like
+                pairs the operator already speaks (Marque ↔ Modèle, dates next to
+                their counterpart, admin numbers grouped).
+
+                Row 1 — Identity        : Immat (×2 wide)  · Année
+                Row 2 — Make/model      : Marque           · Modèle           · Catégorie
+                Row 3 — Classification  : Type             · Carburant        · Puissance (CV)
+                Row 4 — Mechanical/use  : Cylindres        · Index conteur Km · Mise en circulation
+                Row 5 — Admin dates     : Date immat.      · Date acquisition · Montant (DH)
+                Row 6 — Admin numbers   : N° Carte grise   · Châssis (VIN)    · Immat. provisoire / WW
+                Row 7 — Secondary       : N° police        · Gamme
+              */}
               <div className="space-y-6">
                 <h3 className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em]">Fiche Technique</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                  {/* Marque */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className={labelCls}>Marque</label>
-                      {brands.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setAddingBrand((v) => !v)}
-                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700"
-                        >
-                          + Ajouter
-                        </button>
-                      )}
-                    </div>
-                    {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.brand_id ?? ''}
-                        onChange={e => {
-                          const bid = e.target.value ? String(e.target.value) : null;
-                          const bObj = brands.find(b => b.id === bid);
-                          setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? '', model_id: null, model: '' }));
-                        }}>
-                        <option value="">— Sélectionner —</option>
-                        {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    ) : (
-                      <input required className={inputCls} value={formData.brand} onChange={e => setFormData(fd => ({ ...fd, brand: e.target.value }))} placeholder="ex: Dacia" />
-                    )}
-                    {addingBrand && brands.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          className={inputCls}
-                          placeholder="Nouvelle marque"
-                          value={newBrandName}
-                          onChange={(e) => setNewBrandName(e.target.value)}
-                        />
-                        <button type="button" onClick={handleAddBrand} className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black">
-                          OK
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  {/* Row 1 — Identity ─────────────────────────────────────── */}
 
-                  {/* Modèle */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className={labelCls}>Modèle</label>
-                      {brands.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setAddingModel((v) => !v)}
-                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700"
-                        >
-                          + Ajouter
-                        </button>
-                      )}
-                    </div>
-                    {brands.length > 0 ? (
-                      <select required className={selectCls} value={formData.model_id ?? ''} disabled={!formData.brand_id}
-                        onChange={e => {
-                          const mid = e.target.value ? String(e.target.value) : null;
-                          const mObj = brands.find(b => b.id === formData.brand_id)?.models.find(m => m.id === mid);
-                          setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? '' }));
-                        }}>
-                        <option value="">— Sélectionner —</option>
-                        {(brands.find(b => b.id === formData.brand_id)?.models ?? []).map(m => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input required className={inputCls} value={formData.model} onChange={e => setFormData(fd => ({ ...fd, model: e.target.value }))} placeholder="ex: Logan" />
-                    )}
-                    {addingModel && brands.length > 0 && (
+                  {/* Immatriculation + Immat. provisoire / WW — grouped (col-span-2) */}
+                  <div className="space-y-4 md:col-span-2">
+                    <div className="space-y-2">
+                      <label className={labelCls}>Immat.</label>
                       <div className="flex items-center gap-2">
                         <input
-                          className={inputCls}
-                          disabled={!formData.brand_id}
-                          placeholder={formData.brand_id ? 'Nouveau modèle' : 'Choisir une marque d’abord'}
-                          value={newModelName}
-                          onChange={(e) => setNewModelName(e.target.value)}
+                          required
+                          type="text"
+                          pattern="\d{1,5}"
+                          maxLength={5}
+                          className="flex-1 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
+                          placeholder="12345"
+                          value={formData.platNum}
+                          onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, '') }))}
                         />
-                        <button
-                          type="button"
-                          onClick={handleAddModel}
-                          disabled={!formData.brand_id}
-                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black disabled:opacity-50"
-                        >
-                          OK
-                        </button>
+                        <span className="text-slate-300 font-black text-xl">–</span>
+                        <select
+                          required
+                          className="w-20 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
+                          value={formData.platLetter}
+                          onChange={e => setFormData(fd => ({ ...fd, platLetter: e.target.value }))}>
+                          {PLATE_LETTERS.map(l => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                        <span className="text-slate-300 font-black text-xl">–</span>
+                        <select
+                          required
+                          className="w-24 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
+                          value={formData.platRegion}
+                          onChange={e => setFormData(fd => ({ ...fd, platRegion: Number(e.target.value) }))}>
+                          {PLATE_REGIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
                       </div>
-                    )}
+                      <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className={labelCls}>Immat. provisoire / WW</label>
+                      <input className={inputCls} placeholder="Immatriculation en ligne" value={formData.immatOnline}
+                        onChange={e => setFormData(fd => ({ ...fd, immatOnline: e.target.value }))} />
+                    </div>
                   </div>
 
                   {/* Année */}
@@ -671,7 +979,103 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, year: parseInt(e.target.value) }))} />
                   </div>
 
-                  {/* CV */}
+                  {/* Row 2 — Make / Model / Category ──────────────────────── */}
+
+                  {/* Marque */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className={labelCls}>Marque</label>
+                      {getApiBase() && (
+                        <button type="button" onClick={() => setAddingBrand((v) => !v)}
+                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
+                          + Ajouter
+                        </button>
+                      )}
+                    </div>
+                    <select required className={selectCls} value={formData.brand_id ?? ''}
+                      onChange={e => {
+                        const bid = e.target.value ? String(e.target.value) : null;
+                        const bObj = brands.find(b => b.id === bid);
+                        setFormData(fd => ({ ...fd, brand_id: bid, brand: bObj?.name ?? '', model_id: null, model: '' }));
+                      }}>
+                      <option value="">— Choix marque —</option>
+                      {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    {addingBrand && (
+                      <div className="flex items-center gap-2">
+                        <input className={inputCls} placeholder="Nouvelle marque" value={newBrandName}
+                          onChange={(e) => setNewBrandName(e.target.value)} />
+                        <button type="button" onClick={handleAddBrand}
+                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black">OK</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Modèle — kept directly after Marque (depends on it via brand_id) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className={labelCls}>Modèle</label>
+                      {getApiBase() && formData.brand_id && (
+                        <button type="button" onClick={() => setAddingModel((v) => !v)}
+                          className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
+                          + Ajouter
+                        </button>
+                      )}
+                    </div>
+                    <select required className={selectCls} value={formData.model_id ?? ''} disabled={!formData.brand_id}
+                      onChange={e => {
+                        const mid = e.target.value ? String(e.target.value) : null;
+                        const mObj = brands.find(b => b.id === formData.brand_id)?.models.find(m => m.id === mid);
+                        setFormData(fd => ({ ...fd, model_id: mid, model: mObj?.name ?? '' }));
+                      }}>
+                      <option value="">— Choix modèle —</option>
+                      {(brands.find(b => b.id === formData.brand_id)?.models ?? []).map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    {addingModel && formData.brand_id && (
+                      <div className="flex items-center gap-2">
+                        <input className={inputCls} placeholder="Nouveau modèle"
+                          value={newModelName} onChange={(e) => setNewModelName(e.target.value)} />
+                        <button type="button" onClick={handleAddModel}
+                          className="px-4 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black">OK</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Catégorie */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Catégorie</label>
+                    <select className={selectCls} value={formData.categorie}
+                      onChange={e => setFormData(fd => ({ ...fd, categorie: e.target.value }))}>
+                      <option value="">— Choix catégorie —</option>
+                      {CATEGORIE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Row 3 — Classification / Engine ──────────────────────── */}
+
+                  {/* Type */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Type</label>
+                    <select className={selectCls} value={formData.vehicleType}
+                      onChange={e => setFormData(fd => ({ ...fd, vehicleType: e.target.value }))}>
+                      <option value="">— Choix type —</option>
+                      {VEHICLE_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Type de carburant */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Type de carburant</label>
+                    <select className={selectCls} value={formData.fuel}
+                      onChange={e => setFormData(fd => ({ ...fd, fuel: e.target.value }))}>
+                      <option value="">— Choix carburant —</option>
+                      {FUEL_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Puissance */}
                   <div className="space-y-2">
                     <label className={labelCls}>Puissance (CV)</label>
                     <input type="number" min="1" className={inputCls} placeholder="ex: 90"
@@ -679,74 +1083,105 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, cv: e.target.value }))} />
                   </div>
 
-                  {/* Kilométrage */}
+                  {/* Row 4 — Mechanical / use ────────────────────────────── */}
+
+                  {/* Nombre de cylindres */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Kilométrage (km)</label>
+                    <label className={labelCls}>Nombre de cylindre</label>
+                    <input type="number" min="1" max="16" className={inputCls} placeholder="ex: 4"
+                      value={formData.nombreCylindres}
+                      onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
+                  </div>
+
+                  {/* Index conteur / Km */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Index conteur (Km)</label>
                     <input type="number" min="0" className={inputCls} placeholder="ex: 45000"
                       value={formData.mileageKm}
                       onChange={e => setFormData(fd => ({ ...fd, mileageKm: e.target.value }))} />
                   </div>
 
-                  {/* Carburant */}
+                  {/* Mise en circulation */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Carburant</label>
-                    <select className={selectCls} value={formData.fuel}
-                      onChange={e => setFormData(fd => ({ ...fd, fuel: e.target.value }))}>
-                      {FUEL_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
+                    <label className={labelCls}>Mise en circulation</label>
+                    <input type="date" className={inputCls} value={formData.miseEnCirculation}
+                      onChange={e => setFormData(fd => ({ ...fd, miseEnCirculation: e.target.value }))} />
                   </div>
 
-                  {/* Immatriculation — 3 parts */}
-                  <div className="space-y-2 md:col-span-2">
-                    <label className={labelCls}>Immatriculation</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        required
-                        type="text"
-                        pattern="\d{1,5}"
-                        maxLength={5}
-                        className="flex-1 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
-                        placeholder="12345"
-                        value={formData.platNum}
-                        onChange={e => setFormData(fd => ({ ...fd, platNum: e.target.value.replace(/\D/g, '') }))}
-                      />
-                      <span className="text-slate-300 font-black text-xl">–</span>
-                      <select
-                        required
-                        className="w-20 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
-                        value={formData.platLetter}
-                        onChange={e => setFormData(fd => ({ ...fd, platLetter: e.target.value }))}>
-                        {PLATE_LETTERS.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                      <span className="text-slate-300 font-black text-xl">–</span>
-                      <select
-                        required
-                        className="w-24 px-3 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black font-mono text-center text-lg"
-                        value={formData.platRegion}
-                        onChange={e => setFormData(fd => ({ ...fd, platRegion: Number(e.target.value) }))}>
-                        {PLATE_REGIONS.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
+                  {/* Row 5 — Admin dates + amount ────────────────────────── */}
+
+                  {/* Date immatriculation */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Date immatriculation</label>
+                    <input type="date" className={inputCls} value={formData.dateImmatriculation}
+                      onChange={e => setFormData(fd => ({ ...fd, dateImmatriculation: e.target.value }))} />
+                  </div>
+
+                  {/* Date d'acquisition */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Date d'acquisition</label>
+                    <input type="date" className={inputCls} value={formData.acquisitionDate}
+                      onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
+                  </div>
+
+                  {/* Montant (prix d'acquisition) — placed next to its date */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Montant (DH)</label>
+                    <input type="number" min="0" className={inputCls} placeholder="ex: 150000"
+                      value={formData.montant}
+                      onChange={e => setFormData(fd => ({ ...fd, montant: e.target.value }))} />
+                  </div>
+
+                  {/* Row 6 — Admin numbers ───────────────────────────────── */}
+
+                  {/* N° Carte grise — only shown when Reçue */}
+                  {formData.carteGriseStatus === 'recue' && (
+                    <div className="space-y-2">
+                      <label className={labelCls}>N° de la carte grise</label>
+                      <input className={inputCls} value={formData.registrationCard}
+                        onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
                     </div>
-                    <p className="text-[10px] text-slate-400 ml-1">Format : <span className="font-mono font-bold">{formData.platNum || 'XXXXX'}-{formData.platLetter}-{formData.platRegion}</span></p>
+                  )}
+
+                  {/* Châssis (VIN) */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Chassis</label>
+                    <input className={inputCls} placeholder="ex: VF1AA000..." value={formData.chassis}
+                      onChange={e => setFormData(fd => ({ ...fd, chassis: e.target.value }))} />
                   </div>
 
-                  {/* Prix / jour */}
+                  {/* Row 7 — Secondary ──────────────────────────────────── */}
+
+                  {/* N° police */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Prix Location / Jour (DH)</label>
-                    <input type="number" required className={`${inputCls} text-indigo-600`} value={formData.pricePerDay}
-                      onChange={e => setFormData(fd => ({ ...fd, pricePerDay: parseInt(e.target.value) }))} />
+                    <label className={labelCls}>N° police</label>
+                    <input className={inputCls} placeholder="ex: POL-2024-001" value={formData.numeroPolice}
+                      onChange={e => setFormData(fd => ({ ...fd, numeroPolice: e.target.value }))} />
                   </div>
 
-                  {/* Statut */}
+                  {/* Gamme */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Statut Initial</label>
-                    <select className={selectCls} value={formData.status}
-                      onChange={e => setFormData(fd => ({ ...fd, status: e.target.value as VehicleStatus }))}>
-                      <option value={VehicleStatus.AVAILABLE}>Disponible</option>
-                      <option value={VehicleStatus.RENTED}>Louée</option>
-                      <option value={VehicleStatus.MAINTENANCE}>Maintenance</option>
+                    <label className={labelCls}>Gamme</label>
+                    <select className={selectCls} value={formData.gamme}
+                      onChange={e => setFormData(fd => ({ ...fd, gamme: e.target.value }))}>
+                      <option value="">— Choix gamme —</option>
+                      {GAMME_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </div>
+
+                  {/* Immatriculation provisoire / WW */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Immat. provisoire / WW</label>
+                    <input className={inputCls} placeholder="ex: WW-12345" value={formData.immatProvisoire}
+                      onChange={e => setFormData(fd => ({ ...fd, immatProvisoire: e.target.value }))} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className={labelCls}>Validité immat. provisoire</label>
+                    <input type="date" className={inputCls} value={formData.immatProvisoireExpiry}
+                      onChange={e => setFormData(fd => ({ ...fd, immatProvisoireExpiry: e.target.value }))} />
+                  </div>
+
                 </div>
               </div>
 
@@ -754,49 +1189,39 @@ const VehiclesList: React.FC = () => {
               <div className="space-y-6 pt-6 border-t border-slate-100">
                 <h3 className="text-xs font-black text-rose-500 uppercase tracking-[0.2em]">Conformité Administrative</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* Carte Grise */}
+                  {/* Carte Grise — status + conditional fields */}
                   <div className="space-y-2">
-                    <label className={labelCls}>N° Carte Grise</label>
-                    <input required className={inputCls} value={formData.registrationCard}
-                      onChange={e => setFormData(fd => ({ ...fd, registrationCard: e.target.value }))} />
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.carteGrise}
-                      onFile={f => handleDocPhoto('carteGrise', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, carteGrise: null } }))}
-                    />
+                    <label className={labelCls}>Statut Carte Grise</label>
+                    <select className={selectCls} value={formData.carteGriseStatus}
+                      onChange={e => setFormData(fd => ({ ...fd, carteGriseStatus: e.target.value as 'en_attente' | 'recue' }))}>
+                      <option value="en_attente">En attente</option>
+                      <option value="recue">Reçue</option>
+                    </select>
+                    {formData.carteGriseStatus === 'recue' && (
+                      <DocPhotoUpload
+                        preview={formData.docPhotos.carteGrise}
+                        onFile={f => handleDocPhoto('carteGrise', f)}
+                        onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, carteGrise: null } }))}
+                      />
+                    )}
                   </div>
                   {/* Assurance */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Assurance</label>
                     <input type="date" required className={inputCls} value={formData.insuranceExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, insuranceExpiry: e.target.value }))} />
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.assurance}
-                      onFile={f => handleDocPhoto('assurance', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, assurance: null } }))}
-                    />
                   </div>
                   {/* Visite Tech */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Visite Tech.</label>
                     <input type="date" required className={inputCls} value={formData.techControlExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, techControlExpiry: e.target.value }))} />
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.visiteTech}
-                      onFile={f => handleDocPhoto('visiteTech', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, visiteTech: null } }))}
-                    />
                   </div>
                   {/* Vignette */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Vignette</label>
                     <input type="date" required className={inputCls} value={formData.vignetteExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, vignetteExpiry: e.target.value }))} />
-                    <DocPhotoUpload
-                      preview={formData.docPhotos.vignette}
-                      onFile={f => handleDocPhoto('vignette', f)}
-                      onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, vignette: null } }))}
-                    />
                   </div>
                 </div>
               </div>
@@ -808,12 +1233,34 @@ const VehiclesList: React.FC = () => {
                 {/* Photos */}
                 <div className="space-y-3">
                   <label className={labelCls}>Photos du véhicule</label>
-                  <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotos} />
-                  <button type="button" onClick={() => photoInputRef.current?.click()}
-                    className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all w-full justify-center font-bold text-sm">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    Ajouter des photos
-                  </button>
+                  {/*
+                    Two pickers:
+                      1. file input (no `capture`) → opens the gallery / file
+                         dialog on mobile, file picker on desktop.
+                      2. camera input (`capture="environment"`) → opens the
+                         rear camera directly on mobile so the user can snap
+                         a photo of the car without leaving the form. On
+                         desktop browsers without a camera the OS file dialog
+                         opens as a graceful fallback.
+                    Both feed the same handler (`handlePhotos`) so file
+                    handling stays in one place.
+                  */}
+                  <input ref={photoInputRef}   type="file" accept="image/*" multiple className="hidden" onChange={handlePhotos} />
+                  <input ref={photoCameraRef}  type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotos} />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button type="button" onClick={() => photoInputRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all justify-center font-bold text-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      Ajouter des photos
+                    </button>
+                    <button type="button" onClick={() => photoCameraRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-emerald-200 bg-emerald-50/40 rounded-2xl text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 transition-all justify-center font-bold text-sm"
+                      title="Ouvrir la caméra pour prendre une photo">
+                      {/* camera icon */}
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      Prendre une photo
+                    </button>
+                  </div>
                   {formData.photoPreviews.length > 0 && (
                     <div className="grid grid-cols-4 gap-3">
                       {formData.photoPreviews.map((src, i) => (
@@ -831,12 +1278,23 @@ const VehiclesList: React.FC = () => {
                 {/* Vidéo */}
                 <div className="space-y-3">
                   <label className={labelCls}>Vidéo du véhicule (optionnel)</label>
-                  <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideo} />
-                  <button type="button" onClick={() => videoInputRef.current?.click()}
-                    className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all w-full justify-center font-bold text-sm">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    {formData.videoPreview ? 'Remplacer la vidéo' : 'Ajouter une vidéo'}
-                  </button>
+                  {/* See Photos block above — same gallery / camera split. */}
+                  <input ref={videoInputRef}   type="file" accept="video/*" className="hidden" onChange={handleVideo} />
+                  <input ref={videoCameraRef}  type="file" accept="video/*" capture="environment" className="hidden" onChange={handleVideo} />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button type="button" onClick={() => videoInputRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-all justify-center font-bold text-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      {formData.videoPreview ? 'Remplacer la vidéo' : 'Ajouter une vidéo'}
+                    </button>
+                    <button type="button" onClick={() => videoCameraRef.current?.click()}
+                      className="flex items-center gap-3 px-6 py-4 border-2 border-dashed border-emerald-200 bg-emerald-50/40 rounded-2xl text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50 transition-all justify-center font-bold text-sm"
+                      title="Ouvrir la caméra pour filmer une vidéo">
+                      {/* video-camera icon */}
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /><circle cx="9" cy="13" r="1.5" fill="currentColor" /></svg>
+                      Filmer une vidéo
+                    </button>
+                  </div>
                   {formData.videoPreview && (
                     <video src={formData.videoPreview} controls className="w-full rounded-2xl border border-slate-100 max-h-48" />
                   )}

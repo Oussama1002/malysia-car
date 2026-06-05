@@ -22,6 +22,15 @@ import {
   type DashboardRange,
   type DashboardParams,
 } from '@/services/dashboardApi';
+import { notificationsApi, type NotificationDto } from '@/services/notificationsApi';
+import { maintenanceApi, type MaintenanceAlertDto } from '@/services/maintenanceApi';
+import { complianceApi, type ComplianceAlertDto } from '@/services/complianceApi';
+import { contractsApi } from '@/services/contractsApi';
+import { gpsApi } from '@/services/gpsApi';
+import { opsApi, type ReservationDto } from '@/services/opsApi';
+import { apiClient, endpoints, getApiBase } from '@/services/apiClient';
+import { queryKeys } from '@/services/queryKeys';
+import type { GpsAlertDto, ContractDto } from '@/services/dtos';
 import { KpiCard } from '@/modules/shared/components/KpiCard';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
 import { Icon } from '@/modules/shared/components/Icon';
@@ -67,9 +76,66 @@ export const ExecutiveDashboardPage: React.FC = () => {
     enabled: realDashboard,
   });
 
+  // ── Reservations starting today that still need a contract ────────────
+  const reservationsQ = useQuery({
+    queryKey: queryKeys.reservations,
+    queryFn: async () => opsApi.reservations(),
+    staleTime: 120_000,
+    enabled: !!getApiBase(),
+  });
+
+  const todayReservations = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const PRE_CONTRACT = ['draft', 'reserved', 'confirmed', 'pickup_scheduled'];
+    return ((reservationsQ.data ?? []) as ReservationDto[]).filter((r) => {
+      if (!PRE_CONTRACT.includes(r.status)) return false;
+      const start = new Date(r.desired_start_at);
+      start.setHours(0, 0, 0, 0);
+      return start.getTime() === now.getTime();
+    });
+  }, [reservationsQ.data]);
+
+  // Shared banner component for today's reservations needing contracts
+  const TodayReservationsBanner = todayReservations.length > 0 ? (
+    <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 shadow-sm">
+      <div className="flex items-center gap-3 mb-3">
+        <span className="text-2xl">🔔</span>
+        <div>
+          <div className="text-sm font-black text-amber-900">
+            {todayReservations.length} réservation{todayReservations.length > 1 ? 's' : ''} — départ aujourd'hui, contrat à générer
+          </div>
+          <div className="text-xs text-amber-700">
+            Cliquez sur « Générer contrat » pour créer le contrat avec les informations pré-remplies.
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {todayReservations.map((r) => (
+          <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-xs font-black text-slate-700">{r.reservation_number}</div>
+              <div className="text-xs text-slate-500">
+                {new Date(r.desired_start_at).toLocaleDateString('fr-MA')} → {new Date(r.desired_end_at).toLocaleDateString('fr-MA')}
+                {r.estimated_price ? <span className="ml-2 font-semibold text-slate-700">{Number(r.estimated_price).toLocaleString('fr-MA')} MAD</span> : null}
+              </div>
+            </div>
+            <Link
+              to={`/contracts/new?from_reservation=${r.id}`}
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors shadow-sm"
+            >
+              📄 Générer contrat
+            </Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   if (!realDashboard) {
     return (
       <div className="space-y-8">
+        {TodayReservationsBanner}
         <section className="df-card df-card--elev relative overflow-hidden p-8 md:p-12">
           <div className="df-grid-bg pointer-events-none absolute inset-0 opacity-30" />
           <div className="relative mx-auto max-w-xl text-center">
@@ -131,6 +197,8 @@ export const ExecutiveDashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
+
+      {TodayReservationsBanner}
 
       {/* ── Hero / welcome band ─────────────────────────────────────────── */}
       <section className="df-card df-card--elev relative overflow-hidden p-6 md:p-8">
@@ -207,6 +275,9 @@ export const ExecutiveDashboardPage: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* ── Notifications & alerts center (top priority) ─────────────────── */}
+      <NotificationsAlertsSection />
 
       {/* ── KPI grid ─────────────────────────────────────────────────────── */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -473,5 +544,363 @@ export const ExecutiveDashboardPage: React.FC = () => {
       </section>
 
     </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Notifications & alerts center
+// ───────────────────────────────────────────────────────────────────────────
+// Aggregates five independent feeds in one place so the dirigeant sees, at the
+// top of the dashboard, everything that needs attention without navigating to
+// the bell icon, the fleet module, the compliance page, the contracts list and
+// the GPS module separately:
+//   1. In-app notifications  → notificationsApi.list (paginated, all modules)
+//   2. Vehicle documents     → complianceApi.alerts (assurance / visite tech /
+//                              vignette expirées, bientôt expirées, manquantes)
+//   3. Contracts             → contractsApi.list, computed expiry (échéance proche
+//                              ou dépassée) from endDate
+//   4. Maintenance alerts    → maintenanceApi.alerts (vehicle-bound)
+//   5. GPS alerts            → gpsApi.alerts (speeding, geofence, offline…)
+//
+// Each feed query is independent — if one endpoint is down (e.g. GPS provider
+// outage) the others still render. Empty/error states are inline per tab.
+// ═══════════════════════════════════════════════════════════════════════════
+
+type AlertSource = 'notification' | 'document' | 'contract' | 'maintenance' | 'gps';
+type AlertSeverity = 'critical' | 'high' | 'normal' | 'low';
+
+interface UnifiedAlert {
+  id: string;
+  source: AlertSource;
+  severity: AlertSeverity;
+  title: string;
+  body: string | null;
+  at: string | null;
+  linkTo: string | null;
+  read?: boolean;
+}
+
+const SOURCE_META: Record<AlertSource, { label: string; icon: string; color: string }> = {
+  notification: { label: 'Notifications',  icon: '🔔', color: '#5b5bf4' },
+  document:     { label: 'Documents',      icon: '📄', color: '#e11d48' },
+  contract:     { label: 'Contrats',       icon: '📑', color: '#7c3aed' },
+  maintenance:  { label: 'Maintenance',    icon: '🔧', color: '#f59e0b' },
+  gps:          { label: 'GPS',            icon: '🛰️', color: '#22d3ee' },
+};
+
+/**
+ * Build a " · Renault Clio · 1234-A-56" suffix from a vehicle, showing
+ * marque + modèle next to the matricule. Any missing part is skipped.
+ */
+function vehicleLabel(v: { registration?: string | null; brand?: string | null; model?: string | null } | null | undefined): string {
+  if (!v) return '';
+  const makeModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
+  const parts = [makeModel, v.registration].filter(Boolean) as string[];
+  return parts.length ? ` · ${parts.join(' · ')}` : '';
+}
+
+/** Whole days from now until `dateStr` (negative = already past). */
+function daysUntil(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const t = Date.parse(dateStr);
+  if (Number.isNaN(t)) return null;
+  return Math.ceil((t - Date.now()) / 86_400_000);
+}
+
+const SEVERITY_TONE: Record<AlertSeverity, { bg: string; text: string; border: string; label: string }> = {
+  critical: { bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-200',   label: 'Critique' },
+  high:     { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200',  label: 'Élevée'   },
+  normal:   { bg: 'bg-sky-50',    text: 'text-sky-700',    border: 'border-sky-200',    label: 'Normale'  },
+  low:      { bg: 'bg-slate-50',  text: 'text-slate-600',  border: 'border-slate-200',  label: 'Info'     },
+};
+
+/** Map any free-form severity string from the 3 backends into our 4 buckets. */
+function normalizeSeverity(raw: string | null | undefined): AlertSeverity {
+  const v = (raw ?? '').toLowerCase();
+  if (v === 'critical' || v === 'urgent') return 'critical';
+  if (v === 'high' || v === 'warning')    return 'high';
+  if (v === 'low' || v === 'info')        return 'low';
+  return 'normal';
+}
+
+const NotificationsAlertsSection: React.FC = () => {
+  const [tab, setTab] = useState<'all' | AlertSource>('all');
+
+  // ── 3 independent queries — failure of one does not poison the others ──
+  const notifQ = useQuery({
+    queryKey: ['dashboard', 'notifications'],
+    // Pull the 50 most recent across all modules — we filter/sort client-side.
+    queryFn:  () => notificationsApi.list({ per_page: 50 }),
+    staleTime: 30_000,
+    retry:     1,
+  });
+
+  // Vehicle document compliance (assurance / visite technique / vignette).
+  const complianceQ = useQuery({
+    queryKey: ['dashboard', 'compliance-alerts'],
+    queryFn:  () => complianceApi.alerts(),
+    staleTime: 60_000,
+    retry:     1,
+  });
+
+  // Active contracts — we compute "expiring/expired" client-side from endDate.
+  const contractsQ = useQuery({
+    queryKey: ['dashboard', 'contracts-expiry'],
+    queryFn:  () => contractsApi.list({ status: 'active' }),
+    staleTime: 60_000,
+    retry:     1,
+  });
+
+  const maintQ = useQuery({
+    queryKey: ['dashboard', 'maintenance-alerts'],
+    queryFn:  () => maintenanceApi.alerts(),
+    staleTime: 60_000,
+    retry:     1,
+  });
+
+  const gpsQ = useQuery({
+    queryKey: ['dashboard', 'gps-alerts'],
+    queryFn:  () => gpsApi.alerts(),
+    staleTime: 30_000,
+    retry:     1,
+  });
+
+  // ── Normalize every feed into the same shape so they can share one list ──
+  const unified: UnifiedAlert[] = useMemo(() => {
+    const items: UnifiedAlert[] = [];
+
+    (notifQ.data?.data ?? []).forEach((n: NotificationDto) => {
+      items.push({
+        id:       `notif-${n.id}`,
+        source:   'notification',
+        severity: normalizeSeverity(n.priority),
+        title:    n.title,
+        body:     n.body,
+        at:       n.created_at,
+        linkTo:   n.link_url,
+        read:     n.read_at != null,
+      });
+    });
+
+    // Vehicle documents — assurance / visite technique / vignette expiry.
+    (complianceQ.data?.data?.alerts ?? []).forEach((a: ComplianceAlertDto) => {
+      const reg = vehicleLabel(a.vehicle);
+      const dleft = daysUntil(a.dueDate);
+      // Expired (or expiring within 7 days) is critical; otherwise high.
+      const sev: AlertSeverity =
+        a.severity === 'critical' || (dleft !== null && dleft <= 0) ? 'critical'
+        : a.severity === 'high' || (dleft !== null && dleft <= 7) ? 'high'
+        : normalizeSeverity(a.severity);
+      const due =
+        dleft === null ? '' :
+        dleft < 0 ? ` — expiré depuis ${Math.abs(dleft)} j` :
+        dleft === 0 ? ' — expire aujourd’hui' :
+        ` — expire dans ${dleft} j`;
+      items.push({
+        id:       `doc-${a.id}`,
+        source:   'document',
+        severity: sev,
+        title:    `${a.title}${reg}`,
+        body:     (a.description ?? '') + due || null,
+        at:       a.triggeredAt ?? a.dueDate,
+        linkTo:   a.vehicle?.id ? `/fleet/${a.vehicle.id}` : '/fleet/compliance',
+      });
+    });
+
+    // Contracts — expiring soon (≤30 days) or already past endDate.
+    (contractsQ.data ?? []).forEach((c: ContractDto) => {
+      const dleft = daysUntil(c.endDate);
+      if (dleft === null || dleft > 30) return; // only surface the ones needing attention
+      const sev: AlertSeverity = dleft < 0 ? 'critical' : dleft <= 7 ? 'high' : 'normal';
+      const label =
+        dleft < 0 ? `Contrat échu depuis ${Math.abs(dleft)} j` :
+        dleft === 0 ? 'Contrat expire aujourd’hui' :
+        `Contrat expire dans ${dleft} j`;
+      items.push({
+        id:       `contract-${c.id}`,
+        source:   'contract',
+        severity: sev,
+        title:    `${label} · ${c.reference ?? c.id}`,
+        body:     c.endDate ? `Échéance : ${c.endDate}` : null,
+        at:       c.endDate ?? c.createdAt ?? null,
+        linkTo:   `/contracts/${c.id}`,
+      });
+    });
+
+    (maintQ.data?.data?.alerts ?? []).forEach((a: MaintenanceAlertDto) => {
+      const reg = vehicleLabel(a.vehicle);
+      items.push({
+        id:       `maint-${a.id}`,
+        source:   'maintenance',
+        severity: normalizeSeverity(a.severity),
+        title:    `${a.title}${reg}`,
+        body:     a.description,
+        at:       a.triggeredAt,
+        linkTo:   a.vehicle?.id ? `/fleet/${a.vehicle.id}` : '/fleet',
+      });
+    });
+
+    (gpsQ.data ?? []).forEach((g: GpsAlertDto) => {
+      items.push({
+        id:       `gps-${g.id}`,
+        source:   'gps',
+        severity: normalizeSeverity(g.severity),
+        title:    g.type ? String(g.type) : 'Alerte GPS',
+        body:     g.message ?? null,
+        at:       g.at ?? null,
+        linkTo:   '/gps/alerts',
+      });
+    });
+
+    // Severity first (critical → low), then most recent within each bucket.
+    const rank: Record<AlertSeverity, number> = { critical: 0, high: 1, normal: 2, low: 3 };
+    return items.sort((a, b) => {
+      if (rank[a.severity] !== rank[b.severity]) return rank[a.severity] - rank[b.severity];
+      const ta = a.at ? Date.parse(a.at) : 0;
+      const tb = b.at ? Date.parse(b.at) : 0;
+      return tb - ta;
+    });
+  }, [notifQ.data, complianceQ.data, contractsQ.data, maintQ.data, gpsQ.data]);
+
+  const counts = useMemo(() => {
+    const c: Record<'all' | AlertSource | 'critical' | 'unread', number> = {
+      all: unified.length, notification: 0, document: 0, contract: 0, maintenance: 0, gps: 0, critical: 0, unread: 0,
+    };
+    unified.forEach((u) => {
+      c[u.source]++;
+      if (u.severity === 'critical') c.critical++;
+      if (u.source === 'notification' && u.read === false) c.unread++;
+    });
+    return c;
+  }, [unified]);
+
+  const filtered = tab === 'all' ? unified : unified.filter((u) => u.source === tab);
+
+  const anyLoading = notifQ.isLoading || complianceQ.isLoading || contractsQ.isLoading || maintQ.isLoading || gpsQ.isLoading;
+  const allFailed  = notifQ.isError && complianceQ.isError && contractsQ.isError && maintQ.isError && gpsQ.isError;
+
+  return (
+    <section className="df-card">
+      <div className="df-card__header">
+        <div>
+          <div className="df-card__hint">Centre opérationnel</div>
+          <h3 className="text-lg font-bold tracking-tight">Notifications &amp; alertes</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {counts.critical > 0 && (
+            <StatusChip label={`${counts.critical} critique${counts.critical > 1 ? 's' : ''}`} tone="danger" dot />
+          )}
+          {counts.unread > 0 && (
+            <StatusChip label={`${counts.unread} non lu${counts.unread > 1 ? 's' : ''}`} tone="brand" dot />
+          )}
+          <Link to="/notifications" className="df-btn df-btn--ghost df-btn--sm text-xs">
+            Tout voir →
+          </Link>
+        </div>
+      </div>
+
+      <div className="df-card__body">
+        {/* Source filter tabs */}
+        <div className="df-tabs mb-4 flex-wrap" role="tablist">
+          {(['all', 'notification', 'document', 'contract', 'maintenance', 'gps'] as const).map((k) => {
+            const label = k === 'all' ? 'Tout' : SOURCE_META[k].label;
+            const count = k === 'all' ? counts.all : counts[k];
+            return (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                onClick={() => setTab(k)}
+                className={`df-tab ${tab === k ? 'df-tab--active' : ''}`}
+              >
+                {k !== 'all' && <span className="mr-1">{SOURCE_META[k as AlertSource].icon}</span>}
+                {label}
+                <span className="ml-2 rounded-full bg-[color:var(--df-surface-elev)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--df-text-muted)]">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* States */}
+        {anyLoading && filtered.length === 0 && (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="df-shimmer h-16 rounded-xl" />
+            ))}
+          </div>
+        )}
+
+        {allFailed && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            Impossible de charger les notifications et les alertes — vérifiez la connexion à l'API.
+          </div>
+        )}
+
+        {!anyLoading && !allFailed && filtered.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-[color:var(--df-border)] py-10 text-center text-sm text-[color:var(--df-text-muted)]">
+            <div className="mb-2 text-3xl">✨</div>
+            Aucune notification ni alerte à signaler.
+          </div>
+        )}
+
+        {/* Unified, scrollable list (cap height so the dashboard stays compact) */}
+        {filtered.length > 0 && (
+          <ul className="max-h-[28rem] divide-y divide-[color:var(--df-border)] overflow-y-auto">
+            {filtered.slice(0, 50).map((a) => {
+              const meta = SOURCE_META[a.source];
+              const tone = SEVERITY_TONE[a.severity];
+              const row = (
+                <li
+                  className={`flex items-start gap-3 py-3 transition ${
+                    a.linkTo ? 'cursor-pointer hover:bg-[color:var(--df-surface-elev)]' : ''
+                  } ${a.read === false ? 'bg-indigo-50/40' : ''}`}
+                >
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg"
+                    style={{ background: `color-mix(in srgb, ${meta.color} 12%, transparent)` }}
+                    title={meta.label}
+                  >
+                    {meta.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-bold text-[color:var(--df-text)]">{a.title}</span>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tone.bg} ${tone.text} ${tone.border}`}
+                      >
+                        {tone.label}
+                      </span>
+                      {a.read === false && (
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-500" title="Non lue" />
+                      )}
+                    </div>
+                    {a.body && (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-[color:var(--df-text-muted)]">{a.body}</p>
+                    )}
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-[color:var(--df-text-faint)]">
+                      <span className="font-semibold uppercase tracking-wide">{meta.label}</span>
+                      {a.at && <span>· {formatDate(new Date(a.at))}</span>}
+                    </div>
+                  </div>
+                  {a.linkTo && <span className="self-center text-[color:var(--df-text-faint)]">→</span>}
+                </li>
+              );
+              return a.linkTo ? (
+                <Link key={a.id} to={a.linkTo} className="block px-1 no-underline">
+                  {row}
+                </Link>
+              ) : (
+                <div key={a.id} className="px-1">
+                  {row}
+                </div>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 };

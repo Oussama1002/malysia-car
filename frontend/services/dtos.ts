@@ -69,6 +69,7 @@ export interface FleetVehicleDto {
   registrationCard?: string;
   pricePerDay?: number;
   image?: string;
+  /** "owned" | "sub_rented" | … — flags vehicles we rent from a third party. */
   ownershipStatus?: string;
 }
 

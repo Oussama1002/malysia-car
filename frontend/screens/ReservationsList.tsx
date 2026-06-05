@@ -335,7 +335,7 @@ const ReservationsList: React.FC = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Client (CIN)</label>
                   <select required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
                     <option value="">Sélectionner un client</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.idNumber})</option>)}
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.idNumber ? ` (${c.idNumber})` : ''}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">

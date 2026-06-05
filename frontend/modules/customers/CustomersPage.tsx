@@ -17,6 +17,8 @@ import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
+import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
+import { documentReaderApi } from '@/services/documentReaderApi';
 
 const kycTone: Record<KycStatus, 'success' | 'warning' | 'info' | 'danger' | 'default'> = {
   pending: 'warning',
@@ -67,7 +69,19 @@ export const CustomersPage: React.FC = () => {
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
 
   const createMut = useMutation({
-    mutationFn: (p: CustomerCreatePayload) => createCustomer(p),
+    mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
+      const res = await createCustomer(vars.payload);
+      // Attach every CIN / Permis the admin scanned to the new customer so it
+      // shows under the customer's Documents tab.
+      for (const scan of vars.scans) {
+        try {
+          await documentReaderApi.link(scan.documentId, 'customer', String(res.data.id));
+        } catch {
+          /* don't block the create on attachment failures */
+        }
+      }
+      return res;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['customers'] });
       setDrawerOpen(false);
@@ -86,7 +100,7 @@ export const CustomersPage: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Clients & conformité</h1>
+          <h1 className="text-2xl font-black text-slate-900">Clients</h1>
           <p className="text-slate-500">Particuliers et entreprises — KYC, risque, blacklist.</p>
         </div>
         <button
@@ -261,9 +275,9 @@ export const CustomersPage: React.FC = () => {
           submitting={createMut.isPending}
           branches={branchesQ.data?.data ?? []}
           onCancel={() => setDrawerOpen(false)}
-          onSubmit={(payload) => {
+          onSubmit={(payload, scans) => {
             setError(null);
-            createMut.mutate(payload);
+            createMut.mutate({ payload, scans });
           }}
         />
       </DrawerPanel>

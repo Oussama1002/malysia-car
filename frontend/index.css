@@ -451,14 +451,18 @@ select.df-input { cursor: pointer; }
 .df-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: var(--df-sidebar-w) 1fr;
+  grid-template-columns: 1fr;
 }
-.df-shell[data-sidebar="collapsed"] { grid-template-columns: var(--df-sidebar-collapsed-w) 1fr; }
+@media (min-width: 768px) {
+  .df-shell { grid-template-columns: var(--df-sidebar-w) 1fr; }
+  .df-shell[data-sidebar="collapsed"] { grid-template-columns: var(--df-sidebar-collapsed-w) 1fr; }
+}
 
 .df-sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
   background: var(--df-glass);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);

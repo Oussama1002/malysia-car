@@ -44,6 +44,16 @@ export const endpoints = {
     byEntity: (entityType: string, entityId: string | number) => `/v1/entities/${entityType}/${entityId}/documents`,
     generateInvoicePdf: (id: number | string) => `/v1/invoices/${id}/generate-pdf`,
   },
+  documentReader: {
+    list: '/v1/document-reader/documents',
+    one: (id: string) => `/v1/document-reader/documents/${id}`,
+    upload: '/v1/document-reader/uploads',
+    extract: (id: string) => `/v1/document-reader/documents/${id}/extract`,
+    validate: (id: string) => `/v1/document-reader/documents/${id}/validate`,
+    link: (id: string) => `/v1/document-reader/documents/${id}/link`,
+    preview: (id: string) => `/v1/document-reader/documents/${id}/preview`,
+    remove: (id: string) => `/v1/document-reader/documents/${id}`,
+  },
   credit: {
     applications: '/v1/credit-applications',
     one: (id: number | string) => `/v1/credit-applications/${id}`,

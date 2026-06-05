@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
@@ -31,9 +32,16 @@ class Customer extends Model
         'assigned_to_user_id',
     ];
 
+    protected $appends = ['full_name'];
+
     protected $casts = [
         'is_blacklisted' => 'boolean',
     ];
+
+    public function getFullNameAttribute(): string
+    {
+        return $this->displayName();
+    }
 
     public function individualProfile(): HasOne
     {
@@ -83,6 +91,11 @@ class Customer extends Model
     public function notes(): HasMany
     {
         return $this->hasMany(CustomerNote::class, 'customer_id');
+    }
+
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(CustomerWallet::class, 'customer_id');
     }
 
     public function displayName(): string

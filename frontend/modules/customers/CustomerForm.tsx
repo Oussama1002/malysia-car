@@ -7,6 +7,12 @@ import type {
   CompanyProfile,
 } from '@/services/customersApi';
 import type { Branch } from '@/services/adminApi';
+import {
+  CustomerIdentityScanner,
+  type ScannedDocument,
+  type ScannedIdentity,
+} from '@/modules/customers/CustomerIdentityScanner';
+import { COUNTRIES_FR } from '@/modules/customers/countries';
 
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
@@ -15,8 +21,14 @@ export const CustomerForm: React.FC<{
   submitting: boolean;
   branches: Branch[];
   onCancel: () => void;
-  onSubmit: (payload: CustomerCreatePayload) => void;
+  /**
+   * `scannedDocuments` carries the reader_documents IDs of the files
+   * uploaded via the OCR scanner so the parent can attach them to the
+   * newly-created customer.
+   */
+  onSubmit: (payload: CustomerCreatePayload, scannedDocuments: ScannedDocument[]) => void;
 }> = ({ mode, initial, error, submitting, branches, onCancel, onSubmit }) => {
+  const [scannedDocs, setScannedDocs] = useState<ScannedDocument[]>([]);
   const [type, setType] = useState<CustomerType>(initial?.customer_type ?? 'PARTICULIER');
   const [customerCode, setCustomerCode] = useState(initial?.customer_code ?? '');
   const [status, setStatus] = useState<Customer['status']>(initial?.status ?? 'active');
@@ -28,7 +40,7 @@ export const CustomerForm: React.FC<{
     initial?.individual_profile ?? {
       first_name: '',
       last_name: '',
-      nationality: 'MA',
+      nationality: 'Maroc',
     },
   );
   const [company, setCompany] = useState<Partial<CompanyProfile>>(initial?.company_profile ?? { legal_name: '' });
@@ -75,7 +87,7 @@ export const CustomerForm: React.FC<{
         is_primary: true,
       });
     }
-    onSubmit(payload);
+    onSubmit(payload, scannedDocs);
   };
 
   return (
@@ -106,59 +118,31 @@ export const CustomerForm: React.FC<{
         </div>
       </div>
 
-      <section className="space-y-3">
-        <SectionTitle>Dossier</SectionTitle>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Code client (laisser vide pour auto)">
-            <input
-              className="df-input"
-              value={customerCode}
-              onChange={(e) => setCustomerCode(e.target.value.toUpperCase())}
-              placeholder="AUTO"
-            />
-          </Field>
-          <Field label="Agence">
-            <select className="df-input" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">—</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Statut">
-            <select
-              className="df-input"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as Customer['status'])}
-            >
-              <option value="active">Actif</option>
-              <option value="inactive">Inactif</option>
-              <option value="suspended">Suspendu</option>
-            </select>
-          </Field>
-          <Field label="Langue">
-            <select className="df-input" value={language} onChange={(e) => setLanguage(e.target.value)}>
-              <option value="fr">Français</option>
-              <option value="ar">العربية</option>
-              <option value="en">English</option>
-            </select>
-          </Field>
-          <Field label="Canal d'acquisition">
-            <input
-              className="df-input"
-              value={sourceChannel}
-              onChange={(e) => setSourceChannel(e.target.value)}
-              placeholder="web, agence, apporteur, …"
-            />
-          </Field>
-        </div>
-      </section>
+      {/*
+        Dossier metadata is intentionally not rendered:
+          - customer_code  → backend auto-generates when empty
+          - branch_id      → defaults to user's branch on the API
+          - status         → defaults to "active"
+          - preferred_language → defaults to "fr"
+          - source_channel → optional, omitted for a leaner form
+        The state still carries these values and they go out with the submit.
+      */}
 
       {type === 'PARTICULIER' ? (
         <section className="space-y-3">
           <SectionTitle>Identité particulier</SectionTitle>
+          {mode === 'create' ? (
+            <CustomerIdentityScanner
+              onPrefill={(scanned: ScannedIdentity) =>
+                setIndividual((prev) => ({ ...prev, ...scanned }))
+              }
+              onScanComplete={(scan) =>
+                setScannedDocs((prev) =>
+                  prev.some((s) => s.documentId === scan.documentId) ? prev : [...prev, scan],
+                )
+              }
+            />
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Prénom">
               <input
@@ -192,12 +176,21 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Nationalité">
-              <input
+              <select
                 className="df-input"
-                maxLength={2}
                 value={individual.nationality ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, nationality: e.target.value.toUpperCase() }))}
-              />
+                onChange={(e) => setIndividual((p) => ({ ...p, nationality: e.target.value }))}
+              >
+                <option value="">—</option>
+                {COUNTRIES_FR.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                {individual.nationality && !COUNTRIES_FR.includes(individual.nationality) ? (
+                  <option value={individual.nationality}>{individual.nationality}</option>
+                ) : null}
+              </select>
             </Field>
             <Field label="Permis de conduire n°">
               <input
@@ -219,24 +212,6 @@ export const CustomerForm: React.FC<{
                 className="df-input"
                 value={individual.profession ?? ''}
                 onChange={(e) => setIndividual((p) => ({ ...p, profession: e.target.value }))}
-              />
-            </Field>
-            <Field label="Employeur">
-              <input
-                className="df-input"
-                value={individual.employer_name ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, employer_name: e.target.value }))}
-              />
-            </Field>
-            <Field label="Revenu mensuel (MAD)">
-              <input
-                type="number"
-                step="0.01"
-                className="df-input"
-                value={individual.monthly_income ?? ''}
-                onChange={(e) =>
-                  setIndividual((p) => ({ ...p, monthly_income: e.target.value ? Number(e.target.value) : null }))
-                }
               />
             </Field>
           </div>

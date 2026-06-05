@@ -74,7 +74,7 @@ class CustomerController extends Controller
         $customer = DB::transaction(function () use ($data, $request) {
             $c = new Customer;
             $c->id = (string) Str::uuid();
-            $c->customer_code = $data['customer_code'] ?? 'CUS-'.strtoupper(Str::random(8));
+            $c->customer_code = $data['customer_code'] ?? $this->generateCustomerCode();
             $c->customer_type = $data['customer_type'];
             $c->status = $data['status'] ?? 'active';
             $c->risk_level = $data['risk_level'] ?? 'normal';
@@ -218,5 +218,24 @@ class CustomerController extends Controller
                 'score' => optional($customer->kycCases->first())->risk_score,
             ],
         ]);
+    }
+
+    /**
+     * Generate a sequential customer code: CL-0001, CL-0002, ...
+     */
+    private function generateCustomerCode(): string
+    {
+        $latest = Customer::query()
+            ->where('customer_code', 'like', 'CL-%')
+            ->orderByDesc('customer_code')
+            ->value('customer_code');
+
+        $seq = 1;
+        if ($latest) {
+            $num = (int) substr($latest, 3);
+            $seq = $num + 1;
+        }
+
+        return 'CL-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 }

@@ -65,4 +65,33 @@ export const documentCenterApi = {
   downloadUrl(id: string) {
     return `${getApiBase()}${endpoints.documents.download(id)}`;
   },
+  /**
+   * Open a document in a new tab. We can't use a plain <a href> because the
+   * download route is auth:sanctum and the browser doesn't attach the bearer
+   * token on cross-tab navigation — Laravel returns 401 "Unauthenticated".
+   * Instead: fetch the file ourselves (auth header included), wrap the bytes
+   * in a blob: URL, and pop a new window pointing at it.
+   */
+  async openInNewTab(id: string): Promise<void> {
+    const base = getApiBase();
+    if (!base) throw new Error('API base URL not configured.');
+    const session = localStorage.getItem('df_session');
+    let token: string | undefined;
+    try {
+      token = session ? (JSON.parse(session) as { token?: string }).token : undefined;
+    } catch {
+      /* ignore */
+    }
+    const res = await fetch(`${base}${endpoints.documents.download(id)}`, {
+      headers: token ? { Authorization: `Bearer ${token}`, Accept: '*/*' } : { Accept: '*/*' },
+    });
+    if (!res.ok) {
+      throw new Error(res.status === 401 ? 'Session expirée — reconnectez-vous.' : `Échec du téléchargement (HTTP ${res.status}).`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    // Free the blob URL after a minute — long enough for the new tab to load it.
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  },
 };

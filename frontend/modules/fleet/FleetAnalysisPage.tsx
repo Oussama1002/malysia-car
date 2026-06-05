@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, getApiBase } from '@/services/apiClient';
+import { apiClient, getApiBase, ApiError } from '@/services/apiClient';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 
 export const FleetAnalysisPage: React.FC = () => {
@@ -48,11 +48,37 @@ export const FleetAnalysisPage: React.FC = () => {
           Chargement de l'analyse de parc…
         </div>
       )}
-      {q.isError && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
-          Impossible de charger l'analyse de parc. Vérifiez l'API (`/v1/fleet/analysis`) et vos droits d'accès.
-        </div>
-      )}
+      {q.isError && (() => {
+        // Surface the real backend error so we don't keep guessing.
+        // The three common shapes:
+        //   - 403/permission denied  → user lacks vehicles.view
+        //   - 500 + SQL/Carbon trace → bad data on a vehicle (date, FK)
+        //   - 0 + 'API base URL...'  → VITE_API_BASE not set in build
+        const err = q.error as unknown;
+        const isApi = err instanceof ApiError;
+        const status = isApi ? err.status : 0;
+        const message = isApi ? err.message : err instanceof Error ? err.message : String(err);
+        const hint =
+          status === 401 ? 'Session expirée — reconnectez-vous.' :
+          status === 403 ? "Votre rôle n'a pas la permission `vehicles.view`. Ajoutez-la via Administration → Rôles."
+          : status === 0 ? 'Le frontend ne peut pas joindre l\'API (VITE_API_BASE mal configuré ou serveur injoignable).'
+          : status >= 500 ? 'Erreur serveur — consultez storage/logs/laravel.log pour la trace complète.'
+          : null;
+        return (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 space-y-2">
+            <div className="font-semibold">Impossible de charger l'analyse de parc.</div>
+            <div className="font-mono text-xs">HTTP {status || '—'} — {message}</div>
+            {hint && <div className="text-xs">{hint}</div>}
+            <button
+              type="button"
+              onClick={() => q.refetch()}
+              className="mt-1 inline-flex items-center rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100"
+            >
+              Réessayer
+            </button>
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
         {[

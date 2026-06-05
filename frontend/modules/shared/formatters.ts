@@ -17,6 +17,11 @@ export function formatDate(iso: string | Date, locale = 'fr-MA'): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(d);
 }
 
+export function formatDateTime(iso: string | Date, locale = 'fr-MA'): string {
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'medium' }).format(d);
+}
+
 export function formatNumber(n: number, locale = 'fr-MA'): string {
   return new Intl.NumberFormat(locale).format(n);
 }

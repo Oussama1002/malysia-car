@@ -38,6 +38,8 @@ class ComplianceAlertController extends Controller
                 'vehicle' => $a->vehicle ? [
                     'id' => $a->vehicle->id,
                     'registration' => $a->vehicle->registration_number,
+                    'brand' => $a->vehicle->brand_name,
+                    'model' => $a->vehicle->model_name,
                 ] : null,
             ])
             ->values();

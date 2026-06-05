@@ -25,8 +25,12 @@ class VehicleResource extends JsonResource
             'vin' => $v->vin,
             'brand_id' => $v->brand_id,
             'model_id' => $v->model_id,
-            'brand' => $v->brand?->name,
-            'model' => $v->model?->model_name ?? $v->model?->name,
+            // Fall back to denormalized brand_name/model_name when no FK to
+            // vehicle_brands/vehicle_models is set (older imports / manual
+            // entries). Otherwise the API returned null and the contract
+            // wizard's dropdown showed only the registration.
+            'brand' => $v->brand?->name ?? $v->brand_name,
+            'model' => $v->model?->model_name ?? $v->model?->name ?? $v->model_name,
             'year' => $v->year ? (int) $v->year : null,
             'color' => $v->color,
             'fuel' => $v->fuel_type,
@@ -47,11 +51,20 @@ class VehicleResource extends JsonResource
             'currentReservationId' => $v->current_reservation_id,
             'unavailabilityReason' => $v->unavailability_reason,
             'acquisitionType' => $v->acquisition_type,
+            'acquisitionDate' => $v->acquisition_date?->toDateString(),
             'purchaseCostMad' => $v->purchase_price !== null ? (float) $v->purchase_price : null,
             'currentValueMad' => $v->book_value !== null ? (float) $v->book_value : null,
             'branchId' => $v->branch_id,
             'pricePerDay' => $v->daily_rental_price !== null ? (float) $v->daily_rental_price : null,
             'photoUrl' => $this->resolvePhotoUrl($v),
+            'vehicleType' => $v->vehicle_type,
+            'numeroPolice' => $v->numero_police,
+            'nombreCylindres' => $v->nombre_cylindres !== null ? (int) $v->nombre_cylindres : null,
+            'gamme' => $v->gamme,
+            'miseEnCirculation' => $v->mise_en_circulation?->toDateString(),
+            'dateImmatriculation' => $v->date_immatriculation?->toDateString(),
+            'categorie' => $v->categorie,
+            'immatOnline' => $v->immat_online,
         ];
     }
 

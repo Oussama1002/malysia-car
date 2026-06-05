@@ -47,6 +47,15 @@ class StoreVehicleRequest extends ApiFormRequest
             'notes' => ['nullable', 'string', 'max:2000'],
             'branch_id' => ['nullable', 'uuid'],
             'company_id' => ['nullable', 'uuid'],
+            'vehicle_type' => ['nullable', 'string', 'max:50'],
+            'numero_police' => ['nullable', 'string', 'max:100'],
+            'nombre_cylindres' => ['nullable', 'integer', 'min:1', 'max:16'],
+            'gamme' => ['nullable', 'string', 'max:50'],
+            'mise_en_circulation' => ['nullable', 'date'],
+            'date_immatriculation' => ['nullable', 'date'],
+            'categorie' => ['nullable', 'string', 'max:50'],
+            'immat_online' => ['nullable', 'string', 'max:100'],
+            'chassis' => ['nullable', 'string', 'max:100'],
         ];
     }
 }

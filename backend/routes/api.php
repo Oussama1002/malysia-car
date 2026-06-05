@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\V1\AiAssistantController;
 use App\Http\Controllers\Api\V1\AiOverviewController;
 use App\Http\Controllers\Api\V1\AiPredictionController;
 use App\Http\Controllers\Api\V1\DocumentCenterController;
+use App\Http\Controllers\Api\V1\DocumentReaderController;
 use App\Http\Controllers\Api\V1\GeneratedDocumentController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
 use App\Http\Controllers\Api\V1\PermissionController;
@@ -68,6 +69,8 @@ use App\Http\Controllers\Api\V1\ComplianceAlertController;
 use App\Http\Controllers\Api\V1\VehicleRepairController;
 use App\Http\Controllers\Api\V1\VehicleMovementController;
 use App\Http\Controllers\Api\V1\FleetAnalysisController;
+use App\Http\Controllers\Api\V1\ContractSignatureRequestController;
+use App\Http\Controllers\Api\V1\PublicSignatureController;
 use App\Http\Controllers\Api\V1\FixedChargeController;
 use App\Http\Controllers\Api\V1\FixedChargePaymentController;
 use App\Http\Controllers\Api\V1\VehicleAccidentController;
@@ -93,6 +96,16 @@ Route::prefix('v1')->group(function () {
     Route::post('signatures/webhooks/provider', [SignatureWebhookController::class, 'handle']);
     // GPS provider webhook (public — provider API key/HMAC/IP controls)
     Route::post('gps/webhooks/{provider}', [GpsWebhookController::class, 'handle']);
+
+    // Public electronic-signature endpoints (tokenized, no auth).
+    // The opaque one-time token in the URL is the only capability; throttled
+    // to blunt token brute-forcing.
+    Route::middleware('throttle:30,1')->group(function () {
+        Route::get('public/signature/{token}', [PublicSignatureController::class, 'show']);
+        Route::get('public/signature/{token}/pdf', [PublicSignatureController::class, 'pdf']);
+        Route::post('public/signature/{token}/sign', [PublicSignatureController::class, 'sign']);
+        Route::post('public/signature/{token}/reject', [PublicSignatureController::class, 'reject']);
+    });
 
     // Public auth endpoints
     Route::post('auth/login', [AuthController::class, 'login'])
@@ -178,6 +191,27 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:documents.generate');
         Route::post('invoices/{invoice}/generate-pdf', [GeneratedDocumentController::class, 'generateInvoice'])
             ->middleware('permission:documents.generate');
+
+        // ==================================================================
+        // Softnovation Document Reader (OCR-driven document ingestion)
+        // ADMIN / DIRECTEUR / AGENT_COMMERCIAL only — validation is RBAC-gated.
+        // ==================================================================
+        Route::get('document-reader/documents', [DocumentReaderController::class, 'index'])
+            ->middleware('permission:documents.view');
+        Route::get('document-reader/documents/{id}', [DocumentReaderController::class, 'show'])
+            ->middleware('permission:documents.view');
+        Route::post('document-reader/uploads', [DocumentReaderController::class, 'upload'])
+            ->middleware('permission:documents.upload');
+        Route::post('document-reader/documents/{id}/extract', [DocumentReaderController::class, 'extract'])
+            ->middleware('permission:documents.upload');
+        Route::post('document-reader/documents/{id}/validate', [DocumentReaderController::class, 'validateDocument'])
+            ->middleware(['permission:documents.upload', 'role:ADMIN,DIRECTEUR,AGENT_COMMERCIAL']);
+        Route::post('document-reader/documents/{id}/link', [DocumentReaderController::class, 'link'])
+            ->middleware(['permission:documents.upload', 'role:ADMIN,DIRECTEUR,AGENT_COMMERCIAL']);
+        Route::get('document-reader/documents/{id}/preview', [DocumentReaderController::class, 'preview'])
+            ->middleware('permission:documents.view');
+        Route::delete('document-reader/documents/{id}', [DocumentReaderController::class, 'destroy'])
+            ->middleware('permission:documents.delete');
 
         // ==================================================================
         // Phase 4 — Fleet
@@ -342,6 +376,12 @@ Route::prefix('v1')->group(function () {
         Route::post('contracts/{contract}/generate-schedule', [ContractController::class, 'generateSchedule'])
             ->middleware('permission:contracts.generate_schedule');
 
+        // Electronic signature — create / list signing requests for a contract.
+        Route::get('contracts/{contract}/signature-requests', [ContractSignatureRequestController::class, 'index'])
+            ->middleware('permission:contracts.view');
+        Route::post('contracts/{contract}/signature-requests', [ContractSignatureRequestController::class, 'store'])
+            ->middleware('permission:contracts.update');
+
         // ==================================================================
         // Phase 6 — Credit applications
         // ==================================================================
@@ -465,6 +505,32 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:missions.complete');
         Route::get('mobile-ops/customer-tracking', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'customerTracking'])
             ->middleware('permission:mobile_ops.customer_tracking');
+        Route::post('mobile-ops/missions/{mission}/accept', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'accept'])
+            ->middleware('permission:missions.start');
+        Route::post('mobile-ops/missions/{mission}/arrive', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'arrive'])
+            ->middleware('permission:missions.start');
+        Route::post('mobile-ops/missions/{mission}/inspection', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'submitInspection'])
+            ->middleware('permission:missions.add_checklist');
+        Route::post('mobile-ops/missions/{mission}/issues', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'reportIssue'])
+            ->middleware('permission:missions.add_checklist');
+        Route::patch('mobile-ops/missions/{mission}/issues/{issue}', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'resolveIssue'])
+            ->middleware('permission:missions.complete');
+        Route::post('mobile-ops/missions/{mission}/signature', [\App\Http\Controllers\Api\V1\MobileOpsController::class, 'captureSignature'])
+            ->middleware('permission:missions.customer_signature');
+
+        // Admin / Manager field ops endpoints
+        Route::middleware('role:ADMIN,DIRECTEUR,GESTIONNAIRE_FLOTTE')->group(function () {
+            Route::get('mobile-ops/admin/missions', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'index'])
+                ->middleware('permission:missions.view');
+            Route::post('mobile-ops/admin/missions', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'store'])
+                ->middleware('permission:missions.start');
+            Route::post('mobile-ops/admin/missions/{mission}/assign', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'assign'])
+                ->middleware('permission:missions.start');
+            Route::post('mobile-ops/admin/missions/{mission}/cancel', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'cancel'])
+                ->middleware('permission:missions.complete');
+            Route::get('mobile-ops/admin/missions/{mission}/proof', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'proof'])
+                ->middleware('permission:missions.view');
+        });
 
         // ==================================================================
         // Phase 3 — Customers & KYC
@@ -611,6 +677,18 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:customer_balance.view');
         Route::get('customers/{customer}/statement', [CustomerBalanceController::class, 'statement'])
             ->middleware('permission:customer_balance.view');
+
+        // ── Customer Wallet / Avoir ──────────────────────────────────────────
+        Route::get('customers/{customer}/wallet', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'show'])
+            ->middleware('permission:customers.view');
+        Route::get('customers/{customer}/wallet/transactions', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'transactions'])
+            ->middleware('permission:customers.view');
+        Route::post('customers/{customer}/wallet/adjust', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'adjust'])
+            ->middleware('permission:customers.update'); // admin only — requires reason
+        Route::post('customers/{customer}/wallet/apply', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'apply'])
+            ->middleware('permission:customers.update');
+        Route::post('customers/{customer}/wallet/preview-early-return', [\App\Http\Controllers\Api\V1\CustomerWalletController::class, 'previewEarlyReturn'])
+            ->middleware('permission:customers.view');
 
         Route::get('treasury/summary', [TreasuryController::class, 'summary'])
             ->middleware('permission:treasury.view');

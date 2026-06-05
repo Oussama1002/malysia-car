@@ -27,10 +27,33 @@ const MODULE_HELP: Record<string, string> = {
   gps: 'Géolocalisation, alertes et suivi des trajets.',
 };
 
+const PERM_VERB_FR: Record<string, string> = {
+  view: 'Consulter', create: 'Créer', update: 'Modifier', edit: 'Modifier',
+  delete: 'Supprimer', manage: 'Gérer', approve: 'Approuver', reject: 'Rejeter',
+  assign: 'Assigner', send: 'Envoyer', sync: 'Synchroniser', issue: 'Émettre',
+  cancel: 'Annuler', post: 'Publier', close: 'Clôturer', upload: 'Téléverser',
+  generate: 'Générer', transition: 'Modifier le statut', decide: 'Décider',
+  list: 'Lister', read: 'Lire', write: 'Écrire', export: 'Exporter',
+  import: 'Importer', archive: 'Archiver', restore: 'Restaurer', print: 'Imprimer',
+};
+const PERM_NOUN_FR: Record<string, string> = {
+  fleet: 'parc auto', vehicle: 'véhicule', vehicles: 'véhicules',
+  customer: 'client', customers: 'clients', contract: 'contrat', contracts: 'contrats',
+  invoice: 'facture', invoices: 'factures', payment: 'paiement', payments: 'paiements',
+  role: 'rôle', roles: 'rôles', user: 'utilisateur', users: 'utilisateurs',
+  setting: 'paramètre', settings: 'paramètres', audit: 'audit', gps: 'GPS',
+  report: 'rapport', reports: 'rapports', document: 'document', documents: 'documents',
+  finance: 'finances', accounting: 'comptabilité', arrear: 'impayé', arrears: 'impayés',
+  branch: 'agence', branches: 'agences', permission: 'permission', permissions: 'permissions',
+  compliance: 'conformité', rental: 'location', rentals: 'locations',
+  sub_rental: 'sous-location', maintenance: 'maintenance', insurance: 'assurance',
+  signature: 'signature', signatures: 'signatures', credit: 'crédit',
+};
+
 function humanizePermissionCode(code: string): string {
-  return code
-    .replace(/[._]/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const parts = code.toLowerCase().replace(/\./g, '_').split('_').filter(Boolean);
+  const translated = parts.map((p) => PERM_VERB_FR[p] ?? PERM_NOUN_FR[p] ?? (p.charAt(0).toUpperCase() + p.slice(1)));
+  return translated.join(' ');
 }
 
 function isReadPermission(code: string): boolean {
@@ -361,11 +384,10 @@ export const RolesPermissionsPage: React.FC = () => {
                               >
                                 <input type="checkbox" checked={on} onChange={() => togglePerm(p.id)} />
                                 <span>
-                                  <span className="font-bold text-slate-800">{p.name}</span>
-                                  <span className="block text-xs text-slate-500">{p.code}</span>
-                                  <span className="block text-xs text-slate-400">
+                                  <span className="font-bold text-slate-800">
                                     {p.description ?? humanizePermissionCode(p.code)}
                                   </span>
+                                  <span className="block font-mono text-[10px] text-slate-400">{p.code}</span>
                                 </span>
                               </label>
                             );

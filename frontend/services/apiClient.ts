@@ -49,7 +49,17 @@ export async function apiClient<T>(path: string, init?: RequestInit, options?: A
     },
   });
   const text = await res.text();
-  const json = text ? (JSON.parse(text) as unknown) : null;
+  // Reverse proxies (nginx, cloudflare, …) emit HTML error pages on 502/504,
+  // so JSON.parse can throw with a useless "Unexpected token '<'" message.
+  // Catch it and let the !res.ok branch surface a real, translatable error.
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
   if (res.status === 401 && useAuth) {
     localStorage.removeItem('df_session');
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
@@ -57,8 +67,19 @@ export async function apiClient<T>(path: string, init?: RequestInit, options?: A
     }
   }
   if (!res.ok) {
-    const msg = (json as { message?: string; errors?: unknown })?.message ?? res.statusText;
+    const fromJson = (json as { message?: string; errors?: unknown } | null)?.message;
+    const friendly =
+      res.status === 504
+        ? "Le serveur a mis trop de temps à répondre (OCR > 3 min). Réessayez ou utilisez une image de meilleure qualité."
+        : res.status === 502 || res.status === 503
+        ? 'Service indisponible — réessayez dans quelques secondes.'
+        : null;
+    const msg = fromJson ?? friendly ?? res.statusText ?? `HTTP ${res.status}`;
     throw new ApiError(String(msg), res.status, json);
+  }
+  if (json === null && text) {
+    // OK status but non-JSON body — shouldn't happen for our API but guard anyway.
+    throw new ApiError('Réponse serveur invalide (non-JSON).', res.status, text);
   }
   return json as T;
 }

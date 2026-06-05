@@ -21,6 +21,8 @@ import {
   type RiskLevel,
 } from '@/services/customersApi';
 import { ApiError } from '@/services/apiError';
+import { walletApi, type WalletSummary, type WalletTransaction } from '@/services/walletApi';
+import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { TabsSection } from '@/modules/shared/components/TabsSection';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { ConfirmModal } from '@/modules/shared/components/ConfirmModal';
@@ -58,7 +60,10 @@ const riskLabel: Record<RiskLevel, string> = {
 export const CustomerDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'identity' | 'kyc' | 'contracts' | 'payments' | 'documents' | 'notes' | 'risk' | 'audit'>('identity');
+  // Default tab = Documents so a freshly-created client (with the OCR-scanned
+  // CIN + Permis) shows its document dossier on first open instead of an
+  // empty-looking Identity card.
+  const [tab, setTab] = useState<'identity' | 'kyc' | 'contracts' | 'payments' | 'wallet' | 'documents' | 'notes' | 'risk' | 'audit'>('documents');
   const [confirmBlacklist, setConfirmBlacklist] = useState<'add' | 'remove' | null>(null);
 
   const dossierQ = useQuery({
@@ -136,7 +141,7 @@ export const CustomerDetailPage: React.FC = () => {
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-2xl font-black text-white">
             {customer.display_name.charAt(0).toUpperCase()}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-black text-slate-900">{customer.display_name}</h1>
               {customer.is_blacklisted && <StatusBadge label="Blacklist" tone="danger" />}
@@ -153,6 +158,8 @@ export const CustomerDetailPage: React.FC = () => {
               />
             </div>
           </div>
+          {/* Wallet balance chip — clickable to open wallet tab */}
+          <WalletBalanceChip customerId={customer.id} onOpen={() => setTab('wallet')} />
         </div>
       </header>
 
@@ -164,6 +171,7 @@ export const CustomerDetailPage: React.FC = () => {
           { id: 'kyc', label: `KYC (${kyc.cases.length})` },
           { id: 'contracts', label: `Contrats (${contracts.length})` },
           { id: 'payments', label: `Paiements (${payments.length})` },
+          { id: 'wallet', label: 'Portefeuille' },
           { id: 'documents', label: 'Documents' },
           { id: 'notes', label: `Notes (${notes.length})` },
           { id: 'risk', label: 'Risque' },
@@ -183,11 +191,14 @@ export const CustomerDetailPage: React.FC = () => {
       {tab === 'kyc' && <KycTab customerId={customer.id} cases={kyc.cases} customerType={customer.customer_type} onChange={invalidate} />}
       {tab === 'contracts' && <ContractsTab contracts={contracts} />}
       {tab === 'payments' && <PaymentsTab payments={payments} />}
+      {tab === 'wallet' && <WalletTab customerId={customer.id} />}
       {tab === 'documents' && (
-        <div className="space-y-4">
-          <EntityDocuments entityType="customer" entityId={customer.id} title="Référentiel central client" />
-          <DocumentsTab cases={kyc.cases} />
-        </div>
+        // Single authoritative listing: entity_attachments via the document
+        // centre, which already covers OCR-scanned CIN/Permis (linked at customer
+        // create time) AND any manually uploaded files. The previous KYC-only
+        // section below was confusingly showing a second "Aucun document" empty
+        // state for customers whose OCR docs aren't tied to a KYC case.
+        <EntityDocuments entityType="customer" entityId={customer.id} title="Documents du client" />
       )}
       {tab === 'notes' && <NotesTab customerId={customer.id} notes={notes} onChange={invalidate} />}
       {tab === 'audit' && (
@@ -373,7 +384,9 @@ const KycTab: React.FC<{
   });
 
   const approveMut = useMutation({
-    mutationFn: (vars: { caseId: string; score: number }) => approveKycCase(vars.caseId, vars.score),
+    // score optional — UI now approves directly without prompting for it.
+    // Backend accepts `risk_score` as `sometimes`, so omitting it is fine.
+    mutationFn: (vars: { caseId: string; score?: number }) => approveKycCase(vars.caseId, vars.score),
     onSuccess: refetch,
   });
 
@@ -457,13 +470,7 @@ const KycTab: React.FC<{
               <button
                 type="button"
                 className="df-btn df-btn--primary"
-                onClick={() => {
-                  const s = window.prompt('Score de risque (0-100) ?', '80');
-                  if (s === null) return;
-                  const score = Number(s);
-                  if (Number.isNaN(score)) return;
-                  approveMut.mutate({ caseId: active.id, score });
-                }}
+                onClick={() => approveMut.mutate({ caseId: active.id })}
                 disabled={approveMut.isPending}
               >
                 ✓ Approuver
@@ -898,5 +905,384 @@ const BlacklistAddModal: React.FC<{
         </div>
       </form>
     </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WALLET COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Small balance chip shown in the customer header */
+const WalletBalanceChip: React.FC<{ customerId: string; onOpen: () => void }> = ({ customerId, onOpen }) => {
+  const q = useQuery({
+    queryKey: ['wallet', customerId],
+    queryFn: () => walletApi.get(customerId),
+  });
+  const balance = q.data?.balance ?? null;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col items-end rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-right hover:bg-indigo-100 transition-colors"
+      title="Voir le portefeuille"
+    >
+      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Avoir disponible</span>
+      <span className="mt-0.5 text-xl font-black text-indigo-700">
+        {q.isLoading ? '…' : balance !== null ? formatCurrencyMad(balance) : '—'}
+      </span>
+    </button>
+  );
+};
+
+// ── Transaction type labels + colours ──────────────────────────────────────
+const TX_META: Record<string, { label: string; bg: string; text: string; icon: string }> = {
+  early_return:         { label: 'Retour anticipé',         bg: 'bg-emerald-50', text: 'text-emerald-700', icon: '↩' },
+  manual_credit:        { label: 'Crédit manuel',           bg: 'bg-blue-50',    text: 'text-blue-700',    icon: '＋' },
+  manual_debit:         { label: 'Débit manuel',            bg: 'bg-slate-100',  text: 'text-slate-700',   icon: '−' },
+  reservation_applied:  { label: 'Appliqué réservation',    bg: 'bg-violet-50',  text: 'text-violet-700',  icon: '🗓' },
+  contract_applied:     { label: 'Appliqué contrat',        bg: 'bg-violet-50',  text: 'text-violet-700',  icon: '📄' },
+};
+function txMeta(type: string) {
+  return TX_META[type] ?? { label: type, bg: 'bg-slate-50', text: 'text-slate-600', icon: '•' };
+}
+
+/** Full wallet tab with balance, history, adjust form, apply form */
+const WalletTab: React.FC<{ customerId: string }> = ({ customerId }) => {
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [showApply, setShowApply] = useState(false);
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['wallet', customerId] });
+
+  const walletQ = useQuery({
+    queryKey: ['wallet', customerId],
+    queryFn: () => walletApi.get(customerId),
+  });
+  const txQ = useQuery({
+    queryKey: ['wallet-tx', customerId, page],
+    queryFn: () => walletApi.transactions(customerId, page),
+    keepPreviousData: true,
+  } as any);
+
+  const wallet = walletQ.data;
+  const txData = (txQ as any).data;
+
+  return (
+    <div className="space-y-4">
+      {/* Balance card */}
+      <div className="flex flex-col gap-4 md:flex-row">
+        <div className="flex-1 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-6 shadow-sm">
+          <div className="text-[11px] font-black uppercase tracking-widest text-indigo-400">Solde disponible</div>
+          <div className="mt-2 text-4xl font-black text-indigo-700">
+            {walletQ.isLoading ? '…' : formatCurrencyMad(wallet?.balance ?? 0)}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">Avoir uniquement — pas de remboursement en espèces</div>
+        </div>
+        <div className="flex flex-col gap-2 justify-center">
+          <button
+            type="button"
+            onClick={() => { setShowAdjust(true); setShowApply(false); }}
+            className="df-btn df-btn--primary df-btn--sm"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+            </svg>
+            Ajustement admin
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowApply(true); setShowAdjust(false); }}
+            className="df-btn df-btn--ghost df-btn--sm"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Appliquer sur contrat
+          </button>
+        </div>
+      </div>
+
+      {/* Adjust form */}
+      {showAdjust && (
+        <AdjustForm
+          customerId={customerId}
+          onSuccess={() => { setShowAdjust(false); invalidate(); }}
+          onCancel={() => setShowAdjust(false)}
+        />
+      )}
+
+      {/* Apply form */}
+      {showApply && (
+        <ApplyForm
+          customerId={customerId}
+          currentBalance={wallet?.balance ?? 0}
+          onSuccess={() => { setShowApply(false); invalidate(); }}
+          onCancel={() => setShowApply(false)}
+        />
+      )}
+
+      {/* Transaction history */}
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="text-sm font-black text-slate-900">Historique des transactions</div>
+          {txData && txData.total > 0 && (
+            <span className="text-xs text-slate-500">{txData.total} transaction{txData.total > 1 ? 's' : ''}</span>
+          )}
+        </div>
+        {txQ.isLoading ? (
+          <div className="p-6 text-sm text-slate-500">Chargement…</div>
+        ) : !txData?.data?.length ? (
+          <div className="p-8 text-center text-sm text-slate-400">
+            <div className="text-3xl mb-2">💳</div>
+            Aucune transaction pour ce client.
+          </div>
+        ) : (
+          <>
+            <ul className="divide-y divide-slate-50">
+              {txData.data.map((tx: WalletTransaction) => {
+                const meta = txMeta(tx.type);
+                return (
+                  <li key={tx.id} className="flex items-start gap-4 px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                    {/* Direction icon */}
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${meta.bg} ${meta.text}`}>
+                      {tx.direction === 'credit' ? '+' : '−'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.bg} ${meta.text} border-current/20`}>
+                          {meta.label}
+                        </span>
+                        {tx.reference_type && (
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {tx.reference_type} · {tx.reference_id?.slice(0, 8)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500 truncate">{tx.description ?? '—'}</div>
+                      {tx.reason && (
+                        <div className="mt-0.5 text-xs text-amber-700 italic">Motif: {tx.reason}</div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className={`text-sm font-black ${tx.direction === 'credit' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {tx.direction === 'credit' ? '+' : '−'}{formatCurrencyMad(tx.amount)}
+                      </div>
+                      <div className="text-[10px] text-slate-400">Solde: {formatCurrencyMad(tx.balance_after)}</div>
+                      <div className="text-[10px] text-slate-300">{formatDate(tx.created_at)}</div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {txData.last_page > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage(p => p - 1)}
+                  className="df-btn df-btn--ghost df-btn--sm disabled:opacity-40"
+                >← Précédent</button>
+                <span className="text-xs text-slate-500">Page {page} / {txData.last_page}</span>
+                <button
+                  disabled={page === txData.last_page}
+                  onClick={() => setPage(p => p + 1)}
+                  className="df-btn df-btn--ghost df-btn--sm disabled:opacity-40"
+                >Suivant →</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Admin manual adjustment form (credit or debit, requires reason) */
+const AdjustForm: React.FC<{
+  customerId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}> = ({ customerId, onSuccess, onCancel }) => {
+  const [direction, setDirection] = useState<'credit' | 'debit'>('credit');
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [description, setDescription] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      setError('Montant invalide.');
+      return;
+    }
+    if (reason.trim().length < 5) {
+      setError('Le motif est obligatoire (min. 5 caractères).');
+      return;
+    }
+    setBusy(true);
+    try {
+      await walletApi.adjust(customerId, {
+        direction,
+        amount: Number(amount),
+        reason: reason.trim(),
+        description: description.trim() || undefined,
+      });
+      onSuccess();
+    } catch (e: any) {
+      setError(e?.message ?? 'Erreur lors de l\'ajustement.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 space-y-4">
+      <div className="text-sm font-black text-amber-900">Ajustement manuel du portefeuille</div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Direction</label>
+          <div className="flex gap-2">
+            <button type="button"
+              onClick={() => setDirection('credit')}
+              className={`flex-1 rounded-xl border py-2 text-sm font-bold transition ${direction === 'credit' ? 'border-emerald-300 bg-emerald-100 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+            >+ Crédit</button>
+            <button type="button"
+              onClick={() => setDirection('debit')}
+              className={`flex-1 rounded-xl border py-2 text-sm font-bold transition ${direction === 'debit' ? 'border-rose-300 bg-rose-100 text-rose-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+            >− Débit</button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Montant (MAD)</label>
+          <input
+            type="number" min="0.01" step="0.01"
+            value={amount} onChange={e => setAmount(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            placeholder="0.00"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-bold text-slate-600 mb-1">Motif <span className="text-rose-500">*</span></label>
+          <input
+            type="text"
+            value={reason} onChange={e => setReason(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            placeholder="Motif obligatoire pour tout ajustement admin"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-bold text-slate-600 mb-1">Note interne (optionnel)</label>
+          <input
+            type="text"
+            value={description} onChange={e => setDescription(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            placeholder="Ex: Correction erreur facturation juillet 2026"
+          />
+        </div>
+      </div>
+      {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">{error}</div>}
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onCancel} className="df-btn df-btn--ghost df-btn--sm">Annuler</button>
+        <button type="submit" disabled={busy} className="df-btn df-btn--primary df-btn--sm disabled:opacity-60">
+          {busy ? 'Enregistrement…' : 'Confirmer'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+/** Apply wallet balance toward a contract or reservation */
+const ApplyForm: React.FC<{
+  customerId: string;
+  currentBalance: number;
+  onSuccess: () => void;
+  onCancel: () => void;
+}> = ({ customerId, currentBalance, onSuccess, onCancel }) => {
+  const [referenceType, setReferenceType] = useState<'contract' | 'reservation'>('contract');
+  const [referenceId, setReferenceId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const maxAmount = currentBalance;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const amt = Number(amount);
+    if (!amt || amt <= 0) { setError('Montant invalide.'); return; }
+    if (amt > maxAmount) { setError(`Montant dépasse le solde disponible (${formatCurrencyMad(maxAmount)}).`); return; }
+    if (!referenceId.trim()) { setError('Identifiant du contrat/réservation requis.'); return; }
+    setBusy(true);
+    try {
+      await walletApi.apply(customerId, {
+        amount: amt,
+        reference_type: referenceType,
+        reference_id: referenceId.trim(),
+      });
+      onSuccess();
+    } catch (e: any) {
+      setError(e?.message ?? 'Erreur lors de l\'application.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-4">
+      <div className="flex items-start justify-between">
+        <div className="text-sm font-black text-indigo-900">Appliquer l'avoir sur un contrat / réservation</div>
+        <div className="text-xs text-indigo-600 font-semibold">Disponible: {formatCurrencyMad(maxAmount)}</div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Type</label>
+          <div className="flex gap-2">
+            <button type="button"
+              onClick={() => setReferenceType('contract')}
+              className={`flex-1 rounded-xl border py-2 text-sm font-bold transition ${referenceType === 'contract' ? 'border-indigo-300 bg-indigo-100 text-indigo-800' : 'border-slate-200 bg-white text-slate-600'}`}
+            >Contrat</button>
+            <button type="button"
+              onClick={() => setReferenceType('reservation')}
+              className={`flex-1 rounded-xl border py-2 text-sm font-bold transition ${referenceType === 'reservation' ? 'border-indigo-300 bg-indigo-100 text-indigo-800' : 'border-slate-200 bg-white text-slate-600'}`}
+            >Réservation</button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Montant à déduire (MAD)</label>
+          <div className="relative">
+            <input
+              type="number" min="0.01" step="0.01" max={maxAmount}
+              value={amount} onChange={e => setAmount(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm pr-16"
+              placeholder="0.00"
+            />
+            <button
+              type="button"
+              onClick={() => setAmount(String(maxAmount))}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-indigo-600 hover:underline"
+            >Tout</button>
+          </div>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-bold text-slate-600 mb-1">ID du {referenceType === 'contract' ? 'contrat' : 'de la réservation'}</label>
+          <input
+            type="text"
+            value={referenceId} onChange={e => setReferenceId(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm"
+            placeholder="UUID du contrat ou de la réservation"
+          />
+        </div>
+      </div>
+      {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">{error}</div>}
+      <div className="flex gap-2 justify-end">
+        <button type="button" onClick={onCancel} className="df-btn df-btn--ghost df-btn--sm">Annuler</button>
+        <button type="submit" disabled={busy} className="df-btn df-btn--primary df-btn--sm disabled:opacity-60">
+          {busy ? 'Application…' : 'Appliquer l\'avoir'}
+        </button>
+      </div>
+    </form>
   );
 };

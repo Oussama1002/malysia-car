@@ -19,7 +19,7 @@ const DEFAULT_CMDS: PaletteCommand[] = [
   { id: 'go-dash', group: 'Navigation', label: 'Tableau de bord direction', icon: 'home', to: '/dashboard', shortcut: 'G D' },
   { id: 'go-fleet', group: 'Navigation', label: 'Flotte', icon: 'car', to: '/fleet', shortcut: 'G F' },
   { id: 'go-gps', group: 'Navigation', label: 'GPS & géolocalisation', icon: 'map', to: '/gps', shortcut: 'G L' },
-  { id: 'go-customers', group: 'Navigation', label: 'Clients & conformité', icon: 'users', to: '/customers' },
+  { id: 'go-customers', group: 'Navigation', label: 'Clients', icon: 'users', to: '/customers' },
   { id: 'go-contracts', group: 'Navigation', label: 'Contrats', icon: 'doc', to: '/contracts' },
   { id: 'go-credit', group: 'Navigation', label: 'Analyse crédit', icon: 'credit', to: '/credit' },
   { id: 'go-finance', group: 'Navigation', label: 'Finance & fiscalité', icon: 'coin', to: '/finance' },

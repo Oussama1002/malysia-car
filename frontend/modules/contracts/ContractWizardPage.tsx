@@ -1,21 +1,36 @@
-import React, { useMemo, useState } from 'react';
-import { SearchableSelect, type SearchableSelectOption } from '@/modules/shared/components/SearchableSelect';
-import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 import { Icon, type IconName } from '@/modules/shared/components/Icon';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
 import { UploadZone } from '@/modules/shared/components/UploadZone';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import type { ContractType } from '@/services/dtos';
 import { contractsApi } from '@/services/contractsApi';
 import { documentsApi } from '@/services/documentsApi';
 import { createEnvelope, sendEnvelope } from '@/services/signatureApi';
 import { useAuthSession } from '@/modules/auth/AuthContext';
+import { CustomerForm } from '@/modules/customers/CustomerForm';
+import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
+import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
+import { listBranches } from '@/services/adminApi';
+import { ApiError } from '@/services/apiError';
+import { documentReaderApi } from '@/services/documentReaderApi';
+import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
 
 type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
+
+interface PaymentEntry {
+  id: string;
+  method: string;
+  amount: number | '';
+  reference: string;
+  chequeNumber: string;
+}
 
 interface Step {
   key: StepKey;
@@ -92,32 +107,49 @@ interface WizardState {
   securityDepositMad: number;
   residualValuePct: number;
   notes: string;
-  paymentMethod: string;
+  payments: PaymentEntry[];
   paymentTerms: string;
-  bankReference: string;
-  chequeNumber: string;
   expectedPaymentDay: number | '';
+  startDate: string | null;
+  endDate: string | null;
 }
 
 const INITIAL: WizardState = {
   clientId: null,
   vehicleId: null,
   type: 'LLD',
-  durationMonths: 36,
-  monthlyRentMad: 4200,
-  kmInclMonth: 1800,
-  securityDepositMad: 10000,
+  durationMonths: 0,
+  monthlyRentMad: 0,
+  kmInclMonth: 0,
+  securityDepositMad: 0,
   residualValuePct: 38,
   notes: '',
-  paymentMethod: 'virement',
+  payments: [{ id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
   paymentTerms: '',
-  bankReference: '',
-  chequeNumber: '',
   expectedPaymentDay: 5,
+  startDate: null,
+  endDate: null,
 };
+
+function friendlyError(e: unknown, fallback: string): string {
+  const raw = e instanceof Error ? e.message : String(e ?? '');
+  if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
+    return 'Ressource introuvable sur le serveur. Veuillez réessayer.';
+  }
+  return raw || fallback;
+}
+
+/** Calculate the number of full months between two ISO date strings. */
+function monthsBetween(start: string, end: string): number {
+  const s = new Date(start);
+  const e = new Date(end);
+  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  return Math.max(1, months);
+}
 
 export const ContractWizardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { session } = useAuthSession();
   const [stepIdx, setStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
@@ -126,7 +158,135 @@ export const ContractWizardPage: React.FC = () => {
   const [draftBusy, setDraftBusy] = useState(false);
   const [draftInfo, setDraftInfo] = useState<string | null>(null);
   const [draftContractId, setDraftContractId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveRef = useRef(false);
+  const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
+  const [newClientError, setNewClientError] = useState<string | null>(null);
+  const [prefillBanner, setPrefillBanner] = useState<string | null>(null);
+  const [prefillLoading, setPrefillLoading] = useState(false);
+  const prefillDoneRef = useRef(false);
   const step = STEPS[stepIdx];
+
+  // Pre-fill wizard from a reservation when ?from_reservation=UUID is present
+  useEffect(() => {
+    const reservationId = searchParams.get('from_reservation');
+    if (!reservationId || prefillDoneRef.current) return;
+    prefillDoneRef.current = true;
+    setPrefillLoading(true);
+    (async () => {
+      try {
+        const res = await apiClient<{ data: { reservation: any } }>(`/v1/reservations/${reservationId}`);
+        const r = res.data?.reservation ?? res.data ?? res;
+        const startDate: string | null = r.desired_start_at
+          ? String(r.desired_start_at).slice(0, 10)
+          : null;
+        const endDate: string | null = r.desired_end_at
+          ? String(r.desired_end_at).slice(0, 10)
+          : null;
+        const durationMonths =
+          startDate && endDate ? monthsBetween(startDate, endDate) : 0;
+        // Normalise payment method to wizard options
+        const methodMap: Record<string, string> = {
+          virement: 'virement',
+          bank_transfer: 'virement',
+          cheque: 'cheque',
+          chèque: 'cheque',
+          espece: 'espece',
+          cash: 'espece',
+          carte: 'carte',
+          card: 'carte',
+        };
+        const rawMethod = String(r.payment_method ?? '').toLowerCase();
+        const paymentMethod = methodMap[rawMethod] ?? 'virement';
+
+        // Map reservation_type to contract type
+        const typeMap: Record<string, ContractType> = {
+          SHORT_RENTAL: 'LOCATION_COURTE',
+          short_rental: 'LOCATION_COURTE',
+          LONG_RENTAL:  'LLD',
+          long_rental:  'LLD',
+          LLD:          'LLD',
+          LOA:          'LOA',
+          CREDIT_AUTO:  'CREDIT_AUTO',
+          VENTE_VO:     'VENTE_VO',
+        };
+        const contractType: ContractType = typeMap[r.reservation_type ?? ''] ?? 'LOCATION_COURTE';
+
+        setState((prev) => ({
+          ...prev,
+          clientId: r.customer_id ?? null,
+          vehicleId: r.vehicle_id ?? null,
+          type: contractType,
+          startDate,
+          endDate,
+          durationMonths,
+          monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths)) : prev.monthlyRentMad,
+          securityDepositMad: r.deposit_amount ? Number(r.deposit_amount) : prev.securityDepositMad,
+          payments: [{ id: String(Date.now()), method: paymentMethod, amount: '', reference: '', chequeNumber: '' }],
+        }));
+
+        // Record the reservation number for the banner
+        const rsvNumber: string = r.reservation_number ?? `RSV-${String(reservationId).slice(0, 8).toUpperCase()}`;
+        setPrefillBanner(rsvNumber);
+
+        // Advance past client (0) and vehicle (1) steps to type (2) — both are already set
+        setStepIdx(2);
+      } catch (e) {
+        // Non-blocking: just log, don't block the wizard
+        console.warn('[ContractWizard] Pre-fill from reservation failed:', e);
+      } finally {
+        setPrefillLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save draft when the user reaches Step 6 (review), once per wizard session
+  useEffect(() => {
+    if (stepIdx !== 5) return;
+    if (autoSaveRef.current) return; // already triggered
+    if (!state.clientId || !state.vehicleId) return; // not enough data yet
+    autoSaveRef.current = true;
+    setAutoSaveStatus('saving');
+    (async () => {
+      try {
+        if (!draftContractId) {
+          const created = await contractsApi.create(buildCreatePayload('draft'));
+          setDraftContractId(String(created.id));
+        }
+        setAutoSaveStatus('saved');
+        // Reset after 4 s so the indicator fades away naturally
+        setTimeout(() => setAutoSaveStatus('idle'), 4000);
+      } catch {
+        setAutoSaveStatus('error');
+        autoSaveRef.current = false; // allow retry on re-entry
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIdx]);
+
+  const qc = useQueryClient();
+  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
+  const createCustomerMut = useMutation({
+    mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
+      const res = await createCustomer(vars.payload);
+      for (const scan of vars.scans) {
+        try {
+          await documentReaderApi.link(scan.documentId, 'customer', String(res.data.id));
+        } catch {
+          /* don't block on attachment failures */
+        }
+      }
+      return res;
+    },
+    onSuccess: async (res) => {
+      setNewClientError(null);
+      setNewClientDrawerOpen(false);
+      await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
+      patch('clientId', String(res.data.id));
+    },
+    onError: (e) => setNewClientError(e instanceof ApiError ? e.message : 'Erreur de création du client'),
+  });
 
   const clients = useQuery({
     queryKey: queryKeys.customers.all,
@@ -177,40 +337,27 @@ export const ContractWizardPage: React.FC = () => {
         insuranceExpiry: v.insurance_expiry,
         techControlExpiry: v.tech_control_expiry,
         vignetteExpiry: v.vignette_expiry,
-        ownershipStatus: v.ownershipStatus ?? v.ownership_status ?? 'owned',
+        ownershipStatus: v.ownership_status,
       }));
     },
   });
 
-  const availableVehicles = useMemo(
-    () => (vehicles.data ?? []).filter((v) => v.status === 'AVAILABLE'),
-    [vehicles.data],
-  );
+  const customerDocs = useQuery({
+    queryKey: ['customer-docs', state.clientId],
+    queryFn: () => documentCenterApi.byEntity('customer', state.clientId!),
+    enabled: !!state.clientId,
+  });
 
-  const vehicleOptions = useMemo((): SearchableSelectOption[] => {
-    return availableVehicles.map((v) => {
-      const isSubRental = (v.ownershipStatus ?? '').toLowerCase() === 'sub_rented';
-      const brandModel = `${v.brand} ${v.model}`.trim();
-      return {
-        value: v.id,
-        displayText: isSubRental ? `${brandModel} · SL` : brandModel,
-        searchText: [v.brand, v.model, v.registration, String(v.year)].filter(Boolean).join(' '),
-        label: (
-          <span className="flex items-center gap-2">
-            <span>{brandModel}</span>
-            {isSubRental && (
-              <span title="Sous-location">
-                <StatusChip label="SL" tone="warning" className="!px-1.5 !py-0 !text-[10px]" />
-              </span>
-            )}
-            <span className="ms-auto font-mono text-[11px] font-normal text-[color:var(--df-text-muted)]">
-              {v.registration}
-            </span>
-          </span>
-        ),
-      };
-    });
-  }, [availableVehicles]);
+  const allClientDocs: DocumentCenterItem[] = [
+    ...(customerDocs.data?.data?.attachments ?? []),
+    ...(customerDocs.data?.data?.generated ?? []),
+  ];
+  const cinDoc = allClientDocs.find((d) =>
+    ['cin', 'national_id', 'identit', 'cni'].some((k) => d.category?.toLowerCase().includes(k) || d.title?.toLowerCase().includes(k))
+  );
+  const permisDoc = allClientDocs.find((d) =>
+    ['permis', 'driving', 'license', 'licence'].some((k) => d.category?.toLowerCase().includes(k) || d.title?.toLowerCase().includes(k))
+  );
 
   const selectedClient = clients.data?.find((c) => String(c.id) === String(state.clientId));
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
@@ -228,23 +375,39 @@ export const ContractWizardPage: React.FC = () => {
     setState((s) => ({ ...s, [k]: v }));
   }
 
+  function addPayment(): void {
+    setState((s) => ({
+      ...s,
+      payments: [...s.payments, { id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
+    }));
+  }
+
+  function removePayment(id: string): void {
+    setState((s) => ({ ...s, payments: s.payments.filter((p) => p.id !== id) }));
+  }
+
+  function updatePayment(id: string, key: keyof Omit<PaymentEntry, 'id'>, value: string | number | ''): void {
+    setState((s) => ({ ...s, payments: s.payments.map((p) => p.id === id ? { ...p, [key]: value } : p) }));
+  }
+
   function buildCreatePayload(status?: 'draft' | 'pending_approval') {
+    const primary = state.payments[0];
     return {
       type: state.type,
       clientId: state.clientId ?? '',
       vehicleId: state.vehicleId ?? undefined,
       amountMad: totalAmount,
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: undefined,
+      startDate: state.startDate ?? new Date().toISOString().slice(0, 10),
+      endDate: state.endDate ?? undefined,
       durationMonths: state.durationMonths,
       monthlyPayment: state.monthlyRentMad,
       allowedKm: state.kmInclMonth * state.durationMonths,
       depositAmount: state.securityDepositMad,
       notes: state.notes,
-      paymentMethod: state.paymentMethod,
+      paymentMethod: primary?.method ?? 'virement',
       paymentTerms: state.paymentTerms || undefined,
-      bankReference: state.bankReference || undefined,
-      chequeNumber: state.chequeNumber || undefined,
+      bankReference: state.payments.map((p) => p.reference).filter(Boolean).join(', ') || undefined,
+      chequeNumber: state.payments.map((p) => p.chequeNumber).filter(Boolean).join(', ') || undefined,
       expectedPaymentDay: state.expectedPaymentDay === '' ? undefined : Number(state.expectedPaymentDay),
       status,
     } as any;
@@ -273,7 +436,7 @@ export const ContractWizardPage: React.FC = () => {
       const id = await ensureDraftContract();
       setDraftInfo(`Brouillon sauvegardé (${id.slice(0, 8)}…).`);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Erreur de sauvegarde du brouillon');
+      setSaveError(friendlyError(e, 'Erreur de sauvegarde du brouillon'));
     } finally {
       setDraftBusy(false);
     }
@@ -289,7 +452,7 @@ export const ContractWizardPage: React.FC = () => {
       await documentsApi.downloadWithAuth(res.data.id, `contrat-brouillon-${id.slice(0, 8)}.pdf`);
       setDraftInfo('Brouillon PDF généré.');
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Erreur de génération PDF');
+      setSaveError(friendlyError(e, 'Erreur de génération PDF'));
     } finally {
       setDraftBusy(false);
     }
@@ -298,8 +461,10 @@ export const ContractWizardPage: React.FC = () => {
   async function submit(): Promise<void> {
     setSaving(true);
     setSaveError(null);
+    let createdId: string | null = null;
     try {
       const created = await contractsApi.create(buildCreatePayload('pending_approval'));
+      createdId = String(created.id);
 
       await contractsApi.generateSchedule(created.id, {
         start_date: new Date().toISOString().slice(0, 10),
@@ -328,18 +493,32 @@ export const ContractWizardPage: React.FC = () => {
       }
 
       if (signers.length > 0) {
-        const envelope = await createEnvelope({
-          subject: `Signature contrat ${state.type} - ${selectedClient.name}`,
-          provider: 'internal',
-          source_file_id: String(generatedDoc.data.id),
-          signers,
-        });
-        await sendEnvelope(envelope.data.id);
+        try {
+          const envelope = await createEnvelope({
+            subject: `Signature contrat ${state.type} - ${selectedClient.name}`,
+            provider: 'internal',
+            source_file_id: String(generatedDoc.data.id),
+            signers,
+          });
+          await sendEnvelope(envelope.data.id);
+        } catch (sigErr) {
+          // Signature step failed but contract is already created — navigate
+          // to the contract and let the user retry from the detail page.
+          console.warn('[ContractWizard] Signature envelope error (non-blocking):', sigErr);
+          navigate(`/contracts/${createdId}`);
+          return;
+        }
       }
 
-      navigate(`/contracts/${created.id}`);
+      navigate(`/contracts/${createdId}`);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Erreur inconnue');
+      const raw = e instanceof Error ? e.message : '';
+      // Hide raw Laravel model-not-found noise; show human-readable French
+      if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
+        setSaveError('Le contrat a été créé mais une ressource associée est introuvable sur le serveur. Vérifiez la fiche contrat.');
+      } else {
+        setSaveError(raw || 'Erreur inconnue lors de la création du contrat.');
+      }
     } finally {
       setSaving(false);
     }
@@ -347,6 +526,38 @@ export const ContractWizardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Pre-fill loading indicator */}
+      {prefillLoading && (
+        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+          <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          Chargement des informations de la réservation…
+        </div>
+      )}
+
+      {/* Pre-fill success banner */}
+      {prefillBanner && !prefillLoading && (
+        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Pré-rempli depuis la réservation <span className="font-mono">{prefillBanner}</span> — vérifiez les informations et complétez le contrat.
+          </div>
+          <button
+            type="button"
+            className="ml-4 shrink-0 text-emerald-600 hover:text-emerald-800 dark:text-emerald-400"
+            onClick={() => setPrefillBanner(null)}
+            aria-label="Fermer"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -358,7 +569,32 @@ export const ContractWizardPage: React.FC = () => {
           <h1 className="mt-1 text-3xl font-black tracking-tight">Nouveau contrat</h1>
           <p className="text-[color:var(--df-text-muted)]">Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Auto-save indicator — visible on step 6 */}
+          {autoSaveStatus === 'saving' && (
+            <span className="flex items-center gap-1.5 text-xs text-slate-400 animate-pulse">
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              Sauvegarde…
+            </span>
+          )}
+          {autoSaveStatus === 'saved' && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-600">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Brouillon sauvegardé
+            </span>
+          )}
+          {autoSaveStatus === 'error' && (
+            <span className="flex items-center gap-1.5 text-xs text-red-500">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" /><path strokeLinecap="round" d="M12 8v4m0 4h.01" />
+              </svg>
+              Échec sauvegarde
+            </span>
+          )}
           <button className="df-btn df-btn--ghost df-btn--sm" disabled={draftBusy} onClick={() => void handleDraftPdf()}>
             <Icon name="download" size={14} /> {draftBusy ? 'Traitement…' : 'Brouillon PDF'}
           </button>
@@ -421,18 +657,30 @@ export const ContractWizardPage: React.FC = () => {
               <>
                 <div>
                   <label className="df-label">Rechercher un client</label>
-                  <select
-                    className="df-input"
-                    value={state.clientId ?? ''}
-                    onChange={(e) => patch('clientId', e.target.value || null)}
-                  >
-                    <option value="">— Sélectionner —</option>
-                    {(clients.data ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-stretch gap-2">
+                    <select
+                      className="df-input flex-1"
+                      value={state.clientId ?? ''}
+                      onChange={(e) => patch('clientId', e.target.value || null)}
+                    >
+                      <option value="">— Sélectionner —</option>
+                      {(clients.data ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="df-btn df-btn--primary whitespace-nowrap"
+                      onClick={() => {
+                        setNewClientError(null);
+                        setNewClientDrawerOpen(true);
+                      }}
+                    >
+                      + Nouveau client
+                    </button>
+                  </div>
                 </div>
 
                 {selectedClient && (
@@ -471,13 +719,33 @@ export const ContractWizardPage: React.FC = () => {
               <>
                 <div>
                   <label className="df-label">Véhicule disponible</label>
-                  <SearchableSelect
-                    options={vehicleOptions}
-                    value={state.vehicleId}
-                    onChange={(id) => patch('vehicleId', id)}
-                    placeholder="Marque, modèle, immatriculation…"
-                    emptyMessage="Aucun véhicule disponible"
-                  />
+                  <select
+                    className="df-input"
+                    value={state.vehicleId ?? ''}
+                    onChange={(e) => patch('vehicleId', e.target.value || null)}
+                  >
+                    <option value="">— Sélectionner —</option>
+                    {(vehicles.data ?? [])
+                      .filter((v) => String(v.status).toUpperCase() === 'AVAILABLE')
+                      .map((v) => {
+                        // Build the human label. Fall back to "Véhicule" when
+                        // both brand and model are empty so the option never
+                        // collapses to just the registration.
+                        const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
+                        const label = brandModel || 'Véhicule';
+                        const isSL = v.ownershipStatus === 'sub_rented';
+                        return (
+                          <option key={v.id} value={v.id}>
+                            {isSL ? '[SL] ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''}
+                          </option>
+                        );
+                      })}
+                  </select>
+                  {selectedVehicle?.ownershipStatus === 'sub_rented' && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                      ⚠️ Véhicule en sous-location (SL) — vérifiez les conditions de re-location.
+                    </p>
+                  )}
                 </div>
 
                 {selectedVehicle && (
@@ -487,12 +755,7 @@ export const ContractWizardPage: React.FC = () => {
                         <Icon name="car" size={22} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-[15px] font-bold">{selectedVehicle.brand} {selectedVehicle.model}</div>
-                          {(selectedVehicle.ownershipStatus ?? '').toLowerCase() === 'sub_rented' && (
-                            <StatusChip label="SL · Sous-location" tone="warning" />
-                          )}
-                        </div>
+                        <div className="text-[15px] font-bold">{selectedVehicle.brand} {selectedVehicle.model}</div>
                         <div className="font-mono text-[11px] text-[color:var(--df-text-muted)]">{selectedVehicle.registration}</div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-[12px] md:grid-cols-4">
                           <InfoBit label="Année" value={String(selectedVehicle.year)} />
@@ -601,35 +864,70 @@ export const ContractWizardPage: React.FC = () => {
                     </Field>
                   )}
                 </div>
-                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Mode de paiement">
-                    <select className="df-input" value={state.paymentMethod} onChange={(e) => patch('paymentMethod', e.target.value)}>
-                      <option value="virement">Virement</option>
-                      <option value="cheque">Chèque</option>
-                      <option value="espece">Espèce</option>
-                      <option value="carte">Carte</option>
-                      <option value="autre">Autre</option>
-                    </select>
-                  </Field>
-                  <Field label="Jour de paiement attendu (1–31)">
-                    <input
-                      type="number"
-                      className="df-input"
-                      min={1}
-                      max={31}
-                      value={state.expectedPaymentDay}
-                      onChange={(e) => patch('expectedPaymentDay', e.target.value === '' ? '' : Number(e.target.value))}
-                    />
-                  </Field>
-                  <Field label="Conditions de paiement">
-                    <input className="df-input" value={state.paymentTerms} onChange={(e) => patch('paymentTerms', e.target.value)} />
-                  </Field>
-                  <Field label="Référence virement">
-                    <input className="df-input" value={state.bankReference} onChange={(e) => patch('bankReference', e.target.value)} />
-                  </Field>
-                  <Field label="N° chèque">
-                    <input className="df-input" value={state.chequeNumber} onChange={(e) => patch('chequeNumber', e.target.value)} />
-                  </Field>
+                <div className="mt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="df-label mb-0">Modes de paiement</span>
+                    <button type="button" className="df-btn df-btn--subtle df-btn--sm" onClick={addPayment}>
+                      <Icon name="plus" size={13} /> Ajouter un mode
+                    </button>
+                  </div>
+                  {state.payments.map((p, i) => (
+                    <div key={p.id} className="rounded-xl border border-[color:var(--df-border)] p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] font-bold text-[color:var(--df-text-muted)]">Paiement {i + 1}</span>
+                        {state.payments.length > 1 && (
+                          <button type="button" className="df-btn df-btn--ghost df-btn--sm text-rose-600" onClick={() => removePayment(p.id)}>
+                            <Icon name="close" size={12} /> Supprimer
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <Field label="Mode">
+                          <select className="df-input" value={p.method} onChange={(e) => updatePayment(p.id, 'method', e.target.value)}>
+                            <option value="virement">Virement</option>
+                            <option value="cheque">Chèque</option>
+                            <option value="espece">Espèce</option>
+                            <option value="carte">Carte</option>
+                            <option value="autre">Autre</option>
+                          </select>
+                        </Field>
+                        <Field label="Montant (MAD) — optionnel">
+                          <input
+                            type="number"
+                            className="df-input"
+                            placeholder="—"
+                            value={p.amount}
+                            onChange={(e) => updatePayment(p.id, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
+                          />
+                        </Field>
+                        {(p.method === 'virement' || p.method === 'carte' || p.method === 'autre') && (
+                          <Field label="Référence">
+                            <input className="df-input" value={p.reference} onChange={(e) => updatePayment(p.id, 'reference', e.target.value)} />
+                          </Field>
+                        )}
+                        {p.method === 'cheque' && (
+                          <Field label="N° chèque">
+                            <input className="df-input" value={p.chequeNumber} onChange={(e) => updatePayment(p.id, 'chequeNumber', e.target.value)} />
+                          </Field>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 pt-2">
+                    <Field label="Jour de paiement attendu (1–31)">
+                      <input
+                        type="number"
+                        className="df-input"
+                        min={1}
+                        max={31}
+                        value={state.expectedPaymentDay}
+                        onChange={(e) => patch('expectedPaymentDay', e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                    </Field>
+                    <Field label="Conditions de paiement">
+                      <input className="df-input" value={state.paymentTerms} onChange={(e) => patch('paymentTerms', e.target.value)} />
+                    </Field>
+                  </div>
                 </div>
                 <AIHint
                   tone="brand"
@@ -640,10 +938,29 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'annex' && (
               <>
-                <UploadZone label="Pièce d'identité (CIN recto/verso)" />
-                <UploadZone label="Justificatif de revenus / attestation CNSS" />
-                <UploadZone label="Permis de conduire valide" />
-                {state.type === 'CREDIT_AUTO' && <UploadZone label="Bilans financiers (3 derniers exercices)" />}
+                <div className="space-y-3">
+                  <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Documents client</div>
+                  {cinDoc
+                    ? <ExistingDocRow doc={cinDoc} label="Pièce d'identité (CIN)" />
+                    : <UploadZone label="Pièce d'identité (CIN recto/verso)" />
+                  }
+                  {permisDoc
+                    ? <ExistingDocRow doc={permisDoc} label="Permis de conduire" />
+                    : <UploadZone label="Permis de conduire valide" />
+                  }
+                  <UploadZone label="Justificatif de revenus / attestation CNSS" />
+                  {state.type === 'CREDIT_AUTO' && <UploadZone label="Bilans financiers (3 derniers exercices)" />}
+                </div>
+                <div className="mt-5 space-y-3">
+                  <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Photos véhicule avant livraison</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <UploadZone label="Avant" hint="JPG / PNG" />
+                    <UploadZone label="Arrière" hint="JPG / PNG" />
+                    <UploadZone label="Côté gauche" hint="JPG / PNG" />
+                    <UploadZone label="Côté droit" hint="JPG / PNG" />
+                  </div>
+                  <UploadZone label="Intérieur / tableau de bord" hint="JPG / PNG" />
+                </div>
                 <AIHint tone="info" text="Tous les documents sont chiffrés et conformes Loi 09-08 sur la protection des données." />
               </>
             )}
@@ -731,6 +1048,25 @@ export const ContractWizardPage: React.FC = () => {
           </div>
         </aside>
       </section>
+
+      <DrawerPanel
+        open={newClientDrawerOpen}
+        title="Nouveau client"
+        onClose={() => setNewClientDrawerOpen(false)}
+        widthClass="max-w-2xl"
+      >
+        <CustomerForm
+          mode="create"
+          error={newClientError}
+          submitting={createCustomerMut.isPending}
+          branches={branchesQ.data?.data ?? []}
+          onCancel={() => setNewClientDrawerOpen(false)}
+          onSubmit={(payload, scans) => {
+            setNewClientError(null);
+            createCustomerMut.mutate({ payload, scans });
+          }}
+        />
+      </DrawerPanel>
     </div>
   );
 };
@@ -789,6 +1125,25 @@ const CheckRow: React.FC<{ done: boolean; label: string }> = ({ done, label }) =
   </li>
 );
 
+const ExistingDocRow: React.FC<{ doc: DocumentCenterItem; label: string }> = ({ doc, label }) => (
+  <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
+    <div className="flex items-center gap-2">
+      <Icon name="check" size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+      <div>
+        <div className="text-[12px] font-bold text-emerald-800 dark:text-emerald-300">{label}</div>
+        <div className="text-[11px] text-emerald-700 dark:text-emerald-400">{doc.title}{doc.createdAt ? ` · ${formatDate(new Date(doc.createdAt))}` : ''}</div>
+      </div>
+    </div>
+    <button
+      type="button"
+      className="df-btn df-btn--ghost df-btn--sm text-emerald-700 dark:text-emerald-400"
+      onClick={() => void documentCenterApi.openInNewTab(doc.id)}
+    >
+      <Icon name="download" size={12} /> Voir
+    </button>
+  </div>
+);
+
 const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: string }> = ({ state, client, vehicle }) => {
   const t = CONTRACT_TYPES.find((x) => x.value === state.type);
   const today = formatDate(new Date());
@@ -836,3 +1191,4 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
     </div>
   );
 };
+

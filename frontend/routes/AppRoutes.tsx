@@ -5,17 +5,17 @@ import { SessionExpiredBanner } from '@/modules/auth/SessionExpiredBanner';
 import { LoginPage } from '@/modules/auth/LoginPage';
 import { ForgotPasswordPage } from '@/modules/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/modules/auth/ResetPasswordPage';
+import { PublicSignaturePage } from '@/modules/signature/PublicSignaturePage';
 import { AppLayout } from '@/modules/layout/AppLayout';
 import { ExecutiveDashboardPage } from '@/modules/dashboard/ExecutiveDashboardPage';
 import { FleetListPage } from '@/modules/fleet/FleetListPage';
 import { FleetVehicleDetailPage } from '@/modules/fleet/FleetVehicleDetailPage';
 import { FleetMaintenanceDashboardPage } from '@/modules/fleet/FleetMaintenanceDashboardPage';
 import { FleetComplianceDashboardPage } from '@/modules/fleet/FleetComplianceDashboardPage';
-import { FleetAnalysisPage } from '@/modules/fleet/FleetAnalysisPage';
 import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
-import { ContractsPage } from '@/modules/contracts/ContractsPage';
+import { ContractsModulePage } from '@/modules/contracts/ContractsModulePage';
 import { ContractWizardPage } from '@/modules/contracts/ContractWizardPage';
 import { ContractDetailPage } from '@/modules/contracts/ContractDetailPage';
 import { ContractTemplatesPage } from '@/modules/contracts/ContractTemplatesPage';
@@ -75,9 +75,10 @@ import { SettingsPage } from '@/modules/settings/SettingsPage';
 import { UserManagementPage } from '@/modules/settings/UserManagementPage';
 import { RolesPermissionsPage } from '@/modules/settings/RolesPermissionsPage';
 import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
+import { VehicleBrandsPage } from '@/modules/settings/VehicleBrandsPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
-import { RentalsPage } from '@/modules/rentals/RentalsPage';
+import { DocumentReaderPage } from '@/modules/documents/DocumentReaderPage';
 // Sous-location
 import { SubRentalsPage } from '@/modules/subRentals/SubRentalsPage';
 import { SubRentalCreatePage } from '@/modules/subRentals/SubRentalCreatePage';
@@ -140,6 +141,8 @@ export default function AppRoutes(): React.ReactElement {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        {/* Public, login-free electronic signature page (tokenized link). */}
+        <Route path="/sign/:token" element={<PublicSignaturePage />} />
 
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
@@ -217,13 +220,15 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
+            {/*
+              Analyse de parc was merged into the Flotte page as a third
+              view-mode (cards / table / analyse). Old route kept as a
+              redirect so existing bookmarks and email links don't 404.
+              `?view=analysis` boots VehiclesList straight into the analyse view.
+            */}
             <Route
               path="/fleet/analysis"
-              element={
-                <ModuleGate module="fleet">
-                  <FleetAnalysisPage />
-                </ModuleGate>
-              }
+              element={<Navigate to="/fleet?view=analysis" replace />}
             />
             <Route
               path="/customers"
@@ -242,11 +247,16 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
 
+            {/*
+              /contracts is now the "Réservations" module shell: a tabbed page
+              hosting both the contracts list and the rental operations
+              (formerly /rentals). See ContractsModulePage.
+            */}
             <Route
               path="/contracts"
               element={
                 <ModuleGate module="contracts">
-                  <ContractsPage />
+                  <ContractsModulePage />
                 </ModuleGate>
               }
             />
@@ -684,6 +694,16 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
+            <Route
+              path="/settings/vehicles"
+              element={
+                <ModuleGate module="settings">
+                  <SettingsRoleGate>
+                    <VehicleBrandsPage />
+                  </SettingsRoleGate>
+                </ModuleGate>
+              }
+            />
 
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/agence" element={<AgencePage />} />
@@ -705,16 +725,22 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
-
             <Route
-              path="/rentals"
+              path="/documents/reader"
               element={
-                <ModuleGate module="rentals">
-                  <RentalsPage />
+                <ModuleGate module="documents">
+                  <DocumentReaderPage />
                 </ModuleGate>
               }
             />
-            <Route path="/reservations" element={<Navigate to="/rentals" replace />} />
+
+            {/*
+              Réservations / Locations merged into the contracts module as a tab.
+              Both old entry points redirect into the Locations tab so bookmarks
+              and in-app links keep working.
+            */}
+            <Route path="/rentals" element={<Navigate to="/contracts?tab=locations" replace />} />
+            <Route path="/reservations" element={<Navigate to="/contracts?tab=locations" replace />} />
 
             {/* Sous-location */}
             <Route

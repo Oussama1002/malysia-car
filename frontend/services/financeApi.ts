@@ -97,7 +97,8 @@ export interface InvoiceCreatePayload {
 // ============================================================================
 
 export type PaymentStatus = 'received' | 'allocated' | 'refunded' | 'reversed';
-export type PaymentMethod = 'cash' | 'bank_transfer' | 'check' | 'card' | 'compensation';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'check' | 'card' | 'compensation' | 'wallet';
+export type PaymentType = 'avance' | 'paiement_location' | 'solde' | 'caution' | 'penalite' | 'utilisation_avoir';
 
 export interface PaymentAllocation {
   id: string;
@@ -119,7 +120,11 @@ export interface Payment {
   branch_id?: string | null;
   payment_number: string;
   customer_id: string;
+  contract_id?: string | null;
+  reservation_id?: string | null;
+  invoice_id?: string | null;
   payment_method: PaymentMethod;
+  payment_type?: PaymentType | null;
   payment_direction: 'incoming' | 'outgoing';
   amount: number;
   currency_code: string;
@@ -153,10 +158,14 @@ export interface PaymentListParams {
 
 export interface PaymentCreatePayload {
   customer_id: string;
+  contract_id?: string;
+  reservation_id?: string;
+  invoice_id?: string;
   branch_id?: string;
   bank_account_id?: string;
   payment_method: PaymentMethod;
-  payment_direction: 'incoming' | 'outgoing';
+  payment_type?: PaymentType;
+  payment_direction?: 'incoming' | 'outgoing';
   amount: number;
   currency_code?: string;
   payment_date: string;
@@ -481,6 +490,16 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   check: 'Chèque',
   card: 'Carte',
   compensation: 'Compensation',
+  wallet: 'Wallet / Avoir',
+};
+
+export const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = {
+  avance: 'Avance',
+  paiement_location: 'Paiement location',
+  solde: 'Solde',
+  caution: 'Caution',
+  penalite: 'Pénalité',
+  utilisation_avoir: 'Utilisation avoir',
 };
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {

@@ -39,9 +39,12 @@ class FleetAnalysisService
                 ->orWhereRaw('LOWER(availability_status) IN (?,?,?)', ['maintenance', 'unavailable', 'immobilized']);
         })->count();
 
+        // Note: previously had 3 `?` placeholders with only 2 bound values, which
+        // raised PDOException "number of bound variables does not match" and
+        // crashed the whole /fleet/analysis endpoint with a 500.
         $inRepair = (clone $vq)->where(function ($q): void {
             $q->where('physical_status', 'repair')
-                ->orWhereRaw('LOWER(status) IN (?,?,?)', ['maintenance', 'in_repair']);
+                ->orWhereRaw('LOWER(status) IN (?,?)', ['maintenance', 'in_repair']);
         })->count();
 
         $inAccident = (clone $vq)->where('physical_status', 'accident')->count();
