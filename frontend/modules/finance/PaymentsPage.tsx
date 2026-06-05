@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   allocatePayment,
@@ -21,6 +21,22 @@ import { apiClient } from '@/services/apiClient';
 import { endpoints } from '@/services/endpoints';
 import { queryKeys } from '@/services/queryKeys';
 import { ApiError } from '@/services/apiError';
+
+/* ── French status labels ──────────────────────────────────────────── */
+
+const CONTRACT_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon', active: 'Actif', signed: 'Signé', pending: 'En attente',
+  terminated: 'Résilié', completed: 'Terminé', cancelled: 'Annulé', suspended: 'Suspendu',
+};
+const RESERVATION_STATUS_FR: Record<string, string> = {
+  reserved: 'Réservée', confirmed: 'Confirmée', picked_up: 'En cours',
+  returned: 'Retournée', cancelled: 'Annulée', no_show: 'Non présenté',
+  completed: 'Terminée', pending: 'En attente',
+};
+const INVOICE_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon', sent: 'Envoyée', paid: 'Payée', partial: 'Partielle',
+  overdue: 'En retard', cancelled: 'Annulée', credited: 'Avoir',
+};
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
@@ -359,6 +375,22 @@ const PaymentForm: React.FC<{
     );
   }, [invoices, form.customer_id]);
 
+  /* ── Load customer balance & wallet when a client is selected ──── */
+
+  const balanceQ = useQuery({
+    queryKey: ['customer-balance', form.customer_id],
+    queryFn: async () =>
+      (await apiClient<{ data: { total_due: number; total_paid: number; total_invoiced: number; overdue_amount: number; currency_code: string } }>(`/v1/customers/${form.customer_id}/balance`)).data,
+    enabled: !!form.customer_id,
+  });
+
+  const walletQ = useQuery({
+    queryKey: ['customer-wallet', form.customer_id],
+    queryFn: async () =>
+      (await apiClient<{ data: { balance: number; currency_code: string } }>(`/v1/customers/${form.customer_id}/wallet`)).data,
+    enabled: !!form.customer_id,
+  });
+
   const set = <K extends keyof PaymentCreatePayload>(field: K, value: PaymentCreatePayload[K]) =>
     setForm((f) => ({ ...f, [field]: value }));
 
@@ -400,6 +432,48 @@ const PaymentForm: React.FC<{
         </select>
       </div>
 
+      {/* ── Solde & Avoir when client is selected ─────────────── */}
+      {form.customer_id && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-bold uppercase text-slate-500">Solde à payer</div>
+            {balanceQ.isLoading ? (
+              <div className="mt-1 text-sm text-slate-400">Chargement...</div>
+            ) : balanceQ.data ? (
+              <div className="mt-1">
+                <span className={`text-lg font-black ${Number(balanceQ.data.total_due) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  {formatCurrencyMad(Number(balanceQ.data.total_due))}
+                </span>
+                {Number(balanceQ.data.overdue_amount) > 0 && (
+                  <span className="ml-2 text-xs font-semibold text-rose-500">
+                    dont {formatCurrencyMad(Number(balanceQ.data.overdue_amount))} en retard
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-slate-400">—</div>
+            )}
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-bold uppercase text-slate-500">Avoir (Wallet)</div>
+            {walletQ.isLoading ? (
+              <div className="mt-1 text-sm text-slate-400">Chargement...</div>
+            ) : walletQ.data ? (
+              <div className="mt-1">
+                <span className={`text-lg font-black ${Number(walletQ.data.balance) > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {formatCurrencyMad(Number(walletQ.data.balance))}
+                </span>
+                {Number(walletQ.data.balance) > 0 && (
+                  <span className="ml-2 text-xs text-emerald-600">disponible</span>
+                )}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-slate-400">0,00 MAD</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Contrat / Réservation / Facture ──────────────────── */}
       <div className="grid gap-3 md:grid-cols-3">
         <div>
@@ -412,7 +486,7 @@ const PaymentForm: React.FC<{
             <option value="">-- Aucun --</option>
             {filteredContracts.map((c) => (
               <option key={String(c.id)} value={String(c.id)}>
-                {c.reference} ({c.type})
+                {c.reference ?? (c as any).contract_number ?? c.id} — {CONTRACT_STATUS_FR[c.status] ?? c.status}
               </option>
             ))}
           </select>
@@ -427,7 +501,7 @@ const PaymentForm: React.FC<{
             <option value="">-- Aucune --</option>
             {filteredReservations.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.reservation_number} ({r.status})
+                {r.reservation_number} — {RESERVATION_STATUS_FR[r.status] ?? r.status}
               </option>
             ))}
           </select>
@@ -440,11 +514,14 @@ const PaymentForm: React.FC<{
             onChange={(e) => set('invoice_id', e.target.value || undefined)}
           >
             <option value="">-- Aucune --</option>
-            {filteredInvoices.map((inv) => (
-              <option key={inv.id} value={inv.id}>
-                {inv.invoice_number} ({formatCurrencyMad(Number(inv.total_amount_mad))})
-              </option>
-            ))}
+            {filteredInvoices.map((inv) => {
+              const amt = Number((inv as any).total_amount ?? inv.total_amount_mad);
+              return (
+                <option key={inv.id} value={inv.id}>
+                  {inv.invoice_number} — {INVOICE_STATUS_FR[inv.status] ?? inv.status}{isFinite(amt) ? ` — ${formatCurrencyMad(amt)}` : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>

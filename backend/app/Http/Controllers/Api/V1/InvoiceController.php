@@ -346,11 +346,16 @@ class InvoiceController extends Controller
 
     private function generateInvoiceNumber(): string
     {
-        $prefix = 'INV-' . now()->format('Ym') . '-';
-        $last = Invoice::where('invoice_number', 'like', $prefix . '%')
-            ->orderByDesc('invoice_number')->value('invoice_number');
-        $seq = $last ? (int) substr($last, strlen($prefix)) + 1 : 1;
+        $latest = Invoice::query()
+            ->where('invoice_number', 'like', 'FAC-%')
+            ->orderByRaw("CAST(SUBSTRING(invoice_number, 5) AS UNSIGNED) DESC")
+            ->value('invoice_number');
 
-        return $prefix . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+        $seq = 1;
+        if ($latest && preg_match('/^FAC-(\d+)$/', $latest, $m)) {
+            $seq = (int) $m[1] + 1;
+        }
+
+        return 'FAC-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 }

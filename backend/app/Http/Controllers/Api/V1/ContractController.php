@@ -98,7 +98,7 @@ class ContractController extends Controller
             $c->id = (string) Str::uuid();
             $c->company_id = $data['company_id'] ?? $request->user()?->company_id;
             $c->branch_id = $data['branch_id'] ?? null;
-            $c->contract_number = $data['contract_number'] ?? ('CTR-'.now()->format('Ymd').'-'.strtoupper(Str::random(6)));
+            $c->contract_number = $data['contract_number'] ?? $this->generateContractNumber();
             $c->contract_type = $data['contract_type'];
             $c->customer_id = $data['customer_id'];
             $c->vehicle_id = $data['vehicle_id'] ?? null;
@@ -569,6 +569,21 @@ class ContractController extends Controller
                 'cheque_number' => [__('Numéro de chèque obligatoire pour ce mode de paiement.')],
             ]);
         }
+    }
+
+    private function generateContractNumber(): string
+    {
+        $latest = Contract::query()
+            ->where('contract_number', 'like', 'CTR-%')
+            ->orderByRaw("CAST(SUBSTRING(contract_number, 5) AS UNSIGNED) DESC")
+            ->value('contract_number');
+
+        $seq = 1;
+        if ($latest && preg_match('/^CTR-(\d+)$/', $latest, $m)) {
+            $seq = (int) $m[1] + 1;
+        }
+
+        return 'CTR-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 }
 
