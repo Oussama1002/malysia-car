@@ -17,12 +17,12 @@ import { useAuthSession } from '@/modules/auth/AuthContext';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
 import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
-import { listBranches } from '@/services/adminApi';
+import { listBranches, listUsers, type AdminUser } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
 
-type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
+type StepKey = 'client' | 'assignment' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
 
 interface PaymentEntry {
   id: string;
@@ -40,7 +40,8 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { key: 'client', title: 'Client', hint: 'Identité & conformité', icon: 'users' },
+  { key: 'client', title: 'Client locataire 1 & 2', hint: 'Identité & conformité', icon: 'users' },
+  { key: 'assignment', title: 'Assigned agent', hint: 'Commercial responsable', icon: 'users' },
   { key: 'vehicle', title: 'Véhicule', hint: 'Choix de l\u2019actif', icon: 'car' },
   { key: 'type', title: 'Type', hint: 'LLD / LOA / Crédit / VO', icon: 'doc' },
   { key: 'terms', title: 'Conditions', hint: 'Durée, loyer, garanties', icon: 'coin' },
@@ -99,6 +100,8 @@ const CONTRACT_TYPES: {
 
 interface WizardState {
   clientId: string | number | null;
+  secondaryClientId: string | number | null;
+  assignedAgentId: string | null;
   vehicleId: string | number | null;
   type: ContractType;
   durationMonths: number;
@@ -116,6 +119,8 @@ interface WizardState {
 
 const INITIAL: WizardState = {
   clientId: null,
+  secondaryClientId: null,
+  assignedAgentId: null,
   vehicleId: null,
   type: 'LLD',
   durationMonths: 0,
@@ -229,8 +234,8 @@ export const ContractWizardPage: React.FC = () => {
         const rsvNumber: string = r.reservation_number ?? `RSV-${String(reservationId).slice(0, 8).toUpperCase()}`;
         setPrefillBanner(rsvNumber);
 
-        // Advance past client (0) and vehicle (1) steps to type (2) — both are already set
-        setStepIdx(2);
+        // Advance to type step (assignment remains optional for now).
+        setStepIdx(3);
       } catch (e) {
         // Non-blocking: just log, don't block the wizard
         console.warn('[ContractWizard] Pre-fill from reservation failed:', e);
@@ -342,6 +347,19 @@ export const ContractWizardPage: React.FC = () => {
     },
   });
 
+  const agents = useQuery({
+    queryKey: ['admin', 'users', 'contract-assignees'],
+    queryFn: async (): Promise<AdminUser[]> => {
+      try {
+        const res = await listUsers({ status: 'active', per_page: 200 });
+        return res.data ?? [];
+      } catch {
+        // Non-admin profiles may not have access to users listing.
+        return [];
+      }
+    },
+  });
+
   const customerDocs = useQuery({
     queryKey: ['customer-docs', state.clientId],
     queryFn: () => documentCenterApi.byEntity('customer', state.clientId!),
@@ -360,6 +378,8 @@ export const ContractWizardPage: React.FC = () => {
   );
 
   const selectedClient = clients.data?.find((c) => String(c.id) === String(state.clientId));
+  const selectedSecondaryClient = clients.data?.find((c) => String(c.id) === String(state.secondaryClientId));
+  const selectedAgent = agents.data?.find((u) => String(u.id) === String(state.assignedAgentId));
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
 
@@ -367,6 +387,7 @@ export const ContractWizardPage: React.FC = () => {
 
   const canNext = useMemo(() => {
     if (step.key === 'client') return !!state.clientId;
+    if (step.key === 'assignment') return true;
     if (step.key === 'vehicle') return !!state.vehicleId;
     return true;
   }, [step, state]);
@@ -392,6 +413,15 @@ export const ContractWizardPage: React.FC = () => {
 
   function buildCreatePayload(status?: 'draft' | 'pending_approval') {
     const primary = state.payments[0];
+    const assignmentNotes = [
+      state.assignedAgentId && selectedAgent
+        ? `Agent assigné: ${selectedAgent.name} (${selectedAgent.email})`
+        : null,
+      state.secondaryClientId && selectedSecondaryClient
+        ? `Locataire 2: ${selectedSecondaryClient.name}`
+        : null,
+    ].filter(Boolean).join('\n');
+    const mergedNotes = [assignmentNotes, state.notes].filter(Boolean).join('\n');
     return {
       type: state.type,
       clientId: state.clientId ?? '',
@@ -403,7 +433,7 @@ export const ContractWizardPage: React.FC = () => {
       monthlyPayment: state.monthlyRentMad,
       allowedKm: state.kmInclMonth * state.durationMonths,
       depositAmount: state.securityDepositMad,
-      notes: state.notes,
+      notes: mergedNotes,
       paymentMethod: primary?.method ?? 'virement',
       paymentTerms: state.paymentTerms || undefined,
       bankReference: state.payments.map((p) => p.reference).filter(Boolean).join(', ') || undefined,
@@ -656,7 +686,7 @@ export const ContractWizardPage: React.FC = () => {
             {step.key === 'client' && (
               <>
                 <div>
-                  <label className="df-label">Rechercher un client</label>
+                  <label className="df-label">Client locataire 1</label>
                   <div className="flex items-stretch gap-2">
                     <select
                       className="df-input flex-1"
@@ -681,6 +711,23 @@ export const ContractWizardPage: React.FC = () => {
                       + Nouveau client
                     </button>
                   </div>
+                </div>
+                <div>
+                  <label className="df-label">Client locataire 2 (optionnel)</label>
+                  <select
+                    className="df-input"
+                    value={state.secondaryClientId ?? ''}
+                    onChange={(e) => patch('secondaryClientId', e.target.value || null)}
+                  >
+                    <option value="">— Aucun —</option>
+                    {(clients.data ?? [])
+                      .filter((c) => String(c.id) !== String(state.clientId))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
+                        </option>
+                      ))}
+                  </select>
                 </div>
 
                 {selectedClient && (
@@ -710,6 +757,38 @@ export const ContractWizardPage: React.FC = () => {
                     {selectedClient.complianceStatus !== 'VERIFIED' && (
                       <AIHint text="KYC incomplet. IA recommande : compléter l'attestation CNSS et scanner la CIN recto/verso avant de poursuivre." tone="warning" />
                     )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {step.key === 'assignment' && (
+              <>
+                <div>
+                  <label className="df-label">Assigned agent</label>
+                  <select
+                    className="df-input"
+                    value={state.assignedAgentId ?? ''}
+                    onChange={(e) => patch('assignedAgentId', e.target.value || null)}
+                  >
+                    <option value="">— Non assigné —</option>
+                    {(agents.data ?? []).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} · {u.role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedAgent && (
+                  <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">Agent assigné</div>
+                        <div className="text-[15px] font-bold">{selectedAgent.name}</div>
+                        <div className="text-[12px] text-[color:var(--df-text-muted)]">{selectedAgent.email}</div>
+                      </div>
+                      <StatusChip label={selectedAgent.role} tone="info" />
+                    </div>
                   </div>
                 )}
               </>
@@ -1030,6 +1109,8 @@ export const ContractWizardPage: React.FC = () => {
             </div>
             <div className="divide-y divide-[color:var(--df-border)]">
               <SummaryRow label="Client" value={selectedClient?.name ?? '—'} />
+              <SummaryRow label="Client locataire 2" value={selectedSecondaryClient?.name ?? '—'} />
+              <SummaryRow label="Agent assigné" value={selectedAgent?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
               <SummaryRow label="Durée" value={`${state.durationMonths} mois`} />
@@ -1051,11 +1132,13 @@ export const ContractWizardPage: React.FC = () => {
             <div className="df-card__hint">Checklist conformité</div>
             <ul className="mt-3 space-y-2 text-[12.5px]">
               <CheckRow done={!!selectedClient} label="Client sélectionné" />
+              <CheckRow done={!state.secondaryClientId || !!selectedSecondaryClient} label="Locataire 2 renseigné" />
+              <CheckRow done={!state.assignedAgentId || !!selectedAgent} label="Agent assigné" />
               <CheckRow done={!!selectedVehicle} label="Véhicule sélectionné" />
-              <CheckRow done={stepIdx >= 2} label="Type de contrat défini" />
-              <CheckRow done={stepIdx >= 3} label="Conditions financières" />
-              <CheckRow done={stepIdx >= 4} label="Pièces jointes" />
-              <CheckRow done={stepIdx === 5} label="Prêt à signer" />
+              <CheckRow done={stepIdx >= 3} label="Type de contrat défini" />
+              <CheckRow done={stepIdx >= 4} label="Conditions financières" />
+              <CheckRow done={stepIdx >= 5} label="Pièces jointes" />
+              <CheckRow done={stepIdx === 6} label="Prêt à signer" />
             </ul>
           </div>
         </aside>
