@@ -15,7 +15,7 @@ class MaintenanceMonitoringController extends Controller
     public function alerts(): JsonResponse
     {
         $alerts = MaintenanceAlert::query()
-            ->with('vehicle')
+            ->with(['vehicle.brand', 'vehicle.model'])
             ->where('status', 'open')
             ->latest('triggered_at')
             ->limit(200)
@@ -30,10 +30,8 @@ class MaintenanceMonitoringController extends Controller
                 'vehicle' => $a->vehicle ? [
                     'id' => $a->vehicle->id,
                     'registration' => $a->vehicle->registration_number,
-                    // Denormalised names (not the *_id FKs) so the UI can show
-                    // "Renault Clio · 1234-A-56" instead of opaque ids.
-                    'brand' => $a->vehicle->brand_name,
-                    'model' => $a->vehicle->model_name,
+                    'brand' => $a->vehicle->brand?->name ?? $a->vehicle->brand_name,
+                    'model' => $a->vehicle->model?->model_name ?? $a->vehicle->model?->name ?? $a->vehicle->model_name,
                 ] : null,
                 'payload' => $a->payload ?? [],
             ])
