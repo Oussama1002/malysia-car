@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { auditApi, type AuditFilters, type AuditLogDto } from '@/services/auditApi';
 import { getApiBase } from '@/services/apiClient';
 import { DataTable } from '@/modules/shared/components/DataTable';
-import { formatDate } from '@/modules/shared/formatters';
+import { formatDate, formatDateTime } from '@/modules/shared/formatters';
 
 const MODULE_OPTIONS = [
   '',
@@ -40,6 +40,154 @@ const ENTITY_OPTIONS = [
   'accounting_entry',
   'document',
 ];
+
+const MODULE_LABELS: Record<string, string> = {
+  auth: 'Authentification',
+  admin: 'Administration',
+  customers: 'Clients',
+  kyc: 'KYC',
+  fleet: 'Flotte',
+  contracts: 'Contrats',
+  credit: 'Crédit',
+  finance: 'Finance',
+  legal: 'Juridique',
+  signature: 'Signature',
+  documents: 'Documents',
+  rentals: 'Réservations',
+  gps: 'GPS',
+  used_cars: "Véhicules d'occasion",
+  general: 'Général',
+  system: 'Système',
+};
+
+const ENTITY_LABELS: Record<string, string> = {
+  contract: 'Contrat',
+  customer: 'Client',
+  vehicle: 'Véhicule',
+  invoice: 'Facture',
+  payment: 'Paiement',
+  kyc: 'Dossier KYC',
+  credit_application: 'Dossier crédit',
+  legal_case: 'Dossier juridique',
+  arrears_case: 'Dossier impayé',
+  envelope: 'Enveloppe de signature',
+  accounting_entry: 'Écriture comptable',
+  document: 'Document',
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  status: 'Statut',
+  customer_id: 'Client',
+  vehicle_id: 'Véhicule',
+  contract_id: 'Contrat',
+  reservation_id: 'Réservation',
+  document_id: 'Document',
+  invoice_id: 'Facture',
+  user_id: 'Utilisateur',
+  actor_email: 'Acteur',
+  payment_method: 'Mode de paiement',
+  amount: 'Montant',
+  total: 'Total',
+  notes: 'Notes',
+  start_date: 'Date de début',
+  end_date: 'Date de fin',
+  due_date: "Date d'échéance",
+  created_at: 'Créé le',
+  updated_at: 'Modifié le',
+};
+
+const VALUE_TRANSLATIONS: Record<string, string> = {
+  draft: 'Brouillon',
+  pending: 'En attente',
+  pending_approval: "En attente d'approbation",
+  approved: 'Approuvé',
+  active: 'Actif',
+  inactive: 'Inactif',
+  cancelled: 'Annulé',
+  rejected: 'Rejeté',
+  completed: 'Terminé',
+  extracted: 'Extrait',
+  validated: 'Validé',
+  failed: 'Échoué',
+  processing: 'Traitement',
+  cash: 'Espèce',
+  virement: 'Virement',
+  cheque: 'Chèque',
+  card: 'Carte',
+  true: 'Oui',
+  false: 'Non',
+  '1': 'Oui',
+  '0': 'Non',
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.Z+-]+)?$/;
+
+function humanModule(moduleName: string): string {
+  return MODULE_LABELS[moduleName] ?? moduleName;
+}
+
+function humanEntityType(raw: string | null): string {
+  if (!raw) return '—';
+  const key = raw.split('\\').pop()?.toLowerCase() ?? raw.toLowerCase();
+  return ENTITY_LABELS[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function entityPrefix(entityType: string | null): string {
+  const k = (entityType ?? '').toLowerCase();
+  if (k.includes('customer')) return 'CLT';
+  if (k.includes('vehicle')) return 'VHL';
+  if (k.includes('contract')) return 'CTR';
+  if (k.includes('invoice')) return 'INV';
+  if (k.includes('payment')) return 'PAY';
+  if (k.includes('document')) return 'DOC';
+  if (k.includes('kyc')) return 'KYC';
+  return 'ENT';
+}
+
+function humanEntityRef(entityType: string | null, entityId: string | null): string {
+  const label = humanEntityType(entityType);
+  if (!entityId) return label;
+  if (UUID_RE.test(entityId)) {
+    return `${label} · ${entityPrefix(entityType)}-${entityId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+  }
+  return `${label} · ${entityId}`;
+}
+
+function humanFieldLabel(field: string): string {
+  return FIELD_LABELS[field] ?? field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function humanValue(field: string, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  const raw = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  if (UUID_RE.test(raw)) {
+    const pfx = entityPrefix(field);
+    return `${pfx}-${raw.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+  }
+  if (ISO_DATE_RE.test(raw)) {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      return raw.includes('T') ? formatDateTime(d) : formatDate(d);
+    }
+  }
+  return VALUE_TRANSLATIONS[raw] ?? VALUE_TRANSLATIONS[raw.toLowerCase()] ?? raw;
+}
+
+function computeDiffRows(log: AuditLogDto): Array<{ field: string; before: string; after: string }> {
+  const before = (log.before_data ?? {}) as Record<string, unknown>;
+  const after = (log.after_data ?? {}) as Record<string, unknown>;
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+
+  return [...keys]
+    .filter((k) => String(before[k] ?? '') !== String(after[k] ?? ''))
+    .slice(0, 80)
+    .map((k) => ({
+      field: humanFieldLabel(k),
+      before: humanValue(k, before[k]),
+      after: humanValue(k, after[k]),
+    }));
+}
 
 export const AuditPage: React.FC = () => {
   const apiReady = !!getApiBase();
@@ -176,7 +324,7 @@ export const AuditPage: React.FC = () => {
           {
             key: 'm',
             header: 'Module',
-            render: (r) => <span className="font-mono text-xs">{r.module}</span>,
+            render: (r) => <span className="text-xs font-semibold">{humanModule(r.module)}</span>,
           },
           {
             key: 'a',
@@ -192,9 +340,8 @@ export const AuditPage: React.FC = () => {
             key: 'e',
             header: 'Entité',
             render: (r) => (
-              <span className="font-mono text-xs">
-                {r.entity_type ? r.entity_type.split('\\').pop() : '—'}{' '}
-                {r.entity_id ? `· ${r.entity_id.slice(0, 8)}` : ''}
+              <span className="text-xs font-semibold">
+                {humanEntityRef(r.entity_type, r.entity_id)}
               </span>
             ),
           },
@@ -248,6 +395,7 @@ export const AuditPage: React.FC = () => {
 };
 
 const DiffDrawer: React.FC<{ log: AuditLogDto; onClose: () => void }> = ({ log, onClose }) => {
+  const diffs = computeDiffRows(log);
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-slate-900/40" onClick={onClose} />
@@ -257,7 +405,7 @@ const DiffDrawer: React.FC<{ log: AuditLogDto; onClose: () => void }> = ({ log, 
             <div className="text-xs font-mono text-slate-500">{log.id}</div>
             <h2 className="text-lg font-black">{log.action_label ?? log.action}</h2>
             <div className="text-xs text-slate-500">
-              {log.module} · {log.entity_type ? log.entity_type.split('\\').pop() : '—'} ·{' '}
+              {humanModule(log.module)} · {humanEntityRef(log.entity_type, log.entity_id)} ·{' '}
               {log.actor_email ?? log.user_id ?? '—'} · {formatDate(log.occurred_at)}
             </div>
           </div>
@@ -266,19 +414,32 @@ const DiffDrawer: React.FC<{ log: AuditLogDto; onClose: () => void }> = ({ log, 
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <div className="mb-1 text-xs font-black uppercase text-slate-500">Avant</div>
-            <pre className="overflow-auto rounded-xl bg-slate-50 p-3 text-[11px]">
-              {log.before_data ? JSON.stringify(log.before_data, null, 2) : '—'}
-            </pre>
-          </div>
-          <div>
-            <div className="mb-1 text-xs font-black uppercase text-slate-500">Après</div>
-            <pre className="overflow-auto rounded-xl bg-slate-50 p-3 text-[11px]">
-              {log.after_data ? JSON.stringify(log.after_data, null, 2) : '—'}
-            </pre>
-          </div>
+        <div className="mt-6">
+          <div className="mb-2 text-xs font-black uppercase text-slate-500">Modifications</div>
+          {diffs.length === 0 ? (
+            <div className="rounded-xl bg-slate-50 p-3 text-[11px] text-slate-500">Aucun champ lisible modifié.</div>
+          ) : (
+            <div className="overflow-auto rounded-xl border border-slate-100">
+              <table className="min-w-full text-[11px]">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-black uppercase">Champ</th>
+                    <th className="px-3 py-2 text-left font-black uppercase">Avant</th>
+                    <th className="px-3 py-2 text-left font-black uppercase">Après</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffs.map((row) => (
+                    <tr key={row.field} className="border-t border-slate-100">
+                      <td className="px-3 py-2 font-semibold text-slate-700">{row.field}</td>
+                      <td className="px-3 py-2 text-slate-500">{row.before}</td>
+                      <td className="px-3 py-2 font-semibold text-slate-800">{row.after}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </aside>
     </div>
