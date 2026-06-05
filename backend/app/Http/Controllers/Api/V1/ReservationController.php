@@ -123,7 +123,12 @@ class ReservationController extends Controller
 
     public function show(Reservation $reservation): JsonResponse
     {
-        $reservation->load(['customer', 'vehicle.brand', 'vehicle.model']);
+        $reservation->load([
+            'customer.individualProfile',
+            'customer.companyProfile',
+            'vehicle.brand',
+            'vehicle.model',
+        ]);
 
         $handoverReports = RentalHandoverReport::query()
             ->where('reservation_id', $reservation->id)
@@ -139,25 +144,29 @@ class ReservationController extends Controller
             ->get();
         $drivers = ReservationDriver::query()
             ->where('reservation_id', $reservation->id)
-            ->orderByRaw("FIELD(driver_type, 'primary', 'secondary')")
+            ->orderBy('driver_type') // primary before secondary alphabetically
             ->get();
         $payments = Payment::query()
             ->where('reservation_id', $reservation->id)
             ->orderByDesc('payment_date')
             ->get();
+
+        // Invoices linked to this reservation via invoice_line metadata
         $invoices = Invoice::query()
             ->where('customer_id', $reservation->customer_id)
-            ->where(function ($q) use ($reservation) {
-                $q->whereHas('lines', fn ($lq) => $lq->where('metadata->reservation_id', $reservation->id));
+            ->whereHas('lines', function ($lq) use ($reservation) {
+                $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]);
             })
             ->with('lines')
             ->orderByDesc('issue_date')
             ->get();
 
-        // Audit trail from audit_log table
-        $history = DB::table('audit_log')
-            ->where('entity_type', 'reservation')
-            ->where('entity_id', $reservation->id)
+        // Audit trail
+        $history = DB::table('audit_logs')
+            ->where(function ($q) use ($reservation) {
+                $q->where('entity_type', (new Reservation)->getMorphClass())
+                  ->where('entity_id', $reservation->id);
+            })
             ->orderByDesc('created_at')
             ->limit(100)
             ->get();
@@ -171,7 +180,7 @@ class ReservationController extends Controller
 
         return ApiResponse::success([
             'reservation' => $reservation,
-            'customer_name' => $customer?->display_name ?? $customer?->customer_code ?? null,
+            'customer_name' => $customer ? $customer->displayName() : null,
             'vehicle_name' => $vehicleName,
             'vehicle_registration' => $vehicle?->registration_number ?? null,
             'handover_reports' => $handoverReports,
