@@ -316,8 +316,10 @@ const PaymentForm: React.FC<{
     payment_method: 'cash',
     payment_type: undefined,
     amount: 0,
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: new Date().toISOString().slice(0, 16),
   });
+  const [chequeScanning, setChequeScanning] = useState(false);
+  const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
 
   /* ── Load catalogue data ──────────────────────────────────────── */
 
@@ -575,9 +577,9 @@ const PaymentForm: React.FC<{
           />
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date paiement *</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement *</label>
           <input
-            type="date"
+            type="datetime-local"
             className="df-input mt-1 w-full"
             value={form.payment_date}
             onChange={(e) => set('payment_date', e.target.value)}
@@ -597,33 +599,138 @@ const PaymentForm: React.FC<{
         />
       </div>
 
-      {/* ── Chèque fields ────────────────────────────────────── */}
+      {/* ── Chèque OCR scan + fields ────────────────────────── */}
       {form.payment_method === 'check' && (
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">N° chèque</label>
-            <input
-              className="df-input mt-1 w-full"
-              value={form.check_number ?? ''}
-              onChange={(e) => set('check_number', e.target.value)}
-            />
+        <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase text-blue-700">Scanner un chèque</span>
+            <span className="text-[10px] text-blue-500">Photo ou upload — remplissage auto par OCR</span>
           </div>
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">Banque</label>
-            <input
-              className="df-input mt-1 w-full"
-              value={form.check_bank ?? ''}
-              onChange={(e) => set('check_bank', e.target.value)}
-            />
+
+          {/* Upload / Camera */}
+          <div className="flex gap-2">
+            <label className="df-btn df-btn--ghost flex-1 cursor-pointer justify-center text-center text-xs">
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setChequeScanning(true);
+                  setChequeOcrError(null);
+                  try {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    const res = await fetch('/api/v1/cheque-ocr', {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
+                      body: fd,
+                    });
+                    const json = await res.json();
+                    if (json.data) {
+                      setForm((f) => ({
+                        ...f,
+                        check_number: json.data.check_number ?? f.check_number,
+                        check_bank: json.data.bank ?? f.check_bank,
+                        check_date: json.data.check_date ?? f.check_date,
+                        amount: json.data.amount ?? f.amount,
+                      }));
+                    } else {
+                      setChequeOcrError(json.message ?? 'OCR a échoué');
+                    }
+                  } catch {
+                    setChequeOcrError('Erreur réseau lors du scan OCR');
+                  } finally {
+                    setChequeScanning(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              {chequeScanning ? '⏳ Analyse en cours...' : '📄 Importer un fichier'}
+            </label>
+            <label className="df-btn df-btn--ghost flex-1 cursor-pointer justify-center text-center text-xs">
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setChequeScanning(true);
+                  setChequeOcrError(null);
+                  try {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    const res = await fetch('/api/v1/cheque-ocr', {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
+                      body: fd,
+                    });
+                    const json = await res.json();
+                    if (json.data) {
+                      setForm((f) => ({
+                        ...f,
+                        check_number: json.data.check_number ?? f.check_number,
+                        check_bank: json.data.bank ?? f.check_bank,
+                        check_date: json.data.check_date ?? f.check_date,
+                        amount: json.data.amount ?? f.amount,
+                      }));
+                    } else {
+                      setChequeOcrError(json.message ?? 'OCR a échoué');
+                    }
+                  } catch {
+                    setChequeOcrError('Erreur réseau lors du scan OCR');
+                  } finally {
+                    setChequeScanning(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              {chequeScanning ? '⏳ Analyse...' : '📷 Prendre une photo'}
+            </label>
           </div>
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
-            <input
-              type="date"
-              className="df-input mt-1 w-full"
-              value={form.check_date ?? ''}
-              onChange={(e) => set('check_date', e.target.value)}
-            />
+
+          {chequeOcrError && (
+            <div className="rounded bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
+          )}
+          {chequeScanning && (
+            <div className="flex items-center gap-2 text-xs text-blue-600">
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              Analyse OCR du chèque en cours...
+            </div>
+          )}
+
+          {/* Manual fields (pre-filled by OCR) */}
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">N° chèque</label>
+              <input
+                className="df-input mt-1 w-full"
+                value={form.check_number ?? ''}
+                onChange={(e) => set('check_number', e.target.value)}
+                placeholder="Auto-rempli par OCR"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Banque</label>
+              <input
+                className="df-input mt-1 w-full"
+                value={form.check_bank ?? ''}
+                onChange={(e) => set('check_bank', e.target.value)}
+                placeholder="Auto-rempli par OCR"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
+              <input
+                type="date"
+                className="df-input mt-1 w-full"
+                value={form.check_date ?? ''}
+                onChange={(e) => set('check_date', e.target.value)}
+              />
+            </div>
           </div>
         </div>
       )}

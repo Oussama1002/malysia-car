@@ -94,7 +94,7 @@ export const ReservationCalendar: React.FC<{
   onCreateAt?: (startISO: string, endISO: string) => void;
   onSelect?: (id: string) => void;
 }> = ({ reservations, vehicles, customers, onCreateAt, onSelect }) => {
-  const [view, setView] = useState<View>('week');
+  const [view, setView] = useState<View>('month');
   const [anchor, setAnchor] = useState<Date>(() => new Date());
   const [vehicleFilter, setVehicleFilter] = useState<string>('');
 

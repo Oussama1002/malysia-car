@@ -29,6 +29,7 @@ class DocumentParser
             ReaderDocument::TYPE_PASSPORT => $this->parsePassport($normalized),
             ReaderDocument::TYPE_DRIVING_LICENSE => $this->parseDrivingLicense($normalized),
             ReaderDocument::TYPE_VEHICLE_REGISTRATION => $this->parseCarteGrise($normalized),
+            ReaderDocument::TYPE_CHEQUE => $this->parseCheque($normalized),
             default => [],
         };
 
@@ -61,6 +62,10 @@ class DocumentParser
         // Moroccan CIN
         if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D[\'’]?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
             return ReaderDocument::TYPE_CIN;
+        }
+        // Cheque / bank check
+        if (preg_match('/CH[ÈE]QUE|CHEQUE|PAYEZ\s+CONTRE|ORDER\s+OF|PAY\s+TO\s+THE|BANQUE|BANK.*CHECK/u', $upper)) {
+            return ReaderDocument::TYPE_CHEQUE;
         }
         // Rental contract
         if (preg_match('/CONTRAT\s+DE\s+LOCATION|RENTAL\s+AGREEMENT|CONTRAT\s+LOCATION/u', $upper)) {
@@ -284,6 +289,106 @@ class DocumentParser
             ]),
             'owner_name' => $this->labelValue($text, ['Propri[ée]taire', 'Nom\s+du\s+propri[ée]taire', 'Owner'], '.+'),
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function parseCheque(string $text): array
+    {
+        $upper = mb_strtoupper($text);
+
+        // Check number — usually 7-digit number printed at the bottom (MICR line)
+        // or labelled "N° du chèque", "Chèque N°", etc.
+        $checkNumber = $this->labelValue($text, [
+            'N°\s*(?:du\s*)?ch[èe]que',
+            'Ch[èe]que\s*N°',
+            'Check\s*No',
+            'Cheque\s*No',
+        ], '\d{5,10}')
+            ?? $this->firstMatch('/\b(\d{7})\b/u', $text);
+
+        // Bank name — look for known Moroccan banks or a "Banque" label
+        $bank = $this->labelValue($text, [
+            'Banque',
+            'Bank',
+            'Établissement',
+        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\']+');
+        if (! $bank) {
+            // Try to detect known Moroccan bank names
+            $moroccanBanks = [
+                'ATTIJARIWAFA', 'AWB', 'BMCE', 'BANK OF AFRICA', 'BOA',
+                'BANQUE POPULAIRE', 'BP', 'BMCI', 'SOCIETE GENERALE',
+                'SGMB', 'CIH', 'CIH BANK', 'CREDIT DU MAROC', 'CDM',
+                'CREDIT AGRICOLE', 'CAM', 'AL BARID BANK', 'CFG BANK',
+                'BANK AL MAGHRIB', 'BAM', 'ARAB BANK', 'CITIBANK',
+                'UMNIA BANK', 'AL AKHDAR BANK', 'BTI BANK',
+            ];
+            foreach ($moroccanBanks as $bk) {
+                if (str_contains($upper, $bk)) {
+                    $bank = $bk;
+                    break;
+                }
+            }
+        }
+
+        // Amount — look for numeric amount with decimals (Moroccan cheques show amount in digits)
+        $amount = null;
+        // Try labelled amount first
+        $amountStr = $this->labelValue($text, [
+            'Montant',
+            'Amount',
+            'Somme\s+de',
+            'MAD',
+            'DH',
+        ], '[\d\s\.,]+');
+        if ($amountStr) {
+            $amount = $this->parseAmount($amountStr);
+        }
+        // Fallback: find a large number with decimals (likely the amount)
+        if (! $amount && preg_match_all('/(\d{1,3}(?:[\s\.,]\d{3})*(?:[,\.]\d{2}))\b/u', $text, $am)) {
+            foreach ($am[1] as $candidate) {
+                $parsed = $this->parseAmount($candidate);
+                if ($parsed && $parsed > 100) { // Cheques are usually > 100 MAD
+                    $amount = $parsed;
+                    break;
+                }
+            }
+        }
+
+        // Date — cheques have a date (usually DD/MM/YYYY)
+        $checkDate = $this->extractDate($text, [
+            'Fait\s+[àa].*le',
+            'Date',
+            'Le',
+            'Casablanca\s*,?\s*le',
+            'Rabat\s*,?\s*le',
+        ]);
+        // Fallback: any date in the text
+        if (! $checkDate) {
+            $classified = $this->classifyDatesByYear($text);
+            $checkDate = $classified['issue'] ?? $classified['expiry'];
+        }
+
+        return [
+            'check_number' => $checkNumber,
+            'bank' => $bank ? mb_convert_case(mb_strtolower($bank), MB_CASE_TITLE, 'UTF-8') : null,
+            'amount' => $amount,
+            'check_date' => $checkDate,
+        ];
+    }
+
+    private function parseAmount(string $raw): ?float
+    {
+        // Normalize: "1 234 567,89" or "1.234.567,89" or "1,234,567.89"
+        $raw = trim($raw);
+        // If last separator is comma with 2 digits after → European format
+        if (preg_match('/,(\d{2})$/', $raw)) {
+            $raw = str_replace([' ', '.'], '', $raw);
+            $raw = str_replace(',', '.', $raw);
+        } else {
+            $raw = str_replace([' ', ','], '', $raw);
+        }
+        $val = (float) $raw;
+        return $val > 0 ? round($val, 2) : null;
     }
 
     // ---------------------------------------------------------------------
