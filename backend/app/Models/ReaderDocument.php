@@ -23,6 +23,7 @@ class ReaderDocument extends Model
     public const TYPE_DRIVING_LICENSE = 'driving_license';
     public const TYPE_VEHICLE_REGISTRATION = 'vehicle_registration';
     public const TYPE_RENTAL_CONTRACT = 'rental_contract';
+    public const TYPE_CHEQUE = 'cheque';
     public const TYPE_OTHER = 'other';
 
     public const TYPES = [
@@ -31,6 +32,7 @@ class ReaderDocument extends Model
         self::TYPE_DRIVING_LICENSE,
         self::TYPE_VEHICLE_REGISTRATION,
         self::TYPE_RENTAL_CONTRACT,
+        self::TYPE_CHEQUE,
         self::TYPE_OTHER,
     ];
 

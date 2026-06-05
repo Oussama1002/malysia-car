@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   allocatePayment,
@@ -21,6 +21,22 @@ import { apiClient } from '@/services/apiClient';
 import { endpoints } from '@/services/endpoints';
 import { queryKeys } from '@/services/queryKeys';
 import { ApiError } from '@/services/apiError';
+
+/* ── French status labels ──────────────────────────────────────────── */
+
+const CONTRACT_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon', active: 'Actif', signed: 'Signé', pending: 'En attente',
+  terminated: 'Résilié', completed: 'Terminé', cancelled: 'Annulé', suspended: 'Suspendu',
+};
+const RESERVATION_STATUS_FR: Record<string, string> = {
+  reserved: 'Réservée', confirmed: 'Confirmée', picked_up: 'En cours',
+  returned: 'Retournée', cancelled: 'Annulée', no_show: 'Non présenté',
+  completed: 'Terminée', pending: 'En attente',
+};
+const INVOICE_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon', sent: 'Envoyée', paid: 'Payée', partial: 'Partielle',
+  overdue: 'En retard', cancelled: 'Annulée', credited: 'Avoir',
+};
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
@@ -300,8 +316,10 @@ const PaymentForm: React.FC<{
     payment_method: 'cash',
     payment_type: undefined,
     amount: 0,
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: new Date().toISOString().slice(0, 16),
   });
+  const [chequeScanning, setChequeScanning] = useState(false);
+  const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
 
   /* ── Load catalogue data ──────────────────────────────────────── */
 
@@ -359,6 +377,22 @@ const PaymentForm: React.FC<{
     );
   }, [invoices, form.customer_id]);
 
+  /* ── Load customer balance & wallet when a client is selected ──── */
+
+  const balanceQ = useQuery({
+    queryKey: ['customer-balance', form.customer_id],
+    queryFn: async () =>
+      (await apiClient<{ data: { total_due: number; total_paid: number; total_invoiced: number; overdue_amount: number; currency_code: string } }>(`/v1/customers/${form.customer_id}/balance`)).data,
+    enabled: !!form.customer_id,
+  });
+
+  const walletQ = useQuery({
+    queryKey: ['customer-wallet', form.customer_id],
+    queryFn: async () =>
+      (await apiClient<{ data: { balance: number; currency_code: string } }>(`/v1/customers/${form.customer_id}/wallet`)).data,
+    enabled: !!form.customer_id,
+  });
+
   const set = <K extends keyof PaymentCreatePayload>(field: K, value: PaymentCreatePayload[K]) =>
     setForm((f) => ({ ...f, [field]: value }));
 
@@ -400,6 +434,48 @@ const PaymentForm: React.FC<{
         </select>
       </div>
 
+      {/* ── Solde & Avoir when client is selected ─────────────── */}
+      {form.customer_id && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-bold uppercase text-slate-500">Solde à payer</div>
+            {balanceQ.isLoading ? (
+              <div className="mt-1 text-sm text-slate-400">Chargement...</div>
+            ) : balanceQ.data ? (
+              <div className="mt-1">
+                <span className={`text-lg font-black ${Number(balanceQ.data.total_due) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  {formatCurrencyMad(Number(balanceQ.data.total_due))}
+                </span>
+                {Number(balanceQ.data.overdue_amount) > 0 && (
+                  <span className="ml-2 text-xs font-semibold text-rose-500">
+                    dont {formatCurrencyMad(Number(balanceQ.data.overdue_amount))} en retard
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-slate-400">—</div>
+            )}
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-bold uppercase text-slate-500">Avoir (Wallet)</div>
+            {walletQ.isLoading ? (
+              <div className="mt-1 text-sm text-slate-400">Chargement...</div>
+            ) : walletQ.data ? (
+              <div className="mt-1">
+                <span className={`text-lg font-black ${Number(walletQ.data.balance) > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {formatCurrencyMad(Number(walletQ.data.balance))}
+                </span>
+                {Number(walletQ.data.balance) > 0 && (
+                  <span className="ml-2 text-xs text-emerald-600">disponible</span>
+                )}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-slate-400">0,00 MAD</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Contrat / Réservation / Facture ──────────────────── */}
       <div className="grid gap-3 md:grid-cols-3">
         <div>
@@ -412,7 +488,7 @@ const PaymentForm: React.FC<{
             <option value="">-- Aucun --</option>
             {filteredContracts.map((c) => (
               <option key={String(c.id)} value={String(c.id)}>
-                {c.reference} ({c.type})
+                {c.reference ?? (c as any).contract_number ?? c.id} — {CONTRACT_STATUS_FR[c.status] ?? c.status}
               </option>
             ))}
           </select>
@@ -427,7 +503,7 @@ const PaymentForm: React.FC<{
             <option value="">-- Aucune --</option>
             {filteredReservations.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.reservation_number} ({r.status})
+                {r.reservation_number} — {RESERVATION_STATUS_FR[r.status] ?? r.status}
               </option>
             ))}
           </select>
@@ -440,11 +516,14 @@ const PaymentForm: React.FC<{
             onChange={(e) => set('invoice_id', e.target.value || undefined)}
           >
             <option value="">-- Aucune --</option>
-            {filteredInvoices.map((inv) => (
-              <option key={inv.id} value={inv.id}>
-                {inv.invoice_number} ({formatCurrencyMad(Number(inv.total_amount_mad))})
-              </option>
-            ))}
+            {filteredInvoices.map((inv) => {
+              const amt = Number((inv as any).total_amount ?? inv.total_amount_mad);
+              return (
+                <option key={inv.id} value={inv.id}>
+                  {inv.invoice_number} — {INVOICE_STATUS_FR[inv.status] ?? inv.status}{isFinite(amt) ? ` — ${formatCurrencyMad(amt)}` : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>
@@ -498,9 +577,9 @@ const PaymentForm: React.FC<{
           />
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date paiement *</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement *</label>
           <input
-            type="date"
+            type="datetime-local"
             className="df-input mt-1 w-full"
             value={form.payment_date}
             onChange={(e) => set('payment_date', e.target.value)}
@@ -520,33 +599,138 @@ const PaymentForm: React.FC<{
         />
       </div>
 
-      {/* ── Chèque fields ────────────────────────────────────── */}
+      {/* ── Chèque OCR scan + fields ────────────────────────── */}
       {form.payment_method === 'check' && (
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">N° chèque</label>
-            <input
-              className="df-input mt-1 w-full"
-              value={form.check_number ?? ''}
-              onChange={(e) => set('check_number', e.target.value)}
-            />
+        <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase text-blue-700">Scanner un chèque</span>
+            <span className="text-[10px] text-blue-500">Photo ou upload — remplissage auto par OCR</span>
           </div>
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">Banque</label>
-            <input
-              className="df-input mt-1 w-full"
-              value={form.check_bank ?? ''}
-              onChange={(e) => set('check_bank', e.target.value)}
-            />
+
+          {/* Upload / Camera */}
+          <div className="flex gap-2">
+            <label className="df-btn df-btn--ghost flex-1 cursor-pointer justify-center text-center text-xs">
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setChequeScanning(true);
+                  setChequeOcrError(null);
+                  try {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    const res = await fetch('/api/v1/cheque-ocr', {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
+                      body: fd,
+                    });
+                    const json = await res.json();
+                    if (json.data) {
+                      setForm((f) => ({
+                        ...f,
+                        check_number: json.data.check_number ?? f.check_number,
+                        check_bank: json.data.bank ?? f.check_bank,
+                        check_date: json.data.check_date ?? f.check_date,
+                        amount: json.data.amount ?? f.amount,
+                      }));
+                    } else {
+                      setChequeOcrError(json.message ?? 'OCR a échoué');
+                    }
+                  } catch {
+                    setChequeOcrError('Erreur réseau lors du scan OCR');
+                  } finally {
+                    setChequeScanning(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              {chequeScanning ? '⏳ Analyse en cours...' : '📄 Importer un fichier'}
+            </label>
+            <label className="df-btn df-btn--ghost flex-1 cursor-pointer justify-center text-center text-xs">
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setChequeScanning(true);
+                  setChequeOcrError(null);
+                  try {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    const res = await fetch('/api/v1/cheque-ocr', {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
+                      body: fd,
+                    });
+                    const json = await res.json();
+                    if (json.data) {
+                      setForm((f) => ({
+                        ...f,
+                        check_number: json.data.check_number ?? f.check_number,
+                        check_bank: json.data.bank ?? f.check_bank,
+                        check_date: json.data.check_date ?? f.check_date,
+                        amount: json.data.amount ?? f.amount,
+                      }));
+                    } else {
+                      setChequeOcrError(json.message ?? 'OCR a échoué');
+                    }
+                  } catch {
+                    setChequeOcrError('Erreur réseau lors du scan OCR');
+                  } finally {
+                    setChequeScanning(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              {chequeScanning ? '⏳ Analyse...' : '📷 Prendre une photo'}
+            </label>
           </div>
-          <div>
-            <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
-            <input
-              type="date"
-              className="df-input mt-1 w-full"
-              value={form.check_date ?? ''}
-              onChange={(e) => set('check_date', e.target.value)}
-            />
+
+          {chequeOcrError && (
+            <div className="rounded bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
+          )}
+          {chequeScanning && (
+            <div className="flex items-center gap-2 text-xs text-blue-600">
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              Analyse OCR du chèque en cours...
+            </div>
+          )}
+
+          {/* Manual fields (pre-filled by OCR) */}
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">N° chèque</label>
+              <input
+                className="df-input mt-1 w-full"
+                value={form.check_number ?? ''}
+                onChange={(e) => set('check_number', e.target.value)}
+                placeholder="Auto-rempli par OCR"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Banque</label>
+              <input
+                className="df-input mt-1 w-full"
+                value={form.check_bank ?? ''}
+                onChange={(e) => set('check_bank', e.target.value)}
+                placeholder="Auto-rempli par OCR"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
+              <input
+                type="date"
+                className="df-input mt-1 w-full"
+                value={form.check_date ?? ''}
+                onChange={(e) => set('check_date', e.target.value)}
+              />
+            </div>
           </div>
         </div>
       )}

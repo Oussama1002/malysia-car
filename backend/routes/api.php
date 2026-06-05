@@ -202,6 +202,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:documents.view');
         Route::post('document-reader/uploads', [DocumentReaderController::class, 'upload'])
             ->middleware('permission:documents.upload');
+        Route::post('cheque-ocr', [\App\Http\Controllers\Api\V1\ChequeOcrController::class, '__invoke'])
+            ->middleware('permission:documents.upload');
         Route::post('document-reader/documents/{id}/extract', [DocumentReaderController::class, 'extract'])
             ->middleware('permission:documents.upload');
         Route::post('document-reader/documents/{id}/validate', [DocumentReaderController::class, 'validateDocument'])

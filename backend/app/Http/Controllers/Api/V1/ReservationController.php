@@ -94,7 +94,7 @@ class ReservationController extends Controller
                 'id' => (string) Str::uuid(),
                 'company_id' => $data['company_id'] ?? $request->user()?->company_id,
                 'branch_id' => $data['branch_id'] ?? null,
-                'reservation_number' => 'RSV-'.now()->format('Ymd').'-'.strtoupper(Str::random(6)),
+                'reservation_number' => $this->generateReservationNumber(),
                 'customer_id' => $data['customer_id'],
                 'vehicle_id' => $data['vehicle_id'],
                 'reservation_type' => $data['reservation_type'],
@@ -438,7 +438,7 @@ class ReservationController extends Controller
                 'id' => (string) Str::uuid(),
                 'company_id' => $reservation->company_id,
                 'branch_id' => $reservation->branch_id,
-                'invoice_number' => 'INV-RENT-'.now()->format('Ym').'-'.strtoupper(Str::random(6)),
+                'invoice_number' => $this->generateRentalInvoiceNumber(),
                 'invoice_type' => 'service',
                 'customer_id' => $reservation->customer_id,
                 'contract_id' => null,
@@ -497,6 +497,36 @@ class ReservationController extends Controller
         $reservation->status = $to;
         $reservation->save();
         AuditLogger::statusChanged($reservation, $from, $to, $request?->user(), $request, module: 'rentals');
+    }
+
+    private function generateReservationNumber(): string
+    {
+        $latest = Reservation::query()
+            ->where('reservation_number', 'like', 'RSV-%')
+            ->orderByRaw("CAST(SUBSTRING(reservation_number, 5) AS UNSIGNED) DESC")
+            ->value('reservation_number');
+
+        $seq = 1;
+        if ($latest && preg_match('/^RSV-(\d+)$/', $latest, $m)) {
+            $seq = (int) $m[1] + 1;
+        }
+
+        return 'RSV-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function generateRentalInvoiceNumber(): string
+    {
+        $latest = Invoice::query()
+            ->where('invoice_number', 'like', 'FAC-%')
+            ->orderByRaw("CAST(SUBSTRING(invoice_number, 5) AS UNSIGNED) DESC")
+            ->value('invoice_number');
+
+        $seq = 1;
+        if ($latest && preg_match('/^FAC-(\d+)$/', $latest, $m)) {
+            $seq = (int) $m[1] + 1;
+        }
+
+        return 'FAC-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 }
 
