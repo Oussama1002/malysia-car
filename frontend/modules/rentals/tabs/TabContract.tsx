@@ -1,0 +1,55 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+
+interface Props {
+  reservation: any;
+}
+
+const TabContract: React.FC<Props> = ({ reservation }) => {
+  // The contract is generated via the wizard and linked externally.
+  // This tab shows contract status and actions.
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-slate-100 p-6 text-center">
+        <div className="text-4xl mb-3">📄</div>
+        <h3 className="text-sm font-black text-slate-800 mb-2">Contrat de location</h3>
+        <p className="text-xs text-slate-500 mb-4">
+          Générez un contrat depuis cette réservation. Les informations du client, véhicule et dates seront pré-remplies automatiquement.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            to={`/contracts/new?from_reservation=${reservation.id}`}
+            className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white hover:bg-amber-700"
+          >
+            Générer contrat
+          </Link>
+        </div>
+      </div>
+
+      {/* Placeholder for future contract history display */}
+      <div className="rounded-xl border border-dashed border-slate-200 p-6">
+        <h3 className="mb-2 text-xs font-black uppercase tracking-widest text-slate-400">Actions contrat</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <ActionCard icon="📥" label="Télécharger PDF" disabled />
+          <ActionCard icon="📱" label="Envoyer WhatsApp" disabled />
+          <ActionCard icon="📧" label="Envoyer Email" disabled />
+          <ActionCard icon="🖊️" label="Signature" disabled />
+        </div>
+        <p className="mt-3 text-[11px] text-slate-400">
+          Ces actions seront disponibles une fois le contrat généré.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+function ActionCard({ icon, label, disabled }: { icon: string; label: string; disabled?: boolean }) {
+  return (
+    <div className={`rounded-xl border p-4 text-center ${disabled ? 'border-slate-100 opacity-50' : 'border-slate-200 hover:bg-slate-50 cursor-pointer'}`}>
+      <div className="text-2xl mb-1">{icon}</div>
+      <div className="text-[11px] font-bold text-slate-600">{label}</div>
+    </div>
+  );
+}
+
+export default TabContract;

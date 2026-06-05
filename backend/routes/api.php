@@ -475,6 +475,14 @@ Route::prefix('v1')->group(function () {
         Route::post('reservations/{reservation}/close-billing', [ReservationController::class, 'closeBilling'])
             ->middleware('permission:rentals.close_billing');
 
+        // Reservation drivers CRUD
+        Route::post('reservations/{reservation}/drivers', [ReservationController::class, 'storeDriver'])
+            ->middleware('permission:rentals.update');
+        Route::put('reservations/{reservation}/drivers/{driver}', [ReservationController::class, 'updateDriver'])
+            ->middleware('permission:rentals.update');
+        Route::delete('reservations/{reservation}/drivers/{driver}', [ReservationController::class, 'destroyDriver'])
+            ->middleware('permission:rentals.update');
+
         Route::get('missions', [MissionController::class, 'index'])
             ->middleware('permission:missions.view');
         Route::get('missions/{mission}', [MissionController::class, 'show'])

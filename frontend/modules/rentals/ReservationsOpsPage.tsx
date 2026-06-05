@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, endpoints, getApiBase, apiClient } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
@@ -52,6 +52,7 @@ const STATUS_FR: Record<string, string> = {
 };
 
 export const ReservationsOpsPage: React.FC = () => {
+  const nav = useNavigate();
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
@@ -376,7 +377,7 @@ export const ReservationsOpsPage: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => { setSelectedReservationId(r.id); setBillingError(null); setBillingSuccess(null); }}
+                      onClick={() => nav(`/reservations/${r.id}`)}
                       className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                     >
                       Voir détail
@@ -432,7 +433,7 @@ export const ReservationsOpsPage: React.FC = () => {
             <div
               key={r.id}
               className="p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer hover:bg-slate-50 transition-colors"
-              onClick={() => { setSelectedReservationId(r.id); setBillingError(null); setBillingSuccess(null); }}
+              onClick={() => nav(`/reservations/${r.id}`)}
             >
               <div>
                 <div className="text-xs font-black text-slate-400 uppercase tracking-widest">{r.reservation_number}</div>
@@ -454,7 +455,7 @@ export const ReservationsOpsPage: React.FC = () => {
                 />
                 <button
                   className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
-                  onClick={(e) => { e.stopPropagation(); setSelectedReservationId(r.id); }}
+                  onClick={(e) => { e.stopPropagation(); nav(`/reservations/${r.id}`); }}
                 >
                   Détail →
                 </button>
@@ -480,7 +481,7 @@ export const ReservationsOpsPage: React.FC = () => {
           setForm((s) => ({ ...s, desired_start_at: startISO, desired_end_at: endISO }));
           setNewResOpen(true);
         }}
-        onSelect={(id) => setSelectedReservationId(id)}
+        onSelect={(id) => nav(`/reservations/${id}`)}
       />
 
       {/* Nouvelle réservation modal */}

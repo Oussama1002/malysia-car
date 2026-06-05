@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Support\TenantScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Reservation extends Model
 {
@@ -57,5 +59,45 @@ class Reservation extends Model
         'delivery_longitude' => 'decimal:7',
         'estimated_price' => 'decimal:2',
     ];
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
+
+    public function drivers(): HasMany
+    {
+        return $this->hasMany(ReservationDriver::class);
+    }
+
+    public function handoverReports(): HasMany
+    {
+        return $this->hasMany(RentalHandoverReport::class);
+    }
+
+    public function extensions(): HasMany
+    {
+        return $this->hasMany(RentalExtension::class);
+    }
+
+    public function damageReports(): HasMany
+    {
+        return $this->hasMany(RentalDamageReport::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'contract_id');
+    }
 }
 

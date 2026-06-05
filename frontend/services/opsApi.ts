@@ -142,6 +142,25 @@ export const opsApi = {
     return res.data;
   },
 
+  async updateReservation(id: string, payload: Record<string, unknown>): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.reservations.one(id), { method: 'PUT', body: JSON.stringify(payload) });
+    return res.data;
+  },
+
+  async storeDriver(reservationId: string, payload: Record<string, unknown>): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.reservations.drivers(reservationId), { method: 'POST', body: JSON.stringify(payload) });
+    return res.data;
+  },
+
+  async updateDriver(reservationId: string, driverId: string, payload: Record<string, unknown>): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.reservations.driver(reservationId, driverId), { method: 'PUT', body: JSON.stringify(payload) });
+    return res.data;
+  },
+
+  async destroyDriver(reservationId: string, driverId: string): Promise<void> {
+    await apiClient(endpoints.reservations.driver(reservationId, driverId), { method: 'DELETE' });
+  },
+
   async startMission(missionId: string): Promise<MissionDto> {
     const res = await apiClient<{ data: MissionDto }>(endpoints.missions.start(missionId), { method: 'POST', body: JSON.stringify({}) });
     return res.data;

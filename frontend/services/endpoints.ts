@@ -112,6 +112,8 @@ export const endpoints = {
     handoverReturn: (id: number | string) => `/v1/reservations/${id}/handover-return`,
     damageReport: (id: number | string) => `/v1/reservations/${id}/damage-report`,
     closeBilling: (id: number | string) => `/v1/reservations/${id}/close-billing`,
+    drivers: (id: number | string) => `/v1/reservations/${id}/drivers`,
+    driver: (id: number | string, driverId: string) => `/v1/reservations/${id}/drivers/${driverId}`,
   },
   rentals: {
     availability: '/v1/rentals/availability',
