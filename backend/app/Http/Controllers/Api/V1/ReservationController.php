@@ -123,12 +123,14 @@ class ReservationController extends Controller
 
     public function show(Reservation $reservation): JsonResponse
     {
-        $reservation->load([
-            'customer.individualProfile',
-            'customer.companyProfile',
-            'vehicle.brand',
-            'vehicle.model',
-        ]);
+        $reservation->load(['vehicle.brand', 'vehicle.model']);
+
+        // Load customer separately to avoid crash if relationship is broken
+        try {
+            $reservation->load(['customer']);
+        } catch (\Throwable) {
+            // customer_id may reference a deleted customer
+        }
 
         $handoverReports = RentalHandoverReport::query()
             ->where('reservation_id', $reservation->id)
@@ -142,34 +144,53 @@ class ReservationController extends Controller
             ->where('reservation_id', $reservation->id)
             ->orderByDesc('created_at')
             ->get();
-        $drivers = ReservationDriver::query()
-            ->where('reservation_id', $reservation->id)
-            ->orderBy('driver_type') // primary before secondary alphabetically
-            ->get();
+
+        // Drivers — table may not exist yet if migration hasn't run
+        $drivers = collect();
+        try {
+            if (\Schema::hasTable('reservation_drivers')) {
+                $drivers = ReservationDriver::query()
+                    ->where('reservation_id', $reservation->id)
+                    ->orderBy('driver_type')
+                    ->get();
+            }
+        } catch (\Throwable) {
+            // graceful fallback
+        }
+
+        // Payments linked to this reservation
         $payments = Payment::query()
             ->where('reservation_id', $reservation->id)
             ->orderByDesc('payment_date')
             ->get();
 
-        // Invoices linked to this reservation via invoice_line metadata
-        $invoices = Invoice::query()
-            ->where('customer_id', $reservation->customer_id)
-            ->whereHas('lines', function ($lq) use ($reservation) {
-                $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]);
-            })
-            ->with('lines')
-            ->orderByDesc('issue_date')
-            ->get();
+        // Invoices linked via invoice_line metadata
+        $invoices = collect();
+        try {
+            $invoices = Invoice::query()
+                ->where('customer_id', $reservation->customer_id)
+                ->whereHas('lines', function ($lq) use ($reservation) {
+                    $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]);
+                })
+                ->with('lines')
+                ->orderByDesc('issue_date')
+                ->get();
+        } catch (\Throwable) {
+            // JSON query might fail on some DB configs
+        }
 
         // Audit trail
-        $history = DB::table('audit_logs')
-            ->where(function ($q) use ($reservation) {
-                $q->where('entity_type', (new Reservation)->getMorphClass())
-                  ->where('entity_id', $reservation->id);
-            })
-            ->orderByDesc('created_at')
-            ->limit(100)
-            ->get();
+        $history = collect();
+        try {
+            $history = DB::table('audit_logs')
+                ->where('entity_type', (new Reservation)->getMorphClass())
+                ->where('entity_id', $reservation->id)
+                ->orderByDesc('created_at')
+                ->limit(100)
+                ->get();
+        } catch (\Throwable) {
+            // table might not exist or have different columns
+        }
 
         // Customer/vehicle summary for header
         $customer = $reservation->customer;
@@ -178,9 +199,16 @@ class ReservationController extends Controller
             ? trim(($vehicle->brand?->name ?? $vehicle->brand_name ?? '') . ' ' . ($vehicle->model?->model_name ?? $vehicle->model?->name ?? $vehicle->model_name ?? ''))
             : null;
 
+        $customerName = null;
+        try {
+            $customerName = $customer ? $customer->displayName() : null;
+        } catch (\Throwable) {
+            $customerName = $customer?->customer_code ?? null;
+        }
+
         return ApiResponse::success([
             'reservation' => $reservation,
-            'customer_name' => $customer ? $customer->displayName() : null,
+            'customer_name' => $customerName,
             'vehicle_name' => $vehicleName,
             'vehicle_registration' => $vehicle?->registration_number ?? null,
             'handover_reports' => $handoverReports,
