@@ -112,6 +112,8 @@ interface WizardState {
   expectedPaymentDay: number | '';
   startDate: string | null;
   endDate: string | null;
+  secondDriverName: string;
+  assignedAgent: string;
 }
 
 const INITIAL: WizardState = {
@@ -129,6 +131,8 @@ const INITIAL: WizardState = {
   expectedPaymentDay: 5,
   startDate: null,
   endDate: null,
+  secondDriverName: '',
+  assignedAgent: '',
 };
 
 function friendlyError(e: unknown, fallback: string): string {
@@ -463,57 +467,32 @@ export const ContractWizardPage: React.FC = () => {
     setSaveError(null);
     let createdId: string | null = null;
     try {
-      const created = await contractsApi.create(buildCreatePayload('pending_approval'));
+      const created = await contractsApi.create(buildCreatePayload('draft'));
       createdId = String(created.id);
 
-      await contractsApi.generateSchedule(created.id, {
-        start_date: new Date().toISOString().slice(0, 10),
-        months: state.durationMonths,
-        monthly_amount: state.monthlyRentMad,
-        tax_rate: 0.2,
-      });
-      const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
-
-      const signers: Array<{ name: string; email: string; role: 'company_rep' | 'client'; signer_order: number }> = [];
-      if (session?.user?.email) {
-        signers.push({
-          name: session.user.name || 'Bailleur',
-          email: session.user.email,
-          role: 'company_rep',
-          signer_order: 1,
+      // Generate payment schedule
+      try {
+        await contractsApi.generateSchedule(created.id, {
+          start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
+          months: state.durationMonths,
+          monthly_amount: state.monthlyRentMad,
+          tax_rate: 0.2,
         });
-      }
-      if (selectedClient?.email) {
-        signers.push({
-          name: selectedClient.name,
-          email: selectedClient.email,
-          role: 'client',
-          signer_order: signers.length + 1,
-        });
+      } catch {
+        // Non-blocking — schedule can be generated later
       }
 
-      if (signers.length > 0) {
-        try {
-          const envelope = await createEnvelope({
-            subject: `Signature contrat ${state.type} - ${selectedClient.name}`,
-            provider: 'internal',
-            source_file_id: String(generatedDoc.data.id),
-            signers,
-          });
-          await sendEnvelope(envelope.data.id);
-        } catch (sigErr) {
-          // Signature step failed but contract is already created — navigate
-          // to the contract and let the user retry from the detail page.
-          console.warn('[ContractWizard] Signature envelope error (non-blocking):', sigErr);
-          navigate(`/contracts/${createdId}`);
-          return;
-        }
+      // Generate and download PDF
+      try {
+        const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
+        await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${created.contract_number ?? createdId.slice(0, 8)}.pdf`);
+      } catch (pdfErr) {
+        console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
       }
 
       navigate(`/contracts/${createdId}`);
     } catch (e) {
       const raw = e instanceof Error ? e.message : '';
-      // Hide raw Laravel model-not-found noise; show human-readable French
       if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
         setSaveError('Le contrat a été créé mais une ressource associée est introuvable sur le serveur. Vérifiez la fiche contrat.');
       } else {
@@ -941,6 +920,24 @@ export const ContractWizardPage: React.FC = () => {
                     </Field>
                   </div>
                 </div>
+                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Client locataire 2 (optionnel)">
+                    <input
+                      className="df-input"
+                      placeholder="Nom complet du 2e conducteur"
+                      value={state.secondDriverName}
+                      onChange={(e) => patch('secondDriverName', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Agent assigné">
+                    <input
+                      className="df-input"
+                      placeholder="Nom de l'agent en charge"
+                      value={state.assignedAgent}
+                      onChange={(e) => patch('assignedAgent', e.target.value)}
+                    />
+                  </Field>
+                </div>
                 <AIHint
                   tone="brand"
                   text={`Suggestion IA: pour ce profil client et véhicule, le loyer optimal est ${formatCurrencyMad(4280)}/mois. Conforme Bank Al-Maghrib.`}
@@ -1000,7 +997,7 @@ export const ContractWizardPage: React.FC = () => {
                   disabled={saving || !state.clientId || !state.vehicleId}
                   onClick={() => void submit()}
                 >
-                  <Icon name="sign" size={14} /> {saving ? 'Création…' : 'Envoyer pour signature'}
+                  <Icon name="download" size={14} /> {saving ? 'Création…' : 'Sauvegarder & télécharger PDF'}
                 </button>
               ) : (
                 <button
