@@ -185,7 +185,7 @@ class CustomerController extends Controller
             if (! empty($contractIds)) {
                 $payments = DB::table('payments')
                     ->whereIn('contract_id', $contractIds)
-                    ->orderByDesc('paid_at')
+                    ->orderByDesc('payment_date')
                     ->limit(100)
                     ->get();
             }
