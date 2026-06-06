@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
             return new TesseractOcrProvider(
                 tesseractBin: (string) config('document_reader.tesseract.bin', 'tesseract'),
                 pdftoppmBin: (string) config('document_reader.tesseract.pdftoppm_bin', 'pdftoppm'),
-                defaultLang: (string) config('document_reader.tesseract.lang', 'eng+fra+ara'),
+                defaultLang: (string) config('document_reader.tesseract.lang', 'fra+eng'),
                 timeoutSeconds: (int) config('document_reader.tesseract.timeout', 120),
             );
         });
