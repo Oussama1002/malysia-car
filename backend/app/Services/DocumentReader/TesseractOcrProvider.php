@@ -21,7 +21,7 @@ class TesseractOcrProvider implements OcrProviderInterface
     public function __construct(
         private readonly string $tesseractBin = 'tesseract',
         private readonly string $pdftoppmBin = 'pdftoppm',
-        private readonly string $defaultLang = 'eng+fra+ara',
+        private readonly string $defaultLang = 'fra+eng',
         private readonly int $timeoutSeconds = 570,
         // ImageMagick `convert` binary — used to suppress the pink Moroccan
         // permis watermark before Tesseract sees the page. Best-effort: if it's
@@ -43,9 +43,17 @@ class TesseractOcrProvider implements OcrProviderInterface
         $lang = (string) ($options['lang'] ?? $this->defaultLang);
         $ext = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
 
-        $imagePaths = $ext === 'pdf'
-            ? $this->renderPdfPages($absolutePath)
-            : [$absolutePath];
+        $needsCleanup = false;
+        if ($ext === 'pdf') {
+            $imagePaths = $this->renderPdfPages($absolutePath);
+            $needsCleanup = true;
+        } else {
+            // Phone cameras produce 12+ MP images — resize to max 2400px
+            // longest edge before OCR so Tesseract runs in ~5-10s not 60s.
+            $resized = $this->downsizeImage($absolutePath);
+            $imagePaths = [$resized ?? $absolutePath];
+            $needsCleanup = $resized !== null;
+        }
 
         try {
             $text = '';
@@ -72,9 +80,11 @@ class TesseractOcrProvider implements OcrProviderInterface
                 }
             }
         } finally {
-            if ($ext === 'pdf') {
+            if ($needsCleanup) {
                 foreach ($imagePaths as $tmp) {
-                    @unlink($tmp);
+                    if ($tmp !== $absolutePath) {
+                        @unlink($tmp);
+                    }
                 }
             }
         }
@@ -194,6 +204,41 @@ class TesseractOcrProvider implements OcrProviderInterface
         } catch (Throwable) {
             // ImageMagick missing / version mismatch / weird input — fall back
             // to the unprocessed image; Tesseract will still try.
+        }
+    }
+
+    /**
+     * Downsize a large image (phone cameras produce 12+ MP) to max 2400 px on
+     * the longest edge. Returns the path to a temporary resized file, or null
+     * if no resize was needed or ImageMagick is unavailable.
+     */
+    private function downsizeImage(string $imagePath): ?string
+    {
+        try {
+            $info = @getimagesize($imagePath);
+            if (! $info) {
+                return null;
+            }
+            [$w, $h] = $info;
+            $maxDim = 2400;
+            if ($w <= $maxDim && $h <= $maxDim) {
+                return null; // already small enough
+            }
+
+            $tmp = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_resize_'.bin2hex(random_bytes(6)).'.png';
+            $process = new Process([
+                $this->convertBin,
+                $imagePath,
+                '-resize', $maxDim.'x'.$maxDim.'>',
+                '-quality', '95',
+                $tmp,
+            ]);
+            $process->setTimeout(30);
+            $process->mustRun();
+
+            return is_file($tmp) ? $tmp : null;
+        } catch (Throwable) {
+            return null; // ImageMagick missing — use original
         }
     }
 
