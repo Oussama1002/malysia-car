@@ -616,26 +616,59 @@ const KycTab: React.FC<{
 // Contracts / Payments stubs (joined later)
 // ---------------------------------------------------------------------------
 
+const CONTRACT_TYPE_FR: Record<string, string> = { LLD: 'LLD', LOA: 'LOA', credit: 'Crédit', VO: 'Vente occasion', rental: 'Location' };
+const CONTRACT_STATUS_FR: Record<string, string> = { draft: 'Brouillon', pending_approval: 'En attente', approved: 'Approuvé', active: 'Actif', terminated: 'Résilié', closed: 'Clôturé' };
+const fmtMadC = (v: unknown) => { const n = Number(v); return isFinite(n) ? `${n.toLocaleString('fr-MA')} MAD` : '—'; };
+
 const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
   <div className="df-card">
     <div className="df-card__body">
       {contracts.length === 0 ? (
         <EmptyState title="Aucun contrat" description="Ce client n'a pas encore de contrat signé." />
       ) : (
-        <ul className="space-y-2 text-sm">
-          {contracts.map((c, i) => {
-            const item = c as Record<string, unknown>;
-            return (
-              <li key={i} className="rounded-lg border border-slate-100 px-3 py-2 font-mono text-xs">
-                {JSON.stringify(item)}
-              </li>
-            );
-          })}
-        </ul>
+        <div className="rounded-xl border border-slate-100 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th className="px-4 py-2.5 text-left">N° contrat</th>
+                <th className="px-4 py-2.5 text-left">Type</th>
+                <th className="px-4 py-2.5 text-left">Statut</th>
+                <th className="px-4 py-2.5 text-right">Montant</th>
+                <th className="px-4 py-2.5 text-right">Mensualité</th>
+                <th className="px-4 py-2.5 text-left">Début</th>
+                <th className="px-4 py-2.5 text-center">Durée</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {contracts.map((c, i) => {
+                const r = c as Record<string, any>;
+                const st = String(r.status ?? '');
+                return (
+                  <tr key={r.id ?? i} className="hover:bg-slate-50 cursor-pointer" onClick={() => { if (r.id) window.location.href = `/contracts/${r.id}`; }}>
+                    <td className="px-4 py-3 font-black text-indigo-700">{r.contract_number ?? '—'}</td>
+                    <td className="px-4 py-3">{CONTRACT_TYPE_FR[r.contract_type] ?? r.contract_type ?? '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${st === 'active' ? 'bg-emerald-100 text-emerald-700' : st === 'draft' ? 'bg-slate-100 text-slate-600' : st === 'terminated' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {CONTRACT_STATUS_FR[st] ?? st}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold">{fmtMadC(r.base_amount)}</td>
+                    <td className="px-4 py-3 text-right">{fmtMadC(r.monthly_payment)}</td>
+                    <td className="px-4 py-3 text-slate-600">{r.start_date ?? '—'}</td>
+                    <td className="px-4 py-3 text-center">{r.duration_months ? `${r.duration_months} mois` : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   </div>
 );
+
+const PAY_METHOD_FR: Record<string, string> = { cash: 'Espèces', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte', mobile: 'Mobile' };
+const PAY_STATUS_FR: Record<string, string> = { received: 'Reçu', allocated: 'Alloué', pending: 'En attente', refunded: 'Remboursé' };
 
 const PaymentsTab: React.FC<{ payments: unknown[] }> = ({ payments }) => (
   <div className="df-card">
@@ -643,13 +676,40 @@ const PaymentsTab: React.FC<{ payments: unknown[] }> = ({ payments }) => (
       {payments.length === 0 ? (
         <EmptyState title="Aucun paiement" description="Aucun mouvement financier pour ce client." />
       ) : (
-        <ul className="space-y-1 text-xs font-mono">
-          {payments.map((p, i) => (
-            <li key={i} className="rounded border border-slate-100 px-3 py-1">
-              {JSON.stringify(p)}
-            </li>
-          ))}
-        </ul>
+        <div className="rounded-xl border border-slate-100 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th className="px-4 py-2.5 text-left">N° paiement</th>
+                <th className="px-4 py-2.5 text-left">Date</th>
+                <th className="px-4 py-2.5 text-right">Montant</th>
+                <th className="px-4 py-2.5 text-left">Mode</th>
+                <th className="px-4 py-2.5 text-left">Référence</th>
+                <th className="px-4 py-2.5 text-center">Statut</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {payments.map((p, i) => {
+                const r = p as Record<string, any>;
+                const st = String(r.status ?? '');
+                return (
+                  <tr key={r.id ?? i} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{r.payment_number ?? '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{r.payment_date ?? '—'}</td>
+                    <td className="px-4 py-3 text-right font-black text-slate-800">{fmtMadC(r.amount)}</td>
+                    <td className="px-4 py-3">{PAY_METHOD_FR[r.payment_method] ?? r.payment_method ?? '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{r.check_number ? `Chèque ${r.check_number}` : r.external_reference || '—'}{r.check_bank ? ` · ${r.check_bank}` : ''}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${st === 'received' ? 'bg-emerald-100 text-emerald-700' : st === 'allocated' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {PAY_STATUS_FR[st] ?? st}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   </div>
