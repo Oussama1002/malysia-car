@@ -123,6 +123,10 @@ export const opsApi = {
     return res.data;
   },
 
+  async deleteReservation(id: string): Promise<void> {
+    await apiClient(endpoints.reservations.one(id), { method: 'DELETE' });
+  },
+
   async handoverPickup(id: string, payload: Record<string, unknown>): Promise<any> {
     const res = await apiClient<{ data: any }>(endpoints.reservations.handoverPickup(id), { method: 'POST', body: JSON.stringify(payload) });
     return res.data;
