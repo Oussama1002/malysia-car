@@ -116,9 +116,11 @@ export const ReservationDetailPage: React.FC = () => {
     mutationFn: () => opsApi.cancelReservation(rid!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
   });
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteM = useMutation({
     mutationFn: () => opsApi.deleteReservation(rid!),
     onSuccess: () => navigate('/contracts'),
+    onError: (e) => alert(e instanceof Error ? e.message : 'Erreur de suppression'),
   });
   const paymentM = useMutation({
     mutationFn: (p: PaymentCreatePayload) => createPayment(p),
@@ -316,14 +318,31 @@ export const ReservationDetailPage: React.FC = () => {
               </button>
             </>
           )}
-          {status === 'cancelled' && (
+          {status === 'cancelled' && !deleteConfirm && (
             <button
-              onClick={() => { if (confirm('Supprimer définitivement cette réservation annulée ?')) deleteM.mutate(); }}
-              disabled={deleteM.isPending}
-              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-50"
+              onClick={() => setDeleteConfirm(true)}
+              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white hover:bg-rose-700"
             >
-              {deleteM.isPending ? 'Suppression…' : '🗑️ Supprimer'}
+              Supprimer
             </button>
+          )}
+          {status === 'cancelled' && deleteConfirm && (
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-xs font-bold text-rose-600">Confirmer la suppression ?</span>
+              <button
+                onClick={() => deleteM.mutate()}
+                disabled={deleteM.isPending}
+                className="rounded-xl bg-rose-700 px-3 py-2 text-xs font-black text-white hover:bg-rose-800 disabled:opacity-50"
+              >
+                {deleteM.isPending ? 'Suppression…' : 'Oui, supprimer'}
+              </button>
+              <button
+                onClick={() => setDeleteConfirm(false)}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+            </div>
           )}
         </div>
       </div>
