@@ -305,18 +305,22 @@ export const PaymentsPage: React.FC = () => {
 /* Payment creation form                                                   */
 /* ════════════════════════════════════════════════════════════════════════ */
 
-const PaymentForm: React.FC<{
+export const PaymentForm: React.FC<{
   submitting: boolean;
   error: string | null;
   onCancel: () => void;
   onSubmit: (p: PaymentCreatePayload) => void;
-}> = ({ submitting, error, onCancel, onSubmit }) => {
+  initialValues?: Partial<PaymentCreatePayload>;
+}> = ({ submitting, error, onCancel, onSubmit, initialValues }) => {
   const [form, setForm] = useState<PaymentCreatePayload>({
-    customer_id: '',
-    payment_method: 'cash',
-    payment_type: undefined,
-    amount: 0,
-    payment_date: new Date().toISOString().slice(0, 16),
+    customer_id: initialValues?.customer_id ?? '',
+    contract_id: initialValues?.contract_id,
+    reservation_id: initialValues?.reservation_id,
+    invoice_id: initialValues?.invoice_id,
+    payment_method: initialValues?.payment_method ?? 'cash',
+    payment_type: initialValues?.payment_type ?? undefined,
+    amount: initialValues?.amount ?? 0,
+    payment_date: initialValues?.payment_date ?? new Date().toISOString().slice(0, 16),
   });
   const [chequeScanning, setChequeScanning] = useState(false);
   const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);

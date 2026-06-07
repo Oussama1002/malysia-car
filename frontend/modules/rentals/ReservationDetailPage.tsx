@@ -3,6 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { PaymentForm } from '@/modules/finance/PaymentsPage';
+import { createPayment, type PaymentCreatePayload } from '@/services/financeApi';
 
 /* ─── lazy tab components ─────────────────────────────────────────── */
 const TabSummary      = lazy(() => import('./tabs/TabSummary'));
@@ -67,6 +70,8 @@ export const ReservationDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabId>('summary');
+  const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const detailQ = useQuery({
     queryKey: ['reservation', rid],
@@ -92,6 +97,15 @@ export const ReservationDetailPage: React.FC = () => {
   const cancelM = useMutation({
     mutationFn: () => opsApi.cancelReservation(rid!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+  });
+  const paymentM = useMutation({
+    mutationFn: (p: PaymentCreatePayload) => createPayment(p),
+    onSuccess: () => {
+      setPaymentDrawerOpen(false);
+      setPaymentError(null);
+      qc.invalidateQueries({ queryKey: ['reservation', rid] });
+    },
+    onError: (e) => setPaymentError(e instanceof Error ? e.message : 'Erreur de création du paiement'),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['reservation', rid] });
@@ -234,7 +248,7 @@ export const ReservationDetailPage: React.FC = () => {
                 🏁 Check-In
               </button>
               <button
-                onClick={() => setActiveTab('payments')}
+                onClick={() => { setPaymentError(null); setPaymentDrawerOpen(true); }}
                 className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700"
               >
                 💳 Ajouter paiement
@@ -297,6 +311,27 @@ export const ReservationDetailPage: React.FC = () => {
           </Suspense>
         </div>
       </div>
+
+      {/* ── Payment creation drawer ── */}
+      <DrawerPanel
+        open={paymentDrawerOpen}
+        title="Nouveau paiement client"
+        onClose={() => setPaymentDrawerOpen(false)}
+      >
+        <PaymentForm
+          submitting={paymentM.isPending}
+          error={paymentError}
+          onCancel={() => setPaymentDrawerOpen(false)}
+          onSubmit={(p) => {
+            setPaymentError(null);
+            paymentM.mutate(p);
+          }}
+          initialValues={{
+            customer_id: r?.customer_id ?? '',
+            reservation_id: rid ?? '',
+          }}
+        />
+      </DrawerPanel>
     </div>
   );
 };
