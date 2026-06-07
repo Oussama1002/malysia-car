@@ -172,12 +172,25 @@ export const SubRentalCreatePage: React.FC = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Agence fournisseur</h2>
           {field('Agence fournisseur', (
-            <select className={inputCls} value={form.supplier_agency_id} onChange={set('supplier_agency_id')} required>
-              <option value="">— Sélectionner —</option>
-              {(agenciesQ.data?.data ?? []).map((a) => (
-                <option key={a.id} value={a.id}>{a.name} {a.city ? `(${a.city})` : ''}</option>
-              ))}
-            </select>
+            <div className="flex items-stretch gap-2">
+              <select className={`${inputCls} flex-1`} value={form.supplier_agency_id} onChange={(e) => {
+                if (e.target.value === '__new__') { navigate('/fleet/supplier-agencies'); return; }
+                set('supplier_agency_id')(e);
+              }} required>
+                <option value="">— Sélectionner —</option>
+                {(agenciesQ.data?.data ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} {a.city ? `(${a.city})` : ''}</option>
+                ))}
+                <option value="__new__">+ Nouveau fournisseur</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => navigate('/fleet/supplier-agencies')}
+                className="shrink-0 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white hover:bg-indigo-700 whitespace-nowrap"
+              >
+                + Nouveau
+              </button>
+            </div>
           ), true)}
           {agenciesQ.data?.data?.length === 0 && (
             <p className="text-xs text-amber-600">Aucune agence active. <a href="/fleet/supplier-agencies" className="underline">Créer une agence</a>.</p>
