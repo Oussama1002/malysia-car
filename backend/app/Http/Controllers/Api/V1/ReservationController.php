@@ -375,6 +375,35 @@ class ReservationController extends Controller
         return ApiResponse::success($reservation->fresh());
     }
 
+    public function destroy(Request $request, Reservation $reservation): JsonResponse
+    {
+        if (! in_array($reservation->status, ['cancelled', 'draft'], true)) {
+            return ApiResponse::error('Seules les réservations annulées ou en brouillon peuvent être supprimées.', 422);
+        }
+
+        DB::transaction(function () use ($reservation): void {
+            // Delete related records
+            RentalHandoverReport::where('reservation_id', $reservation->id)->delete();
+            RentalExtension::where('reservation_id', $reservation->id)->delete();
+            RentalDamageReport::where('reservation_id', $reservation->id)->delete();
+            if (\Schema::hasTable('reservation_drivers')) {
+                ReservationDriver::where('reservation_id', $reservation->id)->delete();
+            }
+            Payment::where('reservation_id', $reservation->id)->update(['reservation_id' => null]);
+            $reservation->delete();
+        });
+
+        AuditLogger::record(
+            action: 'reservation_deleted',
+            user: $request->user(),
+            entityType: 'reservation',
+            entityId: $reservation->id,
+            module: 'rentals',
+        );
+
+        return ApiResponse::success(null, null, 'Réservation supprimée.');
+    }
+
     public function update(Request $request, Reservation $reservation): JsonResponse
     {
         $data = $request->validate([

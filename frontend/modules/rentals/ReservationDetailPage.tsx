@@ -46,16 +46,16 @@ function statusTone(s: string): 'success' | 'danger' | 'brand' | 'info' | 'warni
 }
 
 const TABS = [
-  { id: 'summary',    label: 'Résumé',       icon: '📊' },
-  { id: 'drivers',    label: 'Conducteurs',   icon: '👤' },
-  { id: 'contract',   label: 'Contrat',       icon: '📄' },
-  { id: 'checkout',   label: 'Check-Out',     icon: '🚗' },
-  { id: 'checkin',    label: 'Check-In',      icon: '🏁' },
-  { id: 'extensions', label: 'Prolongations',  icon: '⏰' },
-  { id: 'damages',    label: 'Dommages',      icon: '⚠️' },
-  { id: 'payments',   label: 'Paiements',     icon: '💳' },
-  { id: 'invoices',   label: 'Factures',      icon: '🧾' },
-  { id: 'history',    label: 'Historique',     icon: '📜' },
+  { id: 'summary',    label: 'Résumé' },
+  { id: 'drivers',    label: 'Conducteurs' },
+  { id: 'contract',   label: 'Contrat' },
+  { id: 'checkout',   label: 'Check-Out' },
+  { id: 'checkin',    label: 'Check-In' },
+  { id: 'extensions', label: 'Prolongations' },
+  { id: 'damages',    label: 'Dommages' },
+  { id: 'payments',   label: 'Paiements' },
+  { id: 'invoices',   label: 'Factures' },
+  { id: 'history',    label: 'Historique' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -115,6 +115,10 @@ export const ReservationDetailPage: React.FC = () => {
   const cancelM = useMutation({
     mutationFn: () => opsApi.cancelReservation(rid!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+  });
+  const deleteM = useMutation({
+    mutationFn: () => opsApi.deleteReservation(rid!),
+    onSuccess: () => navigate('/contracts'),
   });
   const paymentM = useMutation({
     mutationFn: (p: PaymentCreatePayload) => createPayment(p),
@@ -312,6 +316,15 @@ export const ReservationDetailPage: React.FC = () => {
               </button>
             </>
           )}
+          {status === 'cancelled' && (
+            <button
+              onClick={() => { if (confirm('Supprimer définitivement cette réservation annulée ?')) deleteM.mutate(); }}
+              disabled={deleteM.isPending}
+              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-50"
+            >
+              {deleteM.isPending ? 'Suppression…' : '🗑️ Supprimer'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -334,7 +347,7 @@ export const ReservationDetailPage: React.FC = () => {
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-white/60'
               }`}
             >
-              <span className="mr-1.5">{t.icon}</span>{t.label}
+              {t.label}
             </button>
           ))}
         </div>
