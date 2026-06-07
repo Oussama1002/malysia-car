@@ -18,12 +18,95 @@ const MODULE_OPTIONS = [
   'legal',
   'signature',
   'documents',
+  'document_reader',
   'rentals',
   'gps',
   'used_cars',
   'general',
   'system',
 ];
+
+const MODULE_FR: Record<string, string> = {
+  auth: 'Authentification',
+  admin: 'Administration',
+  customers: 'Clients',
+  kyc: 'KYC',
+  fleet: 'Flotte',
+  contracts: 'Contrats',
+  credit: 'Crédit',
+  finance: 'Finance',
+  legal: 'Juridique',
+  signature: 'Signature',
+  documents: 'Documents',
+  document_reader: 'Lecture documents',
+  rentals: 'Réservations',
+  gps: 'GPS',
+  used_cars: 'Véhicules occasion',
+  general: 'Général',
+  system: 'Système',
+};
+
+const ACTION_FR: Record<string, string> = {
+  status_changed: 'Changement de statut',
+  created: 'Création',
+  updated: 'Modification',
+  deleted: 'Suppression',
+  approved: 'Approbation',
+  rejected: 'Rejet',
+  activated: 'Activation',
+  terminated: 'Résiliation',
+  login: 'Connexion',
+  logout: 'Déconnexion',
+  password_changed: 'Changement mot de passe',
+  blacklist_added: 'Ajout liste noire',
+  blacklist_removed: 'Retrait liste noire',
+  document_uploaded: 'Document uploadé',
+  document_extracted: 'Extraction OCR',
+  vehicle_swap_requested: 'Demande changement véhicule',
+  vehicle_swap_approved: 'Changement véhicule validé',
+  vehicle_swap_approved_instant: 'Changement véhicule immédiat',
+  reservation_deleted: 'Réservation supprimée',
+  vehicle_swap_rejected: 'Changement véhicule refusé',
+  critical_notification_created: 'Notification critique',
+};
+
+const STATUS_FR: Record<string, string> = {
+  draft: 'brouillon',
+  reserved: 'réservé',
+  confirmed: 'confirmé',
+  pickup_scheduled: 'remise planifiée',
+  handed_over: 'remis',
+  active: 'en cours',
+  extension_requested: 'prolongation demandée',
+  return_scheduled: 'retour planifié',
+  returned: 'retourné',
+  inspection_pending: 'inspection en attente',
+  damage_pending: 'dommages en attente',
+  billing_pending: 'facturation en attente',
+  closed: 'clôturé',
+  cancelled: 'annulé',
+  pending: 'en attente',
+  pending_approval: 'en attente approbation',
+  approved: 'approuvé',
+  terminated: 'résilié',
+  processing: 'en traitement',
+  extracted: 'extrait',
+  failed: 'échoué',
+  validated: 'validé',
+};
+
+/** Translate an action_label that contains status transitions like "Statut reserved → cancelled" */
+function translateActionLabel(label: string | null | undefined, action: string): string {
+  if (!label) return ACTION_FR[action] ?? action;
+  // Translate "Statut X → Y" patterns
+  const m = label.match(/^Statut\s+(\w+)\s*[→→]\s*(\w+)$/i);
+  if (m) {
+    const from = STATUS_FR[m[1]] ?? m[1];
+    const to = STATUS_FR[m[2]] ?? m[2];
+    return `Statut ${from} → ${to}`;
+  }
+  return ACTION_FR[label] ?? label;
+}
 
 const ENTITY_OPTIONS = [
   '',
@@ -176,15 +259,15 @@ export const AuditPage: React.FC = () => {
           {
             key: 'm',
             header: 'Module',
-            render: (r) => <span className="font-mono text-xs">{r.module}</span>,
+            render: (r) => <span className="text-xs font-semibold">{MODULE_FR[r.module] ?? r.module}</span>,
           },
           {
             key: 'a',
             header: 'Action',
             render: (r) => (
               <div className="flex flex-col">
-                <span className="font-semibold">{r.action_label ?? r.action}</span>
-                <span className="text-[10px] uppercase text-slate-400">{r.action}</span>
+                <span className="font-semibold">{translateActionLabel(r.action_label, r.action)}</span>
+                <span className="text-[10px] uppercase text-slate-400">{ACTION_FR[r.action] ?? r.action}</span>
               </div>
             ),
           },
@@ -255,9 +338,9 @@ const DiffDrawer: React.FC<{ log: AuditLogDto; onClose: () => void }> = ({ log, 
         <div className="flex items-start justify-between">
           <div>
             <div className="text-xs font-mono text-slate-500">{log.id}</div>
-            <h2 className="text-lg font-black">{log.action_label ?? log.action}</h2>
+            <h2 className="text-lg font-black">{translateActionLabel(log.action_label, log.action)}</h2>
             <div className="text-xs text-slate-500">
-              {log.module} · {log.entity_type ? log.entity_type.split('\\').pop() : '—'} ·{' '}
+              {MODULE_FR[log.module] ?? log.module} · {log.entity_type ? log.entity_type.split('\\').pop() : '—'} ·{' '}
               {log.actor_email ?? log.user_id ?? '—'} · {formatDate(log.occurred_at)}
             </div>
           </div>
