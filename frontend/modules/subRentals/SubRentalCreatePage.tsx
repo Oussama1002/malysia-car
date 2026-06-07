@@ -83,7 +83,7 @@ export const SubRentalCreatePage: React.FC = () => {
   const vehiclesQ = useQuery({
     queryKey: ['fleet', 'vehicles', 'available'],
     queryFn: () => apiClient<{ data: Array<{ id: string; registration_number: string; brand?: { name: string }; model?: { name: string } }> }>('/v1/vehicles?per_page=200&availability_status=available'),
-    enabled: apiReady && form.vehicle_mode === 'existing',
+    enabled: false, // existing vehicle mode removed
   });
 
   const selectedBrand = brands.find((b) => b.id === form.ext_brand_id);
@@ -130,9 +130,7 @@ export const SubRentalCreatePage: React.FC = () => {
 
     if (form.deposit_amount) body.deposit_amount = parseFloat(form.deposit_amount);
 
-    if (form.vehicle_mode === 'existing' && form.vehicle_id) {
-      body.vehicle_id = form.vehicle_id;
-    } else {
+    {
       const registration = form.plat_num ? `${form.plat_num}-${form.plat_letter}-${form.plat_region}` : undefined;
       const brandObj = brands.find((b) => b.id === form.ext_brand_id);
       const modelObj = brandObj?.models.find((m) => m.id === form.ext_model_id);
@@ -200,34 +198,7 @@ export const SubRentalCreatePage: React.FC = () => {
         {/* Vehicle identity */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Véhicule</h2>
-          <div className="flex gap-3">
-            {(['temporary', 'existing'] as VehicleMode[]).map((m) => (
-              <label key={m} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="vehicle_mode"
-                  value={m}
-                  checked={form.vehicle_mode === m}
-                  onChange={() => setForm((f) => ({ ...f, vehicle_mode: m }))}
-                  className="accent-indigo-600"
-                />
-                <span className="text-sm">{m === 'temporary' ? 'Créer un véhicule temporaire' : 'Lier à un véhicule existant'}</span>
-              </label>
-            ))}
-          </div>
 
-          {form.vehicle_mode === 'existing' ? (
-            field('Véhicule existant', (
-              <select className={inputCls} value={form.vehicle_id} onChange={set('vehicle_id')}>
-                <option value="">— Sélectionner —</option>
-                {(vehiclesQ.data?.data ?? []).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.registration_number} {v.brand?.name} {v.model?.name}
-                  </option>
-                ))}
-              </select>
-            ))
-          ) : (
             <div className="grid grid-cols-2 gap-3">
               {/* Immatriculation — plate picker */}
               <div className="col-span-2">
@@ -305,7 +276,6 @@ export const SubRentalCreatePage: React.FC = () => {
 
               {field('Kilométrage', <input className={inputCls} type="number" value={form.ext_mileage} onChange={set('ext_mileage')} placeholder="Ex: 45000" min="0" />)}
             </div>
-          )}
         </div>
 
         {/* Contract dates & costs */}
