@@ -85,12 +85,20 @@ class ReservationController extends Controller
             'notes' => ['nullable', 'string'],
             'company_id' => ['nullable', 'uuid'],
             'branch_id' => ['nullable', 'uuid'],
+            // 'draft' = non-valid intent (non-blocking), 'reserved' = confirmed booking (blocking)
+            'is_draft' => ['nullable', 'boolean'],
         ]);
 
-        $r = DB::transaction(function () use ($data, $request) {
+        $isDraft = (bool) ($data['is_draft'] ?? false);
+
+        $r = DB::transaction(function () use ($data, $request, $isDraft) {
             $startAt = Carbon::parse($data['desired_start_at']);
             $endAt = Carbon::parse($data['desired_end_at']);
-            $this->availability->assertVehicleAvailableWithLock($data['vehicle_id'], $startAt, $endAt);
+
+            // Only block availability for confirmed (non-draft) reservations
+            if (! $isDraft) {
+                $this->availability->assertVehicleAvailableWithLock($data['vehicle_id'], $startAt, $endAt);
+            }
 
             return Reservation::query()->create([
                 'id' => (string) Str::uuid(),
@@ -100,7 +108,7 @@ class ReservationController extends Controller
                 'customer_id' => $data['customer_id'],
                 'vehicle_id' => $data['vehicle_id'],
                 'reservation_type' => $data['reservation_type'],
-                'status' => 'reserved',
+                'status' => $isDraft ? 'draft' : 'reserved',
                 'desired_start_at' => $data['desired_start_at'],
                 'desired_end_at' => $data['desired_end_at'],
                 'pickup_address' => $data['pickup_address'] ?? null,
@@ -116,9 +124,87 @@ class ReservationController extends Controller
             ]);
         });
 
-        AuditLogger::statusChanged($r, 'draft', 'reserved', $request->user(), $request, module: 'rentals');
+        $initialStatus = $isDraft ? 'draft' : 'reserved';
+        AuditLogger::statusChanged($r, 'new', $initialStatus, $request->user(), $request, module: 'rentals');
+
+        // Send notification
+        try {
+            $ns = app(\App\Services\NotificationService::class);
+            if ($isDraft) {
+                $ns->notifyRoles(
+                    ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+                    'reservation_intent',
+                    "Intention de réservation {$r->reservation_number}",
+                    "Réservation en attente de confirmation. Véhicule non bloqué — reste disponible.",
+                    'rentals',
+                    'normal',
+                    entity: $r,
+                    linkUrl: "/reservations/{$r->id}",
+                );
+            } else {
+                $ns->notifyRoles(
+                    ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+                    'reservation_confirmed',
+                    "Réservation confirmée {$r->reservation_number}",
+                    "Véhicule bloqué pour la période demandée.",
+                    'rentals',
+                    'normal',
+                    entity: $r,
+                    linkUrl: "/reservations/{$r->id}",
+                );
+            }
+        } catch (\Throwable) {
+            // Non-blocking — notification failure shouldn't abort reservation
+        }
 
         return ApiResponse::success($r, null, null, 201);
+    }
+
+    /**
+     * Convert a draft (non-valid) reservation into a confirmed (valid) one.
+     * This locks the vehicle for the period and checks availability.
+     */
+    public function validateReservation(Request $request, Reservation $reservation): JsonResponse
+    {
+        if ($reservation->status !== 'draft') {
+            return ApiResponse::error('Seules les réservations en brouillon peuvent être validées.', 422);
+        }
+
+        DB::transaction(function () use ($reservation, $request): void {
+            $locked = Reservation::withoutGlobalScopes()
+                ->whereKey((string) $reservation->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Now check availability — draft didn't block, so we must verify the slot is free
+            $this->availability->assertVehicleAvailableWithLock(
+                (string) $locked->vehicle_id,
+                Carbon::parse($locked->desired_start_at),
+                Carbon::parse($locked->desired_end_at),
+                (string) $locked->id
+            );
+
+            $this->transitionReservation($locked, 'reserved', $request);
+        });
+
+        // Notify that reservation is now confirmed
+        try {
+            $ns = app(\App\Services\NotificationService::class);
+            $ns->notifyRoles(
+                ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+                'reservation_validated',
+                "Réservation validée {$reservation->reservation_number}",
+                "L'intention de réservation a été confirmée. Véhicule désormais bloqué.",
+                'rentals',
+                'normal',
+                entity: $reservation->fresh(),
+                linkUrl: "/reservations/{$reservation->id}",
+            );
+        } catch (\Throwable) {
+            // Non-blocking
+        }
+
+        return ApiResponse::success($reservation->fresh());
     }
 
     public function show(Reservation $reservation): JsonResponse

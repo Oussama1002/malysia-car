@@ -93,6 +93,7 @@ export const ReservationsOpsPage: React.FC = () => {
     pickup_address: '',
     delivery_address: '',
     estimated_price: '',
+    is_draft: false,
   });
 
   const reservationDetailQ = useQuery({
@@ -141,6 +142,13 @@ export const ReservationsOpsPage: React.FC = () => {
     staleTime: 10_000,
   });
 
+  const validateRes = useMutation({
+    mutationFn: async (id: string) => opsApi.validateReservation(id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+    },
+  });
+
   const createRes = useMutation({
     mutationFn: async () =>
       opsApi.createReservation({
@@ -152,6 +160,7 @@ export const ReservationsOpsPage: React.FC = () => {
         pickup_address: form.pickup_address || undefined,
         delivery_address: form.delivery_address || undefined,
         estimated_price: form.estimated_price ? Number(form.estimated_price) : undefined,
+        is_draft: form.is_draft,
       }),
     onMutate: () => setCreateError(null),
     onSuccess: async () => {
@@ -449,23 +458,40 @@ export const ReservationsOpsPage: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <StatusBadge
-                  label={STATUS_FR[r.status] ?? r.status}
-                  tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : r.status === 'active' ? 'brand' : 'info'}
-                />
+                {r.status === 'draft' ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border-2 border-dashed border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-700">
+                    ⏳ Intention · Non validée
+                  </span>
+                ) : (
+                  <StatusBadge
+                    label={STATUS_FR[r.status] ?? r.status}
+                    tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : r.status === 'active' ? 'brand' : r.status === 'reserved' || r.status === 'confirmed' ? 'success' : 'info'}
+                  />
+                )}
+                {r.status === 'draft' && (
+                  <button
+                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    disabled={validateRes.isPending}
+                    onClick={(e) => { e.stopPropagation(); validateRes.mutate(r.id); }}
+                  >
+                    ✓ Valider
+                  </button>
+                )}
                 <button
                   className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
                   onClick={(e) => { e.stopPropagation(); nav(`/reservations/${r.id}`); }}
                 >
                   Détail →
                 </button>
-                <button
-                  className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
-                  disabled={createMission.isPending}
-                  onClick={(e) => { e.stopPropagation(); createMission.mutate(r.id); }}
-                >
-                  Créer mission
-                </button>
+                {r.status !== 'draft' && (
+                  <button
+                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+                    disabled={createMission.isPending}
+                    onClick={(e) => { e.stopPropagation(); createMission.mutate(r.id); }}
+                  >
+                    Créer mission
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -523,16 +549,47 @@ export const ReservationsOpsPage: React.FC = () => {
           {formAvailabilityQ.data?.available && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">Créneau disponible pour ce véhicule.</div>
           )}
+          {/* Draft / Confirmed toggle */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="res_mode"
+                  checked={!form.is_draft}
+                  onChange={() => setForm((s) => ({ ...s, is_draft: false }))}
+                  className="accent-indigo-600"
+                />
+                <div>
+                  <div className="text-xs font-black text-slate-800">Réservation confirmée</div>
+                  <div className="text-[10px] text-slate-500">Véhicule bloqué · créneau réservé</div>
+                </div>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="res_mode"
+                  checked={form.is_draft}
+                  onChange={() => setForm((s) => ({ ...s, is_draft: true }))}
+                  className="accent-amber-600"
+                />
+                <div>
+                  <div className="text-xs font-black text-slate-800">Intention (brouillon)</div>
+                  <div className="text-[10px] text-slate-500">Véhicule non bloqué · en attente de confirmation</div>
+                </div>
+              </label>
+            </div>
+          </div>
           {createError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{createError}</div>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => setNewResOpen(false)}>Annuler</button>
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 disabled:opacity-50"
-              disabled={!form.customer_id || !form.vehicle_id || !form.desired_start_at || !form.desired_end_at || createRes.isPending || formSlotBlocked}
+              className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-black text-white shadow-lg disabled:opacity-50 ${form.is_draft ? 'bg-amber-600 shadow-amber-100 hover:bg-amber-700' : 'bg-indigo-600 shadow-indigo-100 hover:bg-indigo-700'}`}
+              disabled={!form.customer_id || !form.vehicle_id || !form.desired_start_at || !form.desired_end_at || createRes.isPending || (!form.is_draft && formSlotBlocked)}
               onClick={() => createRes.mutate()}
             >
-              {createRes.isPending ? 'Création…' : 'Créer réservation'}
+              {createRes.isPending ? 'Création…' : form.is_draft ? 'Créer intention' : 'Créer réservation'}
             </button>
           </div>
         </div>

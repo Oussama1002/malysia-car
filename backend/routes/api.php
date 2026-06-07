@@ -460,6 +460,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:rentals.availability');
         Route::post('reservations/{reservation}/confirm', [ReservationController::class, 'confirm'])
             ->middleware('permission:reservations.confirm');
+        Route::post('reservations/{reservation}/validate', [ReservationController::class, 'validateReservation'])
+            ->middleware('permission:reservations.confirm');
         Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
             ->middleware('permission:reservations.cancel');
         Route::post('reservations/{reservation}/create-mission', [ReservationController::class, 'createMission'])

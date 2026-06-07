@@ -80,6 +80,7 @@ export const opsApi = {
     pickup_address?: string;
     delivery_address?: string;
     estimated_price?: number;
+    is_draft?: boolean;
   }): Promise<ReservationDto> {
     const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.create, { method: 'POST', body: JSON.stringify(input) });
     return res.data;
@@ -110,6 +111,11 @@ export const opsApi = {
 
   async confirmReservation(id: string): Promise<ReservationDto> {
     const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.confirm(id), { method: 'POST', body: JSON.stringify({}) });
+    return res.data;
+  },
+
+  async validateReservation(id: string): Promise<ReservationDto> {
+    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.validate(id), { method: 'POST', body: JSON.stringify({}) });
     return res.data;
   },
 
