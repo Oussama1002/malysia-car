@@ -116,6 +116,13 @@ export const endpoints = {
     drivers: (id: number | string) => `/v1/reservations/${id}/drivers`,
     driver: (id: number | string, driverId: string) => `/v1/reservations/${id}/drivers/${driverId}`,
   },
+  vehicleSwaps: {
+    list: '/v1/vehicle-swaps',
+    create: '/v1/vehicle-swaps',
+    instant: '/v1/vehicle-swaps/instant',
+    approve: (id: string) => `/v1/vehicle-swaps/${id}/approve`,
+    reject: (id: string) => `/v1/vehicle-swaps/${id}/reject`,
+  },
   rentals: {
     availability: '/v1/rentals/availability',
   },
