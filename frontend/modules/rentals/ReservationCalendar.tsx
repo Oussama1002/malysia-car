@@ -295,23 +295,30 @@ const TimeGrid: React.FC<{
               .filter((e) => isSameDay(e.start, day) || (ms(e.start) <= ms(endOfDay(day)) && ms(e.end) >= ms(startOfDay(day))))
               .map((e) => {
                 const pos = positionFor(e, day);
-                const c = colourFor(e.vehicleId);
+                const isDraft = e.status === 'draft';
+                const c = isDraft
+                  ? { bg: 'bg-rose-500', soft: 'bg-rose-50', border: 'border-rose-300', text: 'text-rose-900' }
+                  : colourFor(e.vehicleId);
                 return (
                   <button
                     type="button"
                     key={e.id + day.toISOString()}
                     onClick={(ev) => { ev.stopPropagation(); onSelect?.(e.id); }}
-                    className={`absolute left-1 right-1 overflow-hidden rounded-lg border ${c.border} ${c.soft} px-2 py-1 text-left shadow-sm hover:shadow-md`}
+                    className={`absolute left-1 right-1 overflow-hidden rounded-lg border px-2 py-1 text-left shadow-sm hover:shadow-md ${isDraft ? 'border-dashed border-rose-400 bg-rose-50/80' : `${c.border} ${c.soft}`}`}
                     style={{ top: pos.top, height: pos.height }}
-                    title={`${e.ref} · ${e.vehicleLabel} · ${e.customerLabel}`}
+                    title={`${e.ref} · ${e.vehicleLabel} · ${e.customerLabel}${isDraft ? ' (Non validée)' : ''}`}
                   >
                     <div className="flex items-center gap-1">
-                      <span className={`inline-block h-2 w-2 rounded-full ${c.bg}`} />
-                      <span className={`truncate text-[11px] font-black ${c.text}`}>{e.customerLabel}</span>
+                      {isDraft ? (
+                        <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[9px] font-black text-rose-600">✗</span>
+                      ) : (
+                        <span className={`inline-block h-2 w-2 rounded-full ${c.bg}`} />
+                      )}
+                      <span className={`truncate text-[11px] font-black ${isDraft ? 'text-rose-700' : c.text}`}>{e.customerLabel}</span>
                     </div>
-                    <div className="truncate text-[10px] font-semibold text-slate-700">{e.vehicleLabel}</div>
+                    <div className={`truncate text-[10px] font-semibold ${isDraft ? 'text-rose-500' : 'text-slate-700'}`}>{e.vehicleLabel}</div>
                     {pos.height >= 56 && (
-                      <div className="mt-0.5 text-[10px] text-slate-500">
+                      <div className={`mt-0.5 text-[10px] ${isDraft ? 'text-rose-400' : 'text-slate-500'}`}>
                         {e.start.getHours().toString().padStart(2, '0')}:{e.start.getMinutes().toString().padStart(2, '0')}
                         {' – '}
                         {e.end.getHours().toString().padStart(2, '0')}:{e.end.getMinutes().toString().padStart(2, '0')}
@@ -374,14 +381,22 @@ const MonthGrid: React.FC<{
               </div>
               <div className="flex flex-col gap-0.5">
                 {visible.map((e) => {
-                  const c = colourFor(e.vehicleId);
+                  const isDraft = e.status === 'draft';
+                  const c = isDraft
+                    ? { bg: 'bg-rose-500', soft: 'bg-rose-50', border: 'border-rose-300', text: 'text-rose-700' }
+                    : colourFor(e.vehicleId);
                   return (
                     <span
                       key={e.id}
-                      className={`inline-flex items-center gap-1 truncate rounded ${c.soft} px-1.5 py-0.5 text-[10px] font-semibold ${c.text}`}
+                      className={`inline-flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-semibold ${isDraft ? 'border border-dashed border-rose-300 bg-rose-50 text-rose-700' : `${c.soft} ${c.text}`}`}
                       onClick={(ev) => { ev.stopPropagation(); onSelect?.(e.id); }}
+                      title={isDraft ? `${e.ref} (Non validée)` : e.ref}
                     >
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${c.bg}`} />
+                      {isDraft ? (
+                        <span className="text-[9px] font-black text-rose-600">✗</span>
+                      ) : (
+                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${c.bg}`} />
+                      )}
                       <span className="truncate">{e.customerLabel}</span>
                     </span>
                   );
