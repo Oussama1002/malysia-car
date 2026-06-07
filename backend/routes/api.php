@@ -737,6 +737,33 @@ Route::prefix('v1')->group(function () {
         Route::post('treasury/bank-transactions/{transaction}/match', [TreasuryController::class, 'matchTransaction'])
             ->middleware(['permission:treasury.match', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
 
+        // ── Expenses (Dépenses) module ───────────────────────────────────
+        Route::get('expenses/dashboard', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'dashboard'])
+            ->middleware('permission:invoices.view');
+        Route::get('expenses', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'index'])
+            ->middleware('permission:invoices.view');
+        Route::post('expenses', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'store'])
+            ->middleware('permission:invoices.create');
+        Route::get('expenses/vehicle/{vehicleId}', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'byVehicle'])
+            ->middleware('permission:invoices.view');
+        Route::get('expenses/{expense}', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'show'])
+            ->middleware('permission:invoices.view');
+        Route::put('expenses/{expense}', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'update'])
+            ->middleware('permission:invoices.update');
+        Route::delete('expenses/{expense}', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'destroy'])
+            ->middleware('permission:invoices.delete');
+        Route::post('expenses/{expense}/mark-paid', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'markPaid'])
+            ->middleware('permission:invoices.update');
+        // Expense suppliers
+        Route::get('expense-suppliers', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'suppliers'])
+            ->middleware('permission:invoices.view');
+        Route::post('expense-suppliers', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'storeSupplier'])
+            ->middleware('permission:invoices.create');
+        Route::put('expense-suppliers/{supplier}', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'updateSupplier'])
+            ->middleware('permission:invoices.update');
+        Route::delete('expense-suppliers/{supplier}', [\App\Http\Controllers\Api\V1\ExpenseController::class, 'destroySupplier'])
+            ->middleware('permission:invoices.delete');
+
         Route::get('fixed-charges/dashboard', [FixedChargeController::class, 'dashboard'])
             ->middleware('permission:invoices.view');
         Route::get('fixed-charges', [FixedChargeController::class, 'index'])
