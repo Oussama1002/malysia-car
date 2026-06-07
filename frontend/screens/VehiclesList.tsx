@@ -1163,12 +1163,7 @@ const VehiclesList: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Immatriculation provisoire / WW */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Immat. provisoire / WW</label>
-                    <input className={inputCls} placeholder="ex: WW-12345" value={formData.immatProvisoire}
-                      onChange={e => setFormData(fd => ({ ...fd, immatProvisoire: e.target.value }))} />
-                  </div>
+                  {/* Immat. provisoire / WW removed — already in Row 1 */}
 
                   <div className="space-y-2">
                     <label className={labelCls}>Validité immat. provisoire</label>
