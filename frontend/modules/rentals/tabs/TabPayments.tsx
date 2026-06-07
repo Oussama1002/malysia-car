@@ -1,8 +1,8 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
 interface Props {
   data: any;
+  onAddPayment?: () => void;
 }
 
 const fmtMad = (v: number) => `${v.toLocaleString('fr-MA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} MAD`;
@@ -23,7 +23,7 @@ const STATUS_FR: Record<string, { label: string; cls: string }> = {
   pending:   { label: 'En attente', cls: 'bg-amber-100 text-amber-700' },
 };
 
-const TabPayments: React.FC<Props> = ({ data }) => {
+const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
   if (!data) return null;
   const payments = data.payments ?? [];
   const totals = data.totals ?? { estimated_price: 0, extensions_total: 0, damages_total: 0, paid: 0 };
@@ -58,12 +58,13 @@ const TabPayments: React.FC<Props> = ({ data }) => {
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
             Paiements ({payments.length})
           </h3>
-          <Link
-            to={`/finance/payments`}
+          <button
+            type="button"
+            onClick={onAddPayment}
             className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-black text-white hover:bg-violet-700"
           >
             + Ajouter paiement
-          </Link>
+          </button>
         </div>
 
         {payments.length > 0 ? (

@@ -248,7 +248,7 @@ export const ReservationDetailPage: React.FC = () => {
                 🏁 Check-In
               </button>
               <button
-                onClick={() => { setPaymentError(null); setPaymentDrawerOpen(true); }}
+                onClick={() => { setActiveTab('payments'); setTimeout(() => { setPaymentError(null); setPaymentDrawerOpen(true); }, 100); }}
                 className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700"
               >
                 💳 Ajouter paiement
@@ -305,7 +305,7 @@ export const ReservationDetailPage: React.FC = () => {
             {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
             {activeTab === 'extensions' && <TabExtensions reservationId={rid!} extensions={d?.extensions ?? []} onRefresh={invalidate} />}
             {activeTab === 'damages'    && <TabDamages reservationId={rid!} damages={d?.damage_reports ?? []} onRefresh={invalidate} />}
-            {activeTab === 'payments'   && <TabPayments data={d} />}
+            {activeTab === 'payments'   && <TabPayments data={d} onAddPayment={() => { setPaymentError(null); setPaymentDrawerOpen(true); }} />}
             {activeTab === 'invoices'   && <TabInvoices reservationId={rid!} invoices={d?.invoices ?? []} data={d} onRefresh={invalidate} />}
             {activeTab === 'history'    && <TabHistory history={d?.history ?? []} />}
           </Suspense>
