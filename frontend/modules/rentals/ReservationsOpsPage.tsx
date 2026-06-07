@@ -9,6 +9,12 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
 import { ReservationCalendar } from '@/modules/rentals/ReservationCalendar';
 import { Modal } from '@/modules/shared/components/Modal';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { CustomerForm } from '@/modules/customers/CustomerForm';
+import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
+import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
+import { listBranches } from '@/services/adminApi';
+import { documentReaderApi } from '@/services/documentReaderApi';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -65,6 +71,8 @@ export const ReservationsOpsPage: React.FC = () => {
   const [newResOpen, setNewResOpen] = useState(false);
   const [availCheckOpen, setAvailCheckOpen] = useState(false);
   const [availForm, setAvailForm] = useState({ vehicle_id: '', start_at: '', end_at: '' });
+  const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
+  const [newClientError, setNewClientError] = useState<string | null>(null);
 
   const reservationsQ = useQuery({
     queryKey: queryKeys.reservations,
@@ -76,6 +84,25 @@ export const ReservationsOpsPage: React.FC = () => {
     queryKey: queryKeys.customers.all,
     queryFn: async () => (await apiClient<ApiListResponse<CustomerDto>>(endpoints.customers.list)).data,
     enabled: hasBackend(),
+  });
+
+  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches(), enabled: hasBackend() });
+
+  const createCustomerMut = useMutation({
+    mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
+      const res = await createCustomer(vars.payload);
+      for (const scan of vars.scans) {
+        try { await documentReaderApi.link(scan.documentId, 'customer', String(res.data.id)); } catch { /* non-blocking */ }
+      }
+      return res;
+    },
+    onSuccess: async (res) => {
+      setNewClientError(null);
+      setNewClientDrawerOpen(false);
+      await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
+      setForm((s) => ({ ...s, customer_id: String(res.data.id) }));
+    },
+    onError: (e) => setNewClientError(e instanceof Error ? e.message : 'Erreur de création du client'),
   });
 
   const vehiclesQ = useQuery({
@@ -514,12 +541,25 @@ export const ReservationsOpsPage: React.FC = () => {
       <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => setForm((s) => ({ ...s, customer_id: e.target.value }))}>
-              <option value="">Client…</option>
-              {customerOptions.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
+            <div className="flex items-stretch gap-2">
+              <select className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
+                if (e.target.value === '__new__') { setNewClientError(null); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
+                setForm((s) => ({ ...s, customer_id: e.target.value }));
+              }}>
+                <option value="">Client…</option>
+                {customerOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+                <option value="__new__">+ Nouveau client</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => { setNewClientError(null); setNewClientDrawerOpen(true); }}
+                className="shrink-0 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white hover:bg-indigo-700 whitespace-nowrap"
+              >
+                + Nouveau
+              </button>
+            </div>
             <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
               <option value="">Véhicule…</option>
               {vehicleOptions.map((v) => (
@@ -870,6 +910,26 @@ export const ReservationsOpsPage: React.FC = () => {
           </div>
         ) : null}
       </Modal>
+
+      {/* New client drawer */}
+      <DrawerPanel
+        open={newClientDrawerOpen}
+        title="Nouveau client"
+        onClose={() => setNewClientDrawerOpen(false)}
+        widthClass="max-w-2xl"
+      >
+        <CustomerForm
+          mode="create"
+          error={newClientError}
+          submitting={createCustomerMut.isPending}
+          branches={branchesQ.data?.data ?? []}
+          onCancel={() => setNewClientDrawerOpen(false)}
+          onSubmit={(payload, scans) => {
+            setNewClientError(null);
+            createCustomerMut.mutate({ payload, scans });
+          }}
+        />
+      </DrawerPanel>
     </div>
   );
 };
