@@ -81,6 +81,10 @@ export const ReservationDetailPage: React.FC = () => {
   const grandTotal = totals.estimated_price + totals.extensions_total + totals.damages_total;
   const balance = grandTotal - totals.paid;
 
+  const validateM = useMutation({
+    mutationFn: () => opsApi.validateReservation(rid!),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+  });
   const confirmM = useMutation({
     mutationFn: () => opsApi.confirmReservation(rid!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
@@ -131,10 +135,16 @@ export const ReservationDetailPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-black text-slate-900 tracking-tight">{r.reservation_number}</h1>
-            <StatusBadge
-              label={STATUS_FR[status] ?? status}
-              tone={statusTone(status)}
-            />
+            {status === 'draft' ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-dashed border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-700">
+                ⏳ Intention · Non validée
+              </span>
+            ) : (
+              <StatusBadge
+                label={STATUS_FR[status] ?? status}
+                tone={statusTone(status)}
+              />
+            )}
           </div>
           <div className="text-xs text-slate-400">
             Créé le {fmtDate(r.created_at)}
@@ -161,8 +171,37 @@ export const ReservationDetailPage: React.FC = () => {
           ))}
         </div>
 
+        {/* Draft intent banner */}
+        {status === 'draft' && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-200 bg-amber-50 px-6 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⏳</span>
+              <div>
+                <div className="text-xs font-black text-amber-800">Intention de réservation — non validée</div>
+                <div className="text-[10px] text-amber-600">Le véhicule n'est pas bloqué. Validez pour confirmer et réserver le créneau.</div>
+              </div>
+            </div>
+            <button
+              onClick={() => validateM.mutate()}
+              disabled={validateM.isPending}
+              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50 shadow-lg"
+            >
+              {validateM.isPending ? 'Validation…' : '✓ Valider la réservation'}
+            </button>
+          </div>
+        )}
+
         {/* Quick actions bar */}
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-6 py-3 bg-slate-50/50">
+          {status === 'draft' && (
+            <button
+              onClick={() => validateM.mutate()}
+              disabled={validateM.isPending}
+              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              ✓ Valider réservation
+            </button>
+          )}
           {!['cancelled', 'closed'].includes(status) && (
             <Link
               to={`/contracts/new?from_reservation=${rid}`}
