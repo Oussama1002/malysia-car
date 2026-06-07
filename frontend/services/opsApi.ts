@@ -168,6 +168,36 @@ export const opsApi = {
     await apiClient(endpoints.reservations.driver(reservationId, driverId), { method: 'DELETE' });
   },
 
+  // ── Vehicle swaps ──────────────────────────────────────────────────
+  async vehicleSwaps(params?: { contract_id?: string; reservation_id?: string }): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params?.contract_id) qs.set('contract_id', params.contract_id);
+    if (params?.reservation_id) qs.set('reservation_id', params.reservation_id);
+    const path = `${endpoints.vehicleSwaps.list}${qs.toString() ? `?${qs}` : ''}`;
+    const res = await apiClient<{ data: any[] }>(path);
+    return res.data;
+  },
+
+  async requestVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string }): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.create, { method: 'POST', body: JSON.stringify(payload) });
+    return res.data;
+  },
+
+  async instantVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string }): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.instant, { method: 'POST', body: JSON.stringify(payload) });
+    return res.data;
+  },
+
+  async approveVehicleSwap(swapId: string): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.approve(swapId), { method: 'POST', body: JSON.stringify({}) });
+    return res.data;
+  },
+
+  async rejectVehicleSwap(swapId: string, reason?: string): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.reject(swapId), { method: 'POST', body: JSON.stringify({ rejection_reason: reason }) });
+    return res.data;
+  },
+
   async startMission(missionId: string): Promise<MissionDto> {
     const res = await apiClient<{ data: MissionDto }>(endpoints.missions.start(missionId), { method: 'POST', body: JSON.stringify({}) });
     return res.data;

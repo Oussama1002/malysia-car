@@ -485,6 +485,18 @@ Route::prefix('v1')->group(function () {
         Route::delete('reservations/{reservation}/drivers/{driver}', [ReservationController::class, 'destroyDriver'])
             ->middleware('permission:rentals.update');
 
+        // Vehicle swap requests
+        Route::get('vehicle-swaps', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'index'])
+            ->middleware('permission:fleet.view');
+        Route::post('vehicle-swaps', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'store'])
+            ->middleware('permission:rentals.update');
+        Route::post('vehicle-swaps/instant', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'approveInstant'])
+            ->middleware('permission:rentals.update');
+        Route::post('vehicle-swaps/{swap}/approve', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'approve'])
+            ->middleware('permission:rentals.update');
+        Route::post('vehicle-swaps/{swap}/reject', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'reject'])
+            ->middleware('permission:rentals.update');
+
         Route::get('missions', [MissionController::class, 'index'])
             ->middleware('permission:missions.view');
         Route::get('missions/{mission}', [MissionController::class, 'show'])
