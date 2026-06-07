@@ -1124,13 +1124,7 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
                   </div>
 
-                  {/* Montant (prix d'acquisition) — placed next to its date */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Montant (DH)</label>
-                    <input type="number" min="0" className={inputCls} placeholder="ex: 150000"
-                      value={formData.montant}
-                      onChange={e => setFormData(fd => ({ ...fd, montant: e.target.value }))} />
-                  </div>
+                  {/* Montant removed per user request */}
 
                   {/* Row 6 — Admin numbers ───────────────────────────────── */}
 
