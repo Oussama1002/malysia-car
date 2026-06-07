@@ -12,6 +12,7 @@ use App\Models\CreditApplication;
 use App\Models\CreditScore;
 use App\Models\ContractHistory;
 use App\Models\ContractInstallment;
+use App\Models\Reservation;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
 use App\Services\RentalAvailabilityService;
@@ -148,6 +149,11 @@ class ContractController extends Controller
         });
 
         AuditLogger::created($c, $request->user(), request: $request);
+
+        // Auto-create a reservation if none exists for this contract's customer+vehicle+period.
+        // Business rule: every contract must have a matching reservation.
+        $this->ensureReservationForContract($c, $request);
+
         if ((string) $c->status === 'pending_approval') {
             $this->notifications->notifyRoles(
                 roleCodes: ['ADMIN', 'DIRECTEUR'],
@@ -586,6 +592,98 @@ class ContractController extends Controller
                 'cheque_number' => [__('Numéro de chèque obligatoire pour ce mode de paiement.')],
             ]);
         }
+    }
+
+    /**
+     * Ensure a reservation exists for this contract.
+     * Business rule: every valid contract must have an associated reservation.
+     * If no reservation exists for the same customer+vehicle+period, auto-create one.
+     */
+    private function ensureReservationForContract(Contract $contract, Request $request): void
+    {
+        // Skip if no vehicle or dates — contract not yet fully formed
+        if (! $contract->vehicle_id || ! $contract->start_date) {
+            return;
+        }
+
+        try {
+            $endDate = $contract->end_date
+                ?? ($contract->start_date && $contract->duration_months
+                    ? Carbon::parse($contract->start_date)->addMonths($contract->duration_months)->toDateTimeString()
+                    : Carbon::parse($contract->start_date)->addMonths(12)->toDateTimeString());
+
+            // Check if a reservation already exists for this customer+vehicle in the same period
+            $existing = Reservation::query()
+                ->where('customer_id', $contract->customer_id)
+                ->where('vehicle_id', $contract->vehicle_id)
+                ->whereNotIn('status', ['cancelled'])
+                ->where(function ($q) use ($contract, $endDate) {
+                    $q->where('desired_start_at', '<=', $endDate)
+                      ->where('desired_end_at', '>=', $contract->start_date);
+                })
+                ->first();
+
+            if ($existing) {
+                // Reservation already exists — ensure it's at least 'reserved' status
+                if ($existing->status === 'draft') {
+                    $existing->update(['status' => 'reserved']);
+                    AuditLogger::statusChanged($existing, 'draft', 'reserved', $request->user(), $request, module: 'rentals');
+                }
+                return;
+            }
+
+            // Auto-create reservation
+            $reservation = Reservation::query()->create([
+                'id' => (string) Str::uuid(),
+                'company_id' => $contract->company_id,
+                'branch_id' => $contract->branch_id,
+                'reservation_number' => $this->generateReservationNumber(),
+                'customer_id' => $contract->customer_id,
+                'vehicle_id' => $contract->vehicle_id,
+                'reservation_type' => $this->mapContractTypeToReservationType($contract->contract_type),
+                'status' => 'reserved',
+                'desired_start_at' => $contract->start_date,
+                'desired_end_at' => $endDate,
+                'estimated_price' => $contract->base_amount,
+                'payment_method' => $contract->payment_method,
+                'notes' => "Auto-créée depuis le contrat {$contract->contract_number}",
+                'created_by' => auth()->id(),
+            ]);
+
+            AuditLogger::statusChanged($reservation, 'new', 'reserved', $request->user(), $request, module: 'rentals');
+        } catch (\Throwable $e) {
+            // Non-blocking — contract creation should never fail because of reservation auto-creation
+            \Illuminate\Support\Facades\Log::warning('contract.auto_reservation_failed', [
+                'contract_id' => $contract->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function mapContractTypeToReservationType(string $contractType): string
+    {
+        return match (strtoupper($contractType)) {
+            'LLD', 'LOA' => 'LONG_RENTAL',
+            'LOCATION_COURTE' => 'SHORT_RENTAL',
+            'CREDIT_AUTO' => 'CREDIT_AUTO',
+            'VENTE_VO' => 'VENTE_VO',
+            default => 'SHORT_RENTAL',
+        };
+    }
+
+    private function generateReservationNumber(): string
+    {
+        $latest = Reservation::query()
+            ->where('reservation_number', 'like', 'RSV-%')
+            ->orderByRaw("CAST(SUBSTRING(reservation_number, 5) AS UNSIGNED) DESC")
+            ->value('reservation_number');
+
+        $seq = 1;
+        if ($latest && preg_match('/^RSV-(\d+)$/', $latest, $m)) {
+            $seq = (int) $m[1] + 1;
+        }
+
+        return 'RSV-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
     }
 
     private function generateContractNumber(): string
