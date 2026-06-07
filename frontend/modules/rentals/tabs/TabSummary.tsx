@@ -3,6 +3,17 @@ import React from 'react';
 const fmtMad = (v: number) =>
   `${v.toLocaleString('fr-MA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} MAD`;
 
+const RESERVATION_TYPE_FR: Record<string, string> = {
+  SHORT_RENTAL: 'Location courte durée',
+  short_rental: 'Location courte durée',
+  LONG_RENTAL: 'Location longue durée',
+  long_rental: 'Location longue durée',
+  LLD: 'LLD',
+  LOA: 'LOA',
+  CREDIT_AUTO: 'Crédit automobile',
+  VENTE_VO: 'Vente VO',
+};
+
 const fmtDate = (v: string | null | undefined) =>
   v ? new Date(v).toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -52,7 +63,7 @@ const TabSummary: React.FC<Props> = ({ data }) => {
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             {[
               ['N° réservation', r.reservation_number],
-              ['Type', r.reservation_type ?? '—'],
+              ['Type', RESERVATION_TYPE_FR[r.reservation_type] ?? r.reservation_type ?? '—'],
               ['Mode paiement', r.payment_method ?? '—'],
               ['Adresse pickup', r.pickup_address ?? '—'],
               ['Adresse livraison', r.delivery_address ?? '—'],
