@@ -62,10 +62,13 @@ export const documentReaderApi = {
       body: fd,
     });
   },
-  extract(id: string, documentType?: ReaderDocumentType) {
+  extract(id: string, documentType?: ReaderDocumentType, options?: { sync?: boolean }) {
+    const payload: Record<string, unknown> = {};
+    if (documentType) payload.document_type = documentType;
+    if (options?.sync === true) payload.sync = true;
     return apiClient<{ data: ReaderDocument }>(endpoints.documentReader.extract(id), {
       method: 'POST',
-      body: JSON.stringify(documentType ? { document_type: documentType } : {}),
+      body: JSON.stringify(payload),
     });
   },
   validate(

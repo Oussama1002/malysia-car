@@ -131,7 +131,9 @@ const ScanSlot: React.FC<{
         onScanComplete?.({ documentId: docId, documentType: docType });
 
         // 2. Trigger OCR — returns 202 instantly, OCR runs in a background worker.
-        await documentReaderApi.extract(docId, docType);
+        // For customer prefill, force synchronous OCR to avoid queue worker
+        // crashes/timeouts causing false negatives in the UI.
+        await documentReaderApi.extract(docId, docType, { sync: true });
 
         // 3. Poll until the worker finishes (extracted | failed).
         //    Each tick is 3 s; timeout after 5 min.

@@ -105,6 +105,7 @@ class DocumentReaderController extends Controller
     {
         $data = $request->validate([
             'document_type' => ['nullable', 'string', 'in:'.implode(',', ReaderDocument::TYPES)],
+            'sync' => ['nullable', 'boolean'],
         ]);
 
         $doc = $this->find($request, $id);
@@ -127,8 +128,22 @@ class DocumentReaderController extends Controller
         // polling immediately.
         $doc->update(['status' => ReaderDocument::STATUS_PROCESSING]);
 
-        // Dispatch OCR to the background queue — the HTTP request returns 202
-        // in milliseconds regardless of how long Tesseract takes.
+        // Optional synchronous mode for critical UX flows (e.g. identity
+        // scanner prefill): avoid depending on queue worker health and return
+        // once OCR reaches a terminal state.
+        if ((bool) ($data['sync'] ?? false) === true) {
+            try {
+                $this->reader->extract($doc->fresh(), $data['document_type'] ?? null);
+            } catch (Throwable) {
+                // DocumentReaderService already persists a user-friendly
+                // error_message + failed status; always return the fresh state.
+            }
+
+            return ApiResponse::success($this->serialize($doc->fresh()->load('latestExtraction')));
+        }
+
+        // Default mode: dispatch OCR to the background queue — the HTTP request
+        // returns 202 in milliseconds regardless of how long Tesseract takes.
         // Frontend polls GET /documents/{id} every 3 s until status ∈ {extracted, failed}.
         ProcessDocumentOcrJob::dispatch($doc->fresh(), $data['document_type'] ?? null);
 
