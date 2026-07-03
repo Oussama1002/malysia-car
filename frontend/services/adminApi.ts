@@ -370,3 +370,18 @@ export async function uploadMyAvatar(file: File): Promise<{ data: { user: AdminU
     body,
   });
 }
+
+// ============================================================================
+// Company Settings
+// ============================================================================
+
+export async function getSettings(group: string): Promise<{ data: { group: string; settings: Record<string, string> } }> {
+  return apiClient<{ data: { group: string; settings: Record<string, string> } }>(`/v1/settings/${group}`);
+}
+
+export async function updateSettings(group: string, settings: Record<string, string>): Promise<{ data: { group: string; settings: Record<string, string> } }> {
+  return apiClient<{ data: { group: string; settings: Record<string, string> } }>(`/v1/settings/${group}`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings }),
+  });
+}

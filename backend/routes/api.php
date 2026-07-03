@@ -66,6 +66,7 @@ use App\Http\Controllers\Api\V1\VehicleMaintenancePlanController;
 use App\Http\Controllers\Api\V1\VehicleInsurancePolicyController;
 use App\Http\Controllers\Api\V1\VehicleTechnicalInspectionController;
 use App\Http\Controllers\Api\V1\ComplianceAlertController;
+use App\Http\Controllers\Api\V1\CompanySettingsController;
 use App\Http\Controllers\Api\V1\VehicleRepairController;
 use App\Http\Controllers\Api\V1\VehicleMovementController;
 use App\Http\Controllers\Api\V1\FleetAnalysisController;
@@ -1095,6 +1096,9 @@ Route::prefix('v1')->group(function () {
                 ->middleware('permission:branches.manage');
             Route::delete('branches/{branch}', [BranchController::class, 'destroy'])
                 ->middleware('permission:branches.manage');
+
+            Route::get('settings/{group}', [CompanySettingsController::class, 'show']);
+            Route::put('settings/{group}', [CompanySettingsController::class, 'update']);
         });
     });
 });
