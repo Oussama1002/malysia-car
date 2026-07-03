@@ -998,12 +998,18 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
                 <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Field label="Agent assigné">
-                    <input
+                    <select
                       className="df-input"
-                      placeholder="Nom de l'agent en charge"
-                      value={state.assignedAgent}
-                      onChange={(e) => patch('assignedAgent', e.target.value)}
-                    />
+                      value={state.assignedAgentId ?? ''}
+                      onChange={(e) => patch('assignedAgentId', e.target.value || null)}
+                    >
+                      <option value="">— Non assigné —</option>
+                      {(agents.data ?? []).map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} · {u.role}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                 </div>
                 <AIHint
