@@ -541,8 +541,18 @@ export const ReservationsOpsPage: React.FC = () => {
       <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="flex items-stretch gap-2">
-              <select className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
+            <div>
+              <label className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500">
+                <span>Client</span>
+                <button
+                  type="button"
+                  onClick={() => { setNewClientError(null); setNewClientDrawerOpen(true); }}
+                  className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-black text-white hover:bg-indigo-700"
+                >
+                  + Nouveau
+                </button>
+              </label>
+              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
                 if (e.target.value === '__new__') { setNewClientError(null); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
                 setForm((s) => ({ ...s, customer_id: e.target.value }));
               }}>
@@ -552,26 +562,25 @@ export const ReservationsOpsPage: React.FC = () => {
                 ))}
                 <option value="__new__">+ Nouveau client</option>
               </select>
-              <button
-                type="button"
-                onClick={() => { setNewClientError(null); setNewClientDrawerOpen(true); }}
-                className="shrink-0 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white hover:bg-indigo-700 whitespace-nowrap"
-              >
-                + Nouveau
-              </button>
             </div>
-            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
-              <option value="">Véhicule…</option>
-              {vehicleOptions.map((v) => (
-                <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
-              ))}
-            </select>
-            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
-              <option value="SHORT_RENTAL">Location courte durée</option>
-              <option value="LONG_RENTAL">Location longue durée</option>
-              <option value="LLD">LLD</option>
-              <option value="LOA">LOA</option>
-            </select>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Véhicule</label>
+              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
+                <option value="">Véhicule…</option>
+                {vehicleOptions.map((v) => (
+                  <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Type de réservation</label>
+              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
+                <option value="SHORT_RENTAL">Location courte durée</option>
+                <option value="LONG_RENTAL">Location longue durée</option>
+                <option value="LLD">LLD</option>
+                <option value="LOA">LOA</option>
+              </select>
+            </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
               <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_start_at} onChange={(e) => setForm((s) => ({ ...s, desired_start_at: e.target.value }))} />
