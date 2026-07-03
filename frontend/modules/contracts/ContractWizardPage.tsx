@@ -1309,7 +1309,7 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
         <p className="mt-2"><strong>{client}</strong>, ci-après dénommé <em>« le Preneur »</em>,</p>
         <hr className="my-4 border-[color:var(--df-border)]" />
         <p><strong>Article 1 — Objet</strong></p>
-        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d{"’"}un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} jour{state.durationMonths > 1 ? ‘s’ : ‘’}</span>.</p>
+        <p className="mt-1">{"Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat "}<em>{t?.label}</em>{", le véhicule "}<strong>{vehicle}</strong>{", pour une durée de "}<span className="df-num font-semibold">{state.durationMonths}{‘ jour’}{state.durationMonths > 1 ? ‘s’ : ‘’}</span>.</p>
         <p className="mt-3"><strong>Article 2 — {isShortRental ? ‘Tarif et conditions financières’ : ‘Loyer et conditions financières’}</strong></p>
         {isShortRental ? (
           <p className="mt-1">Le tarif journalier est fixé à <span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>, payable à la prise en charge. Le kilométrage inclus est de <span className="df-num font-semibold">{state.kmInclMonth.toLocaleString(‘fr-MA’)} km/jour</span> ; tout dépassement sera facturé conformément à l’annexe tarifaire.</p>
