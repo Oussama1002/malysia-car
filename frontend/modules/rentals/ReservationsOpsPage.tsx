@@ -99,6 +99,7 @@ export const ReservationsOpsPage: React.FC = () => {
     onSuccess: async (res) => {
       setNewClientError(null);
       setNewClientDrawerOpen(false);
+      setNewResOpen(true);
       await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
       setForm((s) => ({ ...s, customer_id: String(res.data.id) }));
     },
@@ -546,14 +547,14 @@ export const ReservationsOpsPage: React.FC = () => {
                 <span>Client</span>
                 <button
                   type="button"
-                  onClick={() => { setNewClientError(null); setNewClientDrawerOpen(true); }}
+                  onClick={() => { setNewClientError(null); setNewResOpen(false); setNewClientDrawerOpen(true); }}
                   className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-black text-white hover:bg-indigo-700"
                 >
                   + Nouveau
                 </button>
               </label>
               <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
-                if (e.target.value === '__new__') { setNewClientError(null); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
+                if (e.target.value === '__new__') { setNewClientError(null); setNewResOpen(false); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
                 setForm((s) => ({ ...s, customer_id: e.target.value }));
               }}>
                 <option value="">Client…</option>
@@ -930,7 +931,7 @@ export const ReservationsOpsPage: React.FC = () => {
       <DrawerPanel
         open={newClientDrawerOpen}
         title="Nouveau client"
-        onClose={() => setNewClientDrawerOpen(false)}
+        onClose={() => { setNewClientDrawerOpen(false); setNewResOpen(true); }}
         widthClass="max-w-2xl"
       >
         <CustomerForm
@@ -938,7 +939,7 @@ export const ReservationsOpsPage: React.FC = () => {
           error={newClientError}
           submitting={createCustomerMut.isPending}
           branches={branchesQ.data?.data ?? []}
-          onCancel={() => setNewClientDrawerOpen(false)}
+          onCancel={() => { setNewClientDrawerOpen(false); setNewResOpen(true); }}
           onSubmit={(payload, scans) => {
             setNewClientError(null);
             createCustomerMut.mutate({ payload, scans });
