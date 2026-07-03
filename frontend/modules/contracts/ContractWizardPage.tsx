@@ -889,12 +889,40 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Date de début">
+                    <input
+                      type="date"
+                      className="df-input"
+                      value={state.startDate ?? ''}
+                      onChange={(e) => {
+                        const start = e.target.value;
+                        setState((s) => {
+                          const days = start && s.endDate ? Math.max(1, Math.round((new Date(s.endDate).getTime() - new Date(start).getTime()) / 86400000)) : s.durationMonths;
+                          return { ...s, startDate: start, durationMonths: days };
+                        });
+                      }}
+                    />
+                  </Field>
+                  <Field label="Date de fin">
+                    <input
+                      type="date"
+                      className="df-input"
+                      value={state.endDate ?? ''}
+                      onChange={(e) => {
+                        const end = e.target.value;
+                        setState((s) => {
+                          const days = s.startDate && end ? Math.max(1, Math.round((new Date(end).getTime() - new Date(s.startDate).getTime()) / 86400000)) : s.durationMonths;
+                          return { ...s, endDate: end, durationMonths: days };
+                        });
+                      }}
+                    />
+                  </Field>
                   <Field label="Durée (jours)">
                     <input
                       type="number"
-                      className="df-input"
+                      className="df-input bg-slate-50 text-slate-500"
                       value={state.durationMonths}
-                      onChange={(e) => patch('durationMonths', Number(e.target.value))}
+                      disabled
                     />
                   </Field>
                   <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isShortRental ? 'Prix par jour' : 'Loyer mensuel'} (MAD)`}>
@@ -1318,7 +1346,7 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
             {`${state.durationMonths} jour${state.durationMonths > 1 ? "s" : ""}`}
           </span>.
         </p>
-        <p className="mt-3"><strong>Article 2 — {isShortRental ? ‘Tarif et conditions financières’ : ‘Loyer et conditions financières’}</strong></p>
+        <p className="mt-3"><strong>Article 2 — {isShortRental ? "Tarif et conditions financières" : "Loyer et conditions financières"}</strong></p>
         {isShortRental ? (
           <p className="mt-1">{`Le tarif journalier est fixé à `}<span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>{`, payable à la prise en charge. Le kilométrage inclus est de `}<span className="df-num font-semibold">{state.kmInclMonth.toLocaleString("fr-MA")} km/jour</span>{` ; tout dépassement sera facturé conformément à l’annexe tarifaire.`}</p>
         ) : (
