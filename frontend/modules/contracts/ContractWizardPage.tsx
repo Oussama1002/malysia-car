@@ -40,13 +40,13 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { key: 'client', title: 'Client locataire 1 & 2', hint: 'Identité & conformité', icon: 'users' },
-  { key: 'assignment', title: 'Assigned agent', hint: 'Commercial responsable', icon: 'users' },
+  { key: 'client', title: 'Client', hint: 'Locataire 1 & 2', icon: 'users' },
+  { key: 'assignment', title: 'Agent', hint: 'Commercial', icon: 'users' },
   { key: 'vehicle', title: 'Véhicule', hint: 'Choix de l\u2019actif', icon: 'car' },
-  { key: 'type', title: 'Type', hint: 'LLD / LOA / Crédit / VO', icon: 'doc' },
-  { key: 'terms', title: 'Conditions', hint: 'Durée, loyer, garanties', icon: 'coin' },
-  { key: 'annex', title: 'Annexes', hint: 'Pièces & justificatifs', icon: 'upload' },
-  { key: 'review', title: 'Validation', hint: 'Relecture & signature', icon: 'sign' },
+  { key: 'type', title: 'Type', hint: 'LLD / LOA / VO', icon: 'doc' },
+  { key: 'terms', title: 'Conditions', hint: 'Loyer & durée', icon: 'coin' },
+  { key: 'annex', title: 'Annexes', hint: 'Justificatifs', icon: 'upload' },
+  { key: 'review', title: 'Validation', hint: 'Signature', icon: 'sign' },
 ];
 
 const CONTRACT_TYPES: {
@@ -612,29 +612,30 @@ export const ContractWizardPage: React.FC = () => {
       </header>
 
       {/* Stepper */}
-      <div className="df-card p-5">
+      <div className="df-card px-4 py-5 md:px-6">
         <div className="df-stepper">
           {STEPS.map((s, i) => {
             const done = i < stepIdx;
             const active = i === stepIdx;
             return (
-              <React.Fragment key={s.key}>
-                <button
-                  type="button"
-                  onClick={() => i <= stepIdx && setStepIdx(i)}
-                  className={`df-step ${done ? 'df-step--done' : ''} ${active ? 'df-step--active' : ''}`}
-                  style={{ cursor: i <= stepIdx ? 'pointer' : 'default', background: 'transparent', border: 0 }}
-                >
-                  <span className="df-step__bullet">
-                    {done ? <Icon name="check" size={12} /> : i + 1}
-                  </span>
-                  <span className="hidden md:block">
-                    <span className="df-step__label">{s.title}</span>
-                    <span className="block text-[10px] font-semibold text-[color:var(--df-text-faint)]">{s.hint}</span>
-                  </span>
-                </button>
-                {i < STEPS.length - 1 && <span className={`df-step__rail ${done ? 'df-step__rail--done' : ''}`} />}
-              </React.Fragment>
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => i <= stepIdx && setStepIdx(i)}
+                className={`df-step ${done ? 'df-step--done' : ''} ${active ? 'df-step--active' : ''}`}
+                style={{ cursor: i <= stepIdx ? 'pointer' : 'default', background: 'transparent', border: 0 }}
+              >
+                {i < STEPS.length - 1 && (
+                  <span className={`df-step__rail ${done ? 'df-step__rail--done' : active ? 'df-step__rail--active' : ''}`} />
+                )}
+                <span className="df-step__bullet">
+                  {done ? <Icon name="check" size={14} /> : i + 1}
+                </span>
+                <span className="df-step__text">
+                  <span className="df-step__label">{s.title}</span>
+                  <span className="df-step__hint">{s.hint}</span>
+                </span>
+              </button>
             );
           })}
         </div>
