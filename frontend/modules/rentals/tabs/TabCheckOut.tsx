@@ -145,7 +145,7 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
             disabled={pickupM.isPending}
             className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            {pickupM.isPending ? 'Enregistrement…' : '🚗 Valider le Check-Out'}
+            {pickupM.isPending ? 'Enregistrement…' : 'Valider le Check-Out'}
           </button>
         </div>
       </div>
