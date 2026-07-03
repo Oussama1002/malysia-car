@@ -889,40 +889,12 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Date de début">
-                    <input
-                      type="date"
-                      className="df-input"
-                      value={state.startDate ?? ''}
-                      onChange={(e) => {
-                        const start = e.target.value;
-                        setState((s) => {
-                          const days = start && s.endDate ? Math.max(1, Math.round((new Date(s.endDate).getTime() - new Date(start).getTime()) / 86400000)) : s.durationMonths;
-                          return { ...s, startDate: start, durationMonths: days };
-                        });
-                      }}
-                    />
-                  </Field>
-                  <Field label="Date de fin">
-                    <input
-                      type="date"
-                      className="df-input"
-                      value={state.endDate ?? ''}
-                      onChange={(e) => {
-                        const end = e.target.value;
-                        setState((s) => {
-                          const days = s.startDate && end ? Math.max(1, Math.round((new Date(end).getTime() - new Date(s.startDate).getTime()) / 86400000)) : s.durationMonths;
-                          return { ...s, endDate: end, durationMonths: days };
-                        });
-                      }}
-                    />
-                  </Field>
                   <Field label="Durée (jours)">
                     <input
                       type="number"
-                      className="df-input bg-slate-50 text-slate-500"
+                      className="df-input"
                       value={state.durationMonths}
-                      disabled
+                      onChange={(e) => patch('durationMonths', Number(e.target.value))}
                     />
                   </Field>
                   <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isShortRental ? 'Prix par jour' : 'Loyer mensuel'} (MAD)`}>
