@@ -389,6 +389,7 @@ export const ContractWizardPage: React.FC = () => {
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
 
+  const isShortRental = state.type === 'LOCATION_COURTE';
   const totalAmount = state.monthlyRentMad * state.durationMonths;
 
   const canNext = useMemo(() => {
@@ -888,7 +889,7 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Durée (mois)">
+                  <Field label={isShortRental ? 'Durée (jours)' : 'Durée (mois)'}>
                     <input
                       type="number"
                       className="df-input"
@@ -896,7 +897,7 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('durationMonths', Number(e.target.value))}
                     />
                   </Field>
-                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : 'Loyer mensuel'} (MAD)`}>
+                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isShortRental ? 'Prix par jour' : 'Loyer mensuel'} (MAD)`}>
                     <input
                       type="number"
                       className="df-input"
@@ -904,7 +905,7 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('monthlyRentMad', Number(e.target.value))}
                     />
                   </Field>
-                  <Field label="Kilométrage mensuel inclus">
+                  <Field label={isShortRental ? 'Kilométrage journalier inclus' : 'Kilométrage mensuel inclus'}>
                     <input
                       type="number"
                       className="df-input"
@@ -1099,9 +1100,9 @@ export const ContractWizardPage: React.FC = () => {
               <SummaryRow label="Agent assigné" value={selectedAgent?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
-              <SummaryRow label="Durée" value={`${state.durationMonths} mois`} />
-              <SummaryRow label="Mensualité" value={formatCurrencyMad(state.monthlyRentMad)} highlight />
-              <SummaryRow label="Km inclus / mois" value={state.kmInclMonth.toLocaleString('fr-MA')} />
+              <SummaryRow label="Durée" value={isShortRental ? `${state.durationMonths} jour${state.durationMonths > 1 ? 's' : ''}` : `${state.durationMonths} mois`} />
+              <SummaryRow label={isShortRental ? 'Prix / jour' : 'Mensualité'} value={formatCurrencyMad(state.monthlyRentMad)} highlight />
+              <SummaryRow label={isShortRental ? 'Km inclus / jour' : 'Km inclus / mois'} value={state.kmInclMonth.toLocaleString('fr-MA')} />
               <SummaryRow label="Caution" value={formatCurrencyMad(state.securityDepositMad)} />
               {state.type === 'LOA' && <SummaryRow label="Valeur résiduelle" value={`${state.residualValuePct}%`} />}
               <div className="px-4 py-3">
@@ -1308,9 +1309,13 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
         <p className="mt-2"><strong>{client}</strong>, ci-après dénommé <em>« le Preneur »</em>,</p>
         <hr className="my-4 border-[color:var(--df-border)]" />
         <p><strong>Article 1 — Objet</strong></p>
-        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} mois</span>.</p>
-        <p className="mt-3"><strong>Article 2 — Loyer et conditions financières</strong></p>
-        <p className="mt-1">Le loyer mensuel est fixé à <span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>, payable le 5 de chaque mois. Le kilométrage inclus est de <span className="df-num font-semibold">{state.kmInclMonth.toLocaleString('fr-MA')} km/mois</span> ; tout dépassement sera facturé conformément à l'annexe tarifaire.</p>
+        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} {isShortRental ? `jour${state.durationMonths > 1 ? ‘s’ : ‘’}` : ‘mois’}</span>.</p>
+        <p className="mt-3"><strong>Article 2 — {isShortRental ? ‘Tarif et conditions financières’ : ‘Loyer et conditions financières’}</strong></p>
+        {isShortRental ? (
+          <p className="mt-1">Le tarif journalier est fixé à <span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>, payable à la prise en charge. Le kilométrage inclus est de <span className="df-num font-semibold">{state.kmInclMonth.toLocaleString(‘fr-MA’)} km/jour</span> ; tout dépassement sera facturé conformément à l’annexe tarifaire.</p>
+        ) : (
+          <p className="mt-1">Le loyer mensuel est fixé à <span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>, payable le 5 de chaque mois. Le kilométrage inclus est de <span className="df-num font-semibold">{state.kmInclMonth.toLocaleString(‘fr-MA’)} km/mois</span> ; tout dépassement sera facturé conformément à l’annexe tarifaire.</p>
+        )}
         <p className="mt-3"><strong>Article 3 — Géolocalisation</strong></p>
         <p className="mt-1">Conformément à la loi 09-08, le Preneur est informé que le véhicule est équipé d’un dispositif GPS. Les données sont conservées de manière chiffrée et utilisées exclusivement pour le suivi contractuel et la sécurité de l'actif.</p>
         <p className="mt-3 text-[11px] text-[color:var(--df-text-faint)]">… clauses supplémentaires générées automatiquement selon le type de contrat.</p>
