@@ -150,12 +150,11 @@ function friendlyError(e: unknown, fallback: string): string {
   return raw || fallback;
 }
 
-/** Calculate the number of full months between two ISO date strings. */
-function monthsBetween(start: string, end: string): number {
+/** Calculate the number of days between two ISO date strings. */
+function daysBetween(start: string, end: string): number {
   const s = new Date(start);
   const e = new Date(end);
-  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
-  return Math.max(1, months);
+  return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000));
 }
 
 export const ContractWizardPage: React.FC = () => {
@@ -195,7 +194,7 @@ export const ContractWizardPage: React.FC = () => {
           ? String(r.desired_end_at).slice(0, 10)
           : null;
         const durationMonths =
-          startDate && endDate ? monthsBetween(startDate, endDate) : 0;
+          startDate && endDate ? daysBetween(startDate, endDate) : 0;
         // Normalise payment method to wizard options
         const methodMap: Record<string, string> = {
           virement: 'virement',
