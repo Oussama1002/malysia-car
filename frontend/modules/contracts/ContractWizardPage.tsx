@@ -101,6 +101,7 @@ const CONTRACT_TYPES: {
 interface WizardState {
   clientId: string | number | null;
   secondaryClientId: string | number | null;
+  secondaryClientSearch: string;
   assignedAgentId: string | null;
   vehicleId: string | number | null;
   type: ContractType;
@@ -122,6 +123,7 @@ interface WizardState {
 const INITIAL: WizardState = {
   clientId: null,
   secondaryClientId: null,
+  secondaryClientSearch: '',
   assignedAgentId: null,
   vehicleId: null,
   type: 'LLD',
@@ -423,7 +425,9 @@ export const ContractWizardPage: React.FC = () => {
         : null,
       state.secondaryClientId && selectedSecondaryClient
         ? `Locataire 2: ${selectedSecondaryClient.name}`
-        : null,
+        : state.secondaryClientSearch
+          ? `Locataire 2: ${state.secondaryClientSearch}`
+          : null,
     ].filter(Boolean).join('\n');
     const mergedNotes = [assignmentNotes, state.notes].filter(Boolean).join('\n');
     return {
@@ -692,23 +696,15 @@ export const ContractWizardPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                <div>
-                  <label className="df-label">Client locataire 2 (optionnel)</label>
-                  <select
-                    className="df-input"
-                    value={state.secondaryClientId ?? ''}
-                    onChange={(e) => patch('secondaryClientId', e.target.value || null)}
-                  >
-                    <option value="">— Aucun —</option>
-                    {(clients.data ?? [])
-                      .filter((c) => String(c.id) !== String(state.clientId))
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+                <ClientAutocomplete
+                  label="Client locataire 2 (optionnel)"
+                  placeholder="Tapez un nom…"
+                  value={state.secondaryClientSearch}
+                  clients={(clients.data ?? []).filter((c) => String(c.id) !== String(state.clientId))}
+                  onChange={(search, id) => {
+                    setState((s) => ({ ...s, secondaryClientSearch: search, secondaryClientId: id, secondDriverName: id ? '' : search }));
+                  }}
+                />
 
                 {selectedClient && (
                   <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
@@ -1001,14 +997,6 @@ export const ContractWizardPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Client locataire 2 (optionnel)">
-                    <input
-                      className="df-input"
-                      placeholder="Nom complet du 2e conducteur"
-                      value={state.secondDriverName}
-                      onChange={(e) => patch('secondDriverName', e.target.value)}
-                    />
-                  </Field>
                   <Field label="Agent assigné">
                     <input
                       className="df-input"
@@ -1107,7 +1095,7 @@ export const ContractWizardPage: React.FC = () => {
             </div>
             <div className="divide-y divide-[color:var(--df-border)]">
               <SummaryRow label="Client" value={selectedClient?.name ?? '—'} />
-              <SummaryRow label="Client locataire 2" value={selectedSecondaryClient?.name ?? '—'} />
+              <SummaryRow label="Client locataire 2" value={(selectedSecondaryClient?.name ?? state.secondaryClientSearch) || '—'} />
               <SummaryRow label="Agent assigné" value={selectedAgent?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
@@ -1170,6 +1158,67 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
     {children}
   </div>
 );
+
+const ClientAutocomplete: React.FC<{
+  label: string;
+  placeholder?: string;
+  value: string;
+  clients: CustomerDto[];
+  onChange: (search: string, selectedId: string | null) => void;
+}> = ({ label, placeholder, value, clients, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = value.trim()
+    ? clients.filter((c) => c.name.toLowerCase().includes(value.toLowerCase()))
+    : [];
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="df-label">{label}</label>
+      <input
+        type="text"
+        className="df-input"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value, null);
+          setOpen(true);
+        }}
+        onFocus={() => { if (value.trim()) setOpen(true); }}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-elev)] shadow-lg">
+          {filtered.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-start text-sm hover:bg-[color:var(--df-surface-sunk)]"
+                onClick={() => {
+                  onChange(c.name, String(c.id));
+                  setOpen(false);
+                }}
+              >
+                <span className="font-semibold">{c.name}</span>
+                <span className="text-[11px] text-[color:var(--df-text-muted)]">
+                  {c.kind === 'ENTREPRISE' ? 'Entreprise' : 'Particulier'}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const InfoBit: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div>
