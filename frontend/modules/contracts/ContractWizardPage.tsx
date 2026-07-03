@@ -882,14 +882,14 @@ export const ContractWizardPage: React.FC = () => {
                     <input
                       type="datetime-local"
                       className="df-input bg-slate-50 text-slate-500"
-                      value={new Date().toISOString().slice(0, 16)}
+                      value={(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
                       disabled
                     />
                   </Field>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label={isShortRental ? 'Durée (jours)' : 'Durée (mois)'}>
+                  <Field label="Durée (jours)">
                     <input
                       type="number"
                       className="df-input"
@@ -1100,7 +1100,7 @@ export const ContractWizardPage: React.FC = () => {
               <SummaryRow label="Agent assigné" value={selectedAgent?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
-              <SummaryRow label="Durée" value={isShortRental ? `${state.durationMonths} jour${state.durationMonths > 1 ? 's' : ''}` : `${state.durationMonths} mois`} />
+              <SummaryRow label="Durée" value={`${state.durationMonths} jour${state.durationMonths > 1 ? 's' : ''}`} />
               <SummaryRow label={isShortRental ? 'Prix / jour' : 'Mensualité'} value={formatCurrencyMad(state.monthlyRentMad)} highlight />
               <SummaryRow label={isShortRental ? 'Km inclus / jour' : 'Km inclus / mois'} value={state.kmInclMonth.toLocaleString('fr-MA')} />
               <SummaryRow label="Caution" value={formatCurrencyMad(state.securityDepositMad)} />
@@ -1309,7 +1309,7 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
         <p className="mt-2"><strong>{client}</strong>, ci-après dénommé <em>« le Preneur »</em>,</p>
         <hr className="my-4 border-[color:var(--df-border)]" />
         <p><strong>Article 1 — Objet</strong></p>
-        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} {isShortRental ? `jour${state.durationMonths > 1 ? ‘s’ : ‘’}` : ‘mois’}</span>.</p>
+        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} jour{state.durationMonths > 1 ? ‘s’ : ‘’}</span>.</p>
         <p className="mt-3"><strong>Article 2 — {isShortRental ? ‘Tarif et conditions financières’ : ‘Loyer et conditions financières’}</strong></p>
         {isShortRental ? (
           <p className="mt-1">Le tarif journalier est fixé à <span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>, payable à la prise en charge. Le kilométrage inclus est de <span className="df-num font-semibold">{state.kmInclMonth.toLocaleString(‘fr-MA’)} km/jour</span> ; tout dépassement sera facturé conformément à l’annexe tarifaire.</p>
