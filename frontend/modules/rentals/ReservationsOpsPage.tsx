@@ -207,11 +207,17 @@ export const ReservationsOpsPage: React.FC = () => {
     },
   });
 
+  const [missionError, setMissionError] = useState<string | null>(null);
   const createMission = useMutation({
     mutationFn: async (reservationId: string) =>
       opsApi.createMission(reservationId, { mission_type: 'delivery' }),
+    onMutate: () => setMissionError(null),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.missions });
+      await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+    },
+    onError: (e: unknown) => {
+      setMissionError(e instanceof Error ? e.message : 'Erreur lors de la création de la mission');
     },
   });
 
@@ -525,6 +531,11 @@ export const ReservationsOpsPage: React.FC = () => {
           ))}
           {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
         </div>
+        {missionError && (
+          <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <strong>Erreur mission :</strong> {missionError}
+          </div>
+        )}
       </div>
 
       <ReservationCalendar
