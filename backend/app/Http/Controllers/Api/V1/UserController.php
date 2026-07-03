@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use App\Services\AuditLogger;
 use Illuminate\Support\Str;
 
 class UserController extends Controller
@@ -120,12 +121,15 @@ class UserController extends Controller
             return $user->fresh(['roles', 'branches']);
         });
 
+        AuditLogger::created($user, $request->user(), request: $request, module: 'admin', label: 'Utilisateur créé');
+
         return ApiResponse::success((new UserResource($user))->resolve($request), null, null, 201);
     }
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
         $data = $request->validated();
+        $before = $user->getAttributes();
         DB::transaction(function () use ($user, $data) {
             foreach (['first_name', 'last_name', 'name', 'email', 'phone', 'role', 'locale', 'status', 'avatar'] as $k) {
                 if (array_key_exists($k, $data) && Schema::hasColumn('users', $k === 'avatar' ? 'avatar' : $k)) {
@@ -159,32 +163,40 @@ class UserController extends Controller
             }
         });
 
+        AuditLogger::updated($user, $request->user(), before: $before, after: $user->getChanges(), request: $request, module: 'admin', label: 'Utilisateur modifié');
+
         return ApiResponse::success((new UserResource($user->fresh(['roles', 'branches'])))->resolve($request));
     }
 
-    public function destroy(User $user): JsonResponse
+    public function destroy(Request $request, User $user): JsonResponse
     {
+        AuditLogger::deleted($user, $request->user(), request: $request, module: 'admin', label: 'Utilisateur supprimé');
+
         $user->tokens()->delete();
         $user->delete();
 
         return ApiResponse::message('User deleted', 200);
     }
 
-    public function activate(User $user): JsonResponse
+    public function activate(Request $request, User $user): JsonResponse
     {
         if (Schema::hasColumn('users', 'status')) {
+            $old = $user->status;
             $user->status = 'active';
             $user->save();
+            AuditLogger::statusChanged($user, $old ?? 'inactive', 'active', $request->user(), $request, module: 'admin', label: 'Utilisateur activé');
         }
 
         return ApiResponse::success(['id' => $user->id, 'status' => 'active']);
     }
 
-    public function deactivate(User $user): JsonResponse
+    public function deactivate(Request $request, User $user): JsonResponse
     {
         if (Schema::hasColumn('users', 'status')) {
+            $old = $user->status;
             $user->status = 'inactive';
             $user->save();
+            AuditLogger::statusChanged($user, $old ?? 'active', 'inactive', $request->user(), $request, module: 'admin', label: 'Utilisateur désactivé');
         }
         $user->tokens()->delete();
 
@@ -199,6 +211,8 @@ class UserController extends Controller
             'primary_branch_id' => ['sometimes', 'nullable', 'uuid', 'exists:branches,id'],
         ]);
 
+        $oldBranches = $user->branches()->pluck('branches.id')->toArray();
+
         $sync = [];
         foreach ($data['branch_ids'] as $bid) {
             $sync[$bid] = [
@@ -211,6 +225,8 @@ class UserController extends Controller
             $user->branch_id = $data['primary_branch_id'];
             $user->save();
         }
+
+        AuditLogger::updated($user, $request->user(), before: ['branch_ids' => $oldBranches], after: ['branch_ids' => $data['branch_ids']], request: $request, module: 'admin', label: 'Agences utilisateur modifiées');
 
         return ApiResponse::success((new UserResource($user->fresh(['roles', 'branches'])))->resolve($request));
     }
