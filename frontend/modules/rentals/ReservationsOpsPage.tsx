@@ -190,7 +190,13 @@ export const ReservationsOpsPage: React.FC = () => {
         desired_end_at: form.desired_end_at,
         pickup_address: form.pickup_address || undefined,
         delivery_address: form.delivery_address || undefined,
-        estimated_price: form.estimated_price ? Number(form.estimated_price) : undefined,
+        estimated_price: (() => {
+          const rate = parseFloat(form.daily_rate);
+          const start = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
+          const end = form.desired_end_at ? new Date(form.desired_end_at).getTime() : NaN;
+          const days = (!isNaN(start) && !isNaN(end) && end > start) ? Math.ceil((end - start) / 86_400_000) : 0;
+          return (rate > 0 && days > 0) ? rate * days : undefined;
+        })(),
         daily_rate: form.daily_rate ? Number(form.daily_rate) : undefined,
         deposit_amount: form.deposit_amount ? Number(form.deposit_amount) : undefined,
         allowed_km_per_day: form.allowed_km_per_day ? Number(form.allowed_km_per_day) : undefined,
@@ -199,7 +205,7 @@ export const ReservationsOpsPage: React.FC = () => {
     onMutate: () => setCreateError(null),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
-      setForm((s) => ({ ...s, desired_start_at: '', desired_end_at: '', estimated_price: '' }));
+      setForm((s) => ({ ...s, desired_start_at: '', desired_end_at: '' }));
       setNewResOpen(false);
     },
     onError: (e: unknown) => {
@@ -590,7 +596,7 @@ export const ReservationsOpsPage: React.FC = () => {
               }}>
                 <option value="">Véhicule…</option>
                 {vehicleOptions.map((v) => (
-                  <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
+                  <option key={v.id} value={v.id}>{v.label}</option>
                 ))}
               </select>
             </div>
@@ -614,9 +620,18 @@ export const ReservationsOpsPage: React.FC = () => {
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup (optionnel)" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison (optionnel)" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Tarif / jour (MAD)" value={form.daily_rate} onChange={(e) => setForm((s) => ({ ...s, daily_rate: e.target.value }))} />
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Prix estimé total (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Caution (MAD)" value={form.deposit_amount} onChange={(e) => setForm((s) => ({ ...s, deposit_amount: e.target.value }))} />
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Km inclus / jour" value={form.allowed_km_per_day} onChange={(e) => setForm((s) => ({ ...s, allowed_km_per_day: e.target.value }))} />
+            {(() => {
+              const rate = parseFloat(form.daily_rate);
+              const start = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
+              const end = form.desired_end_at ? new Date(form.desired_end_at).getTime() : NaN;
+              const days = (!isNaN(start) && !isNaN(end) && end > start) ? Math.ceil((end - start) / 86_400_000) : 0;
+              const est = (rate > 0 && days > 0) ? (rate * days) : 0;
+              return est > 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  Prix estimé : {est.toLocaleString('fr-MA')} MAD ({days} jour{days > 1 ? 's' : ''} × {rate.toLocaleString('fr-MA')} MAD)
+                </div>
+              ) : null;
+            })()}
           </div>
           {formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>
@@ -682,7 +697,7 @@ export const ReservationsOpsPage: React.FC = () => {
           <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={availForm.vehicle_id} onChange={(e) => setAvailForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
             <option value="">Véhicule…</option>
             {vehicleOptions.map((v) => (
-              <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
+              <option key={v.id} value={v.id}>{v.label}</option>
             ))}
           </select>
           <div className="grid grid-cols-2 gap-3">
