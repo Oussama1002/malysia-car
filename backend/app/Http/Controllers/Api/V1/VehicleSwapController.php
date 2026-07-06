@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\Contract;
 use App\Models\Reservation;
+use App\Models\Vehicle;
 use App\Models\VehicleSwapRequest;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
@@ -137,6 +138,8 @@ class VehicleSwapController extends Controller
             'reservation_id' => ['nullable', 'uuid'],
             'new_vehicle_id' => ['required', 'uuid'],
             'reason' => ['nullable', 'string', 'max:500'],
+            'new_rate' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         if (empty($data['contract_id']) && empty($data['reservation_id'])) {
@@ -178,12 +181,27 @@ class VehicleSwapController extends Controller
                 $data['reservation_id'] ?? null
             );
 
+            // Update vehicle availability statuses
+            if ($oldVehicleId) {
+                Vehicle::where('id', $oldVehicleId)->update(['availability_status' => 'available']);
+            }
+            Vehicle::where('id', $data['new_vehicle_id'])->update(['availability_status' => 'in_use']);
+
             // Perform the swap
+            $contractUpdate = ['vehicle_id' => $data['new_vehicle_id']];
+            if (!empty($data['new_rate']) && !empty($data['contract_id'])) {
+                $contractUpdate['base_amount'] = $data['new_rate'];
+            }
             if (!empty($data['contract_id'])) {
-                Contract::where('id', $data['contract_id'])->update(['vehicle_id' => $data['new_vehicle_id']]);
+                Contract::where('id', $data['contract_id'])->update($contractUpdate);
             }
             if (!empty($data['reservation_id'])) {
                 Reservation::withoutGlobalScopes()->where('id', $data['reservation_id'])->update(['vehicle_id' => $data['new_vehicle_id']]);
+            }
+
+            $swapReason = $data['reason'] ?? null;
+            if (!empty($data['note'])) {
+                $swapReason = $swapReason ? "{$swapReason} — {$data['note']}" : $data['note'];
             }
 
             // Create audit record
@@ -196,7 +214,7 @@ class VehicleSwapController extends Controller
                 'old_vehicle_id' => $oldVehicleId,
                 'new_vehicle_id' => $data['new_vehicle_id'],
                 'status' => 'approved',
-                'reason' => $data['reason'] ?? null,
+                'reason' => $swapReason,
                 'requested_by' => $request->user()?->id,
                 'resolved_by' => $request->user()?->id,
                 'requested_at' => now(),
@@ -259,6 +277,12 @@ class VehicleSwapController extends Controller
                 Carbon::parse($endAt),
                 $swap->reservation_id
             );
+
+            // Update vehicle availability statuses
+            if ($swap->old_vehicle_id) {
+                Vehicle::where('id', $swap->old_vehicle_id)->update(['availability_status' => 'available']);
+            }
+            Vehicle::where('id', $swap->new_vehicle_id)->update(['availability_status' => 'in_use']);
 
             // Perform swap
             if ($swap->contract_id) {

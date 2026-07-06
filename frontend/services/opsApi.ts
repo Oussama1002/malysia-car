@@ -187,7 +187,7 @@ export const opsApi = {
     return res.data;
   },
 
-  async instantVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string }): Promise<any> {
+  async instantVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string; new_rate?: number; note?: string }): Promise<any> {
     const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.instant, { method: 'POST', body: JSON.stringify(payload) });
     return res.data;
   },
