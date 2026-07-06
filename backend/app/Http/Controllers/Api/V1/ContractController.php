@@ -12,6 +12,7 @@ use App\Models\CreditApplication;
 use App\Models\CreditScore;
 use App\Models\ContractHistory;
 use App\Models\ContractInstallment;
+use App\Models\Payment;
 use App\Models\Reservation;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
@@ -150,6 +151,42 @@ class ContractController extends Controller
         });
 
         AuditLogger::created($c, $request->user(), request: $request);
+
+        // Create Payment records from wizard payment entries
+        $paymentEntries = $request->input('payment_entries', []);
+        if (is_array($paymentEntries)) {
+            $reservation = Reservation::query()
+                ->where('customer_id', $c->customer_id)
+                ->where('vehicle_id', $c->vehicle_id)
+                ->whereNotIn('status', ['cancelled', 'closed'])
+                ->first();
+
+            foreach ($paymentEntries as $entry) {
+                $amount = (float) ($entry['amount'] ?? 0);
+                if ($amount <= 0) {
+                    continue;
+                }
+                $paymentNumber = 'PAY-' . strtoupper(substr((string) \Illuminate\Support\Str::uuid(), 0, 8));
+                Payment::query()->create([
+                    'id' => (string) \Illuminate\Support\Str::uuid(),
+                    'company_id' => $c->company_id,
+                    'customer_id' => $c->customer_id,
+                    'contract_id' => $c->id,
+                    'reservation_id' => $reservation?->id,
+                    'payment_number' => $paymentNumber,
+                    'payment_method' => PaymentMethodNormalizer::normalize($entry['method'] ?? 'cash'),
+                    'payment_type' => 'down_payment',
+                    'amount' => $amount,
+                    'amount_unallocated' => $amount,
+                    'currency_code' => 'MAD',
+                    'payment_date' => now(),
+                    'status' => 'completed',
+                    'payment_direction' => 'incoming',
+                    'external_reference' => $entry['reference'] ?? null,
+                    'check_number' => $entry['cheque_number'] ?? null,
+                ]);
+            }
+        }
 
         // Auto-create a reservation if none exists for this contract's customer+vehicle+period.
         // Business rule: every contract must have a matching reservation.

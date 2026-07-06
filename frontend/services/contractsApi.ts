@@ -65,6 +65,7 @@ export const contractsApi = {
       bank_reference: (payload as any).bankReference ?? null,
       cheque_number: (payload as any).chequeNumber ?? null,
       expected_payment_day: (payload as any).expectedPaymentDay ?? null,
+      payment_entries: (payload as any).paymentEntries ?? [],
     };
     const res = await apiClient<{ data: ContractDto }>(endpoints.contracts.list, {
       method: 'POST',

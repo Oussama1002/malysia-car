@@ -447,6 +447,9 @@ export const ContractWizardPage: React.FC = () => {
       bankReference: state.payments.map((p) => p.reference).filter(Boolean).join(', ') || undefined,
       chequeNumber: state.payments.map((p) => p.chequeNumber).filter(Boolean).join(', ') || undefined,
       expectedPaymentDay: state.expectedPaymentDay === '' ? undefined : Number(state.expectedPaymentDay),
+      paymentEntries: state.payments
+        .filter((p) => p.amount && Number(p.amount) > 0)
+        .map((p) => ({ method: p.method, amount: Number(p.amount), reference: p.reference || undefined, cheque_number: p.chequeNumber || undefined })),
       status,
     } as any;
   }
