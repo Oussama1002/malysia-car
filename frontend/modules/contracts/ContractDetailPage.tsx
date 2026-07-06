@@ -788,8 +788,10 @@ const VehicleSwapModal: React.FC<{
     },
   });
 
+  const vLabel = (v: any) => `${v.brand ?? v.brand_name ?? ''} ${v.model ?? v.model_name ?? ''} — ${v.registration ?? v.registration_number ?? ''}`.trim();
+
   const availableVehicles = (vehiclesQ.data ?? []).filter(
-    (v: any) => String(v.id) !== String(currentVehicleId) && (v.availability_status === 'available' || !v.availability_status)
+    (v: any) => String(v.id) !== String(currentVehicleId) && (v.availabilityStatus === 'available' || v.availability_status === 'available' || (!v.availabilityStatus && !v.availability_status))
   );
 
   const selectedNewVehicle = (vehiclesQ.data ?? []).find((v: any) => String(v.id) === newVehicleId);
@@ -848,7 +850,7 @@ const VehicleSwapModal: React.FC<{
               {selectedNewVehicle && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
                   <span className="font-bold text-emerald-800">
-                    {selectedNewVehicle.brand_name} {selectedNewVehicle.model_name} — {selectedNewVehicle.registration_number}
+                    {vLabel(selectedNewVehicle)}
                   </span>
                 </div>
               )}
@@ -876,7 +878,7 @@ const VehicleSwapModal: React.FC<{
                     <option value="">— Sélectionner un véhicule —</option>
                     {availableVehicles.map((v: any) => (
                       <option key={v.id} value={v.id}>
-                        {v.brand_name} {v.model_name} — {v.registration_number}
+                        {vLabel(v)}
                       </option>
                     ))}
                   </select>
