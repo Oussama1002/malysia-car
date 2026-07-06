@@ -142,7 +142,21 @@ const INITIAL: WizardState = {
   assignedAgent: '',
 };
 
+function extractValidationErrors(e: unknown): string | null {
+  if (!(e instanceof ApiError) || !e.body) return null;
+  const body = e.body as { errors?: Record<string, string[]> };
+  if (!body.errors || typeof body.errors !== 'object') return null;
+  const lines: string[] = [];
+  for (const [field, msgs] of Object.entries(body.errors)) {
+    const label = field.replace(/_/g, ' ').replace(/\./g, ' › ');
+    for (const m of msgs) lines.push(`• ${label}: ${m}`);
+  }
+  return lines.length > 0 ? lines.join('\n') : null;
+}
+
 function friendlyError(e: unknown, fallback: string): string {
+  const validation = extractValidationErrors(e);
+  if (validation) return validation;
   const raw = e instanceof Error ? e.message : String(e ?? '');
   if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
     return 'Ressource introuvable sur le serveur. Veuillez réessayer.';
@@ -529,12 +543,7 @@ export const ContractWizardPage: React.FC = () => {
 
       navigate(`/contracts/${createdId}`);
     } catch (e) {
-      const raw = e instanceof Error ? e.message : '';
-      if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
-        setSaveError('Le contrat a été créé mais une ressource associée est introuvable sur le serveur. Vérifiez la fiche contrat.');
-      } else {
-        setSaveError(raw || 'Erreur inconnue lors de la création du contrat.');
-      }
+      setSaveError(friendlyError(e, 'Erreur inconnue lors de la création du contrat.'));
     } finally {
       setSaving(false);
     }
@@ -661,7 +670,7 @@ export const ContractWizardPage: React.FC = () => {
 
           <div className="df-card__body space-y-5">
             {saveError && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+              <div className="whitespace-pre-line rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
                 {saveError}
               </div>
             )}
