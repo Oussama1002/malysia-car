@@ -330,7 +330,7 @@ export const PaymentForm: React.FC<{
   const customersQ = useQuery({
     queryKey: queryKeys.customers.all,
     queryFn: async () =>
-      (await apiClient<ApiListResponse<CustomerMin>>(endpoints.customers.list)).data,
+      (await apiClient<ApiListResponse<CustomerMin>>(`${endpoints.customers.list}?per_page=200`)).data,
   });
 
   const contractsQ = useQuery({

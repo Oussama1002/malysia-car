@@ -7,6 +7,7 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Reservation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -36,16 +37,31 @@ class CustomerBalanceController extends Controller
             ->where('status', '!=', 'refunded')
             ->sum('amount_unallocated');
 
+        $activeReservations = Reservation::where('customer_id', $customer->id)
+            ->whereNotIn('status', ['cancelled', 'closed', 'draft'])
+            ->get();
+        $reservationTotal = (float) $activeReservations->sum('estimated_price');
+        $reservationPayments = (float) Payment::where('customer_id', $customer->id)
+            ->whereNotNull('reservation_id')
+            ->where('status', '!=', 'refunded')
+            ->sum('amount');
+        $reservationDue = max(0, $reservationTotal - $reservationPayments);
+
+        $effectiveDue = $totalDue > 0 ? $totalDue : $reservationDue;
+
         return ApiResponse::success([
             'customer_id' => $customer->id,
             'currency_code' => $invoices->first()->currency_code ?? 'MAD',
             'total_invoiced' => round($totalInvoiced, 2),
             'total_paid' => round($totalPaid, 2),
-            'total_due' => round($totalDue, 2),
+            'total_due' => round(max($totalDue, $effectiveDue), 2),
             'overdue_amount' => round($overdueAmount, 2),
             'overdue_invoices_count' => $overdueInvoices->count(),
             'unallocated_payments' => round($unallocatedPayments, 2),
             'invoices_count' => $invoices->count(),
+            'reservation_total' => round($reservationTotal, 2),
+            'reservation_paid' => round($reservationPayments, 2),
+            'reservation_due' => round($reservationDue, 2),
         ]);
     }
 
