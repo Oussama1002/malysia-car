@@ -23,11 +23,12 @@ class CompanySettingsController extends Controller
     {
         $allowed = $this->allowedKeys($group);
         $data = $request->validate([
-            'settings' => ['required', 'array'],
-            'settings.*' => ['nullable', 'string', 'max:500'],
+            'settings' => ['present', 'array'],
+            'settings.*' => ['nullable', 'max:500'],
         ]);
 
-        $input = collect($data['settings'])->only($allowed)->toArray();
+        $settings = $data['settings'] ?? [];
+        $input = collect($settings)->only($allowed)->map(fn ($v) => $v === null ? null : (string) $v)->toArray();
         $companyId = optional($request->user())->company_id;
 
         $before = CompanySetting::getAll($group, $companyId);
