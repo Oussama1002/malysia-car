@@ -14,6 +14,7 @@ interface FieldDef {
 
 const FIELDS: FieldDef[] = [
   { key: 'default_km_per_day', label: 'Kilométrage journalier inclus', type: 'number', suffix: 'km/jour', section: 'Tarification par défaut' },
+  { key: 'default_km_per_month', label: 'Kilométrage mensuel inclus', type: 'number', suffix: 'km/mois', section: 'Tarification par défaut' },
   { key: 'default_deposit_mad', label: 'Caution / garantie', type: 'number', suffix: 'MAD', section: 'Tarification par défaut' },
   { key: 'default_penalty_per_km', label: 'Pénalité par km excédentaire', type: 'number', suffix: 'MAD/km', section: 'Tarification par défaut' },
   { key: 'default_tax_rate', label: 'Taux de TVA', type: 'number', suffix: '%', section: 'Tarification par défaut' },
