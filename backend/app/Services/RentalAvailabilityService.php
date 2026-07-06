@@ -207,10 +207,19 @@ class RentalAvailabilityService
             $messages['active_contract_overlap'] = 'An active finance or lease contract overlaps this period.';
         }
 
+        // Only standalone field-ops missions block the calendar. Missions tied to a
+        // reservation are already represented by the reservation overlap check above.
+        // Also exclude missions whose reservation has been cancelled.
         $hasOverlappingMission = Mission::query()
             ->where('vehicle_id', $vehicleId)
             ->whereNotNull('scheduled_start_at')
             ->whereNotIn('status', ['completed', 'failed', 'cancelled'])
+            ->where(function ($q) {
+                $q->whereNull('reservation_id')
+                  ->orWhereHas('reservation', function ($rq) {
+                      $rq->whereNotIn('status', ['cancelled', 'closed']);
+                  });
+            })
             ->whereRaw(
                 'scheduled_start_at < ? AND COALESCE(scheduled_end_at, scheduled_start_at) > ?',
                 [$endAt, $startAt]
