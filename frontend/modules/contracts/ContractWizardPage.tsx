@@ -142,14 +142,43 @@ const INITIAL: WizardState = {
   assignedAgent: '',
 };
 
+const FIELD_LABELS_FR: Record<string, string> = {
+  customer_id: 'Client',
+  vehicle_id: 'Véhicule',
+  contract_type: 'Type de contrat',
+  duration_months: 'Durée',
+  start_date: 'Date de début',
+  end_date: 'Date de fin',
+  monthly_payment: 'Mensualité',
+  base_amount: 'Montant de base',
+  deposit_amount: 'Caution',
+  allowed_km: 'Km inclus',
+  payment_method: 'Mode de paiement',
+  notes: 'Notes',
+  status: 'Statut',
+};
+
+function translateValidationMsg(msg: string): string {
+  return msg
+    .replace(/The (.+?) field is required\.?/i, 'Le champ $1 est obligatoire.')
+    .replace(/The (.+?) field must not be greater than (\d+)\.?/i, 'Le champ $1 ne doit pas dépasser $2.')
+    .replace(/The (.+?) field must be at least (\d+)\.?/i, 'Le champ $1 doit être au minimum $2.')
+    .replace(/The (.+?) field must be a valid date\.?/i, 'Le champ $1 doit être une date valide.')
+    .replace(/The (.+?) field must be an integer\.?/i, 'Le champ $1 doit être un nombre entier.')
+    .replace(/The (.+?) field must be a number\.?/i, 'Le champ $1 doit être un nombre.')
+    .replace(/The (.+?) field must be a string\.?/i, 'Le champ $1 doit être du texte.')
+    .replace(/The (.+?) field is invalid\.?/i, 'Le champ $1 est invalide.')
+    .replace(/The (.+?) must be a valid UUID\.?/i, '$1 est invalide.');
+}
+
 function extractValidationErrors(e: unknown): string | null {
   if (!(e instanceof ApiError) || !e.body) return null;
   const body = e.body as { errors?: Record<string, string[]> };
   if (!body.errors || typeof body.errors !== 'object') return null;
   const lines: string[] = [];
   for (const [field, msgs] of Object.entries(body.errors)) {
-    const label = field.replace(/_/g, ' ').replace(/\./g, ' › ');
-    for (const m of msgs) lines.push(`• ${label}: ${m}`);
+    const label = FIELD_LABELS_FR[field] ?? field.replace(/_/g, ' ');
+    for (const m of msgs) lines.push(`• ${label} : ${translateValidationMsg(m)}`);
   }
   return lines.length > 0 ? lines.join('\n') : null;
 }

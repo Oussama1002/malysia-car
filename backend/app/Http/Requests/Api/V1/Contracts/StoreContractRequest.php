@@ -32,7 +32,7 @@ class StoreContractRequest extends ApiFormRequest
 
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date'],
-            'duration_months' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'duration_months' => ['nullable', 'integer', 'min:0'],
             'currency_code' => ['nullable', 'string', 'size:3'],
 
             'base_amount' => ['nullable', 'numeric', 'min:0'],
