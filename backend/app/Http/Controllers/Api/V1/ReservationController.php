@@ -309,11 +309,21 @@ class ReservationController extends Controller
             $customerName = $customer?->customer_code ?? null;
         }
 
+        $linkedContract = Contract::withoutGlobalScopes()
+            ->where('customer_id', $reservation->customer_id)
+            ->where('vehicle_id', $reservation->vehicle_id)
+            ->whereNotIn('status', ['cancelled', 'terminated'])
+            ->first();
+
         return ApiResponse::success([
             'reservation' => $reservation,
             'customer_name' => $customerName,
             'vehicle_name' => $vehicleName,
             'vehicle_registration' => $vehicle?->registration_number ?? null,
+            'has_contract' => $linkedContract !== null,
+            'contract_id' => $linkedContract?->id,
+            'contract_number' => $linkedContract?->contract_number,
+            'contract_status' => $linkedContract?->status,
             'handover_reports' => $handoverReports,
             'extensions' => $extensions,
             'damage_reports' => $damages,

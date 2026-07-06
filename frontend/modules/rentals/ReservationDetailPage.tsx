@@ -247,6 +247,24 @@ export const ReservationDetailPage: React.FC = () => {
           </div>
         )}
 
+        {/* No contract banner */}
+        {!['cancelled', 'closed', 'draft'].includes(status) && d && !d.has_contract && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-200 bg-amber-50 px-6 py-3">
+            <div className="flex items-center gap-2">
+              <div>
+                <div className="text-xs font-black text-amber-800">Aucun contrat associé</div>
+                <div className="text-[10px] text-amber-600">Cette réservation n'a pas encore de contrat. Générez un contrat pour formaliser la location.</div>
+              </div>
+            </div>
+            <Link
+              to={`/contracts/new?from_reservation=${rid}`}
+              className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white hover:bg-amber-700 shadow-lg transition-colors"
+            >
+              Générer contrat
+            </Link>
+          </div>
+        )}
+
         {/* Quick actions bar */}
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-6 py-3 bg-slate-50/50">
           {status === 'draft' && (
