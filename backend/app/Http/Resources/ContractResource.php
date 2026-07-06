@@ -51,6 +51,15 @@ class ContractResource extends JsonResource
             'bankReference' => $c->bank_reference,
             'chequeNumber' => $c->cheque_number,
             'expectedPaymentDay' => $c->expected_payment_day,
+            'clientName' => $c->relationLoaded('customer') && $c->customer
+                ? $c->customer->full_name
+                : null,
+            'vehicleName' => $c->relationLoaded('vehicle') && $c->vehicle
+                ? trim(($c->vehicle->brand_name ?? '') . ' ' . ($c->vehicle->model_name ?? ''))
+                : null,
+            'vehicleRegistration' => $c->relationLoaded('vehicle') && $c->vehicle
+                ? $c->vehicle->registration_number
+                : null,
             'createdAt' => optional($c->created_at)?->toIso8601String(),
             'updatedAt' => optional($c->updated_at)?->toIso8601String(),
         ];

@@ -23,7 +23,7 @@ export const ContractsPage: React.FC = () => {
     queryFn: async () => contractsApi.list({ type: filters.type || undefined, status: filters.status || undefined }),
   });
   const rows = (q.data ?? []).filter((c) => {
-    const s = `${c.reference} ${c.type} ${c.status}`.toLowerCase();
+    const s = `${c.reference} ${c.type} ${c.status} ${(c as any).clientName ?? ''} ${(c as any).vehicleName ?? ''}`.toLowerCase();
     return !filters.q || s.includes(filters.q.toLowerCase());
   });
 
@@ -83,8 +83,20 @@ export const ContractsPage: React.FC = () => {
         loading={q.isLoading}
         columns={[
           { key: 'ref', header: 'Référence', render: (r) => <span className="font-mono text-xs font-bold">{r.reference}</span> },
+          { key: 'client', header: 'Client', render: (r) => <span className="text-sm font-semibold">{(r as any).clientName ?? '—'}</span> },
           { key: 'type', header: 'Type', render: (r) => <StatusBadge label={labelContractType(r.type)} tone="info" /> },
           { key: 'status', header: 'Statut', render: (r) => <span className="text-sm font-bold">{labelContractStatus(r.status)}</span> },
+          { key: 'start', header: 'Date début', render: (r) => <span className="text-sm">{r.startDate ?? '—'}</span> },
+          { key: 'end', header: 'Date fin', render: (r) => <span className="text-sm">{(r as any).endDate ?? '—'}</span> },
+          {
+            key: 'vehicle',
+            header: 'Véhicule',
+            render: (r) => (
+              <span className="text-sm">
+                {(r as any).vehicleName ? `${(r as any).vehicleName} · ${(r as any).vehicleRegistration ?? ''}` : '—'}
+              </span>
+            ),
+          },
           {
             key: 'amt',
             header: 'Montant',

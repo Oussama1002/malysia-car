@@ -50,6 +50,7 @@ class ContractController extends Controller
             $q->where('vehicle_id', $vehicleId);
         }
 
+        $q->with(['customer', 'vehicle']);
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
         $page = $q->orderByDesc('updated_at')->paginate($per);
 
