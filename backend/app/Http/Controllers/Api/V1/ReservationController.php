@@ -13,6 +13,7 @@ use App\Models\RentalExtension;
 use App\Models\RentalHandoverReport;
 use App\Models\Reservation;
 use App\Models\ReservationDriver;
+use App\Models\Vehicle;
 use App\Services\AuditLogger;
 use App\Services\RentalAvailabilityService;
 use App\Support\PaymentMethodNormalizer;
@@ -304,15 +305,7 @@ class ReservationController extends Controller
             'payments' => $payments,
             'invoices' => $invoices,
             'history' => $history,
-            'totals' => [
-                'estimated_price' => (float) ($reservation->estimated_price ?? 0),
-                'extensions_total' => (float) $extensions->where('status', 'applied')->sum('additional_amount'),
-                'damages_total' => (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0),
-                'paid' => (float) $payments->sum('amount'),
-                'deposit_amount' => (float) ($vehicle->deposit_amount ?? $this->getSetting($reservation->company_id, 'contracts', 'default_deposit_mad') ?? 0),
-                'allowed_km' => (float) ($vehicle->allowed_km ?? $this->getSetting($reservation->company_id, 'contracts', 'default_km_per_day') ?? 0),
-                'daily_rate' => (float) ($vehicle->daily_rental_price ?? 0),
-            ],
+            'totals' => $this->buildTotals($reservation, $vehicle, $extensions, $damages, $payments),
         ]);
     }
 
@@ -798,6 +791,50 @@ class ReservationController extends Controller
         }
 
         return 'FAC-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function buildTotals(Reservation $reservation, ?Vehicle $vehicle, $extensions, $damages, $payments): array
+    {
+        $dailyRate = (float) ($vehicle->daily_rental_price ?? 0);
+        $monthlyRate = (float) ($vehicle->monthly_rental_price ?? 0);
+        $companyId = $reservation->company_id;
+
+        // Calculate days between start and end
+        $days = 1;
+        if ($reservation->desired_start_at && $reservation->desired_end_at) {
+            $days = max(1, (int) ceil(
+                Carbon::parse($reservation->desired_end_at)->diffInDays(Carbon::parse($reservation->desired_start_at))
+            ));
+        }
+
+        // Estimated price: use stored value, or calculate from daily rate × days
+        $estimatedPrice = (float) ($reservation->estimated_price ?? 0);
+        if ($estimatedPrice <= 0 && $dailyRate > 0) {
+            $estimatedPrice = $dailyRate * $days;
+        }
+
+        // Deposit: from company settings
+        $depositSetting = $this->getSetting($companyId, 'contracts', 'default_deposit_mad');
+        $deposit = $depositSetting ? (float) $depositSetting : 0;
+
+        // Allowed km per day: from company settings
+        $kmSetting = $this->getSetting($companyId, 'contracts', 'default_km_per_day');
+        $allowedKm = $kmSetting ? (float) $kmSetting : 0;
+
+        $extensionsTotal = (float) $extensions->where('status', 'applied')->sum('additional_amount');
+        $damagesTotal = (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0);
+        $paidTotal = (float) $payments->sum('amount');
+
+        return [
+            'estimated_price' => $estimatedPrice,
+            'extensions_total' => $extensionsTotal,
+            'damages_total' => $damagesTotal,
+            'paid' => $paidTotal,
+            'deposit_amount' => $deposit,
+            'allowed_km' => $allowedKm,
+            'daily_rate' => $dailyRate,
+            'days' => $days,
+        ];
     }
 
     private function getSetting(?string $companyId, string $group, string $key): ?string

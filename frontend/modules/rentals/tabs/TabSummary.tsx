@@ -40,6 +40,7 @@ const TabSummary: React.FC<Props> = ({ data }) => {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {[
           { label: 'Durée location', value: `${days} jour${days > 1 ? 's' : ''}`, color: 'bg-indigo-50 text-indigo-700' },
+          { label: 'Tarif / jour', value: totals.daily_rate ? fmtMad(totals.daily_rate) : '—', color: 'bg-blue-50 text-blue-700' },
           { label: 'Montant total', value: fmtMad(grandTotal), color: 'bg-slate-50 text-slate-800' },
           { label: 'Payé', value: fmtMad(totals.paid), color: 'bg-emerald-50 text-emerald-700' },
           { label: 'Solde restant', value: fmtMad(balance), color: balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700' },
