@@ -424,9 +424,9 @@ export const ContractWizardPage: React.FC = () => {
         ? `Agent assigné: ${selectedAgent.name} (${selectedAgent.email})`
         : null,
       state.secondaryClientId && selectedSecondaryClient
-        ? `Locataire 2: ${selectedSecondaryClient.name}`
+        ? `Conducteur: ${selectedSecondaryClient.name}`
         : state.secondaryClientSearch
-          ? `Locataire 2: ${state.secondaryClientSearch}`
+          ? `Conducteur: ${state.secondaryClientSearch}`
           : null,
     ].filter(Boolean).join('\n');
     const mergedNotes = [assignmentNotes, state.notes].filter(Boolean).join('\n');
@@ -700,7 +700,7 @@ export const ContractWizardPage: React.FC = () => {
                   </div>
                 </div>
                 <ClientAutocomplete
-                  label="Client locataire 2 (optionnel)"
+                  label="Conducteur additionnel (optionnel)"
                   placeholder="Tapez un nom…"
                   value={state.secondaryClientSearch}
                   clients={(clients.data ?? []).filter((c) => String(c.id) !== String(state.clientId))}
@@ -1104,7 +1104,7 @@ export const ContractWizardPage: React.FC = () => {
             </div>
             <div className="divide-y divide-[color:var(--df-border)]">
               <SummaryRow label="Client" value={selectedClient?.name ?? '—'} />
-              <SummaryRow label="Client locataire 2" value={(selectedSecondaryClient?.name ?? state.secondaryClientSearch) || '—'} />
+              <SummaryRow label="Conducteur" value={(selectedSecondaryClient?.name ?? state.secondaryClientSearch) || '—'} />
               <SummaryRow label="Agent assigné" value={selectedAgent?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
@@ -1127,7 +1127,7 @@ export const ContractWizardPage: React.FC = () => {
             <div className="df-card__hint">Checklist conformité</div>
             <ul className="mt-3 space-y-2 text-[12.5px]">
               <CheckRow done={!!selectedClient} label="Client sélectionné" />
-              <CheckRow done={!state.secondaryClientId || !!selectedSecondaryClient} label="Locataire 2 renseigné" />
+              <CheckRow done={!state.secondaryClientId || !!selectedSecondaryClient} label="Conducteur renseigné" />
               <CheckRow done={!state.assignedAgentId || !!selectedAgent} label="Agent assigné" />
               <CheckRow done={!!selectedVehicle} label="Véhicule sélectionné" />
               <CheckRow done={stepIdx >= 3} label="Type de contrat défini" />
