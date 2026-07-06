@@ -309,6 +309,9 @@ class ReservationController extends Controller
                 'extensions_total' => (float) $extensions->where('status', 'applied')->sum('additional_amount'),
                 'damages_total' => (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0),
                 'paid' => (float) $payments->sum('amount'),
+                'deposit_amount' => (float) ($vehicle->deposit_amount ?? $this->getSetting($reservation->company_id, 'contracts', 'default_deposit_mad') ?? 0),
+                'allowed_km' => (float) ($vehicle->allowed_km ?? $this->getSetting($reservation->company_id, 'contracts', 'default_km_per_day') ?? 0),
+                'daily_rate' => (float) ($vehicle->daily_rental_price ?? 0),
             ],
         ]);
     }
@@ -795,6 +798,17 @@ class ReservationController extends Controller
         }
 
         return 'FAC-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function getSetting(?string $companyId, string $group, string $key): ?string
+    {
+        if (!$companyId) {
+            return null;
+        }
+        return \App\Models\CompanySetting::where('company_id', $companyId)
+            ->where('group', $group)
+            ->where('key', $key)
+            ->value('value');
     }
 }
 
