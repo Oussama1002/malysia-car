@@ -529,6 +529,15 @@ export const ReservationsOpsPage: React.FC = () => {
                 >
                   Détail →
                 </button>
+                {!['cancelled', 'closed', 'draft'].includes(r.status) && !r.has_contract && (
+                  <Link
+                    to={`/contracts/new?from_reservation=${r.id}`}
+                    className="rounded-2xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Générer contrat
+                  </Link>
+                )}
                 {r.status !== 'draft' && (
                   <button
                     className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"

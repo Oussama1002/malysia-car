@@ -48,7 +48,19 @@ class ReservationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = Reservation::query()->orderByDesc('created_at');
+        $q = Reservation::query()
+            ->addSelect(['reservations.*'])
+            ->selectSub(
+                Contract::withoutGlobalScopes()
+                    ->selectRaw('1')
+                    ->whereColumn('contracts.customer_id', 'reservations.customer_id')
+                    ->whereColumn('contracts.vehicle_id', 'reservations.vehicle_id')
+                    ->whereNotIn('contracts.status', ['cancelled', 'terminated'])
+                    ->whereNull('contracts.deleted_at')
+                    ->limit(1),
+                'has_contract'
+            )
+            ->orderByDesc('created_at');
         if ($status = $request->query('status')) {
             $q->where('status', $status);
         }
@@ -61,7 +73,13 @@ class ReservationController extends Controller
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
         $page = $q->paginate($per);
 
-        return ApiResponse::success($page->items(), [
+        $items = collect($page->items())->map(function ($r) {
+            $arr = $r->toArray();
+            $arr['has_contract'] = (bool) $r->has_contract;
+            return $arr;
+        });
+
+        return ApiResponse::success($items, [
             'current_page' => $page->currentPage(),
             'last_page' => $page->lastPage(),
             'per_page' => $page->perPage(),
