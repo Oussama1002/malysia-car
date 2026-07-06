@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\Mission;
@@ -381,7 +382,22 @@ class ReservationController extends Controller
 
     public function cancel(Request $request, Reservation $reservation): JsonResponse
     {
-        $this->transitionReservation($reservation, 'cancelled', $request);
+        DB::transaction(function () use ($reservation, $request): void {
+            $this->transitionReservation($reservation, 'cancelled', $request);
+
+            $contracts = Contract::withoutGlobalScopes()
+                ->where('customer_id', $reservation->customer_id)
+                ->where('vehicle_id', $reservation->vehicle_id)
+                ->whereNotIn('status', ['cancelled', 'closed', 'terminated'])
+                ->get();
+
+            foreach ($contracts as $contract) {
+                $from = $contract->status;
+                $contract->status = 'cancelled';
+                $contract->save();
+                AuditLogger::statusChanged($contract, $from, 'cancelled', $request->user(), $request, module: 'contracts');
+            }
+        });
 
         return ApiResponse::success($reservation->fresh());
     }
