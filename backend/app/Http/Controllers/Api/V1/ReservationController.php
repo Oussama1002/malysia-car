@@ -14,6 +14,7 @@ use App\Models\RentalExtension;
 use App\Models\RentalHandoverReport;
 use App\Models\Reservation;
 use App\Models\ReservationDriver;
+use App\Models\CustomerContact;
 use App\Models\Vehicle;
 use App\Services\AuditLogger;
 use App\Services\RentalAvailabilityService;
@@ -143,6 +144,42 @@ class ReservationController extends Controller
 
         $initialStatus = $isDraft ? 'draft' : 'reserved';
         AuditLogger::statusChanged($r, 'new', $initialStatus, $request->user(), $request, module: 'rentals');
+
+        // Auto-create primary driver from customer
+        try {
+            $customer = \App\Models\Customer::with(['individualProfile', 'contacts'])->find($data['customer_id']);
+            if ($customer && $customer->individualProfile) {
+                $profile = $customer->individualProfile;
+                $phone = CustomerContact::where('customer_id', $customer->id)
+                    ->where('contact_type', 'phone')->where('is_primary', true)->value('value')
+                    ?? CustomerContact::where('customer_id', $customer->id)
+                        ->where('contact_type', 'phone')->value('value');
+                $email = CustomerContact::where('customer_id', $customer->id)
+                    ->where('contact_type', 'email')->where('is_primary', true)->value('value')
+                    ?? CustomerContact::where('customer_id', $customer->id)
+                        ->where('contact_type', 'email')->value('value');
+
+                ReservationDriver::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'reservation_id' => $r->id,
+                    'driver_type' => 'primary',
+                    'first_name' => $profile->first_name ?? '',
+                    'last_name' => $profile->last_name ?? '',
+                    'phone' => $phone,
+                    'email' => $email,
+                    'cin_passport' => $profile->national_id_number ?? $profile->passport_number ?? null,
+                    'license_number' => $profile->driving_license_number ?? null,
+                    'license_expiry' => $profile->driving_license_expiry ?? null,
+                    'is_contract_signer' => true,
+                    'is_financially_responsible' => true,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('reservation.auto_primary_driver_failed', [
+                'reservation_id' => $r->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Send notification
         try {
