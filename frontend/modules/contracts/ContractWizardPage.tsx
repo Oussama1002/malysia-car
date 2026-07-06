@@ -1294,6 +1294,7 @@ const ExistingDocRow: React.FC<{ doc: DocumentCenterItem; label: string }> = ({ 
 
 const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: string }> = ({ state, client, vehicle }) => {
   const t = CONTRACT_TYPES.find((x) => x.value === state.type);
+  const isShortRental = state.type === 'LOCATION_COURTE';
   const today = formatDate(new Date());
   return (
     <div className="rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-5">
