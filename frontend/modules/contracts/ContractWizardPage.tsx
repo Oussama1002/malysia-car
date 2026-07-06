@@ -1037,6 +1037,12 @@ export const ContractWizardPage: React.FC = () => {
                   <UploadZone label="Justificatif de revenus / attestation CNSS" />
                   {state.type === 'CREDIT_AUTO' && <UploadZone label="Bilans financiers (3 derniers exercices)" />}
                 </div>
+                {state.payments.some((p) => p.method === 'cheque') && (
+                  <div className="mt-5 space-y-3">
+                    <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Chèque</div>
+                    <UploadZone label="Photo / scan du chèque" hint="JPG, PNG ou PDF — recto du chèque" />
+                  </div>
+                )}
                 <div className="mt-5 space-y-3">
                   <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Photos véhicule avant livraison</div>
                   <div className="grid grid-cols-2 gap-3">
