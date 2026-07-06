@@ -340,6 +340,11 @@ class ReservationController extends Controller
         $m = DB::transaction(function () use ($reservation, $data) {
             $this->transitionReservation($reservation, 'pickup_scheduled');
 
+            $scheduledStart = Carbon::parse($data['scheduled_start_at'] ?? $reservation->desired_start_at);
+            $scheduledEnd = isset($data['scheduled_end_at'])
+                ? Carbon::parse($data['scheduled_end_at'])
+                : $scheduledStart->copy()->addHours(2);
+
             return Mission::query()->create([
                 'id' => (string) Str::uuid(),
                 'company_id' => $reservation->company_id,
@@ -349,8 +354,8 @@ class ReservationController extends Controller
                 'assigned_user_id' => $data['assigned_user_id'] ?? null,
                 'mission_type' => $data['mission_type'],
                 'status' => 'planned',
-                'scheduled_start_at' => $data['scheduled_start_at'] ?? $reservation->desired_start_at,
-                'scheduled_end_at' => $data['scheduled_end_at'] ?? $reservation->desired_end_at,
+                'scheduled_start_at' => $scheduledStart,
+                'scheduled_end_at' => $scheduledEnd,
                 'origin_address' => $data['origin_address'] ?? $reservation->pickup_address,
                 'destination_address' => $data['destination_address'] ?? $reservation->delivery_address,
                 'notes' => $data['notes'] ?? null,
@@ -384,6 +389,19 @@ class ReservationController extends Controller
     {
         DB::transaction(function () use ($reservation, $request): void {
             $this->transitionReservation($reservation, 'cancelled', $request);
+
+            Mission::query()
+                ->where(function ($q) use ($reservation) {
+                    $q->where('reservation_id', $reservation->id)
+                      ->orWhere(function ($q2) use ($reservation) {
+                          $q2->where('vehicle_id', $reservation->vehicle_id)
+                             ->whereNotNull('scheduled_start_at')
+                             ->whereRaw('scheduled_start_at < ?', [$reservation->desired_end_at])
+                             ->whereRaw('COALESCE(scheduled_end_at, scheduled_start_at) > ?', [$reservation->desired_start_at]);
+                      });
+                })
+                ->whereNotIn('status', ['completed', 'failed', 'cancelled'])
+                ->update(['status' => 'cancelled']);
 
             $contracts = Contract::withoutGlobalScopes()
                 ->where('customer_id', $reservation->customer_id)
