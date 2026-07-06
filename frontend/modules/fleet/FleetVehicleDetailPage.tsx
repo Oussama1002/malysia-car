@@ -10,6 +10,30 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 
+// ─── Traductions ─────────────────────────────────────────────────────────────
+
+const STATUS_FR: Record<string, string> = {
+  good: 'Bon état', excellent: 'Excellent', fair: 'Correct', poor: 'Mauvais', damaged: 'Endommagé',
+  needs_repair: 'À réparer', new: 'Neuf', used: 'Usé',
+};
+const AVAILABILITY_FR: Record<string, string> = {
+  available: 'Disponible', in_use: 'En utilisation', maintenance: 'En maintenance',
+  repair: 'En réparation', unavailable: 'Indisponible', reserved: 'Réservé',
+  immobilized: 'Immobilisé', immobilised: 'Immobilisé', blocked: 'Bloqué', accident: 'Accident',
+};
+const OWNERSHIP_FR: Record<string, string> = {
+  owned: 'Propriété', leased: 'Leasing', rented: 'Loué', sub_rented: 'Sous-location',
+  financed: 'Financé', company: 'Société',
+};
+const TRANSMISSION_FR: Record<string, string> = {
+  automatic: 'Automatique', manual: 'Manuelle', semi_automatic: 'Semi-automatique',
+};
+
+function tr(val: string | null | undefined, map: Record<string, string>): string | null {
+  if (!val) return null;
+  return map[val.toLowerCase().trim()] ?? val;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface MaintenancePlan {
@@ -398,17 +422,17 @@ export const FleetVehicleDetailPage: React.FC = () => {
               <Field label="Immatriculation" value={<span className="font-mono">{veh.registration}</span>} />
               <Field label="VIN" value={<span className="font-mono text-xs">{veh.vin}</span>} />
               <Field label="Châssis" value={veh.chassisNumber} />
-              <Field label="Transmission" value={veh.transmission} />
-              <Field label="Statut physique" value={veh.physicalStatus} />
-              <Field label="Disponibilité" value={veh.availabilityStatus} />
-              <Field label="Propriété" value={veh.ownershipStatus} />
+              <Field label="Transmission" value={tr(veh.transmission, TRANSMISSION_FR)} />
+              <Field label="Statut physique" value={tr(veh.physicalStatus, STATUS_FR)} />
+              <Field label="Disponibilité" value={tr(veh.availabilityStatus, AVAILABILITY_FR)} />
+              <Field label="Propriété" value={tr(veh.ownershipStatus, OWNERSHIP_FR)} />
               <Field label="Emplacement" value={veh.currentLocation} />
               <Field label="Motif indispo." value={veh.unavailabilityReason} />
             </div>
           </SectionCard>
           <SectionCard title="Contexte location">
             <div className="space-y-2 text-sm">
-              <Field label="Client (lié)" value={(vehicleQ.data?.current as any)?.customer?.legal_name ?? (vehicleQ.data?.current as any)?.customer?.name ?? null} />
+              <Field label="Client (lié)" value={(vehicleQ.data?.current as any)?.customer?.full_name ?? (vehicleQ.data?.current as any)?.customer?.legal_name ?? (vehicleQ.data?.current as any)?.customer?.name ?? null} />
               <Field label="Contrat courant" value={(vehicleQ.data?.current as any)?.contract?.contract_number ?? null} />
               <Field label="Réservation courante" value={(vehicleQ.data?.current as any)?.reservation?.reservation_number ?? null} />
             </div>

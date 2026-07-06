@@ -177,12 +177,28 @@ class VehicleController extends Controller
         $currentMileage = $vehicle->odometerReadings->first()?->reading_km ?? $vehicle->mileage_current;
         $currentStatus = $vehicle->statusHistory->first()?->status ?? $vehicle->status;
 
-        $currentCustomer = $vehicle->current_customer_id
-            ? \App\Models\Customer::query()->find($vehicle->current_customer_id)
-            : null;
+        $currentReservation = $vehicle->currentReservation
+            ?? \App\Models\Reservation::query()
+                ->where('vehicle_id', $vehicle->id)
+                ->whereIn('status', ['confirmed', 'active', 'handed_over', 'pickup_scheduled', 'reserved'])
+                ->orderByDesc('desired_start_at')
+                ->first();
+
         $currentContract = $vehicle->current_contract_id
             ? \App\Models\Contract::query()->find($vehicle->current_contract_id)
-            : null;
+            : \App\Models\Contract::query()
+                ->where('vehicle_id', $vehicle->id)
+                ->whereIn('status', ['active', 'pending_approval', 'draft'])
+                ->orderByDesc('created_at')
+                ->first();
+
+        $currentCustomer = $vehicle->current_customer_id
+            ? \App\Models\Customer::query()->find($vehicle->current_customer_id)
+            : ($currentReservation
+                ? \App\Models\Customer::query()->find($currentReservation->customer_id)
+                : ($currentContract
+                    ? \App\Models\Customer::query()->find($currentContract->customer_id)
+                    : null));
 
         return ApiResponse::success([
             'vehicle' => (new VehicleResource($vehicle))->resolve($request),
@@ -191,7 +207,7 @@ class VehicleController extends Controller
                 'mileageKm' => $currentMileage ? (int) $currentMileage : null,
                 'customer' => $currentCustomer,
                 'contract' => $currentContract,
-                'reservation' => $vehicle->currentReservation,
+                'reservation' => $currentReservation,
             ],
             'documents' => $vehicle->documents,
             'statusHistory' => $vehicle->statusHistory,
