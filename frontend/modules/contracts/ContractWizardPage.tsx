@@ -17,7 +17,7 @@ import { useAuthSession } from '@/modules/auth/AuthContext';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
 import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
-import { listBranches, listUsers, type AdminUser } from '@/services/adminApi';
+import { getSettings, listBranches, listUsers, type AdminUser } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
@@ -290,6 +290,29 @@ export const ContractWizardPage: React.FC = () => {
   }, [stepIdx]);
 
   const qc = useQueryClient();
+  const contractSettingsQ = useQuery({
+    queryKey: ['settings', 'contracts'],
+    queryFn: () => getSettings('contracts'),
+    enabled: !!getApiBase(),
+  });
+
+  useEffect(() => {
+    const s = contractSettingsQ.data?.data?.settings;
+    if (!s) return;
+    setState((prev) => {
+      const isShort = prev.type === 'LOCATION_COURTE';
+      const kmDefault = isShort
+        ? Number(s.default_km_per_day || 0)
+        : Number(s.default_km_per_month || 0);
+      const depositDefault = Number(s.default_deposit_mad || 0);
+      return {
+        ...prev,
+        kmInclMonth: prev.kmInclMonth || kmDefault,
+        securityDepositMad: prev.securityDepositMad || depositDefault,
+      };
+    });
+  }, [contractSettingsQ.data]);
+
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
   const createCustomerMut = useMutation({
     mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
@@ -846,7 +869,16 @@ export const ContractWizardPage: React.FC = () => {
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => patch('type', t.value)}
+                      onClick={() => {
+                        patch('type', t.value);
+                        const s = contractSettingsQ.data?.data?.settings;
+                        if (s) {
+                          const km = t.value === 'LOCATION_COURTE'
+                            ? Number(s.default_km_per_day || 0)
+                            : Number(s.default_km_per_month || 0);
+                          if (km) patch('kmInclMonth', km);
+                        }
+                      }}
                       className={`group relative flex text-start gap-3 rounded-2xl border p-4 transition ${
                         active
                           ? 'border-[color:var(--df-brand-500)] bg-[color:var(--df-brand-50)] dark:bg-[color:var(--df-brand-100)] shadow-[var(--df-ring)]'
