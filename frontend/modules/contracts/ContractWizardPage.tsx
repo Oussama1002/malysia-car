@@ -1339,13 +1339,13 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
         <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4">
           <div className="df-card__hint">Signature Bailleur</div>
           <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-[color:var(--df-border-strong)] text-[12px] text-[color:var(--df-text-muted)]">
-            <Icon name="sign" size={16} className="me-1" /> Signature électronique qualifiée
+            Signature manuelle sur document imprimé
           </div>
         </div>
         <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4">
           <div className="df-card__hint">Signature Preneur</div>
           <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-[color:var(--df-border-strong)] text-[12px] text-[color:var(--df-text-muted)]">
-            En attente — envoi par email
+            Signature manuelle sur document imprimé
           </div>
         </div>
       </div>
