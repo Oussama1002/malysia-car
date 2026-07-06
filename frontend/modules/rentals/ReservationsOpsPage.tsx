@@ -121,6 +121,9 @@ export const ReservationsOpsPage: React.FC = () => {
     pickup_address: '',
     delivery_address: '',
     estimated_price: '',
+    daily_rate: '',
+    deposit_amount: '',
+    allowed_km_per_day: '',
     is_draft: false,
   });
 
@@ -188,6 +191,9 @@ export const ReservationsOpsPage: React.FC = () => {
         pickup_address: form.pickup_address || undefined,
         delivery_address: form.delivery_address || undefined,
         estimated_price: form.estimated_price ? Number(form.estimated_price) : undefined,
+        daily_rate: form.daily_rate ? Number(form.daily_rate) : undefined,
+        deposit_amount: form.deposit_amount ? Number(form.deposit_amount) : undefined,
+        allowed_km_per_day: form.allowed_km_per_day ? Number(form.allowed_km_per_day) : undefined,
         is_draft: form.is_draft,
       }),
     onMutate: () => setCreateError(null),
@@ -577,7 +583,11 @@ export const ReservationsOpsPage: React.FC = () => {
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Véhicule</label>
-              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
+              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => {
+                const vid = e.target.value;
+                const v = (vehiclesQ.data ?? []).find((x) => String(x.id) === vid) as any;
+                setForm((s) => ({ ...s, vehicle_id: vid, daily_rate: v?.pricePerDay ? String(v.pricePerDay) : s.daily_rate }));
+              }}>
                 <option value="">Véhicule…</option>
                 {vehicleOptions.map((v) => (
                   <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
@@ -603,7 +613,10 @@ export const ReservationsOpsPage: React.FC = () => {
             </div>
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup (optionnel)" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison (optionnel)" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold md:col-span-2" placeholder="Prix estimé (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Tarif / jour (MAD)" value={form.daily_rate} onChange={(e) => setForm((s) => ({ ...s, daily_rate: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Prix estimé total (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Caution (MAD)" value={form.deposit_amount} onChange={(e) => setForm((s) => ({ ...s, deposit_amount: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Km inclus / jour" value={form.allowed_km_per_day} onChange={(e) => setForm((s) => ({ ...s, allowed_km_per_day: e.target.value }))} />
           </div>
           {formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>

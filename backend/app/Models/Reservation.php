@@ -45,6 +45,9 @@ class Reservation extends Model
         'delivery_latitude',
         'delivery_longitude',
         'estimated_price',
+        'daily_rate',
+        'deposit_amount',
+        'allowed_km_per_day',
         'payment_method',
         'pickup_location',
         'return_location',
@@ -58,6 +61,9 @@ class Reservation extends Model
         'delivery_latitude' => 'decimal:7',
         'delivery_longitude' => 'decimal:7',
         'estimated_price' => 'decimal:2',
+        'daily_rate' => 'decimal:2',
+        'deposit_amount' => 'decimal:2',
+        'allowed_km_per_day' => 'decimal:2',
     ];
 
     public function customer(): BelongsTo

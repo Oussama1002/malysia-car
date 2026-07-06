@@ -80,6 +80,9 @@ class ReservationController extends Controller
             'delivery_latitude' => ['nullable', 'numeric'],
             'delivery_longitude' => ['nullable', 'numeric'],
             'estimated_price' => ['nullable', 'numeric', 'min:0'],
+            'daily_rate' => ['nullable', 'numeric', 'min:0'],
+            'deposit_amount' => ['nullable', 'numeric', 'min:0'],
+            'allowed_km_per_day' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['nullable', 'string', 'max:40'],
             'pickup_location' => ['nullable', 'string', 'max:500'],
             'return_location' => ['nullable', 'string', 'max:500'],
@@ -101,9 +104,18 @@ class ReservationController extends Controller
                 $this->availability->assertVehicleAvailableWithLock($data['vehicle_id'], $startAt, $endAt);
             }
 
+            $vehicle = Vehicle::find($data['vehicle_id']);
+            $companyId = $data['company_id'] ?? $request->user()?->company_id;
+            $dailyRate = $data['daily_rate'] ?? ($vehicle->daily_rental_price ?? null);
+            $depositAmount = $data['deposit_amount'] ?? $this->getSetting($companyId, 'contracts', 'default_deposit_mad');
+            $allowedKm = $data['allowed_km_per_day'] ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day');
+
+            $days = max(1, (int) ceil($endAt->diffInDays($startAt)));
+            $estimatedPrice = $data['estimated_price'] ?? ($dailyRate ? $dailyRate * $days : null);
+
             return Reservation::query()->create([
                 'id' => (string) Str::uuid(),
-                'company_id' => $data['company_id'] ?? $request->user()?->company_id,
+                'company_id' => $companyId,
                 'branch_id' => $data['branch_id'] ?? null,
                 'reservation_number' => $this->generateReservationNumber(),
                 'customer_id' => $data['customer_id'],
@@ -116,7 +128,10 @@ class ReservationController extends Controller
                 'delivery_address' => $data['delivery_address'] ?? null,
                 'delivery_latitude' => $data['delivery_latitude'] ?? null,
                 'delivery_longitude' => $data['delivery_longitude'] ?? null,
-                'estimated_price' => $data['estimated_price'] ?? null,
+                'estimated_price' => $estimatedPrice,
+                'daily_rate' => $dailyRate,
+                'deposit_amount' => $depositAmount,
+                'allowed_km_per_day' => $allowedKm,
                 'payment_method' => PaymentMethodNormalizer::normalize($data['payment_method'] ?? null),
                 'pickup_location' => $data['pickup_location'] ?? null,
                 'return_location' => $data['return_location'] ?? null,
@@ -795,11 +810,12 @@ class ReservationController extends Controller
 
     private function buildTotals(Reservation $reservation, ?Vehicle $vehicle, $extensions, $damages, $payments): array
     {
-        $dailyRate = (float) ($vehicle->daily_rental_price ?? 0);
-        $monthlyRate = (float) ($vehicle->monthly_rental_price ?? 0);
         $companyId = $reservation->company_id;
 
-        // Calculate days between start and end
+        // Daily rate: reservation field > vehicle field > 0
+        $dailyRate = (float) ($reservation->daily_rate ?? $vehicle->daily_rental_price ?? 0);
+
+        // Days
         $days = 1;
         if ($reservation->desired_start_at && $reservation->desired_end_at) {
             $days = max(1, (int) ceil(
@@ -807,19 +823,17 @@ class ReservationController extends Controller
             ));
         }
 
-        // Estimated price: use stored value, or calculate from daily rate × days
+        // Estimated price: reservation field, or daily_rate × days
         $estimatedPrice = (float) ($reservation->estimated_price ?? 0);
         if ($estimatedPrice <= 0 && $dailyRate > 0) {
             $estimatedPrice = $dailyRate * $days;
         }
 
-        // Deposit: from company settings
-        $depositSetting = $this->getSetting($companyId, 'contracts', 'default_deposit_mad');
-        $deposit = $depositSetting ? (float) $depositSetting : 0;
+        // Deposit: reservation field > company setting
+        $deposit = (float) ($reservation->deposit_amount ?? $this->getSetting($companyId, 'contracts', 'default_deposit_mad') ?? 0);
 
-        // Allowed km per day: from company settings
-        $kmSetting = $this->getSetting($companyId, 'contracts', 'default_km_per_day');
-        $allowedKm = $kmSetting ? (float) $kmSetting : 0;
+        // Allowed km: reservation field > company setting
+        $allowedKm = (float) ($reservation->allowed_km_per_day ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day') ?? 0);
 
         $extensionsTotal = (float) $extensions->where('status', 'applied')->sum('additional_amount');
         $damagesTotal = (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0);

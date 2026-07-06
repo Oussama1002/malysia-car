@@ -80,6 +80,9 @@ export const opsApi = {
     pickup_address?: string;
     delivery_address?: string;
     estimated_price?: number;
+    daily_rate?: number;
+    deposit_amount?: number;
+    allowed_km_per_day?: number;
     is_draft?: boolean;
   }): Promise<ReservationDto> {
     const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.create, { method: 'POST', body: JSON.stringify(input) });
