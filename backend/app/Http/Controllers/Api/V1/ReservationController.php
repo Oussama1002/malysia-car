@@ -880,11 +880,25 @@ class ReservationController extends Controller
             $estimatedPrice = $dailyRate * $days;
         }
 
-        // Deposit: reservation field > company setting
-        $deposit = (float) ($reservation->deposit_amount ?? $this->getSetting($companyId, 'contracts', 'default_deposit_mad') ?? 0);
+        // Deposit: reservation field > linked contract > company setting
+        $contractDeposit = Contract::withoutGlobalScopes()
+            ->where('customer_id', $reservation->customer_id)
+            ->where('vehicle_id', $reservation->vehicle_id)
+            ->whereNotIn('status', ['cancelled', 'terminated'])
+            ->value('deposit_amount');
+        $deposit = (float) ($reservation->deposit_amount ?? $contractDeposit ?? $this->getSetting($companyId, 'contracts', 'default_deposit_mad') ?? 0);
 
-        // Allowed km: reservation field > company setting
-        $allowedKm = (float) ($reservation->allowed_km_per_day ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day') ?? 0);
+        // Allowed km: reservation field > linked contract > company setting > default 250
+        $contractKm = null;
+        $linkedContract = Contract::withoutGlobalScopes()
+            ->where('customer_id', $reservation->customer_id)
+            ->where('vehicle_id', $reservation->vehicle_id)
+            ->whereNotIn('status', ['cancelled', 'terminated'])
+            ->value('allowed_km');
+        if ($linkedContract !== null) {
+            $contractKm = (float) $linkedContract;
+        }
+        $allowedKm = (float) ($reservation->allowed_km_per_day ?? $contractKm ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day') ?? 250);
 
         $extensionsTotal = (float) $extensions->where('status', 'applied')->sum('additional_amount');
         $damagesTotal = (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0);
