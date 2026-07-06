@@ -394,7 +394,7 @@ export const ReservationDetailPage: React.FC = () => {
           <Suspense fallback={<TabFallback />}>
             {activeTab === 'summary'    && <TabSummary data={d} />}
             {activeTab === 'drivers'    && <TabDrivers reservationId={rid!} drivers={d?.drivers ?? []} onRefresh={invalidate} />}
-            {activeTab === 'contract'   && <TabContract reservation={r} />}
+            {activeTab === 'contract'   && <TabContract reservation={r} detail={d} />}
             {activeTab === 'checkout'   && <TabCheckOut reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
             {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
             {activeTab === 'extensions' && <TabExtensions reservationId={rid!} extensions={d?.extensions ?? []} onRefresh={invalidate} />}
