@@ -68,6 +68,15 @@ const ACTION_FR: Record<string, string> = {
   reservation_deleted: 'Réservation supprimée',
   vehicle_swap_rejected: 'Changement véhicule refusé',
   critical_notification_created: 'Notification critique',
+  pdf_generated: 'PDF généré',
+  document_downloaded: 'Accès document',
+  document_generated: 'Document généré',
+  document_linked: 'Document lié',
+  signature_requested: 'Signature demandée',
+  signature_completed: 'Signature complétée',
+  payment_received: 'Paiement reçu',
+  payment_created: 'Paiement créé',
+  schedule_generated: 'Échéancier généré',
 };
 
 const STATUS_FR: Record<string, string> = {
@@ -106,6 +115,43 @@ function translateActionLabel(label: string | null | undefined, action: string):
     return `Statut ${from} → ${to}`;
   }
   return ACTION_FR[label] ?? label;
+}
+
+const ENTITY_FR: Record<string, string> = {
+  Contract: 'Contrat',
+  Customer: 'Client',
+  Vehicle: 'Véhicule',
+  Invoice: 'Facture',
+  Payment: 'Paiement',
+  Reservation: 'Réservation',
+  Mission: 'Mission',
+  Expense: 'Dépense',
+  Document: 'Document',
+  CreditApplication: 'Demande crédit',
+  LegalCase: 'Dossier juridique',
+  ArrearsCase: 'Dossier impayé',
+  Envelope: 'Enveloppe signature',
+  AccountingEntry: 'Écriture comptable',
+  VehicleRepair: 'Réparation',
+  VehicleMaintenanceEvent: 'Maintenance',
+  VehicleAccident: 'Accident',
+  VehicleInsurancePolicy: 'Assurance',
+  VehicleTechnicalInspection: 'Contrôle technique',
+  SubRentalContract: 'Contrat sous-location',
+  User: 'Utilisateur',
+  // document sub-types
+  pdf_generated: 'PDF généré',
+  document_downloaded: 'Document téléchargé',
+  entity_attachment: 'Pièce jointe',
+  generated: 'Document généré',
+  contract_pdf: 'PDF contrat',
+  invoice_pdf: 'PDF facture',
+};
+
+function translateEntity(raw: string | null | undefined): string {
+  if (!raw) return '—';
+  const short = raw.includes('\\') ? raw.split('\\').pop()! : raw;
+  return ENTITY_FR[short] ?? short;
 }
 
 const ENTITY_OPTIONS = [
@@ -276,7 +322,7 @@ export const AuditPage: React.FC = () => {
             header: 'Entité',
             render: (r) => (
               <span className="font-mono text-xs">
-                {r.entity_type ? r.entity_type.split('\\').pop() : '—'}{' '}
+                {translateEntity(r.entity_type)}{' '}
                 {r.entity_id ? `· ${r.entity_id.slice(0, 8)}` : ''}
               </span>
             ),
@@ -340,7 +386,7 @@ const DiffDrawer: React.FC<{ log: AuditLogDto; onClose: () => void }> = ({ log, 
             <div className="text-xs font-mono text-slate-500">{log.id}</div>
             <h2 className="text-lg font-black">{translateActionLabel(log.action_label, log.action)}</h2>
             <div className="text-xs text-slate-500">
-              {MODULE_FR[log.module] ?? log.module} · {log.entity_type ? log.entity_type.split('\\').pop() : '—'} ·{' '}
+              {MODULE_FR[log.module] ?? log.module} · {translateEntity(log.entity_type)} ·{' '}
               {log.actor_email ?? log.user_id ?? '—'} · {formatDate(log.occurred_at)}
             </div>
           </div>
