@@ -119,7 +119,8 @@ class ExpenseController extends Controller
             'reservation_id' => ['nullable', 'uuid'],
             'mission_id' => ['nullable', 'uuid'],
             'supplier_id' => ['nullable', 'uuid'],
-            'frequency' => ['nullable', 'string', 'in:monthly,quarterly,yearly'],
+            'frequency' => ['nullable', 'string', 'in:daily,monthly,quarterly,yearly,threshold'],
+            'reminder_threshold_value' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
         ]);
 
@@ -159,7 +160,8 @@ class ExpenseController extends Controller
             'reservation_id' => ['nullable', 'uuid'],
             'mission_id' => ['nullable', 'uuid'],
             'supplier_id' => ['nullable', 'uuid'],
-            'frequency' => ['nullable', 'string', 'in:monthly,quarterly,yearly'],
+            'frequency' => ['nullable', 'string', 'in:daily,monthly,quarterly,yearly,threshold'],
+            'reminder_threshold_value' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
         ]);
 

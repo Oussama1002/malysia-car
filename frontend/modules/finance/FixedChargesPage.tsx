@@ -22,6 +22,8 @@ type Expense = {
   supplier_id?: string | null;
   notes?: string | null;
   paid_at?: string | null;
+  frequency?: string | null;
+  reminder_threshold_value?: number | null;
 };
 
 type DashboardData = {
@@ -62,6 +64,7 @@ const CATEGORY_FR: Record<string, string> = {
 
 const TYPE_FR: Record<string, string> = { fixed: 'Fixe', operational: 'Opérationnelle', one_time: 'Ponctuelle' };
 const STATUS_FR: Record<string, string> = { paid: 'Payée', unpaid: 'Impayée', overdue: 'En retard' };
+const REMINDER_FR: Record<string, string> = { daily: 'Journalier', monthly: 'Mensuel', quarterly: 'Trimestriel', yearly: 'Annuel', threshold: 'Au seuil' };
 const METHOD_FR: Record<string, string> = { cash: 'Espèces', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte' };
 
 type TabKey = 'dashboard' | 'list' | 'vehicle' | 'suppliers';
@@ -275,6 +278,7 @@ export const FixedChargesPage: React.FC = () => {
                   <th className="px-4 py-2.5 text-left">Libellé</th>
                   <th className="px-4 py-2.5 text-left">Catégorie</th>
                   <th className="px-4 py-2.5 text-left">Type</th>
+                  <th className="px-4 py-2.5 text-left">Rappel</th>
                   <th className="px-4 py-2.5 text-right">Montant</th>
                   <th className="px-4 py-2.5 text-left">Date</th>
                   <th className="px-4 py-2.5 text-center">Statut</th>
@@ -290,6 +294,14 @@ export const FixedChargesPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{CATEGORY_FR[e.category] ?? e.category}</td>
                     <td className="px-4 py-3 text-slate-600">{TYPE_FR[e.expense_type] ?? e.expense_type}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">
+                      {e.frequency
+                        ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                            {REMINDER_FR[e.frequency] ?? e.frequency}
+                            {e.frequency === 'threshold' && e.reminder_threshold_value ? ` (${formatCurrencyMad(e.reminder_threshold_value)})` : ''}
+                          </span>
+                        : '—'}
+                    </td>
                     <td className="px-4 py-3 text-right font-black text-slate-800">{formatCurrencyMad(Number(e.amount))}</td>
                     <td className="px-4 py-3 text-slate-600">{fmtDate(e.expense_date)}</td>
                     <td className="px-4 py-3 text-center">
@@ -307,7 +319,7 @@ export const FixedChargesPage: React.FC = () => {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={7} className="py-8 text-center text-sm text-slate-400">Aucune dépense</td></tr>
+                  <tr><td colSpan={8} className="py-8 text-center text-sm text-slate-400">Aucune dépense</td></tr>
                 )}
               </tbody>
             </table>
@@ -468,6 +480,8 @@ const CreateExpenseModal: React.FC<{
     vehicle_id: '',
     supplier_id: '',
     notes: '',
+    reminder_frequency: '' as '' | 'daily' | 'monthly' | 'quarterly' | 'yearly' | 'threshold',
+    reminder_threshold_value: '',
   });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -502,6 +516,25 @@ const CreateExpenseModal: React.FC<{
               <option value="one_time">Ponctuelle</option>
             </select>
           </div>
+          {form.expense_type === 'fixed' && (
+            <div>
+              <label className="mb-1 block text-[10px] font-bold text-slate-400">Rappel (récurrence)</label>
+              <select className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.reminder_frequency} onChange={(e) => set('reminder_frequency', e.target.value)}>
+                <option value="">— Aucun rappel —</option>
+                <option value="daily">Journalier</option>
+                <option value="monthly">Mensuel</option>
+                <option value="quarterly">Trimestriel</option>
+                <option value="yearly">Annuel</option>
+                <option value="threshold">À un seuil (valeur)</option>
+              </select>
+            </div>
+          )}
+          {form.expense_type === 'fixed' && form.reminder_frequency === 'threshold' && (
+            <div>
+              <label className="mb-1 block text-[10px] font-bold text-slate-400">Seuil de rappel (MAD)</label>
+              <input type="number" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.reminder_threshold_value} onChange={(e) => set('reminder_threshold_value', e.target.value)} placeholder="Ex: 5000" />
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Véhicule</label>
             <select className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.vehicle_id} onChange={(e) => set('vehicle_id', e.target.value)}>
@@ -544,7 +577,17 @@ const CreateExpenseModal: React.FC<{
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600">Annuler</button>
           <button
-            onClick={() => onSubmit({ ...form, amount: Number(form.amount), vehicle_id: form.vehicle_id || undefined, supplier_id: form.supplier_id || undefined })}
+            onClick={() => {
+              const { reminder_frequency, reminder_threshold_value, ...rest } = form;
+              onSubmit({
+                ...rest,
+                amount: Number(form.amount),
+                vehicle_id: form.vehicle_id || undefined,
+                supplier_id: form.supplier_id || undefined,
+                frequency: form.expense_type === 'fixed' && reminder_frequency ? reminder_frequency : undefined,
+                reminder_threshold_value: form.expense_type === 'fixed' && reminder_frequency === 'threshold' && reminder_threshold_value ? Number(reminder_threshold_value) : undefined,
+              });
+            }}
             disabled={submitting || !form.label || !form.amount || !form.expense_date}
             className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
           >

@@ -22,7 +22,7 @@ class Expense extends Model
         'category', 'expense_type', 'status', 'payment_method', 'reference',
         'vehicle_id', 'driver_id', 'customer_id', 'contract_id',
         'reservation_id', 'mission_id', 'supplier_id',
-        'frequency', 'recurring_parent_id',
+        'frequency', 'recurring_parent_id', 'reminder_threshold_value',
         'notes', 'created_by', 'paid_at',
     ];
 
