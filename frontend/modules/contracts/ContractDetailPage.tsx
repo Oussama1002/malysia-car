@@ -14,6 +14,7 @@ import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTime
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { walletApi } from '@/services/walletApi';
 import { createPortal } from 'react-dom';
+import TabCheckOut from '@/modules/rentals/tabs/TabCheckOut';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -116,6 +117,7 @@ export const ContractDetailPage: React.FC = () => {
 
   const c = q.data?.contract ?? null;
   const history = q.data?.history ?? [];
+  const linkedReservationId: string | null = (q.data as any)?.linked_reservation_id ?? null;
 
   // Resolve raw IDs → names by fetching customer + vehicle
   const raw = c as any;
@@ -148,6 +150,15 @@ export const ContractDetailPage: React.FC = () => {
     ? [vehicleQ.data.brand?.name ?? vehicleQ.data.brand, vehicleQ.data.model?.name ?? vehicleQ.data.model, vehicleQ.data.plate ?? vehicleQ.data.registration]
         .filter(Boolean).join(' ')
     : shortId(vehicleId, 'VHL');
+
+  const handoverQ = useQuery({
+    queryKey: ['handover-reports', linkedReservationId],
+    enabled: !!linkedReservationId,
+    queryFn: async () => {
+      const res = await apiClient<{ data: any[] }>(`/v1/reservations/${linkedReservationId}/handover-reports`);
+      return res.data;
+    },
+  });
 
   // Compute end date if missing: startDate + duration_months
   const durationMonths: number | null = raw?.durationMonths ?? raw?.duration_months ?? null;
@@ -224,6 +235,7 @@ export const ContractDetailPage: React.FC = () => {
           { id: 'signature', label: 'Signature' },
           { id: 'payments',  label: 'Paiements' },
           { id: 'legal',     label: 'Contentieux' },
+          { id: 'checkout',  label: 'Check-Out' },
           { id: 'history',   label: 'Historique' },
           { id: 'actions',   label: 'Actions' },
         ]}
@@ -313,6 +325,13 @@ export const ContractDetailPage: React.FC = () => {
 
       {/* ── CONTENTIEUX ──────────────────────────────────────────────────── */}
       {tab === 'legal' && <LegalTab />}
+
+      {/* ── CHECK-OUT ──────────────────────────────────────────────────── */}
+      {tab === 'checkout' && (
+        linkedReservationId
+          ? <TabCheckOut reservationId={linkedReservationId} reports={handoverQ.data ?? []} onRefresh={() => { handoverQ.refetch(); }} />
+          : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-700">Aucune réservation liée à ce contrat. Le Check-Out nécessite une réservation active.</div>
+      )}
 
       {/* ── HISTORIQUE ───────────────────────────────────────────────────── */}
       {tab === 'history' && (

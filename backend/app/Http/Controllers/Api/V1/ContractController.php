@@ -70,9 +70,17 @@ class ContractController extends Controller
     {
         $contract->load(['history']);
 
+        $linkedReservation = Reservation::query()
+            ->where('customer_id', $contract->customer_id)
+            ->where('vehicle_id', $contract->vehicle_id)
+            ->whereNotIn('status', ['cancelled', 'closed'])
+            ->orderByDesc('created_at')
+            ->first();
+
         return ApiResponse::success([
             'contract' => (new ContractResource($contract))->resolve($request),
             'history' => $contract->history,
+            'linked_reservation_id' => $linkedReservation?->id,
         ]);
     }
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { documentReaderApi } from '@/services/documentReaderApi';
 
 interface Report {
   id: string;
@@ -31,6 +32,34 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
     condition_notes: '',
     signature: '',
   });
+  const [ocrStatus, setOcrStatus] = useState<'idle' | 'uploading' | 'extracting' | 'done' | 'error'>('idle');
+  const [ocrError, setOcrError] = useState<string | null>(null);
+
+  async function handleDashboardPhoto(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    setOcrStatus('uploading');
+    setOcrError(null);
+    try {
+      const uploaded = await documentReaderApi.upload(file, 'vehicle_dashboard');
+      setOcrStatus('extracting');
+      await documentReaderApi.extract(uploaded.data.id, 'vehicle_dashboard');
+      const result = await documentReaderApi.pollUntilDone(uploaded.data.id, { timeoutMs: 30000 });
+      const doc = result.data;
+      const data = doc.extraction?.extracted_data ?? doc.extracted_data ?? {};
+      const km = Number(data.odometer ?? data.mileage ?? data.km ?? data.kilometrage ?? 0);
+      const fuel = Number(data.fuel_level ?? data.fuel ?? data.carburant ?? 0);
+      setForm((s) => ({
+        ...s,
+        odometer: km > 0 ? String(km) : s.odometer,
+        fuel_level: fuel > 0 ? String(Math.min(100, fuel)) : s.fuel_level,
+      }));
+      setOcrStatus('done');
+    } catch {
+      setOcrStatus('error');
+      setOcrError('Extraction impossible. Remplissez les champs manuellement.');
+    }
+  }
 
   const pickupM = useMutation({
     mutationFn: () =>
@@ -116,20 +145,41 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
           </div>
         </div>
 
-        {/* Photo zones placeholder */}
+        {/* Photo zones */}
         <div className="mt-4">
           <label className="mb-2 block text-[10px] font-bold text-slate-400">Photos du véhicule</label>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {PHOTO_ZONES.map((zone) => (
-              <div
-                key={zone}
-                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 p-3 text-center hover:border-slate-300 cursor-pointer"
-              >
-                <div className="text-lg text-slate-300">📷</div>
-                <div className="mt-1 text-[10px] font-bold text-slate-400">{zone}</div>
-              </div>
-            ))}
+            {PHOTO_ZONES.map((zone) => {
+              const isDashboard = zone === 'Tableau de bord';
+              return (
+                <label
+                  key={zone}
+                  className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-3 text-center cursor-pointer ${
+                    isDashboard
+                      ? 'border-indigo-300 bg-indigo-50/40 hover:border-indigo-400'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture={isDashboard ? 'environment' : undefined}
+                    className="hidden"
+                    onChange={(e) => {
+                      if (isDashboard) handleDashboardPhoto(e.target.files);
+                    }}
+                  />
+                  <div className="text-lg text-slate-300">{isDashboard ? '🔍' : '📷'}</div>
+                  <div className={`mt-1 text-[10px] font-bold ${isDashboard ? 'text-indigo-600' : 'text-slate-400'}`}>{zone}</div>
+                  {isDashboard && <div className="mt-0.5 text-[8px] text-indigo-400">Auto-remplir km & carburant</div>}
+                </label>
+              );
+            })}
           </div>
+          {ocrStatus === 'uploading' && <div className="mt-2 text-xs font-semibold text-indigo-600">Upload en cours…</div>}
+          {ocrStatus === 'extracting' && <div className="mt-2 text-xs font-semibold text-indigo-600">Extraction OCR en cours…</div>}
+          {ocrStatus === 'done' && <div className="mt-2 text-xs font-semibold text-emerald-600">Km et carburant extraits avec succès.</div>}
+          {ocrStatus === 'error' && <div className="mt-2 text-xs font-semibold text-rose-600">{ocrError}</div>}
         </div>
 
         <div className="mt-4">
