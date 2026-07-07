@@ -9,10 +9,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('reservations', function (Blueprint $table) {
-            $table->decimal('daily_rate', 18, 2)->nullable()->after('estimated_price');
-            $table->decimal('deposit_amount', 18, 2)->nullable()->after('daily_rate');
-            $table->decimal('allowed_km_per_day', 10, 2)->nullable()->after('deposit_amount');
-            $table->string('payment_method', 50)->nullable()->after('allowed_km_per_day');
+            if (! Schema::hasColumn('reservations', 'daily_rate')) {
+                $table->decimal('daily_rate', 18, 2)->nullable()->after('estimated_price');
+            }
+            if (! Schema::hasColumn('reservations', 'deposit_amount')) {
+                $table->decimal('deposit_amount', 18, 2)->nullable()->after('daily_rate');
+            }
+            if (! Schema::hasColumn('reservations', 'allowed_km_per_day')) {
+                $table->decimal('allowed_km_per_day', 10, 2)->nullable()->after('deposit_amount');
+            }
+            if (! Schema::hasColumn('reservations', 'payment_method')) {
+                $table->string('payment_method', 50)->nullable()->after('allowed_km_per_day');
+            }
         });
     }
 
