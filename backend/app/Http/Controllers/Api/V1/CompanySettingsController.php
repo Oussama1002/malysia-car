@@ -55,6 +55,7 @@ class CompanySettingsController extends Controller
         return match ($group) {
             'contracts' => [
                 'default_km_per_day',
+                'default_km_per_month',
                 'default_deposit_mad',
                 'default_payment_day',
                 'default_payment_terms',
