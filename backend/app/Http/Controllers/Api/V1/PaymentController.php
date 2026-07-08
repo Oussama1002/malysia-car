@@ -97,7 +97,7 @@ class PaymentController extends Controller
             $payment = Payment::create([
                 'id' => (string) Str::uuid(),
                 'company_id' => optional($request->user())->company_id,
-                'branch_id' => $data['branch_id'] ?? null,
+                'branch_id' => $data['branch_id'] ?? optional($request->user())->branch_id,
                 'payment_number' => $this->generatePaymentNumber(),
                 'customer_id' => $data['customer_id'],
                 'contract_id' => $data['contract_id'] ?? null,
