@@ -18,7 +18,7 @@ import { isExperimentalEnabled, isModuleHiddenInDemo } from '@/config/runtimeFla
 import { resolveNotificationRoute } from '@/modules/notifications/NotificationsPage';
 
 type NavItem = { to: string; module: ModuleKey; labelKey: string; icon: IconName };
-type NavGroup = { key: string; labelKey: string; items: NavItem[] };
+type NavGroup = { key: string; labelKey: string; collapsible?: boolean; items: NavItem[] };
 
 const GROUPS: NavGroup[] = [
   {
@@ -31,23 +31,17 @@ const GROUPS: NavGroup[] = [
     labelKey: 'nav.group.operations',
     items: [
       { to: '/fleet', module: 'fleet', labelKey: 'nav.fleet', icon: 'car' },
-      // 'Conformité véhicules' AND 'Analyse de parc' moved out of the sidebar —
-      // both are now reached via toggles/buttons on /fleet (VehiclesList). The
-      // /fleet/compliance route is kept for deep links; /fleet/analysis now
-      // redirects to /fleet (see AppRoutes).
-      { to: '/fleet/sub-rentals', module: 'subRentals', labelKey: 'nav.subRentals', icon: 'key' },
-      { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },
-      { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
-      // Réservations module = contracts list + rental operations as tabs.
-      // The standalone /rentals entry was merged in (redirects to the
-      // Locations tab); see ContractsModulePage + AppRoutes.
       { to: '/contracts', module: 'contracts', labelKey: 'nav.contractsSidebar', icon: 'doc' },
+      { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
+      { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },
+      { to: '/fleet/sub-rentals', module: 'subRentals', labelKey: 'nav.subRentals', icon: 'key' },
       { to: '/used-cars', module: 'usedCars', labelKey: 'nav.usedCars', icon: 'marketplace' },
     ],
   },
   {
     key: 'finance',
     labelKey: 'nav.group.finance',
+    collapsible: true,
     items: [
       { to: '/credit', module: 'credit', labelKey: 'nav.credit', icon: 'credit' },
       { to: '/finance', module: 'finance', labelKey: 'nav.finance', icon: 'coin' },
@@ -60,13 +54,13 @@ const GROUPS: NavGroup[] = [
     key: 'intelligence',
     labelKey: 'nav.group.intelligence',
     items: [
-      { to: '/ai', module: 'ai', labelKey: 'nav.ai', icon: 'sparkles' },
       { to: '/mobile-ops', module: 'mobileOps', labelKey: 'nav.mobileOps', icon: 'mobile' },
     ],
   },
   {
     key: 'system',
     labelKey: 'nav.group.system',
+    collapsible: true,
     items: [
       { to: '/notifications', module: 'notifications', labelKey: 'nav.notifications', icon: 'bell' },
       { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'doc' },
@@ -92,28 +86,40 @@ export const AppLayout: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { session, logout } = useAuthSession();
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, sidebarCollapsed, toggleSidebar } = useUIPrefs();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [sidebarFilter, setSidebarFilter] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const notifRef = useRef<HTMLDivElement | null>(null);
   const crumb = useBreadcrumb();
+
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
 
   useCommandPaletteShortcut(() => setCmdOpen(true));
 
   const groups = useMemo(() => {
     const role = session?.user.role ?? 'AGENT_COMMERCIAL';
     const showExperimental = isExperimentalEnabled();
+    const needle = sidebarFilter.trim().toLowerCase();
     return GROUPS.map((g) => ({
       ...g,
       items: g.items.filter((it) => {
         if (it.module === 'ai' && !showExperimental) return false;
         if (isModuleHiddenInDemo(it.module)) return false;
-        return canAccessModule(role, it.module);
+        if (!canAccessModule(role, it.module)) return false;
+        if (needle) {
+          const label = t(it.labelKey).toLowerCase();
+          if (!label.includes(needle)) return false;
+        }
+        return true;
       }),
     })).filter((g) => g.items.length > 0);
-  }, [session?.user.role]);
+  }, [session?.user.role, sidebarFilter, t]);
 
   const unreadQ = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -203,17 +209,63 @@ export const AppLayout: React.FC = () => {
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-1">
-        {groups.map((g) => (
-          <div key={g.key} className="mb-3">
-            {!sidebarCollapsed && <div className="df-nav-section">{t(g.labelKey)}</div>}
-            <div className="flex flex-col gap-0.5">
-              {g.items.map((it) => (
-                <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
-              ))}
-            </div>
+      {!sidebarCollapsed && (
+        <div className="mx-3 mb-2">
+          <div className="relative">
+            <Icon name="filter" size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--df-text-faint)]" />
+            <input
+              type="text"
+              value={sidebarFilter}
+              onChange={(e) => setSidebarFilter(e.target.value)}
+              placeholder="Filtrer le menu…"
+              className="h-8 w-full rounded-lg border border-[color:var(--df-border-strong)] bg-[color:var(--df-surface-sunk)] pl-8 pr-3 text-[11px] text-[color:var(--df-text)] placeholder:text-[color:var(--df-text-faint)] focus:border-[color:var(--df-brand-500)] focus:outline-none transition"
+            />
+            {sidebarFilter && (
+              <button
+                type="button"
+                onClick={() => setSidebarFilter('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--df-text-faint)] hover:text-[color:var(--df-text)]"
+              >
+                <Icon name="close" size={12} />
+              </button>
+            )}
           </div>
-        ))}
+        </div>
+      )}
+
+      <nav className="flex-1 overflow-y-auto px-3 py-1">
+        {groups.map((g) => {
+          const isCollapsible = g.collapsible && !sidebarCollapsed && !sidebarFilter;
+          const hasActiveChild = g.items.some(
+            (it) => location.pathname === it.to || location.pathname.startsWith(it.to + '/'),
+          );
+          const isOpen = hasActiveChild || !collapsedGroups[g.key];
+          return (
+            <div key={g.key} className="mb-3">
+              {!sidebarCollapsed && (
+                isCollapsible ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(g.key)}
+                    className="df-nav-section flex w-full items-center justify-between hover:text-[color:var(--df-text)] transition-colors cursor-pointer"
+                  >
+                    <span>{t(g.labelKey)}</span>
+                    <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={11} />
+                  </button>
+                ) : (
+                  <div className="df-nav-section">{t(g.labelKey)}</div>
+                )
+              )}
+              {(!isCollapsible || isOpen) && (
+                <div className="flex flex-col gap-0.5">
+                  {g.items.map((it) => (
+                    <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       <div className="border-t border-[color:var(--df-border)] p-3">
