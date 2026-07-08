@@ -321,7 +321,7 @@ export const ContractDetailPage: React.FC = () => {
       {tab === 'signature' && <SignatureTab contractId={String(c.id ?? id)} />}
 
       {/* ── PAIEMENTS ────────────────────────────────────────────────────── */}
-      {tab === 'payments' && <PaymentsTab contractId={String(c.id ?? id)} />}
+      {tab === 'payments' && <PaymentsTab contractId={String(c.id ?? id)} customerId={customerId} />}
 
       {/* ── CONTENTIEUX ──────────────────────────────────────────────────── */}
       {tab === 'legal' && <LegalTab />}
@@ -517,27 +517,186 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
 };
 
 // ── Paiements tab ──────────────────────────────────────────────────────────────
-const PaymentsTab: React.FC<{ contractId: string }> = ({ contractId }) => {
+const PaymentsTab: React.FC<{ contractId: string; customerId?: string | null }> = ({ contractId, customerId }) => {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('bank_transfer');
+  const [payType, setPayType] = useState('paiement_location');
+  const [payRef, setPayRef] = useState('');
+  const [payCheckNum, setPayCheckNum] = useState('');
+  const [payNotes, setPayNotes] = useState('');
+  const [payError, setPayError] = useState<string | null>(null);
+  const [payBusy, setPayBusy] = useState(false);
+
   const q = useQuery({
     queryKey: ['contract-installments-payments', contractId],
     queryFn: async () => contractsApi.installments(contractId),
   });
 
+  const paymentsListQ = useQuery({
+    queryKey: ['contract-payments-list', contractId],
+    queryFn: async () => {
+      const res = await apiClient<{ data: any[] }>(`/v1/payments?contract_id=${contractId}&per_page=200`);
+      return res.data;
+    },
+  });
+
+  const directPayments = (paymentsListQ.data ?? []) as any[];
+
   const all = (q.data ?? []) as any[];
   const paid    = all.filter((i: any) => (i.status ?? '') === 'paid' || Number(i.amount_paid ?? i.amountPaid ?? 0) > 0);
   const pending = all.filter((i: any) => (i.status ?? '') !== 'paid' && Number(i.amount_paid ?? i.amountPaid ?? 0) === 0);
 
+  const handleAddPayment = async () => {
+    if (!payAmount || Number(payAmount) <= 0) { setPayError('Montant requis.'); return; }
+    if (!customerId) { setPayError('Client introuvable pour ce contrat.'); return; }
+    setPayBusy(true);
+    setPayError(null);
+    try {
+      await apiClient('/v1/payments', {
+        method: 'POST',
+        body: JSON.stringify({
+          customer_id: customerId,
+          contract_id: contractId,
+          payment_method: payMethod,
+          payment_type: payType,
+          amount: Number(payAmount),
+          currency_code: 'MAD',
+          payment_date: new Date().toISOString().slice(0, 10),
+          external_reference: payRef || undefined,
+          check_number: payCheckNum || undefined,
+          notes: payNotes || undefined,
+        }),
+      });
+      setShowForm(false);
+      setPayAmount('');
+      setPayMethod('bank_transfer');
+      setPayType('paiement_location');
+      setPayRef('');
+      setPayCheckNum('');
+      setPayNotes('');
+      await qc.invalidateQueries({ queryKey: ['contract-installments-payments', contractId] });
+      await qc.invalidateQueries({ queryKey: ['contract-payments-list', contractId] });
+    } catch (e: any) {
+      setPayError(e instanceof ApiError ? e.message : 'Erreur lors de l\'enregistrement du paiement.');
+    } finally {
+      setPayBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Add payment button + modal */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-black text-slate-900">Paiements du contrat</div>
+        <button
+          type="button"
+          className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700"
+          onClick={() => { setShowForm(true); setPayError(null); }}
+        >
+          Ajouter un paiement
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowForm(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-900">Nouveau paiement</h3>
+              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Montant (MAD) *</label>
+                  <input type="number" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Mode de paiement *</label>
+                  <select className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+                    <option value="bank_transfer">Virement bancaire</option>
+                    <option value="check">Chèque</option>
+                    <option value="cash">Espèce</option>
+                    <option value="card">Carte bancaire</option>
+                    <option value="compensation">Compensation</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Type de paiement</label>
+                <select className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payType} onChange={(e) => setPayType(e.target.value)}>
+                  <option value="avance">Avance</option>
+                  <option value="paiement_location">Paiement location</option>
+                  <option value="solde">Solde</option>
+                  <option value="caution">Caution</option>
+                  <option value="penalite">Pénalité</option>
+                </select>
+              </div>
+              {payMethod === 'check' && (
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">N° chèque</label>
+                  <input type="text" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payCheckNum} onChange={(e) => setPayCheckNum(e.target.value)} />
+                </div>
+              )}
+              {(payMethod === 'bank_transfer' || payMethod === 'card') && (
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Référence externe</label>
+                  <input type="text" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payRef} onChange={(e) => setPayRef(e.target.value)} />
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
+                <textarea className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" rows={2} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} />
+              </div>
+              {payError && <p className="text-xs font-semibold text-red-600">{payError}</p>}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600" onClick={() => setShowForm(false)}>Annuler</button>
+                <button
+                  type="button"
+                  className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                  disabled={payBusy || !payAmount}
+                  onClick={handleAddPayment}
+                >
+                  {payBusy ? 'Enregistrement…' : 'Enregistrer le paiement'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct payments list */}
       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <div className="mb-4 text-sm font-black text-slate-900">Paiements reçus</div>
-        {q.isLoading ? (
+        {paymentsListQ.isLoading && q.isLoading ? (
           <p className="text-sm text-slate-500">Chargement…</p>
-        ) : paid.length === 0 ? (
+        ) : directPayments.length === 0 && paid.length === 0 ? (
           <p className="text-sm text-slate-500">Aucun paiement enregistré pour ce contrat.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {paid.map((inst: any, idx: number) => {
+            {directPayments.map((p: any) => {
+              const amount = Number(p.amount ?? 0);
+              const date = p.payment_date ?? p.created_at;
+              const method = PAYMENT_METHOD_FR[p.payment_method ?? ''] ?? p.payment_method ?? '—';
+              return (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-800">{p.payment_number ?? 'Paiement'}</div>
+                      <div className="text-xs text-slate-500">{date ? formatDate(date) : '—'} · {method}</div>
+                    </div>
+                  </div>
+                  <div className="font-black text-emerald-700">{formatCurrencyMad(amount)}</div>
+                </li>
+              );
+            })}
+            {paid.filter((inst: any) => !directPayments.some((dp: any) => dp.id === inst.id)).map((inst: any, idx: number) => {
               const amount = Number(inst.amount_paid ?? inst.amountPaid ?? inst.amount_due ?? 0);
               const date   = inst.paid_at ?? inst.paidAt ?? inst.due_date ?? inst.dueDate;
               return (
