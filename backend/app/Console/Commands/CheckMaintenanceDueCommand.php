@@ -29,7 +29,8 @@ class CheckMaintenanceDueCommand extends Command
             if (!$vehicle) continue;
             $newStatus = $plan->computed_status;
             $oldStatus = (string) ($plan->status ?? 'ok');
-            if ($newStatus !== $oldStatus) {
+            $statusChanged = $newStatus !== $oldStatus;
+            if ($statusChanged) {
                 $plan->status = $newStatus;
                 $plan->save();
                 AuditLogger::record(
@@ -44,10 +45,11 @@ class CheckMaintenanceDueCommand extends Command
                 );
             }
 
-            if (in_array($newStatus, ['due_soon', 'overdue'], true)) {
+            // Only notify when status just changed to due_soon/overdue (not every hourly run)
+            if ($statusChanged && in_array($newStatus, ['due_soon', 'overdue'], true)) {
                 $severity = $newStatus === 'overdue' ? 'critical' : 'high';
                 $type = $newStatus === 'overdue' ? 'maintenance_overdue' : 'maintenance_due_soon';
-                $title = $newStatus === 'overdue' ? 'Entretien depasse' : 'Entretien bientot du';
+                $title = $newStatus === 'overdue' ? 'Entretien dépassé' : 'Entretien bientôt dû';
                 $description = ($plan->maintenance_type ?? 'Maintenance').' pour '.$vehicle->registration_number;
                 $this->alerts->createAlert(
                     vehicle: $vehicle,

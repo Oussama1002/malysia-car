@@ -16,6 +16,48 @@ import { ApiError } from '@/services/apiError';
 
 type ListFilter = 'all' | 'unread' | 'critical' | 'failed';
 
+const CATEGORY_FR: Record<string, string> = {
+  'fleet.maintenance_due_soon': 'Entretien bientôt dû',
+  'fleet.maintenance_overdue': 'Entretien dépassé',
+  'fleet.accident_declared': 'Accident déclaré',
+  'fleet.immobilized': 'Véhicule immobilisé',
+  'fleet.document_expiring': 'Document véhicule expirant',
+  'fleet.document_expired': 'Document véhicule expiré',
+  'contract.pending_approval': 'Contrat en attente',
+  'contract.approved': 'Contrat approuvé',
+  'contract.activated': 'Contrat activé',
+  'contract.terminated': 'Contrat résilié',
+  'contract_expiry': 'Contrat expirant',
+  'contracts.expiring': 'Contrat expirant',
+  'payment.received': 'Paiement reçu',
+  'invoice.overdue': 'Facture en retard',
+  'arrears.detected': 'Impayé détecté',
+  'arrears.escalated': 'Impayé escaladé',
+  'rentals.return_due': 'Retour prévu',
+  'gps.alert': 'Alerte GPS',
+  'gps.unknown_device': 'Appareil GPS inconnu',
+  'kyc.pending_validation': 'KYC en attente',
+  'kyc.document_uploaded': 'Document KYC uploadé',
+  'signature.sent': 'Signature envoyée',
+  'signature.signed': 'Signature effectuée',
+  'signature.voided': 'Signature annulée',
+  'sub_rental_return_due': 'Sous-location retour prévu',
+  'sub_rental_overdue': 'Sous-location en retard',
+  'sub_rental_margin_negative': 'Sous-location marge négative',
+  'sub_rental_blacklisted_supplier': 'Fournisseur blacklisté',
+  'finance.fixed_charge_overdue': 'Charge fixe en retard',
+};
+
+const PRIORITY_FR: Record<string, string> = {
+  critical: 'Critique',
+  high: 'Haute',
+  medium: 'Moyenne',
+  low: 'Basse',
+};
+
+const categoryLabel = (cat: string) => CATEGORY_FR[cat] ?? cat;
+const priorityLabel = (p: string) => PRIORITY_FR[p] ?? p;
+
 export const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -176,8 +218,8 @@ export const NotificationsPage: React.FC = () => {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge label={n.category} tone="info" />
-                    {n.priority && <StatusBadge label={n.priority} tone={n.priority === 'critical' ? 'danger' : n.priority === 'high' ? 'warning' : 'default'} />}
+                    <StatusBadge label={categoryLabel(n.category)} tone="info" />
+                    {n.priority && <StatusBadge label={priorityLabel(n.priority)} tone={n.priority === 'critical' ? 'danger' : n.priority === 'high' ? 'warning' : 'default'} />}
                     <div className="text-sm font-black text-slate-900">{n.title}</div>
                   </div>
                   {n.body && <div className="mt-2 text-sm text-slate-600 line-clamp-2">{n.body}</div>}
@@ -197,8 +239,8 @@ export const NotificationsPage: React.FC = () => {
         {selected && (
           <div className="space-y-4 text-sm">
             <div className="flex flex-wrap gap-2">
-              <StatusBadge label={selected.category} tone="info" />
-              {selected.priority && <StatusBadge label={selected.priority} tone={selected.priority === 'critical' ? 'danger' : 'default'} />}
+              <StatusBadge label={categoryLabel(selected.category)} tone="info" />
+              {selected.priority && <StatusBadge label={priorityLabel(selected.priority)} tone={selected.priority === 'critical' ? 'danger' : 'default'} />}
               {selected.read_at ? <StatusBadge label="Lu" tone="success" /> : <StatusBadge label="Non lu" tone="warning" />}
             </div>
             {selected.body && <p className="text-slate-700 whitespace-pre-wrap">{selected.body}</p>}
