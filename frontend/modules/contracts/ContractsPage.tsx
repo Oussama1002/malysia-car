@@ -110,9 +110,14 @@ export const ContractsPage: React.FC = () => {
             key: 'a',
             header: '',
             render: (r) => (
-              <Link className="text-sm font-black text-indigo-600" to={`/contracts/${r.id}`}>
-                Détail
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link className="text-sm font-black text-indigo-600" to={`/contracts/${r.id}`}>
+                  Détail
+                </Link>
+                <Link className="text-sm font-bold text-amber-600 hover:text-amber-700" to={`/contracts/${r.id}/edit`}>
+                  Modifier
+                </Link>
+              </div>
             ),
           },
         ]}

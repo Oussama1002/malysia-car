@@ -106,6 +106,37 @@ export const contractsApi = {
     return res.data;
   },
 
+  async update(id: number | string, payload: Partial<ContractDto> & { type: string; clientId: number | string }): Promise<ContractDto> {
+    if (!hasBackend()) {
+      throw new Error('Backend required for contract update (set VITE_API_BASE).');
+    }
+    const body = {
+      contract_type: payload.type,
+      customer_id: String(payload.clientId),
+      vehicle_id: payload.vehicleId ? String(payload.vehicleId) : null,
+      start_date: payload.startDate ?? null,
+      end_date: payload.endDate ?? null,
+      duration_months: (payload as any).durationMonths ?? null,
+      currency_code: 'MAD',
+      base_amount: payload.amountMad ?? payload.baseAmount ?? null,
+      monthly_payment: (payload as any).monthlyPayment ?? null,
+      allowed_km: (payload as any).allowedKm ?? null,
+      excess_km_rate: (payload as any).excessKmRate ?? null,
+      deposit_amount: (payload as any).depositAmount ?? null,
+      notes: (payload as any).notes ?? null,
+      payment_method: (payload as any).paymentMethod ?? null,
+      payment_terms: (payload as any).paymentTerms ?? null,
+      bank_reference: (payload as any).bankReference ?? null,
+      cheque_number: (payload as any).chequeNumber ?? null,
+      expected_payment_day: (payload as any).expectedPaymentDay ?? null,
+    };
+    const res = await apiClient<{ data: ContractDto }>(endpoints.contracts.one(id), {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+    return res.data;
+  },
+
   async destroy(id: number | string): Promise<void> {
     await apiClient(endpoints.contracts.one(id), { method: 'DELETE' });
   },

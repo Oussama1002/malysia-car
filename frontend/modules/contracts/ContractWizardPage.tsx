@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
@@ -202,6 +202,8 @@ function daysBetween(start: string, end: string): number {
 
 export const ContractWizardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id?: string }>();
+  const isEditMode = !!editId;
   const [searchParams] = useSearchParams();
   const { session } = useAuthSession();
   const [stepIdx, setStepIdx] = useState(0);
@@ -218,6 +220,8 @@ export const ContractWizardPage: React.FC = () => {
   const [prefillBanner, setPrefillBanner] = useState<string | null>(null);
   const [prefillLoading, setPrefillLoading] = useState(false);
   const prefillDoneRef = useRef(false);
+  const editLoadedRef = useRef(false);
+  const [editLoading, setEditLoading] = useState(isEditMode);
   const step = STEPS[stepIdx];
 
   // Pre-fill wizard from a reservation when ?from_reservation=UUID is present
@@ -289,6 +293,84 @@ export const ContractWizardPage: React.FC = () => {
         console.warn('[ContractWizard] Pre-fill from reservation failed:', e);
       } finally {
         setPrefillLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Pre-fill wizard from existing contract when editing
+  useEffect(() => {
+    if (!isEditMode || !editId || editLoadedRef.current) return;
+    editLoadedRef.current = true;
+    setEditLoading(true);
+    (async () => {
+      try {
+        const res = await contractsApi.get(editId);
+        const c = res.contract;
+        const typeMap: Record<string, ContractType> = {
+          LLD: 'LLD', LOA: 'LOA', CREDIT_AUTO: 'CREDIT_AUTO',
+          VENTE_VO: 'VENTE_VO', LOCATION_COURTE: 'LOCATION_COURTE',
+        };
+        const contractType: ContractType = typeMap[c.type ?? ''] ?? 'LLD';
+        const isShort = contractType === 'LOCATION_COURTE';
+        const duration = c.durationMonths ?? 0;
+        const monthly = (c as any).monthlyPayment ?? 0;
+        const allowedKm = (c as any).allowedKm ?? 0;
+        const kmPerUnit = duration > 0 ? Math.round(allowedKm / duration) : 0;
+
+        const methodMap: Record<string, string> = {
+          virement: 'virement', bank_transfer: 'virement', cheque: 'cheque',
+          espece: 'espece', cash: 'espece', carte: 'carte', card: 'carte',
+        };
+        const rawMethod = String((c as any).paymentMethod ?? '').toLowerCase();
+        const paymentMethod = methodMap[rawMethod] ?? 'virement';
+
+        // Parse notes to extract agent and secondary driver info
+        const notesLines = (c.notes ?? '').split('\n');
+        let agentId: string | null = null;
+        let secondDriverSearch = '';
+        const cleanNotes: string[] = [];
+        for (const line of notesLines) {
+          const agentMatch = line.match(/^Agent assigné:\s*.+\((.+)\)$/);
+          const driverMatch = line.match(/^Conducteur:\s*(.+)$/);
+          if (agentMatch) continue;
+          else if (driverMatch) { secondDriverSearch = driverMatch[1]; continue; }
+          else cleanNotes.push(line);
+        }
+
+        setState({
+          clientId: c.customerId ?? null,
+          secondaryClientId: null,
+          secondaryClientSearch: secondDriverSearch,
+          assignedAgentId: agentId,
+          vehicleId: c.vehicleId ?? null,
+          type: contractType,
+          durationMonths: duration,
+          monthlyRentMad: monthly,
+          kmInclMonth: kmPerUnit,
+          securityDepositMad: (c as any).depositAmount ?? 0,
+          residualValuePct: (c as any).buyoutOptionAmount ?? 38,
+          notes: cleanNotes.filter(Boolean).join('\n'),
+          payments: [{
+            id: String(Date.now()),
+            method: paymentMethod,
+            amount: '',
+            reference: (c as any).bankReference ?? '',
+            chequeNumber: (c as any).chequeNumber ?? '',
+          }],
+          paymentTerms: (c as any).paymentTerms ?? '',
+          expectedPaymentDay: (c as any).expectedPaymentDay ?? 5,
+          startDate: c.startDate ? String(c.startDate).slice(0, 10) : null,
+          endDate: (c as any).endDate ? String((c as any).endDate).slice(0, 10) : null,
+          secondDriverName: '',
+          assignedAgent: '',
+        });
+        setDraftContractId(String(c.id));
+      } catch (e) {
+        console.warn('[ContractWizard] Edit pre-fill failed:', e);
+        setSaveError(friendlyError(e, 'Impossible de charger le contrat.'));
+      } finally {
+        setEditLoading(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -568,34 +650,39 @@ export const ContractWizardPage: React.FC = () => {
   async function submit(): Promise<void> {
     setSaving(true);
     setSaveError(null);
-    let createdId: string | null = null;
+    let resultId: string | null = null;
     try {
-      const created = await contractsApi.create(buildCreatePayload('draft'));
-      createdId = String(created.id);
+      if (isEditMode && editId) {
+        const updated = await contractsApi.update(editId, buildCreatePayload());
+        resultId = String(updated.id);
+      } else {
+        const created = await contractsApi.create(buildCreatePayload('draft'));
+        resultId = String(created.id);
 
-      // Generate payment schedule
-      try {
-        await contractsApi.generateSchedule(created.id, {
-          start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
-          months: state.durationMonths,
-          monthly_amount: state.monthlyRentMad,
-          tax_rate: 0.2,
-        });
-      } catch {
-        // Non-blocking — schedule can be generated later
+        // Generate payment schedule
+        try {
+          await contractsApi.generateSchedule(created.id, {
+            start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
+            months: state.durationMonths,
+            monthly_amount: state.monthlyRentMad,
+            tax_rate: 0.2,
+          });
+        } catch {
+          // Non-blocking — schedule can be generated later
+        }
+
+        // Generate and download PDF
+        try {
+          const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
+          await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${created.contract_number ?? resultId.slice(0, 8)}.pdf`);
+        } catch (pdfErr) {
+          console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
+        }
       }
 
-      // Generate and download PDF
-      try {
-        const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
-        await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${created.contract_number ?? createdId.slice(0, 8)}.pdf`);
-      } catch (pdfErr) {
-        console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
-      }
-
-      navigate(`/contracts/${createdId}`);
+      navigate(`/contracts/${resultId}`);
     } catch (e) {
-      setSaveError(friendlyError(e, 'Erreur inconnue lors de la création du contrat.'));
+      setSaveError(friendlyError(e, isEditMode ? 'Erreur lors de la mise à jour du contrat.' : 'Erreur inconnue lors de la création du contrat.'));
     } finally {
       setSaving(false);
     }
@@ -635,16 +722,32 @@ export const ContractWizardPage: React.FC = () => {
         </div>
       )}
 
+      {/* Edit loading */}
+      {editLoading && (
+        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          Chargement du contrat…
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="df-crumb">
             <Link to="/contracts" className="text-[color:var(--df-text-muted)] hover:text-[color:var(--df-text)]">Contrats</Link>
             <span className="df-crumb__sep"><Icon name="chevron-right" size={12} /></span>
-            <span className="df-crumb__current">Nouveau</span>
+            {isEditMode && editId && (
+              <>
+                <Link to={`/contracts/${editId}`} className="text-[color:var(--df-text-muted)] hover:text-[color:var(--df-text)]">Détail</Link>
+                <span className="df-crumb__sep"><Icon name="chevron-right" size={12} /></span>
+              </>
+            )}
+            <span className="df-crumb__current">{isEditMode ? 'Modifier' : 'Nouveau'}</span>
           </div>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">Nouveau contrat</h1>
-          <p className="text-[color:var(--df-text-muted)]">Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight">{isEditMode ? 'Modifier le contrat' : 'Nouveau contrat'}</h1>
+          <p className="text-[color:var(--df-text-muted)]">{isEditMode ? 'Modifiez les informations du contrat et sauvegardez.' : 'Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).'}</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Auto-save indicator — visible on step 6 */}
@@ -1150,7 +1253,7 @@ export const ContractWizardPage: React.FC = () => {
                   disabled={saving || !state.clientId || !state.vehicleId}
                   onClick={() => void submit()}
                 >
-                  <Icon name="download" size={14} /> {saving ? 'Création…' : 'Sauvegarder & télécharger PDF'}
+                  <Icon name="download" size={14} /> {saving ? (isEditMode ? 'Mise à jour…' : 'Création…') : (isEditMode ? 'Sauvegarder les modifications' : 'Sauvegarder & télécharger PDF')}
                 </button>
               ) : (
                 <button

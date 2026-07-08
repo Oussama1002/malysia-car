@@ -32,7 +32,7 @@ class UpdateContractRequest extends ApiFormRequest
 
             'start_date' => ['sometimes', 'nullable', 'date'],
             'end_date' => ['sometimes', 'nullable', 'date'],
-            'duration_months' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:120'],
+            'duration_months' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'currency_code' => ['sometimes', 'nullable', 'string', 'size:3'],
 
             'base_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],

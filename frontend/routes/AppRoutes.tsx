@@ -271,6 +271,14 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
             <Route
+              path="/contracts/:id/edit"
+              element={
+                <ModuleGate module="contracts">
+                  <ContractWizardPage />
+                </ModuleGate>
+              }
+            />
+            <Route
               path="/contracts/templates"
               element={
                 <ModuleGate module="contracts">
