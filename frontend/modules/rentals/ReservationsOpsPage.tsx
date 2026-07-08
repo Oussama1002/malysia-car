@@ -127,6 +127,9 @@ export const ReservationsOpsPage: React.FC = () => {
     is_draft: false,
   });
 
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
+
   const reservationDetailQ = useQuery({
     queryKey: ['reservation', selectedReservationId],
     queryFn: async () => (selectedReservationId ? opsApi.reservation(selectedReservationId) : null),
@@ -361,6 +364,7 @@ export const ReservationsOpsPage: React.FC = () => {
         id: String(v.id),
         label: `${v.brand} ${v.model} · ${v.registration}`,
         status: String((v as any).status ?? ''),
+        isSubRented: (v.ownershipStatus ?? '').toLowerCase() === 'sub_rented',
       })),
     [vehiclesQ.data]
   );
@@ -596,18 +600,48 @@ export const ReservationsOpsPage: React.FC = () => {
                 <option value="__new__">+ Nouveau client</option>
               </select>
             </div>
-            <div>
+            <div className="relative">
               <label className="mb-1 block text-xs font-bold text-slate-500">Véhicule</label>
-              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => {
-                const vid = e.target.value;
-                const v = (vehiclesQ.data ?? []).find((x) => String(x.id) === vid) as any;
-                setForm((s) => ({ ...s, vehicle_id: vid, daily_rate: v?.pricePerDay ? String(v.pricePerDay) : s.daily_rate }));
-              }}>
-                <option value="">Véhicule…</option>
-                {vehicleOptions.map((v) => (
-                  <option key={v.id} value={v.id}>{v.label}</option>
-                ))}
-              </select>
+              <input
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+                placeholder="Rechercher marque, modèle ou immatriculation…"
+                value={vehicleSearch || (form.vehicle_id ? (vehicleOptions.find((v) => v.id === form.vehicle_id)?.label ?? '') : '')}
+                onChange={(e) => {
+                  setVehicleSearch(e.target.value);
+                  setVehicleDropdownOpen(true);
+                  if (!e.target.value) setForm((s) => ({ ...s, vehicle_id: '' }));
+                }}
+                onFocus={() => setVehicleDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setVehicleDropdownOpen(false), 200)}
+              />
+              {form.vehicle_id && (
+                <button className="absolute right-3 top-[34px] text-slate-400 hover:text-slate-600 text-sm" onClick={() => { setForm((s) => ({ ...s, vehicle_id: '' })); setVehicleSearch(''); }}>&times;</button>
+              )}
+              {vehicleDropdownOpen && (
+                <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                  {vehicleOptions
+                    .filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase()))
+                    .map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${form.vehicle_id === v.id ? 'bg-indigo-50 font-bold' : ''}`}
+                        onClick={() => {
+                          const raw = (vehiclesQ.data ?? []).find((x) => String(x.id) === v.id) as any;
+                          setForm((s) => ({ ...s, vehicle_id: v.id, daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate }));
+                          setVehicleSearch('');
+                          setVehicleDropdownOpen(false);
+                        }}
+                      >
+                        <span className="flex-1">{v.label}</span>
+                        {v.isSubRented && <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-black text-amber-700">SL</span>}
+                      </button>
+                    ))}
+                  {vehicleOptions.filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase())).length === 0 && (
+                    <div className="px-4 py-3 text-xs text-slate-400">Aucun véhicule trouvé</div>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Type de réservation</label>

@@ -239,6 +239,7 @@ export const FleetVehicleDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [tab, setTab] = useState('overview');
+  const [movementModalOpen, setMovementModalOpen] = useState(false);
 
   // Modals / forms
   const [showPlanForm, setShowPlanForm] = useState(false);
@@ -442,6 +443,15 @@ export const FleetVehicleDetailPage: React.FC = () => {
 
       {tab === 'movements' && (
         <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div />
+            <button
+              className="df-btn df-btn--primary df-btn--sm"
+              onClick={() => setMovementModalOpen(true)}
+            >
+              + Enregistrer un mouvement
+            </button>
+          </div>
           <SectionCard title="Historique des mouvements">
             <div className="overflow-x-auto">
               <table className="df-table w-full text-sm">
@@ -471,7 +481,7 @@ export const FleetVehicleDetailPage: React.FC = () => {
               </table>
             </div>
           </SectionCard>
-          <MovementForms vehicleId={id!} onDone={() => invalidateVehicle()} />
+          <MovementForms vehicleId={id!} open={movementModalOpen} onClose={() => setMovementModalOpen(false)} onDone={() => invalidateVehicle()} />
         </div>
       )}
 
@@ -1584,12 +1594,14 @@ function AccidentCard({ accident, vehicleId, onUpdated }: { accident: Accident; 
   );
 }
 
-function MovementForms({ vehicleId, onDone }: { vehicleId: string; onDone: () => void }): React.ReactElement {
+function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string; open: boolean; onClose: () => void; onDone: () => void }): React.ReactElement | null {
   const [odometer, setOdometer] = useState('');
   const [fuel, setFuel] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  if (!open) return null;
 
   const post = async (type: 'entry' | 'exit' | 'return') => {
     setBusy(true);
@@ -1603,7 +1615,9 @@ function MovementForms({ vehicleId, onDone }: { vehicleId: string; onDone: () =>
           condition_notes: notes || undefined,
         }),
       });
+      setOdometer(''); setFuel(''); setNotes('');
       onDone();
+      onClose();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Erreur');
     } finally {
@@ -1612,27 +1626,32 @@ function MovementForms({ vehicleId, onDone }: { vehicleId: string; onDone: () =>
   };
 
   return (
-    <div className="df-card df-card--elev p-4 space-y-3">
-      <div className="text-sm font-bold">Enregistrer un mouvement</div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div>
-          <label className="df-label">Km compteur</label>
-          <input className="df-input" value={odometer} onChange={(e) => setOdometer(e.target.value)} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-black text-slate-900">Enregistrer un mouvement</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
         </div>
-        <div>
-          <label className="df-label">Carburant %</label>
-          <input className="df-input" value={fuel} onChange={(e) => setFuel(e.target.value)} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="df-label">Km compteur</label>
+            <input className="df-input" placeholder="Ex: 45230" value={odometer} onChange={(e) => setOdometer(e.target.value)} />
+          </div>
+          <div>
+            <label className="df-label">Carburant %</label>
+            <input className="df-input" placeholder="Ex: 75" value={fuel} onChange={(e) => setFuel(e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="df-label">Notes / état</label>
+            <input className="df-input" placeholder="Observations…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
         </div>
-        <div className="sm:col-span-3">
-          <label className="df-label">Notes / état</label>
-          <input className="df-input" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('entry')}>Entrée</button>
+          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('exit')}>Sortie</button>
+          <button type="button" className="df-btn df-btn--primary df-btn--sm" disabled={busy} onClick={() => void post('return')}>Retour</button>
         </div>
-      </div>
-      {err && <p className="text-xs text-red-600">{err}</p>}
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('entry')}>Entrée</button>
-        <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('exit')}>Sortie</button>
-        <button type="button" className="df-btn df-btn--primary df-btn--sm" disabled={busy} onClick={() => void post('return')}>Retour</button>
       </div>
     </div>
   );

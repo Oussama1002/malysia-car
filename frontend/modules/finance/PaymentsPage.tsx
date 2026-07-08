@@ -336,7 +336,7 @@ export const PaymentForm: React.FC<{
   const contractsQ = useQuery({
     queryKey: queryKeys.contracts.all,
     queryFn: async () =>
-      (await apiClient<ApiListResponse<ContractMin>>(endpoints.contracts.list)).data,
+      (await apiClient<ApiListResponse<ContractMin>>(`${endpoints.contracts.list}?per_page=200`)).data,
   });
 
   const reservationsQ = useQuery({
@@ -481,7 +481,7 @@ export const PaymentForm: React.FC<{
       )}
 
       {/* ── Contrat / Réservation / Facture ──────────────────── */}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="space-y-3">
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Contrat</label>
           <select
@@ -492,7 +492,7 @@ export const PaymentForm: React.FC<{
             <option value="">-- Aucun --</option>
             {filteredContracts.map((c) => (
               <option key={String(c.id)} value={String(c.id)}>
-                {c.reference ?? (c as any).contract_number ?? c.id} — {CONTRACT_STATUS_FR[c.status] ?? c.status}
+                {c.reference ?? (c as any).contract_number ?? String(c.id).slice(0, 8)} — {CONTRACT_STATUS_FR[c.status] ?? c.status}
               </option>
             ))}
           </select>
@@ -581,13 +581,13 @@ export const PaymentForm: React.FC<{
           />
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement *</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement</label>
           <input
             type="datetime-local"
-            className="df-input mt-1 w-full"
+            className="df-input mt-1 w-full bg-slate-50 text-slate-500 cursor-not-allowed"
             value={form.payment_date}
-            onChange={(e) => set('payment_date', e.target.value)}
-            required
+            readOnly
+            disabled
           />
         </div>
       </div>
