@@ -4,6 +4,23 @@ import { documentCenterApi, type DocumentCenterItem } from '@/services/documentC
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { formatDate } from '@/modules/shared/formatters';
 
+const CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'cin', label: 'CIN' },
+  { value: 'passport', label: 'Passeport' },
+  { value: 'driving_license', label: 'Permis de conduire' },
+  { value: 'vehicle_registration', label: 'Carte grise' },
+  { value: 'rental_contract', label: 'Contrat de location' },
+  { value: 'proof_of_address', label: 'Justificatif de domicile' },
+  { value: 'payslip', label: 'Fiche de paie' },
+  { value: 'identity_document', label: "Pièce d'identité" },
+  { value: 'insurance', label: 'Assurance' },
+  { value: 'general', label: 'Autre document' },
+];
+
+function generateDocNumber(): string {
+  return `DOC-${Date.now().toString(36).toUpperCase()}`;
+}
+
 export const EntityDocuments: React.FC<{
   entityType: string;
   entityId: string;
@@ -14,7 +31,6 @@ export const EntityDocuments: React.FC<{
   const [category, setCategory] = useState('general');
   const [expiryDate, setExpiryDate] = useState('');
   const [issueDate, setIssueDate] = useState('');
-  const [documentNumber, setDocumentNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [selected, setSelected] = useState<File | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
@@ -37,9 +53,9 @@ export const EntityDocuments: React.FC<{
       const fd = new FormData();
       fd.append('file', selected);
       fd.append('category', category);
+      fd.append('document_number', generateDocNumber());
       if (expiryDate) fd.append('expiry_date', expiryDate);
       if (issueDate) fd.append('issue_date', issueDate);
-      if (documentNumber) fd.append('document_number', documentNumber);
       if (notes) fd.append('notes', notes);
       return documentCenterApi.uploadToEntity(entityType, entityId, fd);
     },
@@ -48,8 +64,9 @@ export const EntityDocuments: React.FC<{
       setSelected(null);
       setExpiryDate('');
       setIssueDate('');
-      setDocumentNumber('');
       setNotes('');
+      setCategory('general');
+      setUploadErr(null);
       await qc.invalidateQueries({ queryKey: ['entity-documents', entityType, entityId] });
       await qc.invalidateQueries({ queryKey: ['documents-center'] });
     },
@@ -70,47 +87,59 @@ export const EntityDocuments: React.FC<{
     <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">{title}</h3>
-        <button type="button" className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white" onClick={() => setShowUpload((s) => !s)}>
-          {showUpload ? 'Fermer' : 'Ajouter'}
+        <button type="button" className="rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white" onClick={() => { setShowUpload(true); setUploadErr(null); }}>
+          Ajouter
         </button>
       </div>
 
+      {/* Upload modal */}
       {showUpload && (
-        <div className="mb-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-bold text-slate-600">Fichier</label>
-            <input type="file" onChange={(e) => setSelected(e.target.files?.[0] ?? null)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-slate-600">Catégorie</label>
-            <input className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={category} onChange={(e) => setCategory(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-slate-600">N° document</label>
-            <input className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-slate-600">Date d'émission</label>
-            <input type="date" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-slate-600">Date d'expiration</label>
-            <input type="date" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
-            <textarea className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          {uploadErr && <p className="md:col-span-2 text-xs font-semibold text-red-600">{uploadErr}</p>}
-          <div className="md:col-span-2">
-            <button
-              type="button"
-              className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
-              disabled={uploadM.isPending || !selected}
-              onClick={() => uploadM.mutate()}
-            >
-              {uploadM.isPending ? 'Envoi…' : 'Téléverser'}
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowUpload(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-900">Ajouter un document</h3>
+              <button onClick={() => setShowUpload(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Fichier *</label>
+                <input type="file" className="w-full text-sm" onChange={(e) => setSelected(e.target.files?.[0] ?? null)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Catégorie *</label>
+                <select className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
+                  {CATEGORY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Date d'émission</label>
+                  <input type="date" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Date d'expiration</label>
+                  <input type="date" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
+                <textarea className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </div>
+              {uploadErr && <p className="text-xs font-semibold text-red-600">{uploadErr}</p>}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600" onClick={() => setShowUpload(false)}>Annuler</button>
+                <button
+                  type="button"
+                  className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                  disabled={uploadM.isPending || !selected}
+                  onClick={() => uploadM.mutate()}
+                >
+                  {uploadM.isPending ? 'Envoi…' : 'Téléverser'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -199,8 +228,6 @@ const DocumentCard: React.FC<{ item: DocumentCenterItem; onDelete: (id: string) 
           type="button"
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-indigo-700"
           onClick={async () => {
-            // Plain <a href> doesn't carry the bearer token, so the download
-            // route returns 401. Fetch with auth, then pop a blob: URL.
             try {
               await documentCenterApi.openInNewTab(item.id);
             } catch (e) {
