@@ -326,27 +326,31 @@ export const ContractWizardPage: React.FC = () => {
         const paymentMethod = methodMap[rawMethod] ?? 'virement';
 
         // Parse notes to extract agent and secondary driver info
-        const notesLines = (c.notes ?? '').split('\n');
-        let agentEmail: string | null = null;
+        const rawNotes = c.notes ?? '';
+        const notesLines = rawNotes.split('\n');
         let secondDriverSearch = '';
         const cleanNotes: string[] = [];
         for (const line of notesLines) {
-          const agentMatch = line.match(/^Agent assigné:\s*.+\((.+)\)$/);
+          if (/Agent\s+assign/i.test(line)) continue;
           const driverMatch = line.match(/^Conducteur:\s*(.+)$/);
-          if (agentMatch) { agentEmail = agentMatch[1]; continue; }
-          else if (driverMatch) { secondDriverSearch = driverMatch[1]; continue; }
-          else cleanNotes.push(line);
+          if (driverMatch) { secondDriverSearch = driverMatch[1]; continue; }
+          cleanNotes.push(line);
         }
 
-        // Resolve agent email to agent ID
+        // Resolve agent from notes by matching email or name against users list
         let resolvedAgentId: string | null = null;
-        if (agentEmail) {
-          try {
-            const usersRes = await listUsers({ status: 'active', per_page: 200 });
-            const match = (usersRes.data ?? []).find((u: any) => u.email === agentEmail);
-            if (match) resolvedAgentId = String(match.id);
-          } catch { /* non-blocking */ }
-        }
+        try {
+          const usersRes = await listUsers({ status: 'active', per_page: 200 });
+          const allUsers = usersRes.data ?? [];
+          for (const u of allUsers) {
+            if (u.email && rawNotes.includes(u.email)) { resolvedAgentId = String(u.id); break; }
+          }
+          if (!resolvedAgentId) {
+            for (const u of allUsers) {
+              if (u.name && rawNotes.includes(u.name)) { resolvedAgentId = String(u.id); break; }
+            }
+          }
+        } catch { /* non-blocking */ }
 
         setState({
           clientId: c.customerId ?? null,
