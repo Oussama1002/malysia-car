@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
@@ -10,6 +10,7 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { Modal } from '@/modules/shared/components/Modal';
+import { documentReaderApi } from '@/services/documentReaderApi';
 
 // ─── Traductions ─────────────────────────────────────────────────────────────
 
@@ -21,6 +22,18 @@ const AVAILABILITY_FR: Record<string, string> = {
   available: 'Disponible', in_use: 'En utilisation', maintenance: 'En maintenance',
   repair: 'En réparation', unavailable: 'Indisponible', reserved: 'Réservé',
   immobilized: 'Immobilisé', immobilised: 'Immobilisé', blocked: 'Bloqué', accident: 'Accident',
+};
+const MOVEMENT_STATUS_FR: Record<string, string> = {
+  entry: 'Check-in', exit: 'Check-out', return: 'Retour',
+  transfer: 'Transfert', immobilization: 'Immobilisé', release: 'Disponible',
+};
+const MOVEMENT_STATUS_STYLE: Record<string, string> = {
+  entry: 'bg-emerald-100 text-emerald-700',
+  exit: 'bg-amber-100 text-amber-700',
+  return: 'bg-blue-100 text-blue-700',
+  transfer: 'bg-purple-100 text-purple-700',
+  immobilization: 'bg-red-100 text-red-700',
+  release: 'bg-emerald-100 text-emerald-700',
 };
 const OWNERSHIP_FR: Record<string, string> = {
   owned: 'Propriété', leased: 'Leasing', rented: 'Loué', sub_rented: 'Sous-location',
@@ -459,23 +472,25 @@ export const FleetVehicleDetailPage: React.FC = () => {
                 <thead>
                   <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
                     <th className="px-4 py-2">Date</th>
-                    <th className="px-4 py-2">Type</th>
+                    <th className="px-4 py-2">Statut</th>
                     <th className="px-4 py-2 text-right">Km</th>
                     <th className="px-4 py-2 text-right">Carburant %</th>
                     <th className="px-4 py-2">Notes</th>
+                    <th className="px-4 py-2">Photo</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(vehicleQ.data?.movements ?? []).length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-4 text-center text-slate-400">Aucun mouvement enregistré.</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-4 text-center text-slate-400">Aucun mouvement enregistré.</td></tr>
                   )}
                   {(vehicleQ.data?.movements ?? []).map((m: Record<string, unknown>) => (
                     <tr key={String(m.id)} className="hover:bg-slate-50">
                       <td className="px-4 py-2.5 whitespace-nowrap">{m.performed_at ? formatDate(String(m.performed_at)) : '—'}</td>
-                      <td className="px-4 py-2.5 font-semibold">{String(m.movement_type ?? '')}</td>
+                      <td className="px-4 py-2.5"><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${MOVEMENT_STATUS_STYLE[String(m.movement_type)] ?? 'bg-slate-100 text-slate-600'}`}>{MOVEMENT_STATUS_FR[String(m.movement_type)] ?? String(m.movement_type ?? '')}</span></td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{m.odometer_km != null ? Number(m.odometer_km).toLocaleString('fr-MA') : '—'}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{m.fuel_level != null ? `${m.fuel_level}%` : '—'}</td>
                       <td className="px-4 py-2.5 max-w-xs truncate">{String(m.condition_notes ?? '')}</td>
+                      <td className="px-4 py-2.5">{m.report_file_id ? <a href={`${getApiBase()}/v1/files/${m.report_file_id}/download`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline text-xs">Voir</a> : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1600,6 +1615,11 @@ function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const cameraRef = useRef<HTMLInputElement | null>(null);
 
   if (!open) return null;
 
@@ -1615,7 +1635,7 @@ function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string
           condition_notes: notes || undefined,
         }),
       });
-      setOdometer(''); setFuel(''); setNotes('');
+      setOdometer(''); setFuel(''); setNotes(''); setPreviewUrl(null); setScanMsg(null);
       onDone();
       onClose();
     } catch (e: unknown) {
@@ -1625,13 +1645,69 @@ function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string
     }
   };
 
+  const handleDashboardPhoto = async (file: File) => {
+    setScanning(true);
+    setScanMsg(null);
+    setPreviewUrl(URL.createObjectURL(file));
+    try {
+      const uploaded = await documentReaderApi.upload(file, 'other');
+      await documentReaderApi.extract(uploaded.data.id, 'other');
+      const done = await documentReaderApi.pollUntilDone(uploaded.data.id);
+      if (done.data.status === 'failed') {
+        setScanMsg('Échec OCR — réessayez avec une photo plus nette.');
+        return;
+      }
+      const fields = (done.data.extraction?.extracted_data ?? {}) as Record<string, unknown>;
+      const km = fields.odometer ?? fields.mileage ?? fields.km ?? fields.odometer_km ?? fields.compteur ?? fields.kilometers ?? fields.total_km;
+      const fuelVal = fields.fuel ?? fields.fuel_level ?? fields.carburant ?? fields.fuel_percentage ?? fields.essence;
+      if (km != null) setOdometer(String(km).replace(/[^\d]/g, ''));
+      if (fuelVal != null) setFuel(String(fuelVal).replace(/[^\d]/g, ''));
+      setScanMsg(km || fuelVal ? 'Données extraites avec succès.' : 'Aucune donnée détectée — saisissez manuellement.');
+    } catch (e) {
+      setScanMsg(e instanceof Error ? e.message : 'Erreur OCR');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-black text-slate-900">Enregistrer un mouvement</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
         </div>
+
+        {/* Dashboard photo scanner */}
+        <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-2">
+          <div className="text-[10px] font-black uppercase tracking-wider text-indigo-700">Photo tableau de bord</div>
+          <p className="text-[11px] text-slate-500">Prenez ou importez une photo du tableau de bord pour extraire automatiquement le kilométrage et le carburant.</p>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={scanning} onClick={() => fileRef.current?.click()}
+              className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5 5 5M12 4v12" /></svg>
+              Importer
+            </button>
+            <button type="button" disabled={scanning} onClick={() => cameraRef.current?.click()}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50 flex items-center gap-1.5">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+              Caméra
+            </button>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleDashboardPhoto(f); e.target.value = ''; }} />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleDashboardPhoto(f); e.target.value = ''; }} />
+          </div>
+          {scanning && (
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600">
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+              Extraction en cours…
+            </div>
+          )}
+          {scanMsg && <div className={`text-[11px] font-semibold ${scanMsg.includes('succès') ? 'text-emerald-600' : 'text-amber-600'}`}>{scanMsg}</div>}
+          {previewUrl && <img src={previewUrl} alt="Dashboard" className="mt-2 max-h-32 rounded-lg border border-slate-200 object-contain" />}
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="df-label">Km compteur</label>
@@ -1648,9 +1724,9 @@ function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string
         </div>
         {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('entry')}>Entrée</button>
-          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('exit')}>Sortie</button>
-          <button type="button" className="df-btn df-btn--primary df-btn--sm" disabled={busy} onClick={() => void post('return')}>Retour</button>
+          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy || scanning} onClick={() => void post('entry')}>Check-in</button>
+          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy || scanning} onClick={() => void post('exit')}>Check-out</button>
+          <button type="button" className="df-btn df-btn--primary df-btn--sm" disabled={busy || scanning} onClick={() => void post('return')}>Retour</button>
         </div>
       </div>
     </div>
