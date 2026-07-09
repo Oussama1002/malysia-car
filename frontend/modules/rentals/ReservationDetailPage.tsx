@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { PaymentForm } from '@/modules/finance/PaymentsPage';
@@ -73,6 +74,7 @@ export const ReservationDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('summary');
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [validateError, setValidateError] = useState<string | null>(null);
   const [swapOpen, setSwapOpen] = useState(false);
   const [swapVehicleId, setSwapVehicleId] = useState('');
   const [swapReason, setSwapReason] = useState('');
@@ -106,7 +108,20 @@ export const ReservationDetailPage: React.FC = () => {
 
   const validateM = useMutation({
     mutationFn: () => opsApi.validateReservation(rid!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+    onSuccess: () => {
+      setValidateError(null);
+      qc.invalidateQueries({ queryKey: ['reservation', rid] });
+      qc.invalidateQueries({ queryKey: ['reservations'] });
+    },
+    onError: (e: unknown) => {
+      if (e instanceof ApiError && e.body && typeof e.body === 'object') {
+        const body = e.body as any;
+        const parts = [...(body.errors?.vehicle_id ?? []), ...(body.errors?.rental ?? [])];
+        setValidateError(parts.length > 0 ? parts.join(' ') : body.message ?? e.message);
+      } else {
+        setValidateError(e instanceof Error ? e.message : 'Erreur lors de la validation');
+      }
+    },
   });
   const confirmM = useMutation({
     mutationFn: () => opsApi.confirmReservation(rid!),
@@ -238,12 +253,17 @@ export const ReservationDetailPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => validateM.mutate()}
+              onClick={() => { setValidateError(null); validateM.mutate(); }}
               disabled={validateM.isPending}
               className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50 shadow-lg"
             >
               {validateM.isPending ? 'Validation…' : '✓ Valider la réservation'}
             </button>
+          </div>
+        )}
+        {validateError && (
+          <div className="border-t border-rose-200 bg-rose-50 px-6 py-3 text-sm text-rose-800">
+            <span className="font-black">Erreur de validation :</span> {validateError}
           </div>
         )}
 
@@ -269,7 +289,7 @@ export const ReservationDetailPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-6 py-3 bg-slate-50/50">
           {status === 'draft' && (
             <button
-              onClick={() => validateM.mutate()}
+              onClick={() => { setValidateError(null); validateM.mutate(); }}
               disabled={validateM.isPending}
               className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
             >
