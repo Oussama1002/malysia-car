@@ -455,27 +455,27 @@ export const FleetVehicleDetailPage: React.FC = () => {
           </div>
           <SectionCard title="Historique des mouvements">
             <div className="overflow-x-auto">
-              <table className="df-table w-full text-sm">
+              <table className="w-full text-left text-sm">
                 <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Km</th>
-                    <th>Carburant %</th>
-                    <th>Notes</th>
+                  <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
+                    <th className="px-4 py-2">Date</th>
+                    <th className="px-4 py-2">Type</th>
+                    <th className="px-4 py-2 text-right">Km</th>
+                    <th className="px-4 py-2 text-right">Carburant %</th>
+                    <th className="px-4 py-2">Notes</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {(vehicleQ.data?.movements ?? []).length === 0 && (
-                    <tr><td colSpan={5} className="text-[color:var(--df-text-muted)]">Aucun mouvement enregistré.</td></tr>
+                    <tr><td colSpan={5} className="px-4 py-4 text-center text-slate-400">Aucun mouvement enregistré.</td></tr>
                   )}
                   {(vehicleQ.data?.movements ?? []).map((m: Record<string, unknown>) => (
-                    <tr key={String(m.id)}>
-                      <td>{m.performed_at ? formatDate(String(m.performed_at)) : '—'}</td>
-                      <td className="font-semibold">{String(m.movement_type ?? '')}</td>
-                      <td>{m.odometer_km != null ? String(m.odometer_km) : '—'}</td>
-                      <td>{m.fuel_level != null ? String(m.fuel_level) : '—'}</td>
-                      <td className="max-w-xs truncate">{String(m.condition_notes ?? '')}</td>
+                    <tr key={String(m.id)} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5 whitespace-nowrap">{m.performed_at ? formatDate(String(m.performed_at)) : '—'}</td>
+                      <td className="px-4 py-2.5 font-semibold">{String(m.movement_type ?? '')}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{m.odometer_km != null ? Number(m.odometer_km).toLocaleString('fr-MA') : '—'}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{m.fuel_level != null ? `${m.fuel_level}%` : '—'}</td>
+                      <td className="px-4 py-2.5 max-w-xs truncate">{String(m.condition_notes ?? '')}</td>
                     </tr>
                   ))}
                 </tbody>
