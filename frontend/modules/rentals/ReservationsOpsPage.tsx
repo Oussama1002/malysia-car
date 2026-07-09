@@ -13,7 +13,7 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
 import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
-import { listBranches } from '@/services/adminApi';
+import { listBranches, getSettings } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
@@ -111,6 +111,14 @@ export const ReservationsOpsPage: React.FC = () => {
     queryFn: async () => (await apiClient<ApiListResponse<FleetVehicleDto>>(endpoints.fleet.list)).data,
     enabled: hasBackend(),
   });
+
+  const contractSettingsQ = useQuery({
+    queryKey: ['settings', 'contracts'],
+    queryFn: () => getSettings('contracts'),
+    enabled: hasBackend(),
+  });
+  const cSettings = contractSettingsQ.data?.data?.settings ?? {};
+  const lcdMaxDays = Number(cSettings.lcd_max_days) || 30;
 
   const [form, setForm] = useState({
     customer_id: '',
@@ -655,8 +663,8 @@ export const ReservationsOpsPage: React.FC = () => {
               const s0 = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
               const e0 = form.desired_end_at ? new Date(form.desired_end_at).getTime() : NaN;
               const days = (!isNaN(s0) && !isNaN(e0) && e0 > s0) ? Math.ceil((e0 - s0) / 86_400_000) : 0;
-              const autoType = days > 30 ? 'LONG_RENTAL' : 'SHORT_RENTAL';
-              const label = autoType === 'LONG_RENTAL' ? 'Location longue durée' : 'Location courte durée';
+              const autoType = days > lcdMaxDays ? 'LONG_RENTAL' : 'SHORT_RENTAL';
+              const label = autoType === 'LONG_RENTAL' ? 'Location longue durée (LLD)' : 'Location courte durée (LCD)';
               if (days > 0 && form.reservation_type !== autoType) {
                 setTimeout(() => setForm((p) => ({ ...p, reservation_type: autoType })), 0);
               }
@@ -664,7 +672,7 @@ export const ReservationsOpsPage: React.FC = () => {
                 <div>
                   <label className="mb-1 block text-xs font-bold text-slate-500">Type de réservation</label>
                   <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                    {days > 0 ? `${label} (${days} jour${days > 1 ? 's' : ''})` : 'Sélectionnez les dates'}
+                    {days > 0 ? `${label} — ${days} jour${days > 1 ? 's' : ''}` : 'Sélectionnez les dates'}
                   </div>
                 </div>
               );
