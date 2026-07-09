@@ -677,11 +677,29 @@ export const ContractWizardPage: React.FC = () => {
       if (isEditMode && editId) {
         const updated = await contractsApi.update(editId, buildCreatePayload());
         resultId = String(updated.id);
+      } else if (draftContractId) {
+        const updated = await contractsApi.update(draftContractId, buildCreatePayload());
+        resultId = draftContractId;
+
+        try {
+          await contractsApi.generateSchedule(resultId, {
+            start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
+            months: state.durationMonths,
+            monthly_amount: state.monthlyRentMad,
+            tax_rate: 0.2,
+          });
+        } catch { /* Non-blocking */ }
+
+        try {
+          const generatedDoc = await documentsApi.generateContractPdf(resultId);
+          await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${updated.contract_number ?? resultId.slice(0, 8)}.pdf`);
+        } catch (pdfErr) {
+          console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
+        }
       } else {
         const created = await contractsApi.create(buildCreatePayload('draft'));
         resultId = String(created.id);
 
-        // Generate payment schedule
         try {
           await contractsApi.generateSchedule(created.id, {
             start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
@@ -689,11 +707,8 @@ export const ContractWizardPage: React.FC = () => {
             monthly_amount: state.monthlyRentMad,
             tax_rate: 0.2,
           });
-        } catch {
-          // Non-blocking — schedule can be generated later
-        }
+        } catch { /* Non-blocking */ }
 
-        // Generate and download PDF
         try {
           const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
           await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${created.contract_number ?? resultId.slice(0, 8)}.pdf`);
