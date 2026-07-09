@@ -422,7 +422,6 @@ export const ContractWizardPage: React.FC = () => {
   });
 
   useEffect(() => {
-    if (isEditMode && editLoadedRef.current) return;
     const s = contractSettingsQ.data?.data?.settings;
     if (!s) return;
     setState((prev) => {
@@ -437,7 +436,7 @@ export const ContractWizardPage: React.FC = () => {
         securityDepositMad: prev.securityDepositMad || depositDefault,
       };
     });
-  }, [contractSettingsQ.data, isEditMode]);
+  }, [contractSettingsQ.data]);
 
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
   const createCustomerMut = useMutation({
@@ -498,19 +497,19 @@ export const ContractWizardPage: React.FC = () => {
       const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200');
       return res.data.map((v): FleetVehicleDto => ({
         id: v.id,
-        registration: v.registration_number ?? v.registration ?? '',
+        registration: v.registration ?? v.registration_number ?? '',
         brand: v.brand ?? v.brand_name ?? '',
         model: v.model ?? v.model_name ?? '',
-        year: v.year_of_manufacture ?? v.year ?? 0,
+        year: v.year ?? v.year_of_manufacture ?? 0,
         status: v.status ?? 'AVAILABLE',
-        fuel: v.fuel_type ?? v.fuel,
-        mileageKm: v.mileage_current ?? v.mileage_km,
-        currentValueMad: v.book_value ?? v.current_value_mad,
-        pricePerDay: v.daily_rental_price ?? v.price_per_day,
-        insuranceExpiry: v.insurance_expiry,
-        techControlExpiry: v.tech_control_expiry,
-        vignetteExpiry: v.vignette_expiry,
-        ownershipStatus: v.ownership_status,
+        fuel: v.fuel ?? v.fuel_type,
+        mileageKm: v.mileageKm ?? v.mileage_current ?? v.mileage_km,
+        currentValueMad: v.currentValueMad ?? v.book_value ?? v.current_value_mad,
+        pricePerDay: v.pricePerDay ?? v.daily_rental_price ?? v.price_per_day,
+        insuranceExpiry: v.insuranceExpiry ?? v.insurance_expiry,
+        techControlExpiry: v.techControlExpiry ?? v.tech_control_expiry,
+        vignetteExpiry: v.vignetteExpiry ?? v.vignette_expiry,
+        ownershipStatus: v.ownershipStatus ?? v.ownership_status,
       }));
     },
   });
