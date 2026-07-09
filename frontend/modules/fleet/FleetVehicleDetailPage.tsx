@@ -9,6 +9,7 @@ import { Icon } from '@/modules/shared/components/Icon';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
+import { Modal } from '@/modules/shared/components/Modal';
 
 // ─── Traductions ─────────────────────────────────────────────────────────────
 
@@ -574,14 +575,14 @@ export const FleetVehicleDetailPage: React.FC = () => {
             </div>
           </SectionCard>
 
-          {/* Add Plan form */}
-          {showPlanForm && (
+          {/* Add Plan modal */}
+          <Modal open={showPlanForm} title="Nouveau plan d'entretien" onClose={() => setShowPlanForm(false)} widthClass="max-w-lg">
             <MaintenancePlanForm
               vehicleId={id!}
               onSaved={() => { setShowPlanForm(false); invalidate(['maintenance-plans']); }}
               onCancel={() => setShowPlanForm(false)}
             />
-          )}
+          </Modal>
 
           {/* Record a maintenance event */}
           <SectionCard
@@ -1198,8 +1199,7 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
   };
 
   return (
-    <div className="df-card df-card--elev p-4">
-      <div className="mb-3 text-sm font-bold">Nouveau plan d'entretien</div>
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="df-label">Type d'entretien</label>
@@ -1225,9 +1225,9 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
         </div>
       </div>
       {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
-      <div className="mt-3 flex gap-2">
-        <button className="df-btn df-btn--primary df-btn--sm" disabled={saving} onClick={submit}>{saving ? 'Enregistrement…' : 'Créer le plan'}</button>
-        <button className="df-btn df-btn--ghost df-btn--sm" onClick={onCancel}>Annuler</button>
+      <div className="flex justify-end gap-2">
+        <button className="df-btn df-btn--ghost" onClick={onCancel}>Annuler</button>
+        <button className="df-btn df-btn--primary" disabled={saving} onClick={submit}>{saving ? 'Enregistrement…' : 'Créer le plan'}</button>
       </div>
     </div>
   );

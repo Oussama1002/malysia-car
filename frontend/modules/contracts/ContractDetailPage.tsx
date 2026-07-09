@@ -335,8 +335,12 @@ export const ContractDetailPage: React.FC = () => {
       {tab === 'documents' && (
         <div className="space-y-6">
           <EntityDocuments entityType="contract" entityId={String(c.id ?? id)} title="Documents du contrat" />
-          {customerId && (
-            <EntityDocuments entityType="customer" entityId={customerId} title="Documents du client (CIN, Permis, etc.)" />
+          {customerId ? (
+            <EntityDocuments entityType="customer" entityId={customerId} title={`Documents du client — ${clientName} (CIN, Permis, etc.)`} />
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              Aucun client associé — impossible d'afficher les documents du client.
+            </div>
           )}
         </div>
       )}
