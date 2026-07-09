@@ -327,22 +327,32 @@ export const ContractWizardPage: React.FC = () => {
 
         // Parse notes to extract agent and secondary driver info
         const notesLines = (c.notes ?? '').split('\n');
-        let agentId: string | null = null;
+        let agentEmail: string | null = null;
         let secondDriverSearch = '';
         const cleanNotes: string[] = [];
         for (const line of notesLines) {
           const agentMatch = line.match(/^Agent assigné:\s*.+\((.+)\)$/);
           const driverMatch = line.match(/^Conducteur:\s*(.+)$/);
-          if (agentMatch) continue;
+          if (agentMatch) { agentEmail = agentMatch[1]; continue; }
           else if (driverMatch) { secondDriverSearch = driverMatch[1]; continue; }
           else cleanNotes.push(line);
+        }
+
+        // Resolve agent email to agent ID
+        let resolvedAgentId: string | null = null;
+        if (agentEmail) {
+          try {
+            const usersRes = await listUsers({ status: 'active', per_page: 200 });
+            const match = (usersRes.data ?? []).find((u: any) => u.email === agentEmail);
+            if (match) resolvedAgentId = String(match.id);
+          } catch { /* non-blocking */ }
         }
 
         setState({
           clientId: c.customerId ?? null,
           secondaryClientId: null,
           secondaryClientSearch: secondDriverSearch,
-          assignedAgentId: agentId,
+          assignedAgentId: resolvedAgentId,
           vehicleId: c.vehicleId ?? null,
           type: contractType,
           durationMonths: duration,
@@ -908,7 +918,7 @@ export const ContractWizardPage: React.FC = () => {
             {step.key === 'assignment' && (
               <>
                 <div>
-                  <label className="df-label">Assigned agent</label>
+                  <label className="df-label">Agent assigné</label>
                   <select
                     className="df-input"
                     value={state.assignedAgentId ?? ''}
