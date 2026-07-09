@@ -36,12 +36,23 @@ class VehicleMaintenancePlan extends Model
         return $this->belongsTo(Vehicle::class, 'vehicle_id');
     }
 
-    /** Derive status fallback when column is empty */
+    /** Derive status from date AND km thresholds */
     public function getComputedStatusAttribute(): string
     {
         if ($this->next_due_at && $this->next_due_at->isPast()) {
             return 'overdue';
         }
+
+        $vehicleKm = (int) ($this->vehicle?->mileage_current ?? 0);
+        $dueKm = (int) ($this->next_due_km ?? 0);
+
+        if ($dueKm > 0 && $vehicleKm >= $dueKm) {
+            return 'overdue';
+        }
+        if ($dueKm > 0 && ($dueKm - $vehicleKm) <= 500) {
+            return 'due_soon';
+        }
+
         if ($this->next_due_at && $this->next_due_at->diffInDays(now()) <= 30) {
             return 'due_soon';
         }
