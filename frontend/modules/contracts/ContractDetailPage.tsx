@@ -52,6 +52,25 @@ const STATUS_FR: Record<string, string> = {
   rejected: 'Rejeté',
 };
 
+const STATUS_STYLE: Record<string, string> = {
+  draft:               'bg-slate-100 text-slate-700 border-slate-300',
+  pending:             'bg-amber-50 text-amber-800 border-amber-300',
+  pending_approval:    'bg-amber-50 text-amber-800 border-amber-300',
+  pending_created:     'bg-amber-50 text-amber-800 border-amber-300',
+  pending_signature:   'bg-amber-50 text-amber-800 border-amber-300',
+  approved:            'bg-blue-50 text-blue-800 border-blue-300',
+  active:              'bg-emerald-50 text-emerald-800 border-emerald-300',
+  signed:              'bg-blue-50 text-blue-800 border-blue-300',
+  sent_for_signature:  'bg-indigo-50 text-indigo-800 border-indigo-300',
+  terminated:          'bg-rose-50 text-rose-800 border-rose-300',
+  expired:             'bg-orange-50 text-orange-800 border-orange-300',
+  cancelled:           'bg-rose-50 text-rose-800 border-rose-300',
+  closed:              'bg-slate-100 text-slate-700 border-slate-300',
+  suspended:           'bg-orange-50 text-orange-800 border-orange-300',
+  completed:           'bg-emerald-50 text-emerald-800 border-emerald-300',
+  rejected:            'bg-rose-50 text-rose-800 border-rose-300',
+};
+
 const ACTION_FR: Record<string, string> = {
   created:              'Création',
   updated:              'Modification',
@@ -189,13 +208,15 @@ export const ContractDetailPage: React.FC = () => {
       </Link>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">
-            {c.reference ?? shortId(c.id, 'CTR')}
-          </h1>
-          <p className="text-sm text-slate-500">
-            {c.type} •{' '}
-            <span className="font-semibold">{statusLabel}</span>
-          </p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black text-slate-900">
+              {c.reference ?? shortId(c.id, 'CTR')}
+            </h1>
+            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-black ${STATUS_STYLE[c.status] ?? 'bg-slate-100 text-slate-700 border-slate-300'}`}>
+              {statusLabel}
+            </span>
+          </div>
+          <p className="text-sm text-slate-500">{c.type}</p>
         </div>
         <div className="flex flex-wrap items-start gap-3">
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-right">
