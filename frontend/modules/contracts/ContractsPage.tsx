@@ -107,6 +107,19 @@ export const ContractsPage: React.FC = () => {
             ),
           },
           {
+            key: 'reservation',
+            header: 'Réservation',
+            render: (r) => {
+              const resId = (r as any).reservationId;
+              const resNum = (r as any).reservationNumber;
+              return resId ? (
+                <Link className="text-sm font-bold text-indigo-600 hover:text-indigo-800" to={`/reservations/${resId}`}>
+                  {resNum ?? 'Voir'}
+                </Link>
+              ) : <span className="text-xs text-slate-400">—</span>;
+            },
+          },
+          {
             key: 'a',
             header: '',
             render: (r) => (

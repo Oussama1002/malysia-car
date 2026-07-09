@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Contract;
+use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -60,9 +61,31 @@ class ContractResource extends JsonResource
             'vehicleRegistration' => $c->relationLoaded('vehicle') && $c->vehicle
                 ? $c->vehicle->registration_number
                 : null,
+            'reservationId' => $this->linkedReservation($c)?->id,
+            'reservationNumber' => $this->linkedReservation($c)?->reservation_number,
             'createdAt' => optional($c->created_at)?->toIso8601String(),
             'updatedAt' => optional($c->updated_at)?->toIso8601String(),
         ];
+    }
+
+    private ?Reservation $cachedReservation = null;
+    private bool $reservationResolved = false;
+
+    private function linkedReservation(Contract $c): ?Reservation
+    {
+        if ($this->reservationResolved) {
+            return $this->cachedReservation;
+        }
+        $this->reservationResolved = true;
+        if (! $c->customer_id || ! $c->vehicle_id) {
+            return null;
+        }
+        $this->cachedReservation = Reservation::query()
+            ->where('customer_id', $c->customer_id)
+            ->where('vehicle_id', $c->vehicle_id)
+            ->orderByDesc('created_at')
+            ->first(['id', 'reservation_number']);
+        return $this->cachedReservation;
     }
 }
 
