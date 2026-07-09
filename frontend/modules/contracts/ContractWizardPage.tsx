@@ -418,6 +418,7 @@ export const ContractWizardPage: React.FC = () => {
   });
 
   useEffect(() => {
+    if (isEditMode && editLoadedRef.current) return;
     const s = contractSettingsQ.data?.data?.settings;
     if (!s) return;
     setState((prev) => {
@@ -432,7 +433,7 @@ export const ContractWizardPage: React.FC = () => {
         securityDepositMad: prev.securityDepositMad || depositDefault,
       };
     });
-  }, [contractSettingsQ.data]);
+  }, [contractSettingsQ.data, isEditMode]);
 
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
   const createCustomerMut = useMutation({
@@ -958,7 +959,7 @@ export const ContractWizardPage: React.FC = () => {
                   >
                     <option value="">— Sélectionner —</option>
                     {(vehicles.data ?? [])
-                      .filter((v) => String(v.status).toUpperCase() === 'AVAILABLE')
+                      .filter((v) => String(v.status).toUpperCase() === 'AVAILABLE' || (isEditMode && String(v.id) === String(state.vehicleId)))
                       .map((v) => {
                         // Build the human label. Fall back to "Véhicule" when
                         // both brand and model are empty so the option never
@@ -1181,22 +1182,6 @@ export const ContractWizardPage: React.FC = () => {
                       <input className="df-input" value={state.paymentTerms} onChange={(e) => patch('paymentTerms', e.target.value)} />
                     </Field>
                   </div>
-                </div>
-                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Agent assigné">
-                    <select
-                      className="df-input"
-                      value={state.assignedAgentId ?? ''}
-                      onChange={(e) => patch('assignedAgentId', e.target.value || null)}
-                    >
-                      <option value="">— Non assigné —</option>
-                      {(agents.data ?? []).map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} · {u.role}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
                 </div>
                 <AIHint
                   tone="brand"
