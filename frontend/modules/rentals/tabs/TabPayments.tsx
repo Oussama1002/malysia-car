@@ -12,15 +12,20 @@ const fmtDate = (v: string | null | undefined) =>
 const METHOD_FR: Record<string, string> = {
   cash: 'Espèces',
   cheque: 'Chèque',
+  check: 'Chèque',
   bank_transfer: 'Virement',
   card: 'Carte',
   mobile: 'Mobile',
+  compensation: 'Compensation',
 };
 
 const STATUS_FR: Record<string, { label: string; cls: string }> = {
   received:  { label: 'Reçu', cls: 'bg-emerald-100 text-emerald-700' },
   allocated: { label: 'Alloué', cls: 'bg-indigo-100 text-indigo-700' },
+  completed: { label: 'Complété', cls: 'bg-emerald-100 text-emerald-700' },
   pending:   { label: 'En attente', cls: 'bg-amber-100 text-amber-700' },
+  refunded:  { label: 'Remboursé', cls: 'bg-rose-100 text-rose-700' },
+  reversed:  { label: 'Annulé', cls: 'bg-slate-100 text-slate-600' },
 };
 
 const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {

@@ -316,15 +316,8 @@ class ReservationController extends Controller
             // graceful fallback
         }
 
-        // Payments linked to this reservation directly, or via customer when no reservation_id set
         $payments = Payment::query()
-            ->where(function ($q) use ($reservation) {
-                $q->where('reservation_id', $reservation->id)
-                  ->orWhere(function ($q2) use ($reservation) {
-                      $q2->where('customer_id', $reservation->customer_id)
-                         ->whereNull('reservation_id');
-                  });
-            })
+            ->where('reservation_id', $reservation->id)
             ->where('status', '!=', 'refunded')
             ->orderByDesc('payment_date')
             ->get();

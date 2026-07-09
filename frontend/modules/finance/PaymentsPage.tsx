@@ -573,10 +573,10 @@ export const PaymentForm: React.FC<{
           <input
             type="number"
             min="0"
-            step="0.01"
+            step="any"
             className="df-input mt-1 w-full"
             value={form.amount}
-            onChange={(e) => set('amount', Number(e.target.value))}
+            onChange={(e) => set('amount', Math.round(Number(e.target.value) * 100) / 100)}
             required
           />
         </div>

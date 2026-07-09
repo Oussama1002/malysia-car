@@ -98,6 +98,7 @@ const PAYMENT_METHOD_FR: Record<string, string> = {
   virement:      'Virement bancaire',
   bank_transfer: 'Virement bancaire',
   cheque:        'Chèque',
+  check:         'Chèque',
   espece:        'Espèce',
   cash:          'Espèce',
   carte:         'Carte bancaire',
@@ -589,7 +590,7 @@ const PaymentsTab: React.FC<{ contractId: string; customerId?: string | null }> 
           contract_id: contractId,
           payment_method: payMethod,
           payment_type: payType,
-          amount: Number(payAmount),
+          amount: Math.round(Number(payAmount) * 100) / 100,
           currency_code: 'MAD',
           payment_date: new Date().toISOString().slice(0, 10),
           external_reference: payRef || undefined,
@@ -638,7 +639,7 @@ const PaymentsTab: React.FC<{ contractId: string; customerId?: string | null }> 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-bold text-slate-600">Montant (MAD) *</label>
-                  <input type="number" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" />
+                  <input type="number" step="any" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold text-slate-600">Mode de paiement *</label>
