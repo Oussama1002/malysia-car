@@ -165,16 +165,16 @@ class RentalAvailabilityService
         if (in_array($statusUpper, ['SOLD', 'MAINTENANCE', 'BLOCKED', 'UNAVAILABLE', 'IN_REPAIR', 'ACCIDENT', 'IMMOBILIZED', 'SCRAPPED'], true)
             || in_array(strtolower(trim((string) $vehicle->status)), ['sold', 'maintenance', 'repair', 'accident', 'immobilized', 'immobilised', 'blocked', 'unavailable', 'scrapped', 'in_repair'], true)) {
             $reasons[] = 'vehicle_status_unavailable';
-            $messages['vehicle_status_unavailable'] = 'This vehicle cannot be rented (fleet status).';
+            $messages['vehicle_status_unavailable'] = 'Ce véhicule ne peut pas être loué (statut flotte : '.($vehicle->status).').';
         }
 
         $av = strtolower(trim((string) ($vehicle->availability_status ?? 'available')));
         if ($av !== '' && $av !== 'available' && $av !== 'in_use' && in_array($av, self::AVAILABILITY_STATUS_BLOCKED, true)) {
             $reasons[] = 'vehicle_availability_flag';
-            $messages['vehicle_availability_flag'] = 'This vehicle is flagged as unavailable for rental.';
+            $messages['vehicle_availability_flag'] = 'Ce véhicule est marqué comme indisponible à la location.';
         }
 
-        $hasOverlappingReservation = Reservation::query()
+        $overlappingReservation = Reservation::query()
             ->where('vehicle_id', $vehicleId)
             ->whereIn('status', self::RESERVATION_BLOCKING_STATUSES)
             ->when($excludeReservationId, fn ($q) => $q->where('id', '!=', $excludeReservationId))
@@ -182,17 +182,23 @@ class RentalAvailabilityService
                 $q->where('desired_start_at', '<', $endAt)
                     ->where('desired_end_at', '>', $startAt);
             })
-            ->exists();
+            ->orderBy('desired_end_at', 'desc')
+            ->first();
 
-        if ($hasOverlappingReservation) {
+        if ($overlappingReservation) {
             $reasons[] = 'overlapping_reservation';
-            $messages['overlapping_reservation'] = 'Another reservation overlaps this period.';
+            $returnDate = $overlappingReservation->desired_end_at
+                ? Carbon::parse($overlappingReservation->desired_end_at)->format('d/m/Y')
+                : null;
+            $messages['overlapping_reservation'] = $returnDate
+                ? "Une réservation chevauche cette période. Retour prévu le {$returnDate}."
+                : 'Une réservation chevauche cette période.';
         }
 
         $periodStart = $startAt->toDateString();
         $periodEnd = $endAt->toDateString();
 
-        $hasActiveContractOverlap = Contract::query()
+        $activeContractOverlap = Contract::query()
             ->where('vehicle_id', $vehicleId)
             ->where('status', 'active')
             ->when($excludeContractId, fn ($q) => $q->where('id', '!=', $excludeContractId))
@@ -200,11 +206,17 @@ class RentalAvailabilityService
                 'NOT ((end_date IS NOT NULL AND end_date < ?) OR (start_date IS NOT NULL AND start_date > ?))',
                 [$periodStart, $periodEnd]
             )
-            ->exists();
+            ->orderByRaw('COALESCE(end_date, start_date) DESC')
+            ->first();
 
-        if ($hasActiveContractOverlap) {
+        if ($activeContractOverlap) {
             $reasons[] = 'active_contract_overlap';
-            $messages['active_contract_overlap'] = 'An active finance or lease contract overlaps this period.';
+            $returnDate = $activeContractOverlap->end_date
+                ? Carbon::parse($activeContractOverlap->end_date)->format('d/m/Y')
+                : null;
+            $messages['active_contract_overlap'] = $returnDate
+                ? "Un contrat actif chevauche cette période. Fin de contrat le {$returnDate}."
+                : 'Un contrat actif chevauche cette période.';
         }
 
         // Only standalone field-ops missions block the calendar. Missions tied to a
@@ -228,7 +240,7 @@ class RentalAvailabilityService
 
         if ($hasOverlappingMission) {
             $reasons[] = 'overlapping_mission';
-            $messages['overlapping_mission'] = 'A mission is scheduled for this vehicle during this period.';
+            $messages['overlapping_mission'] = 'Une mission est planifiée pour ce véhicule sur cette période.';
         }
 
         $openRepair = VehicleRepair::query()
@@ -237,7 +249,7 @@ class RentalAvailabilityService
             ->exists();
         if ($openRepair) {
             $reasons[] = 'vehicle_in_maintenance';
-            $messages['vehicle_in_maintenance'] = 'Vehicle has an open repair order.';
+            $messages['vehicle_in_maintenance'] = 'Ce véhicule a un ordre de réparation en cours.';
         }
 
         $openMaintEvent = VehicleMaintenanceEvent::query()
@@ -246,7 +258,7 @@ class RentalAvailabilityService
             ->exists();
         if ($openMaintEvent) {
             $reasons[] = 'vehicle_in_scheduled_maintenance';
-            $messages['vehicle_in_scheduled_maintenance'] = 'Vehicle maintenance is in progress.';
+            $messages['vehicle_in_scheduled_maintenance'] = 'Une maintenance est en cours sur ce véhicule.';
         }
 
         $openAccident = VehicleAccident::query()
@@ -255,7 +267,7 @@ class RentalAvailabilityService
             ->exists();
         if ($openAccident) {
             $reasons[] = 'vehicle_accident_hold';
-            $messages['vehicle_accident_hold'] = 'Vehicle has an open accident case.';
+            $messages['vehicle_accident_hold'] = 'Ce véhicule a un dossier accident ouvert.';
         }
 
         // Sub-rental period constraint: reservation must fit within supplier contract

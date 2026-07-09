@@ -30,7 +30,7 @@ const RENTAL_REASON_LABELS: Record<string, string> = {
 
 function formatRentalConflict(r: RentalAvailabilityDto): string {
   const msgs = r.messages ?? {};
-  return r.reasons.map((c) => RENTAL_REASON_LABELS[c] ?? msgs[c] ?? c).join(' · ');
+  return r.reasons.map((c) => msgs[c] ?? RENTAL_REASON_LABELS[c] ?? c).join(' · ');
 }
 
 function hasBackend(): boolean {
