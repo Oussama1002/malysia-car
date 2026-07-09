@@ -126,6 +126,7 @@ export const ReservationsOpsPage: React.FC = () => {
   const [form, setForm] = useState({
     customer_id: '',
     vehicle_id: '',
+    vehicle_ids: [] as string[],
     reservation_type: 'SHORT_RENTAL',
     desired_start_at: '',
     desired_end_at: '',
@@ -195,10 +196,10 @@ export const ReservationsOpsPage: React.FC = () => {
   });
 
   const createRes = useMutation({
-    mutationFn: async () =>
-      opsApi.createReservation({
+    mutationFn: async () => {
+      const ids = form.is_draft && form.vehicle_ids.length > 0 ? form.vehicle_ids : [form.vehicle_id];
+      const base = {
         customer_id: form.customer_id,
-        vehicle_id: form.vehicle_id,
         reservation_type: form.reservation_type,
         desired_start_at: form.desired_start_at,
         desired_end_at: form.desired_end_at,
@@ -215,7 +216,11 @@ export const ReservationsOpsPage: React.FC = () => {
         deposit_amount: form.deposit_amount ? Number(form.deposit_amount) : undefined,
         allowed_km_per_day: form.allowed_km_per_day ? Number(form.allowed_km_per_day) : undefined,
         is_draft: form.is_draft,
-      }),
+      };
+      for (const vid of ids) {
+        await opsApi.createReservation({ ...base, vehicle_id: vid });
+      }
+    },
     onMutate: () => setCreateError(null),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
@@ -612,42 +617,69 @@ export const ReservationsOpsPage: React.FC = () => {
               </select>
             </div>
             <div className="relative">
-              <label className="mb-1 block text-xs font-bold text-slate-500">Véhicule</label>
+              <label className="mb-1 block text-xs font-bold text-slate-500">
+                Véhicule{form.is_draft ? 's (plusieurs possibles)' : ''}
+              </label>
+              {form.is_draft && form.vehicle_ids.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {form.vehicle_ids.map((vid) => {
+                    const vl = vehicleOptions.find((v) => v.id === vid)?.label ?? vid;
+                    return (
+                      <span key={vid} className="inline-flex items-center gap-1 rounded-full bg-indigo-100 border border-indigo-200 px-2.5 py-1 text-xs font-bold text-indigo-800">
+                        {vl}
+                        <button type="button" className="ml-0.5 text-indigo-400 hover:text-indigo-700" onClick={() => setForm((s) => ({ ...s, vehicle_ids: s.vehicle_ids.filter((x) => x !== vid), vehicle_id: s.vehicle_ids.filter((x) => x !== vid)[0] ?? '' }))}>&times;</button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
               <input
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
                 placeholder="Rechercher marque, modèle ou immatriculation…"
-                value={vehicleSearch || (form.vehicle_id ? (vehicleOptions.find((v) => v.id === form.vehicle_id)?.label ?? '') : '')}
+                value={vehicleSearch || (!form.is_draft && form.vehicle_id ? (vehicleOptions.find((v) => v.id === form.vehicle_id)?.label ?? '') : '')}
                 onChange={(e) => {
                   setVehicleSearch(e.target.value);
                   setVehicleDropdownOpen(true);
-                  if (!e.target.value) setForm((s) => ({ ...s, vehicle_id: '' }));
+                  if (!e.target.value && !form.is_draft) setForm((s) => ({ ...s, vehicle_id: '' }));
                 }}
                 onFocus={() => setVehicleDropdownOpen(true)}
                 onBlur={() => setTimeout(() => setVehicleDropdownOpen(false), 200)}
               />
-              {form.vehicle_id && (
+              {!form.is_draft && form.vehicle_id && (
                 <button className="absolute right-3 top-[34px] text-slate-400 hover:text-slate-600 text-sm" onClick={() => { setForm((s) => ({ ...s, vehicle_id: '' })); setVehicleSearch(''); }}>&times;</button>
               )}
               {vehicleDropdownOpen && (
                 <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
                   {vehicleOptions
                     .filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase()))
-                    .map((v) => (
-                      <button
-                        key={v.id}
-                        type="button"
-                        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${form.vehicle_id === v.id ? 'bg-indigo-50 font-bold' : ''}`}
-                        onClick={() => {
-                          const raw = (vehiclesQ.data ?? []).find((x) => String(x.id) === v.id) as any;
-                          setForm((s) => ({ ...s, vehicle_id: v.id, daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate }));
-                          setVehicleSearch('');
-                          setVehicleDropdownOpen(false);
-                        }}
-                      >
-                        <span className="flex-1">{v.label}</span>
-                        {v.isSubRented && <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-black text-amber-700">SL</span>}
-                      </button>
-                    ))}
+                    .map((v) => {
+                      const selected = form.is_draft ? form.vehicle_ids.includes(v.id) : form.vehicle_id === v.id;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${selected ? 'bg-indigo-50 font-bold' : ''}`}
+                          onClick={() => {
+                            const raw = (vehiclesQ.data ?? []).find((x) => String(x.id) === v.id) as any;
+                            if (form.is_draft) {
+                              setForm((s) => {
+                                const ids = s.vehicle_ids.includes(v.id) ? s.vehicle_ids.filter((x) => x !== v.id) : [...s.vehicle_ids, v.id];
+                                return { ...s, vehicle_ids: ids, vehicle_id: ids[0] ?? '', daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate };
+                              });
+                              setVehicleSearch('');
+                            } else {
+                              setForm((s) => ({ ...s, vehicle_id: v.id, daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate }));
+                              setVehicleSearch('');
+                              setVehicleDropdownOpen(false);
+                            }
+                          }}
+                        >
+                          {form.is_draft && <span className={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selected ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300'}`}>{selected ? '✓' : ''}</span>}
+                          <span className="flex-1">{v.label}</span>
+                          {v.isSubRented && <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-black text-amber-700">SL</span>}
+                        </button>
+                      );
+                    })}
                   {vehicleOptions.filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase())).length === 0 && (
                     <div className="px-4 py-3 text-xs text-slate-400">Aucun véhicule trouvé</div>
                   )}
@@ -696,15 +728,15 @@ export const ReservationsOpsPage: React.FC = () => {
               ) : null;
             })()}
           </div>
-          {formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
+          {!form.is_draft && formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>
           )}
-          {formSlotBlocked && formAvailabilityQ.data && (
+          {!form.is_draft && formSlotBlocked && formAvailabilityQ.data && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <span className="font-black">Créneau indisponible.</span> {formatRentalConflict(formAvailabilityQ.data)}
             </div>
           )}
-          {formAvailabilityQ.data?.available && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
+          {!form.is_draft && formAvailabilityQ.data?.available && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">Créneau disponible pour ce véhicule.</div>
           )}
           {/* Draft / Confirmed toggle */}
@@ -715,12 +747,12 @@ export const ReservationsOpsPage: React.FC = () => {
                   type="radio"
                   name="res_mode"
                   checked={!form.is_draft}
-                  onChange={() => setForm((s) => ({ ...s, is_draft: false }))}
+                  onChange={() => setForm((s) => ({ ...s, is_draft: false, vehicle_id: s.vehicle_ids[0] ?? s.vehicle_id, vehicle_ids: [] }))}
                   className="accent-indigo-600"
                 />
                 <div>
                   <div className="text-xs font-black text-slate-800">Réservation confirmée</div>
-                  <div className="text-[10px] text-slate-500">Véhicule bloqué · créneau réservé</div>
+                  <div className="text-[10px] text-slate-500">1 véhicule bloqué · créneau réservé</div>
                 </div>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -728,12 +760,12 @@ export const ReservationsOpsPage: React.FC = () => {
                   type="radio"
                   name="res_mode"
                   checked={form.is_draft}
-                  onChange={() => setForm((s) => ({ ...s, is_draft: true }))}
+                  onChange={() => setForm((s) => ({ ...s, is_draft: true, vehicle_ids: s.vehicle_id ? [s.vehicle_id] : [] }))}
                   className="accent-amber-600"
                 />
                 <div>
                   <div className="text-xs font-black text-slate-800">Intention (brouillon)</div>
-                  <div className="text-[10px] text-slate-500">Véhicule non bloqué · en attente de confirmation</div>
+                  <div className="text-[10px] text-slate-500">Plusieurs véhicules possibles · non bloqués</div>
                 </div>
               </label>
             </div>
@@ -744,10 +776,10 @@ export const ReservationsOpsPage: React.FC = () => {
             <button
               type="button"
               className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-black text-white shadow-lg disabled:opacity-50 ${form.is_draft ? 'bg-amber-600 shadow-amber-100 hover:bg-amber-700' : 'bg-indigo-600 shadow-indigo-100 hover:bg-indigo-700'}`}
-              disabled={!form.customer_id || !form.vehicle_id || !form.desired_start_at || !form.desired_end_at || createRes.isPending || (!form.is_draft && formSlotBlocked)}
+              disabled={!form.customer_id || !(form.is_draft ? form.vehicle_ids.length > 0 : form.vehicle_id) || !form.desired_start_at || !form.desired_end_at || createRes.isPending || (!form.is_draft && formSlotBlocked)}
               onClick={() => createRes.mutate()}
             >
-              {createRes.isPending ? 'Création…' : form.is_draft ? 'Créer intention' : 'Créer réservation'}
+              {createRes.isPending ? 'Création…' : form.is_draft ? `Créer ${form.vehicle_ids.length > 1 ? form.vehicle_ids.length + ' intentions' : 'intention'}` : 'Créer réservation'}
             </button>
           </div>
         </div>
