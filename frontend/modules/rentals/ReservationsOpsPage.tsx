@@ -239,13 +239,16 @@ export const ReservationsOpsPage: React.FC = () => {
   });
 
   const [missionError, setMissionError] = useState<string | null>(null);
+  const [missionSuccess, setMissionSuccess] = useState<string | null>(null);
   const createMission = useMutation({
     mutationFn: async (reservationId: string) =>
       opsApi.createMission(reservationId, { mission_type: 'delivery' }),
-    onMutate: () => setMissionError(null),
-    onSuccess: async () => {
+    onMutate: () => { setMissionError(null); setMissionSuccess(null); },
+    onSuccess: async (_data, reservationId) => {
       await qc.invalidateQueries({ queryKey: queryKeys.missions });
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      setMissionSuccess(`Mission créée pour la réservation ${reservationId.slice(0, 8)}`);
+      setTimeout(() => setMissionSuccess(null), 4000);
     },
     onError: (e: unknown) => {
       setMissionError(e instanceof Error ? e.message : 'Erreur lors de la création de la mission');
@@ -564,7 +567,7 @@ export const ReservationsOpsPage: React.FC = () => {
                     disabled={createMission.isPending}
                     onClick={(e) => { e.stopPropagation(); createMission.mutate(r.id); }}
                   >
-                    Créer mission
+                    {createMission.isPending ? 'Création…' : 'Créer mission'}
                   </button>
                 )}
               </div>
@@ -575,6 +578,11 @@ export const ReservationsOpsPage: React.FC = () => {
         {missionError && (
           <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             <strong>Erreur mission :</strong> {missionError}
+          </div>
+        )}
+        {missionSuccess && (
+          <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-semibold">
+            {missionSuccess}
           </div>
         )}
       </div>
