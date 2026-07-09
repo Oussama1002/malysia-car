@@ -82,11 +82,12 @@ export const ReservationsOpsPage: React.FC = () => {
 
   const customersQ = useQuery({
     queryKey: queryKeys.customers.all,
-    queryFn: async () => (await apiClient<ApiListResponse<CustomerDto>>(endpoints.customers.list)).data,
+    queryFn: async () => (await apiClient<ApiListResponse<CustomerDto>>(`${endpoints.customers.list}?per_page=500`)).data,
     enabled: hasBackend(),
+    staleTime: 5 * 60_000,
   });
 
-  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches(), enabled: hasBackend() });
+  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches(), enabled: hasBackend(), staleTime: 5 * 60_000 });
 
   const createCustomerMut = useMutation({
     mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
@@ -108,14 +109,16 @@ export const ReservationsOpsPage: React.FC = () => {
 
   const vehiclesQ = useQuery({
     queryKey: queryKeys.fleet.all,
-    queryFn: async () => (await apiClient<ApiListResponse<FleetVehicleDto>>(endpoints.fleet.list)).data,
+    queryFn: async () => (await apiClient<ApiListResponse<FleetVehicleDto>>(`${endpoints.fleet.list}?per_page=500`)).data,
     enabled: hasBackend(),
+    staleTime: 5 * 60_000,
   });
 
   const contractSettingsQ = useQuery({
     queryKey: ['settings', 'contracts'],
     queryFn: () => getSettings('contracts'),
     enabled: hasBackend(),
+    staleTime: 5 * 60_000,
   });
   const cSettings = contractSettingsQ.data?.data?.settings ?? {};
   const lcdMaxDays = Number(cSettings.lcd_max_days) || 30;

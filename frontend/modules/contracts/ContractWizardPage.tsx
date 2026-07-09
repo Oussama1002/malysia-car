@@ -466,7 +466,7 @@ export const ContractWizardPage: React.FC = () => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard clients.');
       }
-      const res = await apiClient<{ data: any[] }>('/v1/customers?per_page=200');
+      const res = await apiClient<{ data: any[] }>('/v1/customers?per_page=500');
       return res.data.map((c): CustomerDto => ({
         id: c.id,
         kind: c.customer_type === 'ENTREPRISE' ? 'ENTREPRISE' : 'PARTICULIER',
@@ -486,6 +486,7 @@ export const ContractWizardPage: React.FC = () => {
         licenseExpiry: c.individual_profile?.driving_license_expiry,
       }));
     },
+    staleTime: 5 * 60_000,
   });
 
   const vehicles = useQuery({
@@ -494,7 +495,7 @@ export const ContractWizardPage: React.FC = () => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard vehicles.');
       }
-      const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200');
+      const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=500');
       return res.data.map((v): FleetVehicleDto => ({
         id: v.id,
         registration: v.registration ?? v.registration_number ?? '',
@@ -512,6 +513,7 @@ export const ContractWizardPage: React.FC = () => {
         ownershipStatus: v.ownershipStatus ?? v.ownership_status,
       }));
     },
+    staleTime: 5 * 60_000,
   });
 
   const agents = useQuery({
