@@ -454,14 +454,14 @@ export const ContractWizardPage: React.FC = () => {
     onSuccess: async (res) => {
       setNewClientError(null);
       setNewClientDrawerOpen(false);
-      await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
+      await qc.invalidateQueries({ queryKey: ['wizard', 'customers'] });
       patch('clientId', String(res.data.id));
     },
     onError: (e) => setNewClientError(e instanceof ApiError ? e.message : 'Erreur de création du client'),
   });
 
   const clients = useQuery({
-    queryKey: queryKeys.customers.all,
+    queryKey: ['wizard', 'customers'],
     queryFn: async (): Promise<CustomerDto[]> => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard clients.');
@@ -490,7 +490,7 @@ export const ContractWizardPage: React.FC = () => {
   });
 
   const vehicles = useQuery({
-    queryKey: queryKeys.fleet.all,
+    queryKey: ['wizard', 'vehicles'],
     queryFn: async (): Promise<FleetVehicleDto[]> => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard vehicles.');
