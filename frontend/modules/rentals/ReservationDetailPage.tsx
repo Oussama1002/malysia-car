@@ -350,7 +350,7 @@ export const ReservationDetailPage: React.FC = () => {
               <button
                 onClick={() => cancelM.mutate()}
                 disabled={cancelM.isPending}
-                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 ml-auto"
+                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50"
               >
                 Annuler réservation
               </button>
