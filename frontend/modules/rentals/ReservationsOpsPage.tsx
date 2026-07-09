@@ -675,7 +675,7 @@ export const ReservationsOpsPage: React.FC = () => {
                 <div>
                   <label className="mb-1 block text-xs font-bold text-slate-500">Type de réservation</label>
                   <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                    {days > 0 ? `${label} — ${days} jour${days > 1 ? 's' : ''}` : 'Sélectionnez les dates'}
+                    {days > 0 ? `${label} — ${(() => { const m = Math.floor(days / 30); const d = days % 30; if (m === 0) return `${days} jour${days > 1 ? 's' : ''}`; return `${m} mois${d > 0 ? ` et ${d} jour${d > 1 ? 's' : ''}` : ''}`; })()}` : 'Sélectionnez les dates'}
                   </div>
                 </div>
               );
