@@ -430,10 +430,16 @@ export const ContractWizardPage: React.FC = () => {
         ? Number(s.default_km_per_day || 0)
         : Number(s.default_km_per_month || 0);
       const depositDefault = Number(s.default_deposit_mad || 0);
+      const paymentDayDefault = Number(s.default_payment_day || 0);
+      const paymentTermsDefault = String(s.default_payment_terms || '');
       return {
         ...prev,
         kmInclMonth: prev.kmInclMonth || kmDefault,
         securityDepositMad: prev.securityDepositMad || depositDefault,
+        expectedPaymentDay: prev.expectedPaymentDay === 5 || !prev.expectedPaymentDay
+          ? (paymentDayDefault || prev.expectedPaymentDay)
+          : prev.expectedPaymentDay,
+        paymentTerms: prev.paymentTerms || paymentTermsDefault,
       };
     });
   }, [contractSettingsQ.data]);
