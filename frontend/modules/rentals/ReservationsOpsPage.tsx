@@ -644,15 +644,6 @@ export const ReservationsOpsPage: React.FC = () => {
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-500">Type de réservation</label>
-              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
-                <option value="SHORT_RENTAL">Location courte durée</option>
-                <option value="LONG_RENTAL">Location longue durée</option>
-                <option value="LLD">LLD</option>
-                <option value="LOA">LOA</option>
-              </select>
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
               <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_start_at} onChange={(e) => setForm((s) => ({ ...s, desired_start_at: e.target.value }))} />
             </div>
@@ -660,6 +651,24 @@ export const ReservationsOpsPage: React.FC = () => {
               <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
               <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_end_at} onChange={(e) => setForm((s) => ({ ...s, desired_end_at: e.target.value }))} />
             </div>
+            {(() => {
+              const s0 = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
+              const e0 = form.desired_end_at ? new Date(form.desired_end_at).getTime() : NaN;
+              const days = (!isNaN(s0) && !isNaN(e0) && e0 > s0) ? Math.ceil((e0 - s0) / 86_400_000) : 0;
+              const autoType = days > 30 ? 'LONG_RENTAL' : 'SHORT_RENTAL';
+              const label = autoType === 'LONG_RENTAL' ? 'Location longue durée' : 'Location courte durée';
+              if (days > 0 && form.reservation_type !== autoType) {
+                setTimeout(() => setForm((p) => ({ ...p, reservation_type: autoType })), 0);
+              }
+              return (
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-500">Type de réservation</label>
+                  <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                    {days > 0 ? `${label} (${days} jour${days > 1 ? 's' : ''})` : 'Sélectionnez les dates'}
+                  </div>
+                </div>
+              );
+            })()}
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup (optionnel)" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison (optionnel)" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
             <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Tarif / jour (MAD)" value={form.daily_rate} onChange={(e) => setForm((s) => ({ ...s, daily_rate: e.target.value }))} />
