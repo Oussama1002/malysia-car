@@ -116,7 +116,7 @@ export const ReservationDetailPage: React.FC = () => {
     onError: (e: unknown) => {
       if (e instanceof ApiError && e.body && typeof e.body === 'object') {
         const body = e.body as any;
-        const parts = [...(body.errors?.vehicle_id ?? []), ...(body.errors?.rental ?? [])];
+        const parts = body.errors?.vehicle_id ?? [];
         setValidateError(parts.length > 0 ? parts.join(' ') : body.message ?? e.message);
       } else {
         setValidateError(e instanceof Error ? e.message : 'Erreur lors de la validation');
