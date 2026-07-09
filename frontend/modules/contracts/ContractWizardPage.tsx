@@ -1075,7 +1075,7 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Durée (jours)">
+                  <Field label={isShortRental ? 'Durée (jours)' : 'Durée (mois)'}>
                     <input
                       type="number"
                       className="df-input"
@@ -1282,7 +1282,7 @@ export const ContractWizardPage: React.FC = () => {
               <SummaryRow label="Agent assigné" value={selectedAgent?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
-              <SummaryRow label="Durée" value={`${state.durationMonths} jour${state.durationMonths > 1 ? 's' : ''}`} />
+              <SummaryRow label="Durée" value={isShortRental ? `${state.durationMonths} jour${state.durationMonths > 1 ? 's' : ''}` : `${state.durationMonths} mois`} />
               <SummaryRow label={isShortRental ? 'Prix / jour' : 'Mensualité'} value={formatCurrencyMad(state.monthlyRentMad)} highlight />
               <SummaryRow label={isShortRental ? 'Km inclus / jour' : 'Km inclus / mois'} value={state.kmInclMonth.toLocaleString('fr-MA')} />
               <SummaryRow label="Caution" value={formatCurrencyMad(state.securityDepositMad)} />
@@ -1498,7 +1498,7 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
           {`, le véhicule `}<strong>{vehicle}</strong>
           {`, pour une durée de `}
           <span className="df-num font-semibold">
-            {`${state.durationMonths} jour${state.durationMonths > 1 ? "s" : ""}`}
+            {isShortRental ? `${state.durationMonths} jour${state.durationMonths > 1 ? "s" : ""}` : `${state.durationMonths} mois`}
           </span>.
         </p>
         <p className="mt-3"><strong>Article 2 — {isShortRental ? "Tarif et conditions financières" : "Loyer et conditions financières"}</strong></p>
