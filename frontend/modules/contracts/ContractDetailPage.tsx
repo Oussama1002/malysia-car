@@ -202,10 +202,7 @@ export const ContractDetailPage: React.FC = () => {
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant</div>
             <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad((raw?.baseAmount ?? raw?.amountMad ?? raw?.base_amount ?? 0) as number)}</div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-right">
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Document</div>
-            <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} className="mt-1 text-2xl font-black text-indigo-700 hover:text-indigo-800 transition-colors disabled:opacity-50" label="Générer PDF" />
-          </div>
+          <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 transition-colors disabled:opacity-50" />
           {c.status === 'active' && (
             <button
               type="button"
