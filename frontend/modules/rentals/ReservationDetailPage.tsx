@@ -195,14 +195,23 @@ export const ReservationDetailPage: React.FC = () => {
             {
               label: 'Véhicule',
               value: (() => {
-                const candidates = (r.candidate_vehicle_ids ?? []) as string[];
-                if (status === 'draft' && candidates.length > 1) {
-                  return `${d?.vehicle_name ?? '—'} (+${candidates.length - 1} autre${candidates.length > 2 ? 's' : ''})`;
+                const candidateVehicles = (d?.candidate_vehicles ?? []) as { id: string; name: string; registration: string }[];
+                if (status === 'draft' && candidateVehicles.length > 1) {
+                  return candidateVehicles.map((v) => v.name).join('  /  ');
                 }
                 return d?.vehicle_name ?? '—';
               })(),
             },
-            { label: 'Immatriculation', value: d?.vehicle_registration ?? '—' },
+            {
+              label: 'Immatriculation',
+              value: (() => {
+                const candidateVehicles = (d?.candidate_vehicles ?? []) as { id: string; name: string; registration: string }[];
+                if (status === 'draft' && candidateVehicles.length > 1) {
+                  return candidateVehicles.map((v) => v.registration).join('  /  ');
+                }
+                return d?.vehicle_registration ?? '—';
+              })(),
+            },
             { label: 'Début', value: fmtDate(r.desired_start_at) },
             { label: 'Fin', value: fmtDate(r.desired_end_at) },
             { label: 'Total', value: fmtMad(grandTotal) },

@@ -418,6 +418,22 @@ class ReservationController extends Controller
             $customerName = $customer?->customer_code ?? null;
         }
 
+        // Resolve all candidate vehicle names for draft intentions
+        $candidateVehicles = [];
+        $candidateIds = (array) ($reservation->candidate_vehicle_ids ?? []);
+        if (count($candidateIds) > 1) {
+            $candidateVehicles = Vehicle::with(['brand', 'model'])
+                ->whereIn('id', $candidateIds)
+                ->get()
+                ->map(fn (Vehicle $v) => [
+                    'id' => $v->id,
+                    'name' => trim(($v->brand?->name ?? $v->brand_name ?? '') . ' ' . ($v->model?->model_name ?? $v->model?->name ?? $v->model_name ?? '')),
+                    'registration' => $v->registration_number,
+                ])
+                ->values()
+                ->all();
+        }
+
         $linkedContract = Contract::withoutGlobalScopes()
             ->where('customer_id', $reservation->customer_id)
             ->where('vehicle_id', $reservation->vehicle_id)
@@ -429,6 +445,7 @@ class ReservationController extends Controller
             'customer_name' => $customerName,
             'vehicle_name' => $vehicleName,
             'vehicle_registration' => $vehicle?->registration_number ?? null,
+            'candidate_vehicles' => $candidateVehicles,
             'has_contract' => $linkedContract !== null,
             'contract_id' => $linkedContract?->id,
             'contract_number' => $linkedContract?->contract_number,
