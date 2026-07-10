@@ -483,19 +483,27 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
     queryKey: ['contract-installments', contractId],
     queryFn: async () => contractsApi.installments(contractId),
   });
+  const paymentsQ = useQuery({
+    queryKey: ['contract-payments-schedule', contractId],
+    queryFn: async () => {
+      const res = await apiClient<{ data: any[] }>(`/v1/payments?contract_id=${contractId}&per_page=200`);
+      return res.data;
+    },
+  });
 
   const installments = (q.data ?? []) as any[];
+  const payments = (paymentsQ.data ?? []) as any[];
+  const actualPaid = payments.reduce((s: number, p: any) => s + Number(p.amount ?? 0), 0);
 
   const totalDue  = installments.reduce((s, i) => s + Number(i.total_due_amount ?? i.amount_due ?? 0), 0);
-  const totalPaid = installments.reduce((s, i) => s + Number(i.total_paid_amount ?? i.amount_paid ?? 0), 0);
-  const remaining = totalDue - totalPaid;
+  const remaining = Math.max(0, totalDue - actualPaid);
 
   return (
     <div className="space-y-4">
       {/* Summary row */}
       <div className="grid grid-cols-3 gap-4">
         <SummaryCard label="Total dû" value={formatCurrencyMad(totalDue)} tone="neutral" />
-        <SummaryCard label="Total payé" value={formatCurrencyMad(totalPaid)} tone="success" />
+        <SummaryCard label="Total payé" value={formatCurrencyMad(actualPaid)} tone="success" />
         <SummaryCard label="Reste à payer" value={formatCurrencyMad(remaining)} tone={remaining > 0 ? 'warn' : 'success'} />
       </div>
 
