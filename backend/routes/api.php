@@ -491,6 +491,10 @@ Route::prefix('v1')->group(function () {
         // Vehicle swap requests
         Route::get('vehicle-swaps', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'index'])
             ->middleware('permission:fleet.view');
+        Route::get('vehicle-swaps/eligible-vehicles', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'eligibleVehicles'])
+            ->middleware('permission:fleet.view');
+        Route::post('vehicle-swaps/financial-impact', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'financialImpact'])
+            ->middleware('permission:fleet.view');
         Route::post('vehicle-swaps', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'store'])
             ->middleware('permission:rentals.update');
         Route::post('vehicle-swaps/instant', [\App\Http\Controllers\Api\V1\VehicleSwapController::class, 'approveInstant'])

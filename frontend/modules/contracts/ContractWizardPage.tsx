@@ -240,7 +240,7 @@ export const ContractWizardPage: React.FC = () => {
         const endDate: string | null = r.desired_end_at
           ? String(r.desired_end_at).slice(0, 10)
           : null;
-        const durationMonths =
+        const rawDays =
           startDate && endDate ? daysBetween(startDate, endDate) : 0;
         // Normalise payment method to wizard options
         const methodMap: Record<string, string> = {
@@ -268,6 +268,8 @@ export const ContractWizardPage: React.FC = () => {
           VENTE_VO:     'VENTE_VO',
         };
         const contractType: ContractType = typeMap[r.reservation_type ?? ''] ?? 'LOCATION_COURTE';
+        const isShort = contractType === 'LOCATION_COURTE';
+        const durationValue = isShort ? rawDays : Math.max(1, Math.round(rawDays / 30));
 
         setState((prev) => ({
           ...prev,
@@ -276,8 +278,8 @@ export const ContractWizardPage: React.FC = () => {
           type: contractType,
           startDate,
           endDate,
-          durationMonths,
-          monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths)) : prev.monthlyRentMad,
+          durationMonths: durationValue,
+          monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationValue)) : prev.monthlyRentMad,
           securityDepositMad: r.deposit_amount ? Number(r.deposit_amount) : prev.securityDepositMad,
           payments: [{ id: String(Date.now()), method: paymentMethod, amount: '', reference: '', chequeNumber: '' }],
         }));

@@ -120,6 +120,8 @@ export const endpoints = {
     list: '/v1/vehicle-swaps',
     create: '/v1/vehicle-swaps',
     instant: '/v1/vehicle-swaps/instant',
+    eligibleVehicles: '/v1/vehicle-swaps/eligible-vehicles',
+    financialImpact: '/v1/vehicle-swaps/financial-impact',
     approve: (id: string) => `/v1/vehicle-swaps/${id}/approve`,
     reject: (id: string) => `/v1/vehicle-swaps/${id}/reject`,
   },

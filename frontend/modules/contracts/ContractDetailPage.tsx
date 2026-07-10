@@ -12,6 +12,7 @@ import { opsApi } from '@/services/opsApi';
 import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
+import { VehicleSwapWizard } from '@/modules/rentals/VehicleSwapWizard';
 import { walletApi } from '@/services/walletApi';
 import { createPortal } from 'react-dom';
 import TabCheckOut from '@/modules/rentals/tabs/TabCheckOut';
@@ -439,19 +440,18 @@ export const ContractDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── VEHICLE SWAP MODAL ────────────────────────────────────────────── */}
-      {showSwapVehicle && (
-        <VehicleSwapModal
-          contractId={String(c.id ?? id)}
-          currentVehicleId={vehicleId}
-          currentVehicleName={vehicleName}
-          onClose={() => setShowSwapVehicle(false)}
-          onDone={() => {
-            setShowSwapVehicle(false);
-            q.refetch();
-          }}
-        />
-      )}
+      {/* ── VEHICLE SWAP WIZARD ────────────────────────────────────────────── */}
+      <VehicleSwapWizard
+        open={showSwapVehicle}
+        onClose={() => setShowSwapVehicle(false)}
+        source={cid ? { type: 'contract', id: cid } : null}
+        contract={c}
+        currentVehicle={null}
+        onSuccess={() => {
+          setShowSwapVehicle(false);
+          q.refetch();
+        }}
+      />
 
       {/* ── EARLY RETURN MODAL ───────────────────────────────────────────── */}
       {showEarlyReturn && customerId && (
@@ -969,192 +969,6 @@ const SignatureTab: React.FC<{ contractId: string }> = ({ contractId }) => {
   );
 };
 
-// ── Vehicle Swap Modal ────────────────────────────────────────────────────────
-const SWAP_REASONS = ['Panne', 'Accident', 'Demande client', 'Upgrade'];
-
-const VehicleSwapModal: React.FC<{
-  contractId: string;
-  currentVehicleId: string | null;
-  currentVehicleName: string;
-  onClose: () => void;
-  onDone: () => void;
-}> = ({ contractId, currentVehicleId, currentVehicleName, onClose, onDone }) => {
-  const [newVehicleId, setNewVehicleId] = useState('');
-  const [reason, setReason] = useState('');
-  const [newRate, setNewRate] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  const vehiclesQ = useQuery({
-    queryKey: ['vehicles-available-for-swap'],
-    queryFn: async () => {
-      const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200');
-      return res.data;
-    },
-  });
-
-  const vLabel = (v: any) => `${v.brand ?? v.brand_name ?? ''} ${v.model ?? v.model_name ?? ''} — ${v.registration ?? v.registration_number ?? ''}`.trim();
-
-  const availableVehicles = (vehiclesQ.data ?? []).filter(
-    (v: any) => String(v.id) !== String(currentVehicleId) && (v.availabilityStatus === 'available' || v.availability_status === 'available' || (!v.availabilityStatus && !v.availability_status))
-  );
-
-  const selectedNewVehicle = (vehiclesQ.data ?? []).find((v: any) => String(v.id) === newVehicleId);
-
-  const confirm = async () => {
-    if (!newVehicleId) { setError('Veuillez sélectionner un véhicule.'); return; }
-    if (!reason) { setError('Veuillez sélectionner un motif.'); return; }
-    setBusy(true);
-    setError(null);
-    try {
-      await opsApi.instantVehicleSwap({
-        contract_id: contractId,
-        new_vehicle_id: newVehicleId,
-        reason,
-        ...(newRate ? { new_rate: Number(newRate) } as any : {}),
-        ...(note ? { note } as any : {}),
-      });
-      setSuccess(true);
-    } catch (e: any) {
-      setError(e?.message ?? 'Erreur lors du changement de véhicule.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <div className="font-black text-slate-900">Changement de véhicule</div>
-            <div className="text-xs text-slate-500">Contrat {contractId.slice(0, 8).toUpperCase()}</div>
-          </div>
-          <button onClick={onClose} className="rounded-xl p-2 hover:bg-slate-100 transition-colors">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          {success ? (
-            <div className="text-center space-y-4">
-              <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-8 w-8">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div>
-                <div className="font-black text-slate-900 text-lg">Véhicule changé</div>
-                <p className="text-sm text-slate-500 mt-1">Le changement de véhicule a été effectué avec succès.</p>
-              </div>
-              {selectedNewVehicle && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
-                  <span className="font-bold text-emerald-800">
-                    {vLabel(selectedNewVehicle)}
-                  </span>
-                </div>
-              )}
-              <button onClick={onDone} className="df-btn df-btn--primary w-full">Fermer</button>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Véhicule actuel</div>
-                <div className="mt-1 text-sm font-bold text-slate-800">{currentVehicleName || '—'}</div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Nouveau véhicule <span className="text-rose-500">*</span>
-                </label>
-                {vehiclesQ.isLoading ? (
-                  <div className="text-sm text-slate-500">Chargement des véhicules…</div>
-                ) : (
-                  <select
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                    value={newVehicleId}
-                    onChange={(e) => setNewVehicleId(e.target.value)}
-                  >
-                    <option value="">— Sélectionner un véhicule —</option>
-                    {availableVehicles.map((v: any) => (
-                      <option key={v.id} value={v.id}>
-                        {vLabel(v)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Motif <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                >
-                  <option value="">— Sélectionner un motif —</option>
-                  {SWAP_REASONS.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Nouveau tarif (MAD)</label>
-                <input
-                  type="number"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  placeholder="Laisser vide si inchangé"
-                  value={newRate}
-                  onChange={(e) => setNewRate(e.target.value)}
-                />
-                <p className="mt-1 text-xs text-slate-400">Le montant du contrat sera mis à jour rétroactivement.</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Note (optionnel)</label>
-                <textarea
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  rows={2}
-                  placeholder="Informations complémentaires…"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </div>
-
-              {error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">{error}</div>
-              )}
-
-              <div className="flex gap-2">
-                <button type="button" onClick={onClose} className="flex-1 df-btn df-btn--ghost">Annuler</button>
-                <button
-                  type="button"
-                  onClick={confirm}
-                  disabled={busy}
-                  className="flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {busy ? 'Changement…' : 'Confirmer le changement'}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  return createPortal(modal, document.body);
-};
 
 // ── Early Return Modal ─────────────────────────────────────────────────────────
 const EarlyReturnModal: React.FC<{
