@@ -7,6 +7,28 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VehicleMaintenancePlan extends Model
 {
+    /** French labels for maintenance_type codes (used in notifications/alerts). */
+    public const TYPE_LABELS_FR = [
+        'OIL_CHANGE' => 'Vidange',
+        'TIRES' => 'Pneus',
+        'INSPECTION' => 'Inspection',
+        'BRAKES' => 'Freins',
+        'FILTER' => 'Filtre',
+        'BATTERY' => 'Batterie',
+        'TIMING_BELT' => 'Courroie de distribution',
+        'TECH_CONTROL' => 'Contrôle technique',
+        'OTHER' => 'Autre',
+    ];
+
+    public static function typeLabelFr(?string $type): string
+    {
+        if ($type === null || trim($type) === '') {
+            return 'Maintenance';
+        }
+
+        return self::TYPE_LABELS_FR[strtoupper(trim($type))] ?? $type;
+    }
+
     protected $fillable = [
         'vehicle_id',
         'maintenance_type',

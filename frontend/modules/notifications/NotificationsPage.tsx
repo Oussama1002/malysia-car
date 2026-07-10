@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CHANNEL_LABEL,
   DELIVERY_STATUS_LABEL,
+  frenchifyNotificationText,
   notificationsApi,
   type NotificationDto,
   type NotificationDeliveryDto,
@@ -186,7 +187,7 @@ export const NotificationsPage: React.FC = () => {
         </select>
         <select className="df-input w-auto text-xs" value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)}>
           <option value="">Tous canaux</option>
-          <option value="in_app">In-app</option>
+          <option value="in_app">Application</option>
           <option value="email">E-mail</option>
           <option value="sms">SMS</option>
         </select>
@@ -222,7 +223,7 @@ export const NotificationsPage: React.FC = () => {
                     {n.priority && <StatusBadge label={priorityLabel(n.priority)} tone={n.priority === 'critical' ? 'danger' : n.priority === 'high' ? 'warning' : 'default'} />}
                     <div className="text-sm font-black text-slate-900">{n.title}</div>
                   </div>
-                  {n.body && <div className="mt-2 text-sm text-slate-600 line-clamp-2">{n.body}</div>}
+                  {n.body && <div className="mt-2 text-sm text-slate-600 line-clamp-2">{frenchifyNotificationText(n.body)}</div>}
                   <DeliveryChips deliveries={n.deliveries} />
                   <div className="mt-2 text-xs text-slate-400">
                     {new Date(n.created_at).toLocaleString('fr-MA')}
@@ -243,7 +244,7 @@ export const NotificationsPage: React.FC = () => {
               {selected.priority && <StatusBadge label={priorityLabel(selected.priority)} tone={selected.priority === 'critical' ? 'danger' : 'default'} />}
               {selected.read_at ? <StatusBadge label="Lu" tone="success" /> : <StatusBadge label="Non lu" tone="warning" />}
             </div>
-            {selected.body && <p className="text-slate-700 whitespace-pre-wrap">{selected.body}</p>}
+            {selected.body && <p className="text-slate-700 whitespace-pre-wrap">{frenchifyNotificationText(selected.body)}</p>}
             <div>
               <div className="text-xs font-bold uppercase text-slate-500 mb-2">Canaux & livraisons</div>
               <DeliveryChips deliveries={selected.deliveries} detailed />

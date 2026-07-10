@@ -12,7 +12,7 @@ import { DensityToggle } from '@/modules/shared/components/DensityToggle';
 import { CommandPalette, useCommandPaletteShortcut } from '@/modules/shared/components/CommandPalette';
 import { AICopilotDrawer, AICopilotFab } from '@/modules/shared/components/AICopilot';
 import { AppBreadcrumbs } from '@/modules/layout/AppBreadcrumbs';
-import { notificationsApi } from '@/services/notificationsApi';
+import { notificationsApi, frenchifyNotificationText } from '@/services/notificationsApi';
 import { maintenanceApi } from '@/services/maintenanceApi';
 import { isExperimentalEnabled, isModuleHiddenInDemo } from '@/config/runtimeFlags';
 import { resolveNotificationRoute } from '@/modules/notifications/NotificationsPage';
@@ -439,7 +439,7 @@ export const AppLayout: React.FC = () => {
                         <div className="truncate text-[12.5px] font-bold">{n.title}</div>
                         {n.body && (
                           <div className="mt-0.5 line-clamp-2 text-[11px] text-[color:var(--df-text-muted)]">
-                            {n.body}
+                            {frenchifyNotificationText(n.body)}
                           </div>
                         )}
                         <div className="mt-1 text-[10px] text-[color:var(--df-text-faint)]">

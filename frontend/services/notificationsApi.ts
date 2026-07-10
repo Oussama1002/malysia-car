@@ -97,10 +97,31 @@ export const notificationsApi = {
 };
 
 export const CHANNEL_LABEL: Record<NotificationChannel, string> = {
-  in_app: 'In-app',
+  in_app: 'Application',
   email: 'E-mail',
   sms: 'SMS',
 };
+
+/**
+ * Older notifications were stored with raw English codes in the body
+ * (e.g. "BRAKES pour 222-A-1"). Translate the known tokens for display.
+ */
+const BODY_TOKEN_FR: Record<string, string> = {
+  OIL_CHANGE: 'Vidange',
+  TIRES: 'Pneus',
+  INSPECTION: 'Inspection',
+  BRAKES: 'Freins',
+  FILTER: 'Filtre',
+  BATTERY: 'Batterie',
+  TIMING_BELT: 'Courroie de distribution',
+  TECH_CONTROL: 'Contrôle technique',
+  OTHER: 'Autre',
+};
+
+export function frenchifyNotificationText(text: string | null | undefined): string {
+  if (!text) return '';
+  return text.replace(/\b[A-Z][A-Z_]{2,}\b/g, (token) => BODY_TOKEN_FR[token] ?? token);
+}
 
 export const DELIVERY_STATUS_LABEL: Record<DeliveryStatus, string> = {
   pending: 'En attente',
