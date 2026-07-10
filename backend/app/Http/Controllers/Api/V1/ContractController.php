@@ -719,7 +719,7 @@ class ContractController extends Controller
 
     private function generateReservationNumber(): string
     {
-        $latest = Reservation::query()
+        $latest = Reservation::withoutGlobalScopes()
             ->where('reservation_number', 'like', 'RSV-%')
             ->orderByRaw("CAST(SUBSTRING(reservation_number, 5) AS UNSIGNED) DESC")
             ->value('reservation_number');
@@ -734,7 +734,7 @@ class ContractController extends Controller
 
     private function generateContractNumber(): string
     {
-        $latest = Contract::query()
+        $latest = Contract::withoutGlobalScopes()
             ->where('contract_number', 'like', 'CTR-%')
             ->orderByRaw("CAST(SUBSTRING(contract_number, 5) AS UNSIGNED) DESC")
             ->value('contract_number');
