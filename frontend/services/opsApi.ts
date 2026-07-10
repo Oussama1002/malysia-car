@@ -89,7 +89,23 @@ export const opsApi = {
     return res.data;
   },
 
-  async createMission(reservationId: string, input: { mission_type: string; assigned_user_id?: string | null; scheduled_start_at?: string; scheduled_end_at?: string; origin_address?: string; destination_address?: string; notes?: string }): Promise<MissionDto> {
+  async createMission(reservationId: string, input: {
+    mission_type: string;
+    assigned_user_id?: string | null;
+    scheduled_start_at?: string;
+    scheduled_end_at?: string;
+    origin_address?: string;
+    destination_address?: string;
+    pickup_address?: string;
+    dropoff_address?: string;
+    priority?: string;
+    estimated_duration_minutes?: number;
+    client_id?: string;
+    contract_id?: string;
+    client_instructions?: string;
+    notes?: string;
+    status?: string;
+  }): Promise<MissionDto> {
     const res = await apiClient<{ data: MissionDto }>(endpoints.reservations.createMission(reservationId), { method: 'POST', body: JSON.stringify(input) });
     return res.data;
   },

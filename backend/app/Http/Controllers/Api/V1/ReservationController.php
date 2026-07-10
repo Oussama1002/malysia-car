@@ -393,22 +393,34 @@ class ReservationController extends Controller
     public function createMission(Request $request, Reservation $reservation): JsonResponse
     {
         $data = $request->validate([
-            'mission_type' => ['required', 'string', 'max:50'], // delivery, pickup
+            'mission_type' => ['required', 'string', 'max:50'],
             'assigned_user_id' => ['nullable', 'uuid'],
             'scheduled_start_at' => ['nullable', 'date'],
             'scheduled_end_at' => ['nullable', 'date'],
-            'origin_address' => ['nullable', 'string', 'max:255'],
-            'destination_address' => ['nullable', 'string', 'max:255'],
+            'origin_address' => ['nullable', 'string', 'max:500'],
+            'destination_address' => ['nullable', 'string', 'max:500'],
+            'pickup_address' => ['nullable', 'string', 'max:500'],
+            'dropoff_address' => ['nullable', 'string', 'max:500'],
+            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
+            'estimated_duration_minutes' => ['nullable', 'integer', 'min:1'],
+            'client_id' => ['nullable', 'uuid'],
+            'contract_id' => ['nullable', 'uuid'],
+            'client_instructions' => ['nullable', 'string', 'max:2000'],
             'notes' => ['nullable', 'string'],
+            'status' => ['nullable', 'string', 'in:planned,assigned'],
         ]);
 
         $m = DB::transaction(function () use ($reservation, $data) {
             $this->transitionReservation($reservation, 'pickup_scheduled');
 
             $scheduledStart = Carbon::parse($data['scheduled_start_at'] ?? $reservation->desired_start_at);
+            $duration = $data['estimated_duration_minutes'] ?? null;
             $scheduledEnd = isset($data['scheduled_end_at'])
                 ? Carbon::parse($data['scheduled_end_at'])
-                : $scheduledStart->copy()->addHours(2);
+                : ($duration ? $scheduledStart->copy()->addMinutes($duration) : $scheduledStart->copy()->addHours(2));
+
+            $hasAgent = ! empty($data['assigned_user_id']);
+            $status = $data['status'] ?? ($hasAgent ? 'assigned' : 'planned');
 
             return Mission::query()->create([
                 'id' => (string) Str::uuid(),
@@ -416,13 +428,20 @@ class ReservationController extends Controller
                 'branch_id' => $reservation->branch_id,
                 'reservation_id' => $reservation->id,
                 'vehicle_id' => $reservation->vehicle_id,
+                'client_id' => $data['client_id'] ?? $reservation->customer_id,
+                'contract_id' => $data['contract_id'] ?? null,
                 'assigned_user_id' => $data['assigned_user_id'] ?? null,
                 'mission_type' => $data['mission_type'],
-                'status' => 'planned',
+                'status' => $status,
+                'priority' => $data['priority'] ?? 'normal',
                 'scheduled_start_at' => $scheduledStart,
                 'scheduled_end_at' => $scheduledEnd,
+                'estimated_duration_minutes' => $duration,
                 'origin_address' => $data['origin_address'] ?? $reservation->pickup_address,
                 'destination_address' => $data['destination_address'] ?? $reservation->delivery_address,
+                'pickup_address' => $data['pickup_address'] ?? $reservation->pickup_address,
+                'dropoff_address' => $data['dropoff_address'] ?? $reservation->delivery_address,
+                'client_instructions' => $data['client_instructions'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => auth()->id(),
             ]);

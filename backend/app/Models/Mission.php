@@ -31,8 +31,10 @@ class Mission extends Model
         'assigned_user_id',
         'mission_type',
         'status',
+        'priority',
         'scheduled_start_at',
         'scheduled_end_at',
+        'estimated_duration_minutes',
         'planned_at',
         'accepted_at',
         'actual_start_at',
@@ -44,6 +46,7 @@ class Mission extends Model
         'dropoff_address',
         'customer_signature_file_id',
         'notes',
+        'client_instructions',
         'created_by',
     ];
 

@@ -15,6 +15,7 @@ import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanne
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
 import { listBranches, getSettings } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
+import { MissionCreationDrawer } from '@/modules/rentals/MissionCreationDrawer';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -238,32 +239,8 @@ export const ReservationsOpsPage: React.FC = () => {
     },
   });
 
-  const [missionError, setMissionError] = useState<string | null>(null);
   const [missionSuccess, setMissionSuccess] = useState<string | null>(null);
-  const [missionModal, setMissionModal] = useState<{ reservationId: string; reservationNumber: string } | null>(null);
-  const [missionForm, setMissionForm] = useState({ mission_type: 'delivery', notes: '', scheduled_start_at: '' });
-  const [missionBusyId, setMissionBusyId] = useState<string | null>(null);
-  const createMission = useMutation({
-    mutationFn: async (args: { reservationId: string; input: { mission_type: string; notes?: string; scheduled_start_at?: string } }) =>
-      opsApi.createMission(args.reservationId, {
-        mission_type: args.input.mission_type,
-        notes: args.input.notes || undefined,
-        scheduled_start_at: args.input.scheduled_start_at || undefined,
-      }),
-    onMutate: (args) => { setMissionError(null); setMissionSuccess(null); setMissionBusyId(args.reservationId); },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: queryKeys.missions });
-      await qc.invalidateQueries({ queryKey: queryKeys.reservations });
-      setMissionSuccess('Mission créée avec succès.');
-      setMissionModal(null);
-      setMissionForm({ mission_type: 'delivery', notes: '', scheduled_start_at: '' });
-      setTimeout(() => setMissionSuccess(null), 4000);
-    },
-    onError: (e: unknown) => {
-      setMissionError(e instanceof Error ? e.message : 'Erreur lors de la création de la mission');
-    },
-    onSettled: () => setMissionBusyId(null),
-  });
+  const [missionDrawerRes, setMissionDrawerRes] = useState<ReservationDto | null>(null);
 
   const confirmRes = useMutation({
     mutationFn: async (id: string) => opsApi.confirmReservation(id),
@@ -573,11 +550,10 @@ export const ReservationsOpsPage: React.FC = () => {
                 )}
                 {r.status !== 'draft' && (
                   <button
-                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
-                    disabled={missionBusyId === r.id}
-                    onClick={(e) => { e.stopPropagation(); setMissionError(null); setMissionModal({ reservationId: r.id, reservationNumber: r.reservation_number ?? r.id.slice(0, 8) }); }}
+                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
+                    onClick={(e) => { e.stopPropagation(); setMissionDrawerRes(r as ReservationDto); }}
                   >
-                    {missionBusyId === r.id ? 'Création…' : 'Créer mission'}
+                    Créer mission
                   </button>
                 )}
               </div>
@@ -585,11 +561,6 @@ export const ReservationsOpsPage: React.FC = () => {
           ))}
           {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
         </div>
-        {missionError && (
-          <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            <strong>Erreur mission :</strong> {missionError}
-          </div>
-        )}
         {missionSuccess && (
           <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-semibold">
             {missionSuccess}
@@ -597,72 +568,15 @@ export const ReservationsOpsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Mission creation modal */}
-      {missionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setMissionModal(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">Nouvelle mission</h3>
-                <p className="text-xs text-slate-500">Réservation {missionModal.reservationNumber}</p>
-              </div>
-              <button onClick={() => setMissionModal(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">Type de mission *</label>
-                <select
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                  value={missionForm.mission_type}
-                  onChange={(e) => setMissionForm((s) => ({ ...s, mission_type: e.target.value }))}
-                >
-                  <option value="delivery">Livraison</option>
-                  <option value="pickup">Récupération</option>
-                  <option value="transfer">Transfert</option>
-                  <option value="inspection">Inspection</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">Date & heure prévue</label>
-                <input
-                  type="datetime-local"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                  value={missionForm.scheduled_start_at}
-                  onChange={(e) => setMissionForm((s) => ({ ...s, scheduled_start_at: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
-                <textarea
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
-                  rows={2}
-                  placeholder="Instructions, adresse, remarques…"
-                  value={missionForm.notes}
-                  onChange={(e) => setMissionForm((s) => ({ ...s, notes: e.target.value }))}
-                />
-              </div>
-              {missionError && <p className="text-xs font-semibold text-red-600">{missionError}</p>}
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600"
-                onClick={() => setMissionModal(null)}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50"
-                disabled={createMission.isPending}
-                onClick={() => createMission.mutate({ reservationId: missionModal.reservationId, input: missionForm })}
-              >
-                {createMission.isPending ? 'Création…' : 'Créer la mission'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MissionCreationDrawer
+        open={!!missionDrawerRes}
+        onClose={() => setMissionDrawerRes(null)}
+        reservation={missionDrawerRes}
+        customers={(customersQ.data ?? []) as CustomerDto[]}
+        vehicles={(vehiclesQ.data ?? []) as FleetVehicleDto[]}
+        branches={(branchesQ.data?.data ?? []) as any[]}
+        onSuccess={() => { setMissionSuccess('Mission créée avec succès.'); setTimeout(() => setMissionSuccess(null), 4000); }}
+      />
 
       <ReservationCalendar
         reservations={(reservationsQ.data ?? []) as ReservationDto[]}
