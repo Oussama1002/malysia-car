@@ -163,12 +163,6 @@ class ContractController extends Controller
         // Create Payment records from wizard payment entries
         $paymentEntries = $request->input('payment_entries', []);
         if (is_array($paymentEntries)) {
-            $reservation = Reservation::query()
-                ->where('customer_id', $c->customer_id)
-                ->where('vehicle_id', $c->vehicle_id)
-                ->whereNotIn('status', ['cancelled', 'closed'])
-                ->first();
-
             foreach ($paymentEntries as $entry) {
                 $amount = (float) ($entry['amount'] ?? 0);
                 if ($amount <= 0) {
@@ -180,7 +174,6 @@ class ContractController extends Controller
                     'company_id' => $c->company_id,
                     'customer_id' => $c->customer_id,
                     'contract_id' => $c->id,
-                    'reservation_id' => $reservation?->id,
                     'payment_number' => $paymentNumber,
                     'payment_method' => PaymentMethodNormalizer::normalize($entry['method'] ?? 'cash'),
                     'payment_type' => 'down_payment',
