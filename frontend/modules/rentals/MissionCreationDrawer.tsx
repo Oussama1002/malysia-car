@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { AddressAutocompleteInput } from '@/modules/shared/components/AddressAutocompleteInput';
 import { opsApi } from '@/services/opsApi';
 import { listUsers, type AdminUser } from '@/services/adminApi';
 import { getCustomer } from '@/services/customersApi';
@@ -624,13 +625,14 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
                 <option value="__custom__">Personnalisée…</option>
               </select>
               {!branches.some((b) => b.name === form.origin_address) && (
-                <input
-                  type="text"
-                  className={`${INPUT} mt-2`}
-                  placeholder="Adresse personnalisée"
-                  value={form.origin_address}
-                  onChange={(e) => setForm((s) => ({ ...s, origin_address: e.target.value }))}
-                />
+                <div className="mt-2">
+                  <AddressAutocompleteInput
+                    value={form.origin_address}
+                    placeholder="Adresse personnalisée"
+                    inputClassName={INPUT}
+                    onChange={(addr) => setForm((s) => ({ ...s, origin_address: addr }))}
+                  />
+                </div>
               )}
             </div>
             <div>
@@ -954,13 +956,14 @@ const AddressSelect: React.FC<{
         <option value="__custom__">Personnalisée…</option>
       </select>
       {(customMode || !isKnown) && (
-        <input
-          type="text"
-          className={`${INPUT} mt-2`}
-          placeholder={placeholder ?? 'Adresse personnalisée'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <div className="mt-2">
+          <AddressAutocompleteInput
+            value={value}
+            placeholder={placeholder ?? 'Adresse personnalisée'}
+            inputClassName={INPUT}
+            onChange={onChange}
+          />
+        </div>
       )}
     </div>
   );
