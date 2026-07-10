@@ -576,7 +576,7 @@ class ContractController extends Controller
         $start = isset($data['start_date']) ? Carbon::parse($data['start_date']) : ($contract->start_date ? Carbon::parse($contract->start_date) : now());
         $months = (int) ($data['months'] ?? $contract->duration_months ?? 12);
         $monthly = (float) ($data['monthly_amount'] ?? $contract->monthly_payment ?? 0);
-        $taxRate = (float) ($data['tax_rate'] ?? 0.2);
+        $taxRate = (float) ($data['tax_rate'] ?? 0);
 
         $rows = DB::transaction(function () use ($contract, $start, $months, $monthly, $taxRate) {
             ContractInstallment::query()->where('contract_id', $contract->id)->delete();

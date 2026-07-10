@@ -688,7 +688,7 @@ export const ContractWizardPage: React.FC = () => {
             start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
             months: state.durationMonths,
             monthly_amount: state.monthlyRentMad,
-            tax_rate: 0.2,
+            tax_rate: 0,
           });
         } catch { /* Non-blocking */ }
 
@@ -707,7 +707,7 @@ export const ContractWizardPage: React.FC = () => {
             start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
             months: state.durationMonths,
             monthly_amount: state.monthlyRentMad,
-            tax_rate: 0.2,
+            tax_rate: 0,
           });
         } catch { /* Non-blocking */ }
 
