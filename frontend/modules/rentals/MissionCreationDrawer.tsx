@@ -292,6 +292,27 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   const [newCheckItem, setNewCheckItem] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resStatus, setResStatus] = useState(reservation?.status ?? '');
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  const changeReservationStatus = useCallback(async (next: string) => {
+    if (!reservation || next === resStatus) return;
+    const previous = resStatus;
+    setResStatus(next);
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      await opsApi.updateReservation(reservation.id, { status: next });
+      await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      await qc.invalidateQueries({ queryKey: ['reservation'] });
+    } catch (e: unknown) {
+      setResStatus(previous);
+      setStatusError(e instanceof Error ? e.message : 'Erreur lors du changement de statut');
+    } finally {
+      setStatusBusy(false);
+    }
+  }, [reservation, resStatus, qc]);
 
   // The agence can resolve after the form was initialised (customer detail
   // loads asynchronously) — backfill the origin address if still empty.
@@ -310,6 +331,8 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     setError(null);
     setAgentSearch('');
     setNewCheckItem('');
+    setResStatus(reservation.status);
+    setStatusError(null);
   }
 
   /* ── Agents query ────────────────────────────────────────────── */
@@ -440,12 +463,25 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
               <InfoRow label="Plaque" value={vehicle?.registration ?? '—'} />
               <InfoRow label="Contrat" value={reservation.contract_number ?? (reservation.has_contract ? 'Oui' : 'Aucun')} />
               <InfoRow label="Agence" value={branch?.name ?? (reservationDetailQ.isLoading || customerDetailQ.isLoading ? 'Chargement…' : '—')} />
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-400 shrink-0">Statut</span>
-                <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${STATUS_BADGE_CLS[reservation.status] ?? 'bg-slate-100 text-slate-600'}`}>
-                  {STATUS_FR[reservation.status] ?? reservation.status}
-                </span>
+                <select
+                  className={`rounded-full border-0 px-2.5 py-1 text-[10px] font-bold uppercase outline-none cursor-pointer disabled:opacity-60 ${STATUS_BADGE_CLS[resStatus] ?? 'bg-slate-100 text-slate-600'}`}
+                  value={resStatus}
+                  disabled={statusBusy}
+                  onChange={(e) => void changeReservationStatus(e.target.value)}
+                >
+                  {Object.entries(STATUS_FR).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                {statusBusy && <span className="text-[10px] text-slate-400">Enregistrement…</span>}
               </div>
+              {statusError && (
+                <div className="col-span-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700 font-semibold">
+                  {statusError}
+                </div>
+              )}
             </div>
           </div>
 

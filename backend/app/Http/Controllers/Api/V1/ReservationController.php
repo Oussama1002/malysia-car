@@ -550,19 +550,29 @@ class ReservationController extends Controller
             'estimated_price' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['nullable', 'string', 'max:40'],
             'notes' => ['nullable', 'string'],
+            'status' => ['sometimes', 'string', \Illuminate\Validation\Rule::in(self::FLOW)],
         ]);
 
         if (isset($data['payment_method'])) {
             $data['payment_method'] = PaymentMethodNormalizer::normalize($data['payment_method']);
         }
 
-        DB::transaction(function () use ($reservation, $data, $request): void {
+        $previousStatus = null;
+
+        DB::transaction(function () use ($reservation, $data, $request, &$previousStatus): void {
             $locked = Reservation::withoutGlobalScopes()
                 ->whereKey((string) $reservation->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (isset($data['vehicle_id']) || isset($data['desired_start_at']) || isset($data['desired_end_at'])) {
+            $previousStatus = $locked->status;
+
+            $blocking = RentalAvailabilityService::blockingReservationStatuses();
+            $entersBlocking = isset($data['status'])
+                && in_array($data['status'], $blocking, true)
+                && ! in_array($locked->status, $blocking, true);
+
+            if (isset($data['vehicle_id']) || isset($data['desired_start_at']) || isset($data['desired_end_at']) || $entersBlocking) {
                 $vehicleId = $data['vehicle_id'] ?? $locked->vehicle_id;
                 $startAt = Carbon::parse($data['desired_start_at'] ?? $locked->desired_start_at);
                 $endAt = Carbon::parse($data['desired_end_at'] ?? $locked->desired_end_at);
@@ -577,6 +587,10 @@ class ReservationController extends Controller
             $locked->fill($data);
             $locked->save();
         });
+
+        if (isset($data['status']) && $previousStatus !== null && $previousStatus !== $data['status']) {
+            AuditLogger::statusChanged($reservation->fresh(), $previousStatus, $data['status'], $request->user(), $request, module: 'rentals');
+        }
 
         AuditLogger::updated($reservation->fresh(), $request->user(), before: [], after: $data, request: $request);
 
