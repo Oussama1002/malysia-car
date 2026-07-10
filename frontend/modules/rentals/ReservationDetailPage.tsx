@@ -2,12 +2,12 @@ import React, { lazy, Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
-import { apiClient, getApiBase } from '@/services/apiClient';
 import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { PaymentForm } from '@/modules/finance/PaymentsPage';
 import { createPayment, type PaymentCreatePayload } from '@/services/financeApi';
+import { VehicleSwapWizard } from '@/modules/rentals/VehicleSwapWizard';
 
 /* ─── lazy tab components ─────────────────────────────────────────── */
 const TabSummary      = lazy(() => import('./tabs/TabSummary'));
@@ -75,27 +75,11 @@ export const ReservationDetailPage: React.FC = () => {
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [validateError, setValidateError] = useState<string | null>(null);
-  const [swapOpen, setSwapOpen] = useState(false);
-  const [swapVehicleId, setSwapVehicleId] = useState('');
-  const [swapReason, setSwapReason] = useState('');
-  const [swapError, setSwapError] = useState<string | null>(null);
-  const [swapMode, setSwapMode] = useState<'instant' | 'request'>('instant');
+  const [swapWizardOpen, setSwapWizardOpen] = useState(false);
 
   const detailQ = useQuery({
     queryKey: ['reservation', rid],
     queryFn: () => opsApi.reservation(rid!),
-    enabled: !!rid,
-  });
-
-  const vehiclesQ = useQuery({
-    queryKey: ['fleet', 'all-vehicles'],
-    queryFn: async () => (await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200')).data,
-    enabled: swapOpen && !!getApiBase(),
-  });
-
-  const swapsQ = useQuery({
-    queryKey: ['vehicle-swaps', rid],
-    queryFn: () => opsApi.vehicleSwaps({ reservation_id: rid }),
     enabled: !!rid,
   });
 
@@ -145,24 +129,6 @@ export const ReservationDetailPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['reservation', rid] });
     },
     onError: (e) => setPaymentError(e instanceof Error ? e.message : 'Erreur de création du paiement'),
-  });
-
-  const swapInstantM = useMutation({
-    mutationFn: () => opsApi.instantVehicleSwap({ reservation_id: rid!, new_vehicle_id: swapVehicleId, reason: swapReason || undefined }),
-    onSuccess: () => {
-      setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
-      qc.invalidateQueries({ queryKey: ['reservation', rid] });
-      qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
-    },
-    onError: (e) => setSwapError(e instanceof Error ? e.message : 'Erreur lors du changement'),
-  });
-  const swapRequestM = useMutation({
-    mutationFn: () => opsApi.requestVehicleSwap({ reservation_id: rid!, new_vehicle_id: swapVehicleId, reason: swapReason || undefined }),
-    onSuccess: () => {
-      setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
-      qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
-    },
-    onError: (e) => setSwapError(e instanceof Error ? e.message : 'Erreur lors de la demande'),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['reservation', rid] });
@@ -222,20 +188,29 @@ export const ReservationDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Info cards row */}
-        <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3 lg:grid-cols-7">
+        {/* Info cards — roomy grid so labels/values are fully readable */}
+        <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { label: 'Client', value: d?.customer_name ?? '—' },
-            { label: 'Véhicule', value: d?.vehicle_name ?? '—' },
+            {
+              label: 'Véhicule',
+              value: (() => {
+                const candidates = (r.candidate_vehicle_ids ?? []) as string[];
+                if (status === 'draft' && candidates.length > 1) {
+                  return `${d?.vehicle_name ?? '—'} (+${candidates.length - 1} autre${candidates.length > 2 ? 's' : ''})`;
+                }
+                return d?.vehicle_name ?? '—';
+              })(),
+            },
             { label: 'Immatriculation', value: d?.vehicle_registration ?? '—' },
             { label: 'Début', value: fmtDate(r.desired_start_at) },
             { label: 'Fin', value: fmtDate(r.desired_end_at) },
             { label: 'Total', value: fmtMad(grandTotal) },
             { label: 'Solde', value: fmtMad(balance), highlight: balance > 0 },
           ].map((c, i) => (
-            <div key={i} className="bg-white px-4 py-3">
+            <div key={i} className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/60 px-5 py-4">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{c.label}</div>
-              <div className={`mt-0.5 text-sm font-black truncate ${(c as any).highlight ? 'text-rose-600' : 'text-slate-800'}`}>
+              <div className={`mt-1.5 text-base font-black leading-snug break-words ${(c as { highlight?: boolean }).highlight ? 'text-rose-600' : 'text-slate-800'}`}>
                 {c.value}
               </div>
             </div>
@@ -306,7 +281,7 @@ export const ReservationDetailPage: React.FC = () => {
           )}
           {!['cancelled', 'closed', 'draft'].includes(status) && (
             <button
-              onClick={() => { setSwapError(null); setSwapOpen(true); }}
+              onClick={() => setSwapWizardOpen(true)}
               className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white hover:bg-slate-900"
             >
               Changer de véhicule
@@ -447,113 +422,16 @@ export const ReservationDetailPage: React.FC = () => {
         />
       </DrawerPanel>
 
-      {/* ── Vehicle swap modal ── */}
-      {swapOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setSwapOpen(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-1 text-sm font-black text-slate-900">Changer de véhicule</h3>
-            <p className="mb-4 text-xs text-slate-500">
-              Véhicule actuel : <span className="font-bold text-slate-700">{d?.vehicle_name ?? '—'}</span> ({d?.vehicle_registration ?? '—'})
-            </p>
-
-            {/* Mode toggle */}
-            <div className="mb-4 flex gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" checked={swapMode === 'instant'} onChange={() => setSwapMode('instant')} className="accent-indigo-600" />
-                <div>
-                  <div className="text-xs font-black text-slate-800">Changement immédiat</div>
-                  <div className="text-[10px] text-slate-500">Approuver et appliquer maintenant</div>
-                </div>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" checked={swapMode === 'request'} onChange={() => setSwapMode('request')} className="accent-amber-600" />
-                <div>
-                  <div className="text-xs font-black text-slate-800">Demande (approbation requise)</div>
-                  <div className="text-[10px] text-slate-500">En attente de validation</div>
-                </div>
-              </label>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-400">Nouveau véhicule *</label>
-                <select
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                  value={swapVehicleId}
-                  onChange={(e) => setSwapVehicleId(e.target.value)}
-                >
-                  <option value="">— Sélectionner un véhicule —</option>
-                  {(vehiclesQ.data ?? [])
-                    .filter((v: any) => v.id !== r?.vehicle_id)
-                    .map((v: any) => {
-                      const brand = v.brand?.name ?? v.brand_name ?? '';
-                      const model = v.model?.model_name ?? v.model?.name ?? v.model_name ?? '';
-                      const reg = v.registration_number ?? v.registration ?? '';
-                      return (
-                        <option key={v.id} value={v.id}>
-                          {brand} {model} · {reg} {v.availability_status === 'available' ? '✓' : `(${v.availability_status})`}
-                        </option>
-                      );
-                    })}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-400">Motif (optionnel)</label>
-                <input
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                  placeholder="Ex: panne, demande client, upgrade…"
-                  value={swapReason}
-                  onChange={(e) => setSwapReason(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {swapError && (
-              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
-                {swapError}
-              </div>
-            )}
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setSwapOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600">Annuler</button>
-              <button
-                onClick={() => swapMode === 'instant' ? swapInstantM.mutate() : swapRequestM.mutate()}
-                disabled={!swapVehicleId || swapInstantM.isPending || swapRequestM.isPending}
-                className={`rounded-xl px-5 py-2.5 text-xs font-black text-white disabled:opacity-50 ${swapMode === 'instant' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-600 hover:bg-amber-700'}`}
-              >
-                {(swapInstantM.isPending || swapRequestM.isPending)
-                  ? 'Traitement…'
-                  : swapMode === 'instant' ? 'Appliquer le changement' : 'Envoyer la demande'}
-              </button>
-            </div>
-
-            {/* Swap history */}
-            {(swapsQ.data ?? []).length > 0 && (
-              <div className="mt-5 border-t border-slate-100 pt-4">
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Historique des changements</div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {(swapsQ.data ?? []).map((s: any) => (
-                    <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs">
-                      <div>
-                        <span className="font-bold text-slate-700">
-                          {s.old_vehicle?.brand?.name ?? ''} {s.old_vehicle?.model?.model_name ?? s.old_vehicle?.model?.name ?? ''}
-                        </span>
-                        <span className="mx-1 text-slate-400">→</span>
-                        <span className="font-bold text-slate-900">
-                          {s.new_vehicle?.brand?.name ?? ''} {s.new_vehicle?.model?.model_name ?? s.new_vehicle?.model?.name ?? ''}
-                        </span>
-                      </div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${s.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : s.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {s.status === 'approved' ? 'Validé' : s.status === 'rejected' ? 'Refusé' : 'En attente'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <VehicleSwapWizard
+        open={swapWizardOpen}
+        onClose={() => setSwapWizardOpen(false)}
+        source={rid ? { type: 'reservation', id: rid } : null}
+        reservation={r}
+        currentVehicle={null}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['reservation', rid] });
+        }}
+      />
     </div>
   );
 };
