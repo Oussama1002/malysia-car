@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
-import { AddressMapInput } from '@/modules/shared/components/AddressMapInput';
 import { opsApi } from '@/services/opsApi';
 import { listUsers, type AdminUser } from '@/services/adminApi';
 import { getCustomer } from '@/services/customersApi';
@@ -235,6 +234,29 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     }
     return null;
   }, [detail, reservation, customerDetail, vehicle, branches]);
+
+  // Options for the location dropdowns: agences, the addresses saved on the
+  // reservation, and the client's own addresses.
+  const locationOptions = useMemo(() => {
+    const opts: { label: string; value: string }[] = [];
+    const seen = new Set<string>();
+    const push = (value: string | null | undefined, label?: string) => {
+      const v = (value ?? '').trim();
+      if (!v || seen.has(v)) return;
+      seen.add(v);
+      opts.push({ value: v, label: label ?? v });
+    };
+    for (const b of branches) {
+      push(b.name, `Agence — ${b.name}${b.city ? ` (${b.city})` : ''}`);
+    }
+    push(reservation?.pickup_address, `Réservation (pickup) — ${reservation?.pickup_address}`);
+    push(reservation?.delivery_address, `Réservation (livraison) — ${reservation?.delivery_address}`);
+    for (const a of customerDetail?.addresses ?? []) {
+      const full = [a.address_line_1, a.address_line_2, a.city].filter(Boolean).join(', ');
+      push(full, `Client — ${full}`);
+    }
+    return opts;
+  }, [branches, reservation, customerDetail]);
 
   /* ── Form state ──────────────────────────────────────────────── */
   const defaultForm = useCallback(() => ({
@@ -602,40 +624,39 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
                 <option value="__custom__">Personnalisée…</option>
               </select>
               {!branches.some((b) => b.name === form.origin_address) && (
-                <div className="mt-2">
-                  <AddressMapInput
-                    value={form.origin_address}
-                    placeholder="Adresse personnalisée"
-                    inputClassName={INPUT}
-                    onChange={(addr) => setForm((s) => ({ ...s, origin_address: addr }))}
-                  />
-                </div>
+                <input
+                  type="text"
+                  className={`${INPUT} mt-2`}
+                  placeholder="Adresse personnalisée"
+                  value={form.origin_address}
+                  onChange={(e) => setForm((s) => ({ ...s, origin_address: e.target.value }))}
+                />
               )}
             </div>
             <div>
               <label className={LABEL}>Adresse de destination</label>
-              <AddressMapInput
+              <AddressSelect
                 value={form.destination_address}
+                options={locationOptions}
                 placeholder="Adresse de destination"
-                inputClassName={INPUT}
                 onChange={(addr) => setForm((s) => ({ ...s, destination_address: addr }))}
               />
             </div>
             <div>
               <label className={LABEL}>Adresse Pickup</label>
-              <AddressMapInput
+              <AddressSelect
                 value={form.pickup_address}
+                options={locationOptions}
                 placeholder="Adresse Pickup"
-                inputClassName={INPUT}
                 onChange={(addr) => setForm((s) => ({ ...s, pickup_address: addr }))}
               />
             </div>
             <div>
               <label className={LABEL}>Adresse Drop-off</label>
-              <AddressMapInput
+              <AddressSelect
                 value={form.dropoff_address}
+                options={locationOptions}
                 placeholder="Adresse Drop-off"
-                inputClassName={INPUT}
                 onChange={(addr) => setForm((s) => ({ ...s, dropoff_address: addr }))}
               />
             </div>
@@ -900,3 +921,47 @@ const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) =
     <span className="text-sm font-semibold text-slate-700 truncate">{value}</span>
   </div>
 );
+
+/**
+ * Dropdown of known locations (agences, reservation addresses, client
+ * addresses) with a "Personnalisée…" option revealing a free-text input.
+ */
+const AddressSelect: React.FC<{
+  value: string;
+  options: { label: string; value: string }[];
+  placeholder?: string;
+  onChange: (value: string) => void;
+}> = ({ value, options, placeholder, onChange }) => {
+  const isKnown = value === '' || options.some((o) => o.value === value);
+  const [customMode, setCustomMode] = useState(!isKnown);
+
+  return (
+    <div>
+      <select
+        className={INPUT}
+        value={customMode || !isKnown ? '__custom__' : value}
+        onChange={(e) => {
+          if (e.target.value === '__custom__') {
+            setCustomMode(true);
+          } else {
+            setCustomMode(false);
+            onChange(e.target.value);
+          }
+        }}
+      >
+        <option value="">— Sélectionner —</option>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <option value="__custom__">Personnalisée…</option>
+      </select>
+      {(customMode || !isKnown) && (
+        <input
+          type="text"
+          className={`${INPUT} mt-2`}
+          placeholder={placeholder ?? 'Adresse personnalisée'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+};
