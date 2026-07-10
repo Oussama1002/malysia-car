@@ -46,7 +46,7 @@ export const contractsApi = {
     if (!hasBackend()) {
       throw new Error('Backend required for contract creation (set VITE_API_BASE).');
     }
-    const body = {
+    const body: Record<string, unknown> = {
       contract_type: payload.type,
       customer_id: String(payload.clientId),
       vehicle_id: payload.vehicleId ? String(payload.vehicleId) : null,
@@ -67,6 +67,7 @@ export const contractsApi = {
       expected_payment_day: (payload as any).expectedPaymentDay ?? null,
       payment_entries: (payload as any).paymentEntries ?? [],
     };
+    if ((payload as any).status) body.status = (payload as any).status;
     const res = await apiClient<{ data: ContractDto }>(endpoints.contracts.list, {
       method: 'POST',
       body: JSON.stringify(body),
