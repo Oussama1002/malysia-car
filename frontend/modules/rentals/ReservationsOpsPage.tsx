@@ -648,7 +648,13 @@ export const ReservationsOpsPage: React.FC = () => {
                 <button className="absolute right-3 top-[34px] text-slate-400 hover:text-slate-600 text-sm" onClick={() => { setForm((s) => ({ ...s, vehicle_id: '' })); setVehicleSearch(''); }}>&times;</button>
               )}
               {vehicleDropdownOpen && (
-                <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                <div
+                  className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+                  // Keep the input focused while interacting with the list:
+                  // otherwise its onBlur unmounts the options mid-click and
+                  // selections are lost (especially in multi-select mode).
+                  onMouseDown={(e) => e.preventDefault()}
+                >
                   {vehicleOptions
                     .filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase()))
                     .map((v) => {
