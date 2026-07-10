@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { opsApi } from '@/services/opsApi';
 import { listUsers, type AdminUser } from '@/services/adminApi';
+import { getCustomer } from '@/services/customersApi';
 import { queryKeys } from '@/services/queryKeys';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 
@@ -87,6 +88,40 @@ const PREP_ITEMS = [
   'Inspection réalisée',
 ];
 
+const STATUS_FR: Record<string, string> = {
+  draft:               'Brouillon',
+  reserved:            'Réservé',
+  confirmed:           'Confirmé',
+  pickup_scheduled:    'Remise planifiée',
+  handed_over:         'Remis',
+  active:              'En cours',
+  extension_requested: 'Prolongation demandée',
+  return_scheduled:    'Retour planifié',
+  returned:            'Retourné',
+  inspection_pending:  'Inspection en attente',
+  damage_pending:      'Dommages en attente',
+  billing_pending:     'Facturation en attente',
+  closed:              'Clôturé',
+  cancelled:           'Annulé',
+};
+
+const STATUS_BADGE_CLS: Record<string, string> = {
+  draft:               'bg-slate-100 text-slate-600',
+  reserved:            'bg-emerald-100 text-emerald-700',
+  confirmed:           'bg-emerald-100 text-emerald-700',
+  pickup_scheduled:    'bg-indigo-100 text-indigo-700',
+  handed_over:         'bg-blue-100 text-blue-700',
+  active:              'bg-blue-100 text-blue-700',
+  extension_requested: 'bg-amber-100 text-amber-700',
+  return_scheduled:    'bg-indigo-100 text-indigo-700',
+  returned:            'bg-cyan-100 text-cyan-700',
+  inspection_pending:  'bg-amber-100 text-amber-700',
+  damage_pending:      'bg-orange-100 text-orange-700',
+  billing_pending:     'bg-purple-100 text-purple-700',
+  cancelled:           'bg-red-100 text-red-700',
+  closed:              'bg-slate-200 text-slate-700',
+};
+
 const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition-colors';
 const LABEL = 'mb-1 block text-xs font-bold text-slate-500 uppercase tracking-wide';
 const SECTION_TITLE = 'text-sm font-black text-slate-800 mb-3';
@@ -126,7 +161,9 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* ── Derived reservation context ─────────────────────────────── */
-  const customer = useMemo(
+  // NOTE: the customers prop may hold the raw API shape (display_name,
+  // customer_code) rather than the mapped CustomerDto (name). Support both.
+  const customerRow = useMemo(
     () => (reservation ? customers.find((c) => String(c.id) === String(reservation.customer_id)) : null),
     [reservation, customers],
   );
@@ -134,10 +171,69 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     () => (reservation ? vehicles.find((v) => String(v.id) === String(reservation.vehicle_id)) : null),
     [reservation, vehicles],
   );
-  const branch = useMemo(
-    () => (reservation?.branch_id ? branches.find((b) => b.id === reservation.branch_id) : null),
-    [reservation, branches],
-  );
+
+  // Reservation detail is the authoritative source for the header info: it
+  // resolves customer_name server-side, includes the primary driver (phone),
+  // and the persisted reservation row (branch_id) — none of which are
+  // guaranteed to be present in the list row or the customers list page.
+  const reservationDetailQ = useQuery({
+    queryKey: ['reservation', 'mission-drawer', reservation?.id],
+    queryFn: async () => opsApi.reservation(reservation!.id),
+    enabled: open && !!reservation?.id,
+    staleTime: 30_000,
+  });
+  const detail = reservationDetailQ.data as {
+    reservation?: { branch_id?: string | null; customer?: { branch_id?: string | null } | null };
+    customer_name?: string | null;
+    drivers?: Array<{ driver_type?: string; first_name?: string; last_name?: string; phone?: string | null }>;
+  } | undefined;
+
+  // Customer detail (loads contacts → phone, and branch_id) since the list
+  // endpoint does not include contact information.
+  const customerDetailQ = useQuery({
+    queryKey: ['customer', 'detail', reservation?.customer_id],
+    queryFn: async () => (await getCustomer(String(reservation!.customer_id))).data,
+    enabled: open && !!reservation?.customer_id,
+    staleTime: 60_000,
+  });
+  const customerDetail = customerDetailQ.data;
+
+  const primaryDriver = useMemo(() => {
+    const drivers = detail?.drivers ?? [];
+    return drivers.find((d) => d.driver_type === 'primary') ?? drivers[0] ?? null;
+  }, [detail]);
+
+  const customerName = useMemo(() => {
+    const raw = customerRow as unknown as { name?: string; display_name?: string; customer_code?: string } | null;
+    const driverName = primaryDriver ? [primaryDriver.first_name, primaryDriver.last_name].filter(Boolean).join(' ').trim() : '';
+    return detail?.customer_name || raw?.name || raw?.display_name || customerDetail?.display_name || driverName || raw?.customer_code || null;
+  }, [detail, customerRow, customerDetail, primaryDriver]);
+
+  const customerPhone = useMemo(() => {
+    const raw = customerRow as unknown as { phone?: string } | null;
+    if (raw?.phone) return raw.phone;
+    const contacts = customerDetail?.contacts ?? [];
+    const phones = contacts.filter((c) => ['phone', 'mobile', 'tel', 'gsm'].includes(String(c.contact_type ?? '').toLowerCase()));
+    return phones.find((c) => c.is_primary)?.value ?? phones[0]?.value ?? primaryDriver?.phone ?? null;
+  }, [customerRow, customerDetail, primaryDriver]);
+
+  // Agence: reservation (detail then list row) → customer → vehicle,
+  // whichever is set first.
+  const branch = useMemo(() => {
+    const candidates = [
+      detail?.reservation?.branch_id,
+      reservation?.branch_id,
+      detail?.reservation?.customer?.branch_id,
+      customerDetail?.branch_id,
+      (vehicle as unknown as { branchId?: number | string } | null)?.branchId,
+    ];
+    for (const id of candidates) {
+      if (id == null || id === '') continue;
+      const found = branches.find((b) => String(b.id) === String(id));
+      if (found) return found;
+    }
+    return null;
+  }, [detail, reservation, customerDetail, vehicle, branches]);
 
   /* ── Form state ──────────────────────────────────────────────── */
   const defaultForm = useCallback(() => ({
@@ -172,6 +268,14 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   const [newCheckItem, setNewCheckItem] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The agence can resolve after the form was initialised (customer detail
+  // loads asynchronously) — backfill the origin address if still empty.
+  useEffect(() => {
+    if (branch?.name) {
+      setForm((s) => (s.origin_address ? s : { ...s, origin_address: branch.name }));
+    }
+  }, [branch]);
 
   // Reset form when reservation changes
   const prevResId = useRef<string | null>(null);
@@ -306,11 +410,18 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
             <p className="text-xs font-bold text-slate-400 uppercase mb-2">Réservation</p>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
               <InfoRow label="N° Réservation" value={resNum} />
-              <InfoRow label="Client" value={customer?.name ?? reservation.customer_id.slice(0, 8)} />
+              <InfoRow label="Client" value={customerName ?? (reservationDetailQ.isLoading || customerDetailQ.isLoading ? 'Chargement…' : reservation.customer_id.slice(0, 8))} />
+              <InfoRow label="Téléphone" value={customerPhone ?? (reservationDetailQ.isLoading || customerDetailQ.isLoading ? 'Chargement…' : '—')} />
               <InfoRow label="Véhicule" value={vehicle ? `${vehicle.brand} ${vehicle.model}` : '—'} />
               <InfoRow label="Plaque" value={vehicle?.registration ?? '—'} />
               <InfoRow label="Contrat" value={reservation.contract_number ?? (reservation.has_contract ? 'Oui' : 'Aucun')} />
-              <InfoRow label="Agence" value={branch?.name ?? '—'} />
+              <InfoRow label="Agence" value={branch?.name ?? (reservationDetailQ.isLoading || customerDetailQ.isLoading ? 'Chargement…' : '—')} />
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-slate-400 shrink-0">Statut</span>
+                <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${STATUS_BADGE_CLS[reservation.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                  {STATUS_FR[reservation.status] ?? reservation.status}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -522,11 +633,13 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={LABEL}>Client</label>
-              <p className="text-sm text-slate-700 font-semibold">{customer?.name ?? '—'}</p>
+              <p className="text-sm text-slate-700 font-semibold">{customerName ?? '—'}</p>
             </div>
             <div>
               <label className={LABEL}>Téléphone</label>
-              <p className="text-sm text-slate-700">{customer?.phone ?? '—'}</p>
+              <p className="text-sm text-slate-700">
+                {customerPhone ?? (customerDetailQ.isLoading ? 'Chargement…' : '—')}
+              </p>
             </div>
             <div>
               <label className={LABEL}>Contact alternatif</label>
