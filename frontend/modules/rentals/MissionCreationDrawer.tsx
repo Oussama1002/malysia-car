@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { AddressMapInput } from '@/modules/shared/components/AddressMapInput';
 import { opsApi } from '@/services/opsApi';
 import { listUsers, type AdminUser } from '@/services/adminApi';
 import { getCustomer } from '@/services/customersApi';
@@ -601,26 +602,42 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
                 <option value="__custom__">Personnalisée…</option>
               </select>
               {!branches.some((b) => b.name === form.origin_address) && (
-                <input
-                  type="text"
-                  className={`${INPUT} mt-2`}
-                  placeholder="Adresse personnalisée"
-                  value={form.origin_address}
-                  onChange={(e) => setForm((s) => ({ ...s, origin_address: e.target.value }))}
-                />
+                <div className="mt-2">
+                  <AddressMapInput
+                    value={form.origin_address}
+                    placeholder="Adresse personnalisée"
+                    inputClassName={INPUT}
+                    onChange={(addr) => setForm((s) => ({ ...s, origin_address: addr }))}
+                  />
+                </div>
               )}
             </div>
             <div>
               <label className={LABEL}>Adresse de destination</label>
-              <input type="text" className={INPUT} placeholder="Adresse de destination" value={form.destination_address} onChange={(e) => setForm((s) => ({ ...s, destination_address: e.target.value }))} />
+              <AddressMapInput
+                value={form.destination_address}
+                placeholder="Adresse de destination"
+                inputClassName={INPUT}
+                onChange={(addr) => setForm((s) => ({ ...s, destination_address: addr }))}
+              />
             </div>
             <div>
               <label className={LABEL}>Adresse Pickup</label>
-              <input type="text" className={INPUT} placeholder="Adresse Pickup" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
+              <AddressMapInput
+                value={form.pickup_address}
+                placeholder="Adresse Pickup"
+                inputClassName={INPUT}
+                onChange={(addr) => setForm((s) => ({ ...s, pickup_address: addr }))}
+              />
             </div>
             <div>
               <label className={LABEL}>Adresse Drop-off</label>
-              <input type="text" className={INPUT} placeholder="Adresse Drop-off" value={form.dropoff_address} onChange={(e) => setForm((s) => ({ ...s, dropoff_address: e.target.value }))} />
+              <AddressMapInput
+                value={form.dropoff_address}
+                placeholder="Adresse Drop-off"
+                inputClassName={INPUT}
+                onChange={(addr) => setForm((s) => ({ ...s, dropoff_address: addr }))}
+              />
             </div>
           </div>
         </section>
