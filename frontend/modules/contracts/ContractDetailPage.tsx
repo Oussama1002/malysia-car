@@ -110,6 +110,10 @@ const PAYMENT_METHOD_FR: Record<string, string> = {
 
 /** French labels for installment statuses */
 const INSTALLMENT_STATUS_FR: Record<string, { label: string; cls: string }> = {
+  DUE:       { label: 'En attente',  cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  PAID:      { label: 'Payé',        cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  OVERDUE:   { label: 'En retard',   cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  PARTIAL:   { label: 'Partiel',     cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   pending:   { label: 'En attente',  cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   paid:      { label: 'Payé',        cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   overdue:   { label: 'En retard',   cls: 'bg-rose-50 text-rose-700 border-rose-200' },
@@ -473,6 +477,8 @@ export const ContractDetailPage: React.FC = () => {
 
 // ── Échéancier tab ─────────────────────────────────────────────────────────────
 const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
+  const qc = useQueryClient();
+  const [regenBusy, setRegenBusy] = useState(false);
   const q = useQuery({
     queryKey: ['contract-installments', contractId],
     queryFn: async () => contractsApi.installments(contractId),
@@ -480,8 +486,8 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
 
   const installments = (q.data ?? []) as any[];
 
-  const totalDue  = installments.reduce((s, i) => s + Number(i.amount_due  ?? i.amountDue  ?? 0), 0);
-  const totalPaid = installments.reduce((s, i) => s + Number(i.amount_paid ?? i.amountPaid ?? 0), 0);
+  const totalDue  = installments.reduce((s, i) => s + Number(i.total_due_amount ?? i.amount_due ?? 0), 0);
+  const totalPaid = installments.reduce((s, i) => s + Number(i.total_paid_amount ?? i.amount_paid ?? 0), 0);
   const remaining = totalDue - totalPaid;
 
   return (
@@ -494,8 +500,23 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div className="text-sm font-black text-slate-900">Tableau de bord des échéances</div>
+          <button
+            type="button"
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+            disabled={regenBusy}
+            onClick={async () => {
+              setRegenBusy(true);
+              try {
+                await contractsApi.generateSchedule(contractId, {});
+                await qc.invalidateQueries({ queryKey: ['contract-installments', contractId] });
+              } catch { /* ignore */ }
+              setRegenBusy(false);
+            }}
+          >
+            {regenBusy ? 'Génération…' : 'Régénérer'}
+          </button>
         </div>
         {q.isLoading ? (
           <div className="p-6 text-sm text-slate-500">Chargement de l'échéancier…</div>
@@ -516,10 +537,10 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {installments.map((inst: any, idx: number) => {
-                  const due    = Number(inst.amount_due  ?? inst.amountDue  ?? 0);
-                  const paid   = Number(inst.amount_paid ?? inst.amountPaid ?? 0);
+                  const due    = Number(inst.total_due_amount ?? inst.amount_due ?? 0);
+                  const paid   = Number(inst.total_paid_amount ?? inst.amount_paid ?? 0);
                   const rest   = due - paid;
-                  const status = inst.status ?? (paid >= due ? 'paid' : new Date(inst.due_date ?? inst.dueDate ?? '') < new Date() ? 'overdue' : 'pending');
+                  const status = inst.installment_status ?? inst.status ?? (paid >= due ? 'paid' : new Date(inst.due_date ?? inst.dueDate ?? '') < new Date() ? 'overdue' : 'pending');
                   const s      = INSTALLMENT_STATUS_FR[status] ?? { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
                   return (
                     <tr key={inst.id ?? idx} className="hover:bg-slate-50/50 transition-colors">
@@ -574,8 +595,8 @@ const PaymentsTab: React.FC<{ contractId: string; customerId?: string | null }> 
   const directPayments = (paymentsListQ.data ?? []) as any[];
 
   const all = (q.data ?? []) as any[];
-  const paid    = all.filter((i: any) => (i.status ?? '') === 'paid' || Number(i.amount_paid ?? i.amountPaid ?? 0) > 0);
-  const pending = all.filter((i: any) => (i.status ?? '') !== 'paid' && Number(i.amount_paid ?? i.amountPaid ?? 0) === 0);
+  const paid    = all.filter((i: any) => (i.installment_status ?? i.status ?? '') === 'paid' || Number(i.total_paid_amount ?? i.amount_paid ?? 0) > 0);
+  const pending = all.filter((i: any) => (i.installment_status ?? i.status ?? '') !== 'paid' && Number(i.total_paid_amount ?? i.amount_paid ?? 0) === 0);
 
   const handleAddPayment = async () => {
     if (!payAmount || Number(payAmount) <= 0) { setPayError('Montant requis.'); return; }
