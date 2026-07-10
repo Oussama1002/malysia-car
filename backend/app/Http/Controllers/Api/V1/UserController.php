@@ -35,7 +35,7 @@ class UserController extends Controller
             });
         }
         if ($role = $request->query('role')) {
-            $q->where('role', $role);
+            $q->whereHas('roles', fn ($r) => $r->where('code', $role)->orWhere('roles.id', $role));
         }
         if ($status = $request->query('status')) {
             $q->where('status', $status);
