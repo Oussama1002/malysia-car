@@ -36,6 +36,7 @@ class Reservation extends Model
         'reservation_number',
         'customer_id',
         'vehicle_id',
+        'candidate_vehicle_ids',
         'reservation_type',
         'status',
         'desired_start_at',
@@ -56,6 +57,7 @@ class Reservation extends Model
     ];
 
     protected $casts = [
+        'candidate_vehicle_ids' => 'array',
         'desired_start_at' => 'datetime',
         'desired_end_at' => 'datetime',
         'delivery_latitude' => 'decimal:7',

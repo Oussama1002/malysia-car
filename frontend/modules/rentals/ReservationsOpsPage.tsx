@@ -189,16 +189,31 @@ export const ReservationsOpsPage: React.FC = () => {
     staleTime: 10_000,
   });
 
+  const [validateChoice, setValidateChoice] = useState<ReservationDto | null>(null);
+  const [validateVehicleId, setValidateVehicleId] = useState('');
+  const [validateError, setValidateError] = useState<string | null>(null);
+
   const validateRes = useMutation({
-    mutationFn: async (id: string) => opsApi.validateReservation(id),
+    mutationFn: async (vars: { id: string; vehicle_id?: string }) => opsApi.validateReservation(vars.id, vars.vehicle_id),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      setValidateChoice(null);
+      setValidateError(null);
+    },
+    onError: (e: unknown) => {
+      if (e instanceof ApiError && e.body && typeof e.body === 'object') {
+        const body = e.body as { errors?: Record<string, string[]>; message?: string };
+        const parts = Object.values(body.errors ?? {}).flat();
+        setValidateError(parts.length > 0 ? parts.join(' ') : body.message ?? e.message);
+        return;
+      }
+      setValidateError(e instanceof Error ? e.message : 'Erreur lors de la validation');
     },
   });
 
   const createRes = useMutation({
     mutationFn: async () => {
-      const ids = form.is_draft && form.vehicle_ids.length > 0 ? form.vehicle_ids : [form.vehicle_id];
+      const draftIds = form.is_draft && form.vehicle_ids.length > 0 ? form.vehicle_ids : null;
       const base = {
         customer_id: form.customer_id,
         reservation_type: form.reservation_type,
@@ -218,9 +233,14 @@ export const ReservationsOpsPage: React.FC = () => {
         allowed_km_per_day: form.allowed_km_per_day ? Number(form.allowed_km_per_day) : undefined,
         is_draft: form.is_draft,
       };
-      for (const vid of ids) {
-        await opsApi.createReservation({ ...base, vehicle_id: vid });
-      }
+      // A single reservation is created even for multi-vehicle intentions:
+      // the shortlist travels in vehicle_ids and one vehicle is chosen at
+      // validation time.
+      await opsApi.createReservation({
+        ...base,
+        vehicle_id: draftIds ? draftIds[0] : form.vehicle_id,
+        ...(draftIds && draftIds.length > 1 ? { vehicle_ids: draftIds } : {}),
+      });
     },
     onMutate: () => setCreateError(null),
     onSuccess: async () => {
@@ -506,8 +526,16 @@ export const ReservationsOpsPage: React.FC = () => {
                   {customerOptions.find((c) => c.id === r.customer_id)?.label.split(' (')[0]
                     ?? <span className="font-mono text-xs">CLT-{r.customer_id.slice(0, 8).toUpperCase()}</span>}
                   <span className="mx-1.5 text-slate-300">·</span>
-                  {vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
-                    ?? <span className="font-mono text-xs">VHL-{r.vehicle_id.slice(0, 8).toUpperCase()}</span>}
+                  {(() => {
+                    const candidates = (r as ReservationDto).candidate_vehicle_ids ?? [];
+                    if (r.status === 'draft' && candidates.length > 1) {
+                      return candidates
+                        .map((vid: string) => vehicleOptions.find((v) => v.id === String(vid))?.label ?? `VHL-${String(vid).slice(0, 8).toUpperCase()}`)
+                        .join('  /  ');
+                    }
+                    return vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
+                      ?? <span className="font-mono text-xs">VHL-{r.vehicle_id.slice(0, 8).toUpperCase()}</span>;
+                  })()}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
                   {new Date(r.desired_start_at).toLocaleString('fr-MA')} → {new Date(r.desired_end_at).toLocaleString('fr-MA')}
@@ -528,7 +556,17 @@ export const ReservationsOpsPage: React.FC = () => {
                   <button
                     className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
                     disabled={validateRes.isPending}
-                    onClick={(e) => { e.stopPropagation(); validateRes.mutate(r.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const candidates = (r as ReservationDto).candidate_vehicle_ids ?? [];
+                      if (candidates.length > 1) {
+                        setValidateError(null);
+                        setValidateVehicleId(String(r.vehicle_id));
+                        setValidateChoice(r as ReservationDto);
+                      } else {
+                        validateRes.mutate({ id: r.id });
+                      }
+                    }}
                   >
                     ✓ Valider
                   </button>
@@ -784,10 +822,68 @@ export const ReservationsOpsPage: React.FC = () => {
               disabled={!form.customer_id || !(form.is_draft ? form.vehicle_ids.length > 0 : form.vehicle_id) || !form.desired_start_at || !form.desired_end_at || createRes.isPending || (!form.is_draft && formSlotBlocked)}
               onClick={() => createRes.mutate()}
             >
-              {createRes.isPending ? 'Création…' : form.is_draft ? `Créer ${form.vehicle_ids.length > 1 ? form.vehicle_ids.length + ' intentions' : 'intention'}` : 'Créer réservation'}
+              {createRes.isPending ? 'Création…' : form.is_draft ? `Créer intention${form.vehicle_ids.length > 1 ? ` (${form.vehicle_ids.length} véhicules)` : ''}` : 'Créer réservation'}
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Choix du véhicule pour valider une intention multi-véhicules */}
+      <Modal
+        open={!!validateChoice}
+        title="Valider l'intention — choisir le véhicule"
+        onClose={() => { setValidateChoice(null); setValidateError(null); }}
+        widthClass="max-w-md"
+      >
+        {validateChoice && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Cette intention comporte plusieurs véhicules présélectionnés. Choisissez le véhicule définitif :
+              les autres seront libérés.
+            </p>
+            <div className="space-y-2">
+              {(validateChoice.candidate_vehicle_ids ?? []).map((vid) => {
+                const label = vehicleOptions.find((v) => v.id === String(vid))?.label ?? `VHL-${String(vid).slice(0, 8).toUpperCase()}`;
+                const checked = validateVehicleId === String(vid);
+                return (
+                  <label
+                    key={String(vid)}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${checked ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="validate_vehicle"
+                      className="accent-emerald-600"
+                      checked={checked}
+                      onChange={() => setValidateVehicleId(String(vid))}
+                    />
+                    <span className="text-sm font-semibold text-slate-800">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {validateError && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{validateError}</div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50"
+                onClick={() => { setValidateChoice(null); setValidateError(null); }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                disabled={!validateVehicleId || validateRes.isPending}
+                onClick={() => validateRes.mutate({ id: validateChoice.id, vehicle_id: validateVehicleId })}
+              >
+                {validateRes.isPending ? 'Validation…' : '✓ Valider avec ce véhicule'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Vérifications de disponibilité modal */}

@@ -91,7 +91,10 @@ class ReservationController extends Controller
     {
         $data = $request->validate([
             'customer_id' => ['required', 'uuid'],
-            'vehicle_id' => ['required', 'uuid'],
+            'vehicle_id' => ['required_without:vehicle_ids', 'nullable', 'uuid'],
+            // Draft intentions can shortlist several vehicles in one reservation.
+            'vehicle_ids' => ['sometimes', 'array', 'min:1'],
+            'vehicle_ids.*' => ['uuid'],
             'reservation_type' => ['required', 'string', 'max:50'],
             'desired_start_at' => ['required', 'date'],
             'desired_end_at' => ['required', 'date'],
@@ -115,7 +118,23 @@ class ReservationController extends Controller
 
         $isDraft = (bool) ($data['is_draft'] ?? false);
 
-        $r = DB::transaction(function () use ($data, $request, $isDraft) {
+        // Multi-vehicle shortlist only makes sense for drafts; the primary
+        // vehicle_id is the first candidate until one is chosen at validation.
+        $candidateIds = array_values(array_unique($data['vehicle_ids'] ?? []));
+        if ($isDraft && count($candidateIds) > 0) {
+            $data['vehicle_id'] = $data['vehicle_id'] ?? $candidateIds[0];
+            if (! in_array($data['vehicle_id'], $candidateIds, true)) {
+                $data['vehicle_id'] = $candidateIds[0];
+            }
+        } else {
+            $candidateIds = [];
+        }
+
+        if (empty($data['vehicle_id'])) {
+            return ApiResponse::error('Un véhicule est requis.', 422);
+        }
+
+        $r = DB::transaction(function () use ($data, $request, $isDraft, $candidateIds) {
             $startAt = Carbon::parse($data['desired_start_at']);
             $endAt = Carbon::parse($data['desired_end_at']);
 
@@ -140,6 +159,9 @@ class ReservationController extends Controller
                 'reservation_number' => $this->generateReservationNumber(),
                 'customer_id' => $data['customer_id'],
                 'vehicle_id' => $data['vehicle_id'],
+                ...(count($candidateIds) > 1 && \Schema::hasColumn('reservations', 'candidate_vehicle_ids')
+                    ? ['candidate_vehicle_ids' => $candidateIds]
+                    : []),
                 'reservation_type' => $data['reservation_type'],
                 'status' => $isDraft ? 'draft' : 'reserved',
                 'desired_start_at' => $data['desired_start_at'],
@@ -242,11 +264,28 @@ class ReservationController extends Controller
             return ApiResponse::error('Seules les réservations en brouillon peuvent être validées.', 422);
         }
 
-        DB::transaction(function () use ($reservation, $request): void {
+        $input = $request->validate([
+            'vehicle_id' => ['sometimes', 'nullable', 'uuid'],
+        ]);
+
+        DB::transaction(function () use ($reservation, $request, $input): void {
             $locked = Reservation::withoutGlobalScopes()
                 ->whereKey((string) $reservation->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // Multi-vehicle intention: the caller picks the definitive vehicle
+            // among the shortlisted candidates.
+            $chosen = $input['vehicle_id'] ?? null;
+            if ($chosen && $chosen !== (string) $locked->vehicle_id) {
+                $candidates = (array) ($locked->candidate_vehicle_ids ?? []);
+                if ($candidates !== [] && ! in_array($chosen, $candidates, true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'vehicle_id' => ['Ce véhicule ne fait pas partie des véhicules présélectionnés.'],
+                    ]);
+                }
+                $locked->vehicle_id = $chosen;
+            }
 
             // Now check availability — draft didn't block, so we must verify the slot is free
             $this->availability->assertVehicleAvailableWithLock(
@@ -256,6 +295,7 @@ class ReservationController extends Controller
                 (string) $locked->id
             );
 
+            $locked->save();
             $this->transitionReservation($locked, 'reserved', $request);
         });
 

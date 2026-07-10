@@ -12,6 +12,7 @@ export type ReservationDto = {
   reservation_number: string;
   customer_id: string;
   vehicle_id: string;
+  candidate_vehicle_ids?: string[] | null;
   reservation_type: string;
   status: string;
   desired_start_at: string;
@@ -74,6 +75,7 @@ export const opsApi = {
   async createReservation(input: {
     customer_id: string;
     vehicle_id: string;
+    vehicle_ids?: string[];
     reservation_type: string;
     desired_start_at: string;
     desired_end_at: string;
@@ -133,8 +135,11 @@ export const opsApi = {
     return res.data;
   },
 
-  async validateReservation(id: string): Promise<ReservationDto> {
-    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.validate(id), { method: 'POST', body: JSON.stringify({}) });
+  async validateReservation(id: string, vehicleId?: string): Promise<ReservationDto> {
+    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.validate(id), {
+      method: 'POST',
+      body: JSON.stringify(vehicleId ? { vehicle_id: vehicleId } : {}),
+    });
     return res.data;
   },
 
@@ -206,7 +211,20 @@ export const opsApi = {
     return res.data;
   },
 
-  async instantVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string; new_rate?: number; note?: string }): Promise<any> {
+  async swapEligibleVehicles(params: { reservation_id?: string; contract_id?: string }): Promise<any> {
+    const qs = new URLSearchParams();
+    if (params.reservation_id) qs.set('reservation_id', params.reservation_id);
+    if (params.contract_id) qs.set('contract_id', params.contract_id);
+    const res = await apiClient<{ data: any }>(`${endpoints.vehicleSwaps.eligibleVehicles}?${qs}`);
+    return res.data;
+  },
+
+  async swapFinancialImpact(params: { reservation_id?: string; contract_id?: string; new_vehicle_id: string }): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.financialImpact, { method: 'POST', body: JSON.stringify(params) });
+    return res.data;
+  },
+
+  async instantVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string; new_rate?: number; note?: string; create_missions?: boolean; old_vehicle_recovered?: boolean; financial_action?: string }): Promise<any> {
     const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.instant, { method: 'POST', body: JSON.stringify(payload) });
     return res.data;
   },
