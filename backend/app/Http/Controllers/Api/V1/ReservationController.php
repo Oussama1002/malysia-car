@@ -346,6 +346,20 @@ class ReservationController extends Controller
                 ->orderByDesc('created_at')
                 ->limit(100)
                 ->get();
+
+            // Resolve actor names (schema-agnostic: the User model normalises
+            // `name` vs `first_name`/`last_name` via its accessor).
+            $userIds = $history->pluck('user_id')->filter()->unique()->values();
+            if ($userIds->isNotEmpty()) {
+                $names = \App\Models\User::query()
+                    ->whereIn('id', $userIds)
+                    ->get()
+                    ->mapWithKeys(fn ($u) => [(string) $u->getKey() => $u->name ?? $u->email]);
+                $history = $history->map(function ($row) use ($names) {
+                    $row->user_name = $names[(string) ($row->user_id ?? '')] ?? null;
+                    return $row;
+                });
+            }
         } catch (\Throwable) {
             // table might not exist or have different columns
         }

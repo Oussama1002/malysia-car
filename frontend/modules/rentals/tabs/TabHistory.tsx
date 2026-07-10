@@ -2,6 +2,13 @@ import React from 'react';
 
 interface AuditEntry {
   id?: string;
+  // audit_logs columns
+  action_type?: string;
+  action_label?: string;
+  before_data?: any;
+  after_data?: any;
+  user_name?: string | null;
+  // legacy shapes kept for compatibility
   action?: string;
   event_type?: string;
   description?: string;
@@ -9,10 +16,6 @@ interface AuditEntry {
   user_id?: string;
   created_at?: string;
   ip_address?: string;
-}
-
-interface Props {
-  history: AuditEntry[];
 }
 
 const ACTION_ICONS: Record<string, string> = {
@@ -29,8 +32,35 @@ const ACTION_FR: Record<string, string> = {
   deleted:        'Suppression',
 };
 
+const STATUS_FR: Record<string, string> = {
+  draft:               'Brouillon',
+  reserved:            'Réservé',
+  confirmed:           'Confirmé',
+  pickup_scheduled:    'Remise planifiée',
+  handed_over:         'Remis',
+  active:              'En cours',
+  extension_requested: 'Prolongation demandée',
+  return_scheduled:    'Retour planifié',
+  returned:            'Retourné',
+  inspection_pending:  'Inspection en attente',
+  damage_pending:      'Dommages en attente',
+  billing_pending:     'Facturation en attente',
+  closed:              'Clôturé',
+  cancelled:           'Annulé',
+  new:                 'Nouveau',
+};
+
 const fmtDate = (v: string | null | undefined) =>
   v ? new Date(v).toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+
+function parseJson(v: unknown): Record<string, unknown> | null {
+  if (v == null) return null;
+  if (typeof v === 'object') return v as Record<string, unknown>;
+  if (typeof v === 'string') {
+    try { return JSON.parse(v) as Record<string, unknown>; } catch { return null; }
+  }
+  return null;
+}
 
 const TabHistory: React.FC<Props> = ({ history }) => {
   return (
@@ -46,19 +76,25 @@ const TabHistory: React.FC<Props> = ({ history }) => {
 
           <div className="space-y-0">
             {history.map((entry, i) => {
-              const action = entry.action ?? entry.event_type ?? 'unknown';
+              const action = entry.action_type ?? entry.action ?? entry.event_type ?? '';
               const icon = ACTION_ICONS[action] ?? '📝';
-              const label = ACTION_FR[action] ?? action;
-              const changes = entry.changes;
+              let label = ACTION_FR[action] ?? entry.action_label ?? action ?? 'Événement';
               let detail = entry.description ?? '';
 
-              // Parse status changes
-              if (action === 'status_changed' && changes) {
-                const c = typeof changes === 'string' ? JSON.parse(changes) : changes;
-                if (c.from_status && c.to_status) {
-                  detail = `${c.from_status} → ${c.to_status}`;
-                  if (c.note) detail += ` — ${c.note}`;
+              const before = parseJson(entry.before_data) ?? parseJson(entry.changes);
+              const after = parseJson(entry.after_data);
+
+              if (action === 'status_changed') {
+                const from = String(before?.status ?? before?.from_status ?? '');
+                const to = String(after?.status ?? before?.to_status ?? '');
+                if (from || to) {
+                  detail = `${STATUS_FR[from] ?? from ?? '—'} → ${STATUS_FR[to] ?? to ?? '—'}`;
                 }
+              } else if (action === 'updated' && after && typeof after === 'object') {
+                const keys = Object.keys(after).filter((k) => k !== 'updated_at');
+                if (keys.length > 0) detail = `Champs modifiés : ${keys.join(', ')}`;
+              } else if (!ACTION_FR[action] && entry.action_label) {
+                label = entry.action_label;
               }
 
               return (
@@ -77,9 +113,9 @@ const TabHistory: React.FC<Props> = ({ history }) => {
                     {detail && (
                       <div className="mt-1 text-xs text-slate-600">{detail}</div>
                     )}
-                    {entry.user_id && (
+                    {(entry.user_name || entry.user_id) && (
                       <div className="mt-1 text-[10px] text-slate-400">
-                        Utilisateur : {entry.user_id.slice(0, 8).toUpperCase()}
+                        Utilisateur : {entry.user_name ?? entry.user_id!.slice(0, 8).toUpperCase()}
                         {entry.ip_address ? ` · IP: ${entry.ip_address}` : ''}
                       </div>
                     )}
@@ -97,5 +133,9 @@ const TabHistory: React.FC<Props> = ({ history }) => {
     </div>
   );
 };
+
+interface Props {
+  history: AuditEntry[];
+}
 
 export default TabHistory;
