@@ -56,7 +56,7 @@ class ContractResource extends JsonResource
                 ? $c->customer->full_name
                 : null,
             'vehicleName' => $c->relationLoaded('vehicle') && $c->vehicle
-                ? trim(($c->vehicle->brand_name ?? '') . ' ' . ($c->vehicle->model_name ?? ''))
+                ? trim(($c->vehicle->brand?->name ?? $c->vehicle->brand_name ?? '') . ' ' . ($c->vehicle->model?->model_name ?? $c->vehicle->model?->name ?? $c->vehicle->model_name ?? ''))
                 : null,
             'vehicleRegistration' => $c->relationLoaded('vehicle') && $c->vehicle
                 ? $c->vehicle->registration_number

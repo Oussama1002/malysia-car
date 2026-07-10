@@ -51,7 +51,7 @@ class ContractController extends Controller
             $q->where('vehicle_id', $vehicleId);
         }
 
-        $q->with(['customer', 'vehicle']);
+        $q->with(['customer', 'vehicle.brand', 'vehicle.model']);
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
         $page = $q->orderByDesc('updated_at')->paginate($per);
 
@@ -68,7 +68,7 @@ class ContractController extends Controller
 
     public function show(Request $request, Contract $contract): JsonResponse
     {
-        $contract->load(['history']);
+        $contract->load(['history', 'customer', 'vehicle.brand', 'vehicle.model']);
 
         $linkedReservation = Reservation::query()
             ->where('customer_id', $contract->customer_id)
