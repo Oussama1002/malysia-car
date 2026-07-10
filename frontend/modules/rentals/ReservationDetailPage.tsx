@@ -196,7 +196,7 @@ export const ReservationDetailPage: React.FC = () => {
               label: 'Véhicule',
               value: (() => {
                 const candidateVehicles = (d?.candidate_vehicles ?? []) as { id: string; name: string; registration: string }[];
-                if (status === 'draft' && candidateVehicles.length > 1) {
+                if (candidateVehicles.length > 1) {
                   return candidateVehicles.map((v) => v.name).join('  /  ');
                 }
                 return d?.vehicle_name ?? '—';
@@ -206,7 +206,7 @@ export const ReservationDetailPage: React.FC = () => {
               label: 'Immatriculation',
               value: (() => {
                 const candidateVehicles = (d?.candidate_vehicles ?? []) as { id: string; name: string; registration: string }[];
-                if (status === 'draft' && candidateVehicles.length > 1) {
+                if (candidateVehicles.length > 1) {
                   return candidateVehicles.map((v) => v.registration).join('  /  ');
                 }
                 return d?.vehicle_registration ?? '—';
