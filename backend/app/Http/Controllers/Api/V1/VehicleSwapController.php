@@ -194,7 +194,7 @@ class VehicleSwapController extends Controller
 
             // Perform the swap
             $contractUpdate = ['vehicle_id' => $data['new_vehicle_id']];
-            if (!empty($data['new_rate']) && !empty($data['contract_id'])) {
+            if (!empty($data['new_rate'])) {
                 $contractUpdate['base_amount'] = $data['new_rate'];
             }
             if (!empty($data['contract_id'])) {
@@ -202,6 +202,17 @@ class VehicleSwapController extends Controller
             }
             if (!empty($data['reservation_id'])) {
                 Reservation::withoutGlobalScopes()->where('id', $data['reservation_id'])->update(['vehicle_id' => $data['new_vehicle_id']]);
+
+                // Also update the linked contract if one exists
+                $linkedContract = Contract::withoutGlobalScopes()
+                    ->where('customer_id', $customerId)
+                    ->where('vehicle_id', $oldVehicleId)
+                    ->whereNotIn('status', ['cancelled', 'terminated'])
+                    ->first();
+                if ($linkedContract) {
+                    $linkedContract->update($contractUpdate);
+                    $data['contract_id'] = $linkedContract->id;
+                }
             }
 
             $swapReason = $data['reason'] ?? null;
