@@ -171,10 +171,15 @@ export const ContractDetailPage: React.FC = () => {
     ? (customerQ.data.display_name ?? customerQ.data.name ?? shortId(customerId, 'CLT'))
     : shortId(customerId, 'CLT');
 
-  const vehicleName: string = vehicleQ.data
-    ? [vehicleQ.data.brand?.name ?? vehicleQ.data.brand, vehicleQ.data.model?.name ?? vehicleQ.data.model, vehicleQ.data.plate ?? vehicleQ.data.registration]
-        .filter(Boolean).join(' ')
-    : shortId(vehicleId, 'VHL');
+  const vehicleName: string = raw?.vehicleName
+    ?? raw?.vehicle_name
+    ?? (vehicleQ.data
+      ? [
+          typeof vehicleQ.data.brand === 'string' ? vehicleQ.data.brand : vehicleQ.data.brand?.name,
+          typeof vehicleQ.data.model === 'string' ? vehicleQ.data.model : vehicleQ.data.model?.name ?? vehicleQ.data.model?.model_name,
+          vehicleQ.data.registration ?? vehicleQ.data.plate,
+        ].filter(Boolean).join(' ')
+      : shortId(vehicleId, 'VHL'));
 
   const handoverQ = useQuery({
     queryKey: ['handover-reports', linkedReservationId],
