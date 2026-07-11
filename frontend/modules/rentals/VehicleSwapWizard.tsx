@@ -51,7 +51,7 @@ const INITIAL_STATE: WizardState = {
   reasonDescription: '',
   selectedVehicleId: '',
   newDailyRate: '',
-  financialAction: '',
+  financialAction: 'charge',
   createMissions: true,
   oldVehicleRecovered: false,
 };
@@ -489,32 +489,9 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-bold text-slate-700 mb-2">Action financière <span className="text-rose-500">*</span></label>
-        <div className="space-y-2">
-          {([
-            { value: 'charge', label: 'Facturer au client', desc: 'La différence sera ajoutée à la facture' },
-            { value: 'free_upgrade', label: 'Upgrade gratuit', desc: 'Aucun frais supplémentaire' },
-            { value: 'refund', label: 'Rembourser le client', desc: 'La différence sera déduite' },
-            { value: 'ignore', label: 'Ignorer', desc: 'Aucune action financière' },
-          ] as const).map(opt => (
-            <label key={opt.value} className={`flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer transition-colors ${
-              form.financialAction === opt.value ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 hover:border-slate-300'
-            }`}>
-              <input
-                type="radio"
-                name="financial_action"
-                checked={form.financialAction === opt.value}
-                onChange={() => setForm(s => ({ ...s, financialAction: opt.value }))}
-                className="mt-0.5 accent-indigo-600"
-              />
-              <div>
-                <div className="text-xs font-bold text-slate-900">{opt.label}</div>
-                <div className="text-[10px] text-slate-500">{opt.desc}</div>
-              </div>
-            </label>
-          ))}
-        </div>
+      <div className="rounded-xl border-2 border-indigo-500 bg-indigo-50/50 p-3">
+        <div className="text-xs font-bold text-slate-900">Facturer au client</div>
+        <div className="text-[10px] text-slate-500">La différence sera ajoutée automatiquement à la facture</div>
       </div>
     </div>
   );
