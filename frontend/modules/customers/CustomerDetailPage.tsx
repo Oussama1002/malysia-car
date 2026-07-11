@@ -617,7 +617,7 @@ const KycTab: React.FC<{
 // ---------------------------------------------------------------------------
 
 const CONTRACT_TYPE_FR: Record<string, string> = { LLD: 'LLD', LOA: 'LOA', credit: 'Crédit', VO: 'Vente occasion', rental: 'Location' };
-const CONTRACT_STATUS_FR: Record<string, string> = { draft: 'Brouillon', pending_approval: 'En attente', approved: 'Approuvé', active: 'Actif', terminated: 'Résilié', closed: 'Clôturé' };
+const CONTRACT_STATUS_FR: Record<string, string> = { draft: 'Brouillon', pending_approval: 'En attente', approved: 'Approuvé', active: 'Actif', suspended: 'Suspendu', terminated: 'Résilié', closed: 'Clôturé', cancelled: 'Annulé' };
 const fmtMadC = (v: unknown) => { const n = Number(v); return isFinite(n) ? `${n.toLocaleString('fr-MA')} MAD` : '—'; };
 
 const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
@@ -668,7 +668,7 @@ const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
 );
 
 const PAY_METHOD_FR: Record<string, string> = { cash: 'Espèces', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte', mobile: 'Mobile' };
-const PAY_STATUS_FR: Record<string, string> = { received: 'Reçu', allocated: 'Alloué', pending: 'En attente', refunded: 'Remboursé' };
+const PAY_STATUS_FR: Record<string, string> = { received: 'Reçu', allocated: 'Alloué', pending: 'En attente', refunded: 'Remboursé', completed: 'Complété', failed: 'Échoué' };
 
 const PaymentsTab: React.FC<{ payments: unknown[] }> = ({ payments }) => (
   <div className="df-card">
