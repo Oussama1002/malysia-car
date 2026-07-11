@@ -357,8 +357,12 @@ export const ReservationsOpsPage: React.FC = () => {
     const data = (reservationsQ.data ?? []) as ReservationDto[];
     if (!q.trim()) return data;
     const qq = q.toLowerCase();
-    return data.filter((r) => `${r.reservation_number} ${r.status} ${r.customer_id} ${r.vehicle_id}`.toLowerCase().includes(qq));
-  }, [reservationsQ.data, q]);
+    return data.filter((r) => {
+      const clientName = customerOptions.find((c) => c.id === r.customer_id)?.label ?? '';
+      const vehicleName = vehicleOptions.find((v) => v.id === r.vehicle_id)?.label ?? '';
+      return `${r.reservation_number} ${r.status} ${clientName} ${vehicleName}`.toLowerCase().includes(qq);
+    });
+  }, [reservationsQ.data, q, customerOptions, vehicleOptions]);
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
   const timelineStatus = String(detail?.status ?? selected?.status ?? '');
