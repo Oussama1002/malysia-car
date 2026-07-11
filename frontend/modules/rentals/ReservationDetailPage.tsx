@@ -435,7 +435,7 @@ export const ReservationDetailPage: React.FC = () => {
         open={swapWizardOpen}
         onClose={() => setSwapWizardOpen(false)}
         source={rid ? { type: 'reservation', id: rid } : null}
-        reservation={r}
+        reservation={{ ...r, customer_name: d?.customer_name, vehicle_name: d?.vehicle_name, vehicle_registration: d?.vehicle_registration }}
         currentVehicle={null}
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ['reservation', rid] });

@@ -128,28 +128,43 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
   const reasonLabel = SWAP_REASONS.find(r => r.value === form.reason)?.label ?? form.reason;
 
   const summaryData = useMemo(() => {
+    const vName = (cv: any) => `${cv?.brand_name ?? cv?.brand?.name ?? ''} ${cv?.model_name ?? cv?.model?.model_name ?? cv?.model?.name ?? ''}`.trim();
     if (source?.type === 'reservation' && reservation) {
+      const r = reservation;
+      const custName = r.customer_name ?? r.customer?.full_name ?? r.customer?.display_name ?? r.customer?.name ?? '—';
+      const vehName = vName(currentV) || r.vehicle_name || vName(r.vehicle) || '—';
+      const plate = currentV?.registration_number ?? r.vehicle_registration ?? r.vehicle?.registration_number ?? '—';
+      const start = r.desired_start_at;
+      const end = r.desired_end_at;
+      const remaining = rentalPeriod?.remaining_days ?? (start && end ? Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86400000)) : '—');
       return {
-        number: reservation.reservation_number ?? reservation.id?.slice(0, 8),
-        customerName: reservation.customer_name ?? reservation.customer?.name ?? '—',
-        vehicleName: `${currentV?.brand_name ?? ''} ${currentV?.model_name ?? ''}`.trim() || '—',
-        plate: currentV?.registration_number ?? reservation.vehicle_registration ?? '—',
-        remainingDays: rentalPeriod?.remaining_days ?? '—',
-        contractNumber: reservation.contract_number ?? '—',
-        periodStart: rentalPeriod?.start ?? reservation.desired_start_at,
-        periodEnd: rentalPeriod?.end ?? reservation.desired_end_at,
+        number: r.reservation_number ?? r.id?.slice(0, 8),
+        customerName: custName,
+        vehicleName: vehName,
+        plate,
+        remainingDays: remaining,
+        contractNumber: r.contract_number ?? '—',
+        periodStart: rentalPeriod?.start ?? start,
+        periodEnd: rentalPeriod?.end ?? end,
       };
     }
     if (source?.type === 'contract' && contract) {
+      const c = contract;
+      const custName = c.customer_name ?? c.customer?.full_name ?? c.customer?.display_name ?? c.customer?.name ?? c.customerName ?? '—';
+      const vehName = vName(currentV) || c.vehicle_name || c.vehicleName || vName(c.vehicle) || '—';
+      const plate = currentV?.registration_number ?? c.vehicle?.registration_number ?? '—';
+      const start = c.start_date ?? c.startDate;
+      const end = c.end_date ?? c.endDate;
+      const remaining = rentalPeriod?.remaining_days ?? (start && end ? Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86400000)) : '—');
       return {
-        number: contract.contract_number ?? contract.contractNumber ?? contract.id?.slice(0, 8),
-        customerName: contract.customer_name ?? contract.customer?.name ?? '—',
-        vehicleName: `${currentV?.brand_name ?? ''} ${currentV?.model_name ?? ''}`.trim() || '—',
-        plate: currentV?.registration_number ?? '—',
-        remainingDays: rentalPeriod?.remaining_days ?? '—',
-        contractNumber: contract.contract_number ?? contract.contractNumber ?? '—',
-        periodStart: rentalPeriod?.start ?? contract.start_date ?? contract.startDate,
-        periodEnd: rentalPeriod?.end ?? contract.end_date ?? contract.endDate,
+        number: c.contract_number ?? c.contractNumber ?? c.id?.slice(0, 8),
+        customerName: custName,
+        vehicleName: vehName,
+        plate,
+        remainingDays: remaining,
+        contractNumber: c.contract_number ?? c.contractNumber ?? '—',
+        periodStart: rentalPeriod?.start ?? start,
+        periodEnd: rentalPeriod?.end ?? end,
       };
     }
     return { number: '—', customerName: '—', vehicleName: '—', plate: '—', remainingDays: '—', contractNumber: '—', periodStart: '—', periodEnd: '—' };
