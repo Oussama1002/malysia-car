@@ -40,6 +40,7 @@ interface WizardState {
   reason: string;
   reasonDescription: string;
   selectedVehicleId: string;
+  newDailyRate: string;
   financialAction: FinancialAction | '';
   createMissions: boolean;
   oldVehicleRecovered: boolean;
@@ -49,6 +50,7 @@ const INITIAL_STATE: WizardState = {
   reason: '',
   reasonDescription: '',
   selectedVehicleId: '',
+  newDailyRate: '',
   financialAction: '',
   createMissions: true,
   oldVehicleRecovered: false,
@@ -103,12 +105,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
     enabled: open && !!source && stepIdx >= 2,
   });
 
-  // ── Financial impact query ──
-  const financialQ = useQuery({
-    queryKey: ['swap-financial', source?.type, source?.id, form.selectedVehicleId],
-    queryFn: () => opsApi.swapFinancialImpact({ ...sourceParams, new_vehicle_id: form.selectedVehicleId }),
-    enabled: open && !!form.selectedVehicleId && stepIdx >= 3,
-  });
+  // Financial impact is computed locally from the editable new daily rate
 
   // ── Swap history ──
   const swapsQ = useQuery({
@@ -122,7 +119,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
   const rentalPeriod = eligibleData?.rental_period;
   const categories = eligibleData?.categories ?? { recommended: [], upgrade: [], downgrade: [], all: [] };
   const selectedVehicle = (categories.all as any[]).find((v: any) => v.id === form.selectedVehicleId);
-  const fin = financialQ.data;
+
 
   /* ── Helpers ─────────────────────────────────────────────────────── */
   const reasonLabel = SWAP_REASONS.find(r => r.value === form.reason)?.label ?? form.reason;
@@ -170,6 +167,11 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
     return { number: '—', customerName: '—', vehicleName: '—', plate: '—', remainingDays: '—', contractNumber: '—', periodStart: '—', periodEnd: '—' };
   }, [source, reservation, contract, currentV, rentalPeriod]);
 
+  const oldDailyRate = Number(currentV?.daily_rental_price ?? reservation?.daily_rate ?? contract?.daily_rate ?? 0);
+  const newDailyRate = form.newDailyRate !== '' ? Number(form.newDailyRate) : Number(selectedVehicle?.daily_rental_price ?? 0);
+  const finRemainingDays = Number(rentalPeriod?.remaining_days ?? summaryData.remainingDays) || 0;
+  const totalDifference = finRemainingDays * (newDailyRate - oldDailyRate);
+
   const canAdvance = (): boolean => {
     if (step.key === 'reason') return !!form.reason && (form.reason !== 'other' || !!form.reasonDescription.trim());
     if (step.key === 'summary') return true;
@@ -192,6 +194,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
           ...sourceParams,
           new_vehicle_id: form.selectedVehicleId,
           reason,
+          new_daily_rate: newDailyRate || undefined,
           financial_action: form.financialAction || undefined,
           create_missions: form.createMissions,
           old_vehicle_recovered: form.oldVehicleRecovered,
@@ -456,62 +459,63 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
 
   const renderFinancial = () => (
     <div className="space-y-4">
-      {financialQ.isLoading ? (
-        <div className="flex items-center justify-center py-12 text-sm text-slate-500">Calcul de l'impact financier…</div>
-      ) : fin ? (
-        <>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Tarif actuel</span>
-              <span className="font-bold text-slate-900">{fmtPrice(fin.old_daily_rate)}/jour</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Nouveau tarif</span>
-              <span className="font-bold text-indigo-700">{fmtPrice(fin.new_daily_rate)}/jour</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Jours restants</span>
-              <span className="font-bold text-slate-900">{fin.remaining_days} jours</span>
-            </div>
-            <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
-              <span className="text-sm font-bold text-slate-700">Différence totale</span>
-              <span className={`text-lg font-black ${fin.total_difference > 0 ? 'text-rose-600' : fin.total_difference < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
-                {fin.total_difference > 0 ? '+' : ''}{fmtPrice(fin.total_difference)}
-              </span>
-            </div>
-          </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-500">Tarif actuel</span>
+          <span className="font-bold text-slate-900">{fmtPrice(oldDailyRate)}/jour</span>
+        </div>
+        <div className="flex items-center justify-between text-sm gap-3">
+          <label htmlFor="new_daily_rate" className="text-slate-500 shrink-0">Nouveau tarif (MAD/jour)</label>
+          <input
+            id="new_daily_rate"
+            type="number"
+            min="0"
+            step="1"
+            placeholder={String(selectedVehicle?.daily_rental_price ?? 0)}
+            value={form.newDailyRate}
+            onChange={e => setForm(s => ({ ...s, newDailyRate: e.target.value }))}
+            className="w-36 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-bold text-indigo-700 text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+          />
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-500">Jours restants</span>
+          <span className="font-bold text-slate-900">{finRemainingDays} jours</span>
+        </div>
+        <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+          <span className="text-sm font-bold text-slate-700">Différence totale</span>
+          <span className={`text-lg font-black ${totalDifference > 0 ? 'text-rose-600' : totalDifference < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+            {totalDifference > 0 ? '+' : ''}{fmtPrice(totalDifference)}
+          </span>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-2">Action financière <span className="text-rose-500">*</span></label>
-            <div className="space-y-2">
-              {([
-                { value: 'charge', label: 'Facturer au client', desc: 'La différence sera ajoutée à la facture' },
-                { value: 'free_upgrade', label: 'Upgrade gratuit', desc: 'Aucun frais supplémentaire' },
-                { value: 'refund', label: 'Rembourser le client', desc: 'La différence sera déduite' },
-                { value: 'ignore', label: 'Ignorer', desc: 'Aucune action financière' },
-              ] as const).map(opt => (
-                <label key={opt.value} className={`flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer transition-colors ${
-                  form.financialAction === opt.value ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 hover:border-slate-300'
-                }`}>
-                  <input
-                    type="radio"
-                    name="financial_action"
-                    checked={form.financialAction === opt.value}
-                    onChange={() => setForm(s => ({ ...s, financialAction: opt.value }))}
-                    className="mt-0.5 accent-indigo-600"
-                  />
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">{opt.label}</div>
-                    <div className="text-[10px] text-slate-500">{opt.desc}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="py-8 text-center text-sm text-slate-400">Sélectionnez un véhicule pour voir l'impact financier.</div>
-      )}
+      <div>
+        <label className="block text-xs font-bold text-slate-700 mb-2">Action financière <span className="text-rose-500">*</span></label>
+        <div className="space-y-2">
+          {([
+            { value: 'charge', label: 'Facturer au client', desc: 'La différence sera ajoutée à la facture' },
+            { value: 'free_upgrade', label: 'Upgrade gratuit', desc: 'Aucun frais supplémentaire' },
+            { value: 'refund', label: 'Rembourser le client', desc: 'La différence sera déduite' },
+            { value: 'ignore', label: 'Ignorer', desc: 'Aucune action financière' },
+          ] as const).map(opt => (
+            <label key={opt.value} className={`flex items-start gap-3 rounded-xl border-2 p-3 cursor-pointer transition-colors ${
+              form.financialAction === opt.value ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 hover:border-slate-300'
+            }`}>
+              <input
+                type="radio"
+                name="financial_action"
+                checked={form.financialAction === opt.value}
+                onChange={() => setForm(s => ({ ...s, financialAction: opt.value }))}
+                className="mt-0.5 accent-indigo-600"
+              />
+              <div>
+                <div className="text-xs font-bold text-slate-900">{opt.label}</div>
+                <div className="text-[10px] text-slate-500">{opt.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
     </div>
   );
 
@@ -618,7 +622,8 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
         {[
           ['Motif', form.reason === 'other' ? form.reasonDescription : reasonLabel],
-          ['Impact financier', fin ? `${fin.total_difference > 0 ? '+' : ''}${fmtPrice(fin.total_difference)}` : '—'],
+          ['Impact financier', `${totalDifference > 0 ? '+' : ''}${fmtPrice(totalDifference)}`],
+          ['Nouveau tarif', `${fmtPrice(newDailyRate)}/jour`],
           ['Action financière', { charge: 'Facturer', free_upgrade: 'Gratuit', refund: 'Rembourser', ignore: 'Ignorer' }[form.financialAction as string] ?? '—'],
           ['Missions', form.createMissions ? `${form.oldVehicleRecovered ? '1' : '2'} mission(s)` : 'Aucune'],
         ].map(([label, val], i) => (
