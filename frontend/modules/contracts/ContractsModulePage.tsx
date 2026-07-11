@@ -36,19 +36,21 @@ export const ContractsModulePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="df-tabs flex-wrap" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={active === t.key}
-            onClick={() => setTab(t.key)}
-            className={`df-tab ${active === t.key ? 'df-tab--active' : ''}`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="sticky top-0 z-30 -mx-4 bg-white/80 backdrop-blur-md px-4 py-3 border-b border-slate-100 flex justify-center">
+        <div className="df-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={active === t.key}
+              onClick={() => setTab(t.key)}
+              className={`df-tab ${active === t.key ? 'df-tab--active' : ''}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {active === 'contrats' ? <ContractsPage /> : <RentalsPage />}
