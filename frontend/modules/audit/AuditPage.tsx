@@ -138,6 +138,7 @@ const ENTITY_FR: Record<string, string> = {
   VehicleInsurancePolicy: 'Assurance',
   VehicleTechnicalInspection: 'Contrôle technique',
   SubRentalContract: 'Contrat sous-location',
+  VehicleSwapRequest: 'Changement de véhicule',
   User: 'Utilisateur',
   // document sub-types
   pdf_generated: 'PDF généré',
@@ -376,6 +377,57 @@ export const AuditPage: React.FC = () => {
   );
 };
 
+const DIFF_FIELD_FR: Record<string, string> = {
+  old_vehicle_id: 'Ancien véhicule',
+  new_vehicle_id: 'Nouveau véhicule',
+  vehicle_id: 'Véhicule',
+  customer_id: 'Client',
+  contract_id: 'Contrat',
+  reservation_id: 'Réservation',
+  status: 'Statut',
+  reason: 'Motif',
+  requested_by: 'Demandé par',
+  resolved_by: 'Résolu par',
+  requested_at: 'Demandé le',
+  resolved_at: 'Résolu le',
+  financial_action: 'Action financière',
+  note: 'Note',
+  base_amount: 'Montant de base',
+  monthly_payment: 'Mensualité',
+  start_date: 'Date de début',
+  end_date: 'Date de fin',
+  duration_months: 'Durée (mois)',
+  payment_method: 'Mode de paiement',
+};
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function formatDiffValue(key: string, val: unknown): string {
+  if (val === null || val === undefined) return '—';
+  const s = String(val);
+  if (UUID_PATTERN.test(s)) {
+    const k = key.toLowerCase();
+    const prefix = k.includes('vehicle') ? 'VHL' : k.includes('customer') ? 'CLT' : k.includes('contract') ? 'CTR' : k.includes('reservation') ? 'RSV' : k.includes('user') ? 'USR' : 'ID';
+    return `${prefix}-${s.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+  }
+  if (STATUS_FR[s]) return STATUS_FR[s];
+  return s;
+}
+function formatDiffData(data: Record<string, unknown>): React.ReactNode {
+  const entries = Object.entries(data).filter(([k]) => !['id', 'company_id', 'created_at', 'updated_at', 'deleted_at'].includes(k));
+  if (entries.length === 0) return '—';
+  return (
+    <table className="w-full text-[11px]">
+      <tbody>
+        {entries.map(([k, v]) => (
+          <tr key={k} className="border-b border-slate-100 last:border-0">
+            <td className="py-1 pr-2 font-semibold text-slate-600 whitespace-nowrap">{DIFF_FIELD_FR[k] ?? k.replace(/_/g, ' ')}</td>
+            <td className="py-1 font-mono text-slate-800">{formatDiffValue(k, v)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 const DiffDrawer: React.FC<{ log: AuditLogDto; onClose: () => void }> = ({ log, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -398,15 +450,15 @@ const DiffDrawer: React.FC<{ log: AuditLogDto; onClose: () => void }> = ({ log, 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <div className="mb-1 text-xs font-black uppercase text-slate-500">Avant</div>
-            <pre className="overflow-auto rounded-xl bg-slate-50 p-3 text-[11px]">
-              {log.before_data ? JSON.stringify(log.before_data, null, 2) : '—'}
-            </pre>
+            <div className="overflow-auto rounded-xl bg-slate-50 p-3 text-[11px]">
+              {log.before_data ? formatDiffData(log.before_data as Record<string, unknown>) : '—'}
+            </div>
           </div>
           <div>
             <div className="mb-1 text-xs font-black uppercase text-slate-500">Après</div>
-            <pre className="overflow-auto rounded-xl bg-slate-50 p-3 text-[11px]">
-              {log.after_data ? JSON.stringify(log.after_data, null, 2) : '—'}
-            </pre>
+            <div className="overflow-auto rounded-xl bg-slate-50 p-3 text-[11px]">
+              {log.after_data ? formatDiffData(log.after_data as Record<string, unknown>) : '—'}
+            </div>
           </div>
         </div>
       </aside>
