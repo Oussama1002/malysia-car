@@ -400,19 +400,8 @@ export const ReservationsOpsPage: React.FC = () => {
   const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
   const timelineStatus = String(detail?.status ?? selected?.status ?? '');
 
-  if (!hasBackend()) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        Backend non configuré. Renseignez <span className="font-mono">VITE_API_BASE</span> pour activer les réservations/missions.
-      </div>
-    );
-  }
-
-  // ── Reservations starting today or yesterday that still need a contract ──
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const yesterday = useMemo(() => { const d = new Date(today); d.setDate(d.getDate() - 1); return d; }, [today]);
 
   const urgentReservations = useMemo(() => {
     const PRE_HANDOVER = ['reserved', 'confirmed', 'pickup_scheduled'];
@@ -422,10 +411,18 @@ export const ReservationsOpsPage: React.FC = () => {
       start.setHours(0, 0, 0, 0);
       return start.getTime() === today.getTime() || start.getTime() === yesterday.getTime();
     });
-  }, [reservationsQ.data]);
+  }, [reservationsQ.data, today, yesterday]);
 
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const visibleUrgent = urgentReservations.filter((r) => !dismissedIds.has(r.id));
+
+  if (!hasBackend()) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+        Backend non configuré. Renseignez <span className="font-mono">VITE_API_BASE</span> pour activer les réservations/missions.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
