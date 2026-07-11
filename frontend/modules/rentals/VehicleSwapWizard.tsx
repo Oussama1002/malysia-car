@@ -367,7 +367,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
                   </div>
                   <div className="mt-1 flex items-center justify-between">
                     <span className="text-[10px] text-slate-400">{v.mileage_current ? `${v.mileage_current.toLocaleString()} km` : ''}</span>
-                    <span className="text-xs font-black text-indigo-600">{v.daily_rental_price ? `${v.daily_rental_price} MAD/j` : ''}</span>
+                    <span></span>
                   </div>
 
                   {/* Availability badge */}
@@ -435,7 +435,6 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
                       ['Gamme', currentV.gamme, selectedVehicle.gamme],
                       ['Transmission', currentV.transmission, selectedVehicle.transmission],
                       ['Carburant', currentV.fuel_type, selectedVehicle.fuel_type],
-                      ['Tarif/jour', currentV.daily_rental_price ? `${currentV.daily_rental_price} MAD` : '—', selectedVehicle.daily_rental_price ? `${selectedVehicle.daily_rental_price} MAD` : '—'],
                     ] as [string, string | null, string | null][]).map(([label, old, nw], i) => {
                       const diff = old && nw && old !== nw && String(old) !== String(nw);
                       return (
