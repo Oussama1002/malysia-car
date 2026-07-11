@@ -133,6 +133,9 @@ export const ContractDetailPage: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showSwapVehicle, setShowSwapVehicle] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
 
   const q = useQuery({
     queryKey: queryKeys.contracts.one(cid),
@@ -397,6 +400,53 @@ export const ContractDetailPage: React.FC = () => {
       {/* ── ACTIONS ─────────────────────────────────────────────────────── */}
       {tab === 'actions' && (
         <div className="space-y-4">
+          {/* Status change */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <div className="text-sm font-black text-slate-900">Modifier le statut</div>
+            <p className="mt-1 text-sm text-slate-500">Statut actuel : <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${STATUS_STYLE[c.status] ?? 'bg-slate-100 text-slate-700 border-slate-300'}`}>{STATUS_FR[c.status] ?? c.status}</span></p>
+            {statusError && <div className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{statusError}</div>}
+            {statusSuccess && <div className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{statusSuccess}</div>}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { key: 'draft', label: 'Brouillon', guard: () => c.status !== 'draft' },
+                { key: 'pending_approval', label: 'En attente d\'approbation', guard: () => ['draft'].includes(c.status) },
+                { key: 'approved', label: 'Approuvé', guard: () => ['pending_approval', 'draft'].includes(c.status) },
+                { key: 'active', label: 'Actif', guard: () => ['approved', 'pending_approval', 'draft'].includes(c.status) },
+                { key: 'suspended', label: 'Suspendu', guard: () => c.status === 'active' },
+                { key: 'terminated', label: 'Résilié', guard: () => ['active', 'suspended'].includes(c.status) },
+                { key: 'closed', label: 'Clôturé', guard: () => ['active', 'terminated', 'completed'].includes(c.status) },
+                { key: 'cancelled', label: 'Annulé', guard: () => !['cancelled', 'closed', 'terminated'].includes(c.status) },
+              ]
+                .filter((s) => s.guard())
+                .map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    disabled={statusBusy}
+                    className={`rounded-xl border px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${STATUS_STYLE[s.key] ?? 'bg-slate-100 text-slate-700 border-slate-300'} hover:opacity-80`}
+                    onClick={async () => {
+                      setStatusBusy(true);
+                      setStatusError(null);
+                      setStatusSuccess(null);
+                      try {
+                        await contractsApi.changeStatus(cid, s.key);
+                        setStatusSuccess(`Statut changé en "${s.label}"`);
+                        q.refetch();
+                        setTimeout(() => setStatusSuccess(null), 4000);
+                      } catch (e) {
+                        setStatusError(e instanceof ApiError ? e.message : 'Erreur lors du changement de statut');
+                      } finally {
+                        setStatusBusy(false);
+                      }
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+            </div>
+          </div>
+
+          {/* Danger zone */}
           <div className="rounded-2xl border border-rose-100 bg-white p-6 shadow-sm">
             <div className="text-sm font-black text-rose-700">Zone dangereuse</div>
             <p className="mt-2 text-sm text-slate-600">

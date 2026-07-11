@@ -138,6 +138,14 @@ export const contractsApi = {
     return res.data;
   },
 
+  async changeStatus(id: number | string, status: string): Promise<ContractDto> {
+    const res = await apiClient<{ data: ContractDto }>(endpoints.contracts.one(id), {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+    return res.data;
+  },
+
   async destroy(id: number | string): Promise<void> {
     await apiClient(endpoints.contracts.one(id), { method: 'DELETE' });
   },

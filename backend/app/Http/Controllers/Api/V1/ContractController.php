@@ -160,8 +160,32 @@ class ContractController extends Controller
 
         AuditLogger::created($c, $request->user(), request: $request);
 
-        // Create Payment records from wizard payment entries
+        // Auto-promote status when contract has payments and a linked reservation
         $paymentEntries = $request->input('payment_entries', []);
+        $hasPayments = is_array($paymentEntries) && collect($paymentEntries)->contains(fn ($e) => ((float) ($e['amount'] ?? 0)) > 0);
+        if ($hasPayments && (string) $c->status === 'draft') {
+            $linkedReservation = Reservation::query()
+                ->where('customer_id', $c->customer_id)
+                ->where('vehicle_id', $c->vehicle_id)
+                ->whereNotIn('status', ['cancelled', 'closed', 'draft'])
+                ->first();
+            if ($linkedReservation) {
+                $c->status = 'pending_approval';
+                $c->save();
+                ContractHistory::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'contract_id' => $c->id,
+                    'action' => 'status_changed',
+                    'from_status' => 'draft',
+                    'to_status' => 'pending_approval',
+                    'actor_id' => auth()->id(),
+                    'at' => now(),
+                    'note' => 'Auto-promu: paiement reçu + réservation confirmée',
+                ]);
+            }
+        }
+
+        // Create Payment records from wizard payment entries
         if (is_array($paymentEntries)) {
             foreach ($paymentEntries as $entry) {
                 $amount = (float) ($entry['amount'] ?? 0);
