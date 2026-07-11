@@ -796,6 +796,9 @@ body:has(.df-overlay-backdrop) .df-copilot-fab { display: none; }
 }
 .df-stepper::-webkit-scrollbar { display: none; }
 
+.scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
 .df-step {
   display: flex;
   flex-direction: column;
