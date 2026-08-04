@@ -40,7 +40,7 @@ const GROUPS: NavGroup[] = [
       // Réservations module = contracts list + rental operations as tabs.
       // The standalone /rentals entry was merged in (redirects to the
       // Locations tab); see ContractsModulePage + AppRoutes.
-      { to: '/contracts', module: 'contracts', labelKey: 'nav.contractsSidebar', icon: 'doc' },
+      { to: '/contracts', module: 'contracts', labelKey: 'nav.contractsSidebar', icon: 'calendar' },
       { to: '/used-cars', module: 'usedCars', labelKey: 'nav.usedCars', icon: 'marketplace' },
     ],
   },
@@ -50,8 +50,8 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/credit', module: 'credit', labelKey: 'nav.credit', icon: 'credit' },
       { to: '/finance', module: 'finance', labelKey: 'nav.finance', icon: 'coin' },
-      { to: '/finance/fixed-charges', module: 'finance', labelKey: 'nav.fixedCharges', icon: 'coin' },
-      { to: '/accounting', module: 'accounting', labelKey: 'nav.accounting', icon: 'coin' },
+      { to: '/finance/fixed-charges', module: 'finance', labelKey: 'nav.fixedCharges', icon: 'receipt' },
+      { to: '/accounting', module: 'accounting', labelKey: 'nav.accounting', icon: 'calculator' },
       { to: '/arrears', module: 'arrears', labelKey: 'nav.arrears', icon: 'alert' },
     ],
   },
@@ -68,8 +68,8 @@ const GROUPS: NavGroup[] = [
     labelKey: 'nav.group.system',
     items: [
       { to: '/notifications', module: 'notifications', labelKey: 'nav.notifications', icon: 'bell' },
-      { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'doc' },
-      { to: '/documents/reader', module: 'documents', labelKey: 'nav.documentReader', icon: 'doc' },
+      { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'folder' },
+      { to: '/documents/reader', module: 'documents', labelKey: 'nav.documentReader', icon: 'scan' },
       { to: '/audit', module: 'audit', labelKey: 'nav.audit', icon: 'audit' },
       { to: '/settings', module: 'settings', labelKey: 'nav.settings', icon: 'gear' },
     ],
