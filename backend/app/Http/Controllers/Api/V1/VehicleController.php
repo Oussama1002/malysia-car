@@ -112,6 +112,7 @@ class VehicleController extends Controller
             $v->color = $data['color'] ?? null;
             $v->fuel_type = $data['fuel_type'] ?? null;
             $v->fiscal_power = $data['fiscal_power'] ?? null;
+            $v->insurance_start = $data['insurance_start'] ?? null;
             $v->insurance_expiry = $data['insurance_expiry'] ?? null;
             $v->tech_control_expiry = $data['tech_control_expiry'] ?? null;
             $v->vignette_expiry = $data['vignette_expiry'] ?? null;
@@ -240,6 +241,9 @@ class VehicleController extends Controller
             }
             if (array_key_exists('registration_card_number', $data)) {
                 $vehicle->registration_card_number = $data['registration_card_number'];
+            }
+            if (array_key_exists('insurance_start', $data)) {
+                $vehicle->insurance_start = $data['insurance_start'];
             }
             if (array_key_exists('insurance_expiry', $data)) {
                 $vehicle->insurance_expiry = $data['insurance_expiry'];

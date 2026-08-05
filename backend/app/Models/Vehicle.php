@@ -39,6 +39,7 @@ class Vehicle extends Model
         'vin',
         'registration_number',
         'registration_card_number',
+        'insurance_start',
         'insurance_expiry',
         'tech_control_expiry',
         'vignette_expiry',
@@ -83,6 +84,7 @@ class Vehicle extends Model
     protected $casts = [
         'gps_enabled' => 'boolean',
         'acquisition_date' => 'date',
+        'insurance_start' => 'date',
         'insurance_expiry' => 'date',
         'tech_control_expiry' => 'date',
         'vignette_expiry' => 'date',

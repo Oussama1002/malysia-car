@@ -30,6 +30,7 @@ class DocumentParser
             ReaderDocument::TYPE_DRIVING_LICENSE => $this->parseDrivingLicense($normalized),
             ReaderDocument::TYPE_VEHICLE_REGISTRATION => $this->parseCarteGrise($normalized),
             ReaderDocument::TYPE_CHEQUE => $this->parseCheque($normalized),
+            ReaderDocument::TYPE_INSURANCE => $this->parseInsurance($normalized),
             default => [],
         };
 
@@ -62,6 +63,10 @@ class DocumentParser
         // Moroccan CIN
         if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D[\'’]?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
             return ReaderDocument::TYPE_CIN;
+        }
+        // Insurance / assurance
+        if (preg_match('/ASSURANCE|INSURANCE|POLICE\s+D[\'']?ASSURANCE|N°?\s*POLICE|ATTESTATION\s+D[\'']?ASSURANCE|COMPAGNIE\s+D[\'']?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE/u', $upper)) {
+            return ReaderDocument::TYPE_INSURANCE;
         }
         // Cheque / bank check
         if (preg_match('/CH[ÈE]QUE|CHEQUE|PAYEZ\s+CONTRE|ORDER\s+OF|PAY\s+TO\s+THE|BANQUE|BANK.*CHECK/u', $upper)) {
@@ -373,6 +378,104 @@ class DocumentParser
             'bank' => $bank ? mb_convert_case(mb_strtolower($bank), MB_CASE_TITLE, 'UTF-8') : null,
             'amount' => $amount,
             'check_date' => $checkDate,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function parseInsurance(string $text): array
+    {
+        $upper = mb_strtoupper($text);
+
+        // Policy number: "N° Police", "Police N°", "N° de police", "Policy No"
+        $policyNumber = $this->labelValue($text, [
+            'N°?\s*(?:de\s+)?Police',
+            'Police\s*N°?',
+            'Policy\s*N[o°]',
+            'Contract\s*N[o°]',
+            'N°?\s*Contrat',
+        ], '[A-Z0-9\-\/\s]{3,30}')
+            ?? $this->firstMatch('/(?:police|contrat)\s*(?:n[°o]?\s*)?[:\-]?\s*([A-Z0-9][\w\-\/]{2,25})/iu', $text);
+
+        // Insurance company
+        $company = $this->labelValue($text, [
+            'Compagnie',
+            'Assureur',
+            'Soci[ée]t[ée]\s+d[\'']?assurance',
+            'Insurance\s+Company',
+            'Insurer',
+        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\'\.]+');
+        if (! $company) {
+            $moroccanInsurers = [
+                'WAFA ASSURANCE', 'SAHAM', 'ATLANTA', 'AXA', 'RMA',
+                'MAMDA', 'MCMA', 'ZURICH', 'ALLIANZ', 'SANAD',
+                'LA MAROCAINE VIE', 'MAROC ASSISTANCE', 'SANLAM',
+                'CAT', 'CNIA', 'MATU', 'MUTUELLE', 'ISAAF',
+            ];
+            foreach ($moroccanInsurers as $ins) {
+                if (str_contains($upper, $ins)) {
+                    $company = $ins;
+                    break;
+                }
+            }
+        }
+
+        // Guarantee period: "Période de garantie du DD/MM/YYYY au DD/MM/YYYY"
+        // or "du ... à ..." / "du ... au ..."
+        $guaranteeStart = null;
+        $guaranteeEnd = null;
+
+        $datePattern = '(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})';
+        // "du DD/MM/YYYY au DD/MM/YYYY" or "du DD/MM/YYYY à DD/MM/YYYY"
+        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture)[^\n]*?du\s*'.$datePattern.'\s*(?:au|[àa])\s*'.$datePattern.'/iu', $text, $m)) {
+            $guaranteeStart = $this->canonicalizeDate($m[1]);
+            $guaranteeEnd = $this->canonicalizeDate($m[2]);
+        }
+        // Fallback: "du DD/MM/YYYY au DD/MM/YYYY" anywhere
+        if (! $guaranteeStart && preg_match('/du\s*'.$datePattern.'\s*(?:au|[àa])\s*'.$datePattern.'/iu', $text, $m)) {
+            $guaranteeStart = $this->canonicalizeDate($m[1]);
+            $guaranteeEnd = $this->canonicalizeDate($m[2]);
+        }
+        // Fallback: labeled start/end dates
+        if (! $guaranteeStart) {
+            $guaranteeStart = $this->extractDate($text, [
+                'Date\s+d[\'']?effet',
+                'Date\s+de\s+d[ée]but',
+                'Effet\s+du',
+                'Start\s+date',
+                'D[ée]but',
+            ]);
+        }
+        if (! $guaranteeEnd) {
+            $guaranteeEnd = $this->extractDate($text, [
+                'Date\s+d[\'']?[ée]ch[ée]ance',
+                'Date\s+d[\'']?expiration',
+                'Date\s+de\s+fin',
+                'Expir',
+                'Fin\s+de\s+garantie',
+                'Echéance',
+                'End\s+date',
+                'Valable\s+jusqu',
+            ]);
+        }
+
+        // Registration / Immatriculation from the insurance doc
+        $registration = $this->labelValue($text, [
+            'Immatriculation',
+            'N°?\s*d[\'']?immatriculation',
+            'V[ée]hicule\s+immatricul[ée]',
+            'WW',
+            'Immat',
+        ], '[A-Z0-9\-\s\/]{3,20}')
+            ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text)
+            ?? $this->firstMatch('/\b(WW[\s\-]?\d{3,6}[\s\-]?[A-Z]?)\b/iu', $text);
+
+        return [
+            'policy_number'    => $policyNumber ? trim($policyNumber) : null,
+            'insurance_company' => $company ? mb_convert_case(mb_strtolower(trim($company)), MB_CASE_TITLE, 'UTF-8') : null,
+            'guarantee_start'  => $guaranteeStart,
+            'guarantee_end'    => $guaranteeEnd,
+            'expiry_date'      => $guaranteeEnd,
+            'registration_number' => $registration ? trim($registration) : null,
         ];
     }
 

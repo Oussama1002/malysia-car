@@ -36,6 +36,7 @@ class VehicleResource extends JsonResource
             'fuel' => $v->fuel_type,
             'cv' => $v->fiscal_power,
             'mileageKm' => $v->mileage_current ? (int) $v->mileage_current : null,
+            'insuranceStart' => $v->insurance_start?->toDateString(),
             'insuranceExpiry' => $v->insurance_expiry?->toDateString(),
             'techControlExpiry' => $v->tech_control_expiry?->toDateString(),
             'vignetteExpiry' => $v->vignette_expiry?->toDateString(),

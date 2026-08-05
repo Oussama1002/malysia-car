@@ -68,6 +68,7 @@ const emptyForm = () => ({
   platRegion: 1,
   registration: '',
   registrationCard: '',
+  insuranceStart: '',
   insuranceExpiry: '',
   techControlExpiry: '',
   vignetteExpiry: '',
@@ -288,6 +289,7 @@ const VehiclesList: React.FC = () => {
         fiscal_power: formData.cv !== '' ? Number(formData.cv) : undefined,
         mileage_km: formData.mileageKm !== '' ? Number(formData.mileageKm) : undefined,
         registration_card_number: formData.registrationCard || undefined,
+        insurance_start: formData.insuranceStart || undefined,
         insurance_expiry: formData.insuranceExpiry || undefined,
         tech_control_expiry: formData.techControlExpiry || undefined,
         vignette_expiry: formData.vignetteExpiry || undefined,
@@ -899,6 +901,7 @@ const VehiclesList: React.FC = () => {
                 onPrefill={(data) => setFormData(fd => ({
                   ...fd,
                   ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
+                  ...(data.insuranceStart  ? { insuranceStart: data.insuranceStart }     : {}),
                   ...(data.insuranceExpiry  ? { insuranceExpiry: data.insuranceExpiry }   : {}),
                   ...(data.chassis          ? { chassis: data.chassis }                   : {}),
                   ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
@@ -1194,9 +1197,14 @@ const VehiclesList: React.FC = () => {
                       />
                     )}
                   </div>
-                  {/* Assurance */}
+                  {/* Assurance — période de garantie */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Exp. Assurance</label>
+                    <label className={labelCls}>Assurance du</label>
+                    <input type="date" className={inputCls} value={formData.insuranceStart}
+                      onChange={e => setFormData(fd => ({ ...fd, insuranceStart: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className={labelCls}>Assurance au</label>
                     <input type="date" required className={inputCls} value={formData.insuranceExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, insuranceExpiry: e.target.value }))} />
                   </div>

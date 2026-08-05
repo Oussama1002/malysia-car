@@ -6,6 +6,7 @@ export interface ScannedVehicleData {
   insuranceCompany?: string;
   numeroPolice?: string;
   insuranceExpiry?: string;
+  insuranceStart?: string;
   // Facture d'achat
   marque?: string;
   modele?: string;
@@ -35,7 +36,7 @@ export const VehicleDocumentScanner: React.FC<{
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       <ScanSlot
         title="Assurance"
-        description="Compagnie, N° police, expiration"
+        description="N° police, période de garantie, immatriculation"
         onPrefill={onPrefill}
         mapFields={mapAssurance}
       />
@@ -109,8 +110,9 @@ const ScanSlot: React.FC<{
     setError(null);
     setPreview(null);
     try {
-      const uploaded = await documentReaderApi.upload(file, 'other');
-      await documentReaderApi.extract(uploaded.data.id, 'other');
+      const docType = mapFields === mapAssurance ? 'insurance' : 'other';
+      const uploaded = await documentReaderApi.upload(file, docType);
+      await documentReaderApi.extract(uploaded.data.id, docType);
       const done = await documentReaderApi.pollUntilDone(uploaded.data.id);
 
       if (done.data.status === 'failed') {
@@ -198,7 +200,9 @@ function mapAssurance(d: Record<string, unknown>): ScannedVehicleData {
   return {
     insuranceCompany: str(d.insurance_company ?? d.company_name ?? d.compagnie ?? d.insurer),
     numeroPolice:     str(d.policy_number ?? d.numero_police ?? d.policy_no ?? d.contract_number),
-    insuranceExpiry:  str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_fin),
+    insuranceStart:   str(d.guarantee_start ?? d.date_effet ?? d.start_date ?? d.date_debut),
+    insuranceExpiry:  str(d.guarantee_end ?? d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_fin),
+    immatProvisoire:  str(d.registration_number ?? d.immatriculation ?? d.plate_number),
   };
 }
 
@@ -235,7 +239,8 @@ function mapVignette(d: Record<string, unknown>): ScannedVehicleData {
 const FIELD_LABELS: Record<string, string> = {
   insuranceCompany:      'Compagnie',
   numeroPolice:          'N° police',
-  insuranceExpiry:       'Exp. assurance',
+  insuranceStart:        'Garantie du',
+  insuranceExpiry:       'Garantie au',
   marque:                'Marque',
   modele:                'Modèle',
   chassis:               'VIN / Châssis',

@@ -34,6 +34,7 @@ class UpdateVehicleRequest extends ApiFormRequest
             'fuel_type' => ['sometimes', 'nullable', 'string', 'max:50'],
             'fiscal_power' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:999'],
             'registration_card_number' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'insurance_start' => ['sometimes', 'nullable', 'date'],
             'insurance_expiry' => ['sometimes', 'nullable', 'date'],
             'tech_control_expiry' => ['sometimes', 'nullable', 'date'],
             'vignette_expiry' => ['sometimes', 'nullable', 'date'],

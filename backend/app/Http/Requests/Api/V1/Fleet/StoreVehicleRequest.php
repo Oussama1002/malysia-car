@@ -31,6 +31,7 @@ class StoreVehicleRequest extends ApiFormRequest
             'fuel_type' => ['nullable', 'string', 'max:50'],
             'fiscal_power' => ['nullable', 'integer', 'min:1', 'max:999'],
             'registration_card_number' => ['nullable', 'string', 'max:100'],
+            'insurance_start' => ['nullable', 'date'],
             'insurance_expiry' => ['nullable', 'date'],
             'tech_control_expiry' => ['nullable', 'date'],
             'vignette_expiry' => ['nullable', 'date'],
