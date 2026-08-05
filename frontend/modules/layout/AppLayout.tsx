@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { canAccessModule, type ModuleKey } from '@/domain/appRole';
 import { useAuthSession } from '@/modules/auth/AuthContext';
@@ -12,7 +12,7 @@ import { DensityToggle } from '@/modules/shared/components/DensityToggle';
 import { CommandPalette, useCommandPaletteShortcut } from '@/modules/shared/components/CommandPalette';
 import { AICopilotDrawer, AICopilotFab } from '@/modules/shared/components/AICopilot';
 import { AppBreadcrumbs } from '@/modules/layout/AppBreadcrumbs';
-import { notificationsApi } from '@/services/notificationsApi';
+import { notificationsApi, type NotificationDto } from '@/services/notificationsApi';
 import { maintenanceApi } from '@/services/maintenanceApi';
 import { isExperimentalEnabled, isModuleHiddenInDemo } from '@/config/runtimeFlags';
 
@@ -95,6 +95,8 @@ export const AppLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
   const crumb = useBreadcrumb();
 
   useCommandPaletteShortcut(() => setCmdOpen(true));
@@ -137,6 +139,45 @@ export const AppLayout: React.FC = () => {
     refetchInterval: 120_000,
   });
   const carteGrisePending = carteGriseQ.data ?? [];
+
+  const queryClient = useQueryClient();
+  const notifListQ = useQuery({
+    queryKey: ['notifications', 'popup'],
+    queryFn: () => notificationsApi.list({ per_page: 8 }),
+    enabled: notifOpen,
+    refetchInterval: notifOpen ? 15000 : false,
+  });
+  const popupNotifs: NotificationDto[] = (notifListQ.data as any)?.data ?? [];
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifOpen]);
+
+  const handleMarkRead = async (id: string) => {
+    await notificationsApi.markRead(id);
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  };
+
+  const handleMarkAllRead = async () => {
+    await notificationsApi.markAllRead();
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  };
+
+  const formatTimeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "À l'instant";
+    if (mins < 60) return `Il y a ${mins}min`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `Il y a ${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `Il y a ${days}j`;
+  };
 
   const renderNavLink = (it: NavItem) => (
     <NavLink
@@ -316,14 +357,72 @@ export const AppLayout: React.FC = () => {
             })}
           </div>
 
-          <button type="button" className="df-btn df-btn--subtle df-btn--sm df-btn--icon relative" aria-label="Notifications" onClick={() => navigate('/notifications')}>
-            <Icon name="bell" size={16} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -end-1.5 min-w-4 rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-[color:var(--df-surface-solid)]">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
+          <div className="relative" ref={notifRef}>
+            <button type="button" className="df-btn df-btn--subtle df-btn--sm df-btn--icon relative" aria-label="Notifications" onClick={() => setNotifOpen((v) => !v)}>
+              <Icon name="bell" size={16} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -end-1.5 min-w-4 rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-[color:var(--df-surface-solid)]">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {notifOpen && (
+              <div className="absolute end-0 top-full mt-2 w-[380px] rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] shadow-2xl z-50 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[color:var(--df-border)]">
+                  <h3 className="text-[13px] font-bold text-[color:var(--df-text)]">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <button type="button" onClick={handleMarkAllRead} className="text-[11px] font-semibold text-[color:var(--df-brand-500)] hover:underline">
+                      Tout marquer comme lu
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-[360px] overflow-y-auto">
+                  {popupNotifs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-[color:var(--df-text-muted)]">
+                      <Icon name="bell" size={28} className="mb-2 opacity-30" />
+                      <p className="text-[12px] font-semibold">Aucune notification</p>
+                    </div>
+                  ) : (
+                    popupNotifs.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        className={`w-full text-start flex gap-3 px-4 py-3 transition hover:bg-[color:var(--df-surface-elev)] ${!n.read_at ? 'bg-[color:var(--df-brand-500)]/[0.04]' : ''}`}
+                        onClick={() => {
+                          if (!n.read_at) handleMarkRead(n.id);
+                          if (n.link_url) navigate(n.link_url);
+                          setNotifOpen(false);
+                        }}
+                      >
+                        <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${!n.read_at ? 'bg-[color:var(--df-brand-500)]' : 'bg-transparent'}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[12.5px] leading-snug ${!n.read_at ? 'font-bold text-[color:var(--df-text)]' : 'font-medium text-[color:var(--df-text-muted)]'}`}>
+                            {n.title}
+                          </p>
+                          {n.body && (
+                            <p className="mt-0.5 text-[11.5px] text-[color:var(--df-text-faint)] line-clamp-2">{n.body}</p>
+                          )}
+                          <p className="mt-1 text-[10px] font-semibold text-[color:var(--df-text-faint)]">{formatTimeAgo(n.created_at)}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="border-t border-[color:var(--df-border)]">
+                  <button
+                    type="button"
+                    className="w-full py-3 text-center text-[12px] font-bold text-[color:var(--df-brand-500)] hover:bg-[color:var(--df-surface-elev)] transition"
+                    onClick={() => { setNotifOpen(false); navigate('/notifications'); }}
+                  >
+                    Voir tout
+                  </button>
+                </div>
+              </div>
             )}
-          </button>
+          </div>
 
           <button
             type="button"
