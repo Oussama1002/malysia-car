@@ -1053,7 +1053,8 @@ const CreateMissionModalContent: React.FC<{
   const res = reservations.find((r) => r.id === reservationId);
   if (!res) return null;
   const veh = vehicles.find((v) => String(v.id) === String(res.vehicle_id));
-  const cust = customers.find((c) => String(c.id) === String(res.customer_id));
+  const custRaw = customers.find((c) => String(c.id) === String(res.customer_id)) as unknown as { id: string | number; display_name?: string; individual_profile?: { first_name?: string; last_name?: string } | null; company_profile?: { trade_name?: string; legal_name?: string } | null } | undefined;
+  const custName = custRaw?.display_name || [custRaw?.individual_profile?.first_name, custRaw?.individual_profile?.last_name].filter(Boolean).join(' ') || custRaw?.company_profile?.trade_name || custRaw?.company_profile?.legal_name || '';
   const agentName = (u: typeof agents[number]) => u.name || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email;
 
   return (
@@ -1062,7 +1063,7 @@ const CreateMissionModalContent: React.FC<{
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-xs">
         <div className="flex justify-between"><span className="text-slate-500">Réservation</span><span className="font-bold text-slate-800">{res.reservation_number}</span></div>
         {veh && <div className="flex justify-between"><span className="text-slate-500">Véhicule</span><span className="font-bold text-slate-800">{[veh.brand_name, veh.model_name].filter(Boolean).join(' ')} — {veh.registration_number}</span></div>}
-        {cust && <div className="flex justify-between"><span className="text-slate-500">Client</span><span className="font-bold text-slate-800">{cust.first_name} {cust.last_name}</span></div>}
+        {custName && <div className="flex justify-between"><span className="text-slate-500">Client</span><span className="font-bold text-slate-800">{custName}</span></div>}
         {res.pickup_address && <div className="flex justify-between items-center"><span className="text-slate-500">Départ</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.pickup_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.pickup_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">Carte</a></div>}
         {res.delivery_address && <div className="flex justify-between items-center"><span className="text-slate-500">Livraison</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.delivery_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">Carte</a></div>}
         {res.pickup_address && res.delivery_address && <div className="pt-1"><a href={`https://www.google.com/maps/dir/${encodeURIComponent(res.pickup_address)}/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800">Voir itinéraire</a></div>}
