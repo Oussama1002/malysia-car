@@ -530,7 +530,9 @@ export const ReservationsOpsPage: React.FC = () => {
                 </button>
                 {(() => {
                   const missions = (r as ReservationDto & { missions?: { id: string; mission_type: string; status: string }[] }).missions ?? [];
-                  const activeMissions = missions.filter((m) => m.status !== 'failed');
+                  const activeMissionsRaw = missions.filter((m) => m.status !== 'failed');
+                  const seen = new Set<string>();
+                  const activeMissions = activeMissionsRaw.filter((m) => { if (seen.has(m.mission_type)) return false; seen.add(m.mission_type); return true; });
                   const hasDelivery = activeMissions.some((m) => m.mission_type === 'delivery');
                   const hasPickup = activeMissions.some((m) => m.mission_type === 'pickup');
                   const canCreate = r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && (!hasDelivery || !hasPickup);
