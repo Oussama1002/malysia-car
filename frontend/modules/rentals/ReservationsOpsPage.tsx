@@ -13,7 +13,7 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
 import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
-import { listBranches } from '@/services/adminApi';
+import { listBranches, listUsers } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
@@ -73,6 +73,9 @@ export const ReservationsOpsPage: React.FC = () => {
   const [availForm, setAvailForm] = useState({ vehicle_id: '', start_at: '', end_at: '' });
   const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
   const [newClientError, setNewClientError] = useState<string | null>(null);
+  const [missionModalResId, setMissionModalResId] = useState<string | null>(null);
+  const [missionForm, setMissionForm] = useState({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '' });
+  const [missionError, setMissionError] = useState<string | null>(null);
 
   const reservationsQ = useQuery({
     queryKey: queryKeys.reservations,
@@ -87,6 +90,7 @@ export const ReservationsOpsPage: React.FC = () => {
   });
 
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches(), enabled: hasBackend() });
+  const usersQ = useQuery({ queryKey: ['admin', 'users'], queryFn: () => listUsers({ per_page: 200 }), enabled: hasBackend() });
 
   const createCustomerMut = useMutation({
     mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
@@ -208,10 +212,20 @@ export const ReservationsOpsPage: React.FC = () => {
 
   const createMission = useMutation({
     mutationFn: async (reservationId: string) =>
-      opsApi.createMission(reservationId, { mission_type: 'delivery' }),
+      opsApi.createMission(reservationId, {
+        mission_type: missionForm.mission_type,
+        assigned_user_id: missionForm.assigned_user_id || null,
+        scheduled_start_at: missionForm.scheduled_start_at || undefined,
+        notes: missionForm.notes || undefined,
+      }),
+    onMutate: () => setMissionError(null),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.missions });
+      await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      setMissionModalResId(null);
+      setMissionForm({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '' });
     },
+    onError: (e) => setMissionError(e instanceof Error ? e.message : 'Erreur création mission'),
   });
 
   const confirmRes = useMutation({
@@ -512,9 +526,18 @@ export const ReservationsOpsPage: React.FC = () => {
                 </button>
                 {r.status !== 'draft' && (
                   <button
-                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
-                    disabled={createMission.isPending}
-                    onClick={(e) => { e.stopPropagation(); createMission.mutate(r.id); }}
+                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMissionForm({
+                        mission_type: 'delivery',
+                        assigned_user_id: '',
+                        scheduled_start_at: r.desired_start_at ? r.desired_start_at.slice(0, 16) : '',
+                        notes: '',
+                      });
+                      setMissionError(null);
+                      setMissionModalResId(r.id);
+                    }}
                   >
                     Créer mission
                   </button>
@@ -536,6 +559,57 @@ export const ReservationsOpsPage: React.FC = () => {
         }}
         onSelect={(id) => nav(`/reservations/${id}`)}
       />
+
+      {/* Créer mission modal */}
+      <Modal open={!!missionModalResId} title="Créer une mission" onClose={() => setMissionModalResId(null)} widthClass="max-w-lg">
+        {(() => {
+          const res = (reservationsQ.data ?? []).find((r: ReservationDto) => r.id === missionModalResId);
+          if (!res) return null;
+          const veh = (vehiclesQ.data ?? []).find((v: FleetVehicleDto) => String(v.id) === String(res.vehicle_id));
+          const cust = (customersQ.data ?? []).find((c: CustomerDto) => String(c.id) === String(res.customer_id));
+          const agents = (usersQ.data?.data ?? []).filter((u) => u.status === 'active');
+          return (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-xs">
+                <div className="flex justify-between"><span className="text-slate-500">Réservation</span><span className="font-bold text-slate-800">{res.reservation_number}</span></div>
+                {veh && <div className="flex justify-between"><span className="text-slate-500">Véhicule</span><span className="font-bold text-slate-800">{[veh.brand_name, veh.model_name].filter(Boolean).join(' ')} — {veh.registration_number}</span></div>}
+                {cust && <div className="flex justify-between"><span className="text-slate-500">Client</span><span className="font-bold text-slate-800">{cust.first_name} {cust.last_name}</span></div>}
+                {res.pickup_address && <div className="flex justify-between"><span className="text-slate-500">Adresse départ</span><span className="font-bold text-slate-800 max-w-[60%] truncate">{res.pickup_address}</span></div>}
+                {res.delivery_address && <div className="flex justify-between"><span className="text-slate-500">Adresse livraison</span><span className="font-bold text-slate-800 max-w-[60%] truncate">{res.delivery_address}</span></div>}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Type de mission *</label>
+                <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={missionForm.mission_type} onChange={(e) => setMissionForm((s) => ({ ...s, mission_type: e.target.value }))}>
+                  <option value="delivery">Livraison</option>
+                  <option value="pickup">Récupération</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Agent assigné</label>
+                <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={missionForm.assigned_user_id} onChange={(e) => setMissionForm((s) => ({ ...s, assigned_user_id: e.target.value }))}>
+                  <option value="">— Non assigné —</option>
+                  {agents.map((u) => <option key={u.id} value={u.id}>{u.name || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure prévue</label>
+                <input type="datetime-local" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={missionForm.scheduled_start_at} onChange={(e) => setMissionForm((s) => ({ ...s, scheduled_start_at: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Notes</label>
+                <textarea className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" rows={3} value={missionForm.notes} onChange={(e) => setMissionForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Instructions pour l'agent…" />
+              </div>
+              {missionError && <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-700">{missionError}</div>}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" className="rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50" onClick={() => setMissionModalResId(null)}>Annuler</button>
+                <button type="button" className="rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50" disabled={createMission.isPending} onClick={() => { if (missionModalResId) createMission.mutate(missionModalResId); }}>
+                  {createMission.isPending ? 'Création…' : 'Créer la mission'}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
 
       {/* Nouvelle réservation modal */}
       <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
