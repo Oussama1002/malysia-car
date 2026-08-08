@@ -464,6 +464,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:reservations.confirm');
         Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
             ->middleware('permission:reservations.cancel');
+        Route::post('reservations/{reservation}/change-status', [ReservationController::class, 'changeStatus'])
+            ->middleware('permission:reservations.cancel');
         Route::delete('reservations/{reservation}', [ReservationController::class, 'destroy'])
             ->middleware('permission:reservations.cancel');
         Route::post('reservations/{reservation}/create-mission', [ReservationController::class, 'createMission'])

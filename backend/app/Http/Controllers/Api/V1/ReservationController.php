@@ -500,6 +500,17 @@ class ReservationController extends Controller
         return ApiResponse::success($reservation->fresh());
     }
 
+    public function changeStatus(Request $request, Reservation $reservation): JsonResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', 'string', 'in:' . implode(',', self::FLOW)],
+        ]);
+
+        $this->transitionReservation($reservation, $data['status'], $request);
+
+        return ApiResponse::success($reservation->fresh());
+    }
+
     public function destroy(Request $request, Reservation $reservation): JsonResponse
     {
         if (! in_array($reservation->status, ['cancelled', 'draft'], true)) {

@@ -117,6 +117,11 @@ export const ReservationDetailPage: React.FC = () => {
     mutationFn: () => opsApi.cancelReservation(rid!),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
   });
+  const [statusChangeTarget, setStatusChangeTarget] = useState('');
+  const changeStatusM = useMutation({
+    mutationFn: (newStatus: string) => opsApi.changeReservationStatus(rid!, newStatus),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); setStatusChangeTarget(''); },
+  });
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteM = useMutation({
     mutationFn: () => opsApi.deleteReservation(rid!),
@@ -248,8 +253,28 @@ export const ReservationDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Quick actions bar */}
+        {/* Status change + Quick actions bar */}
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-6 py-3 bg-slate-50/50">
+          <div className="flex items-center gap-2 mr-4">
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+              value={statusChangeTarget || status}
+              onChange={(e) => setStatusChangeTarget(e.target.value === status ? '' : e.target.value)}
+            >
+              {Object.entries(STATUS_FR).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            {statusChangeTarget && statusChangeTarget !== status && (
+              <button
+                onClick={() => changeStatusM.mutate(statusChangeTarget)}
+                disabled={changeStatusM.isPending}
+                className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {changeStatusM.isPending ? 'Changement...' : 'Appliquer'}
+              </button>
+            )}
+          </div>
           {status === 'draft' && (
             <button
               onClick={() => validateM.mutate()}

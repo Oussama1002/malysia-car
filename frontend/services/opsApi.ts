@@ -128,6 +128,11 @@ export const opsApi = {
     return res.data;
   },
 
+  async changeReservationStatus(id: string, status: string): Promise<ReservationDto> {
+    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.changeStatus(id), { method: 'POST', body: JSON.stringify({ status }) });
+    return res.data;
+  },
+
   async deleteReservation(id: string): Promise<void> {
     await apiClient(endpoints.reservations.one(id), { method: 'DELETE' });
   },
