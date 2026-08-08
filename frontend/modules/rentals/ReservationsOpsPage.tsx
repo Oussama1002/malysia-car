@@ -538,7 +538,7 @@ export const ReservationsOpsPage: React.FC = () => {
                     <>
                       {activeMissions.map((m) => (
                         <span key={m.id} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {m.mission_type === 'pickup' ? '↩ Récup.' : '🚗 Livrais.'} {m.status === 'completed' ? '✓' : m.status === 'in_progress' ? '▶' : '⏳'}
+                          {m.mission_type === 'pickup' ? 'Récup.' : 'Livrais.'} · {m.status === 'completed' ? 'Terminée' : m.status === 'in_progress' ? 'En cours' : 'Planifiée'}
                         </span>
                       ))}
                       {canCreate && (
@@ -1063,9 +1063,9 @@ const CreateMissionModalContent: React.FC<{
         <div className="flex justify-between"><span className="text-slate-500">Réservation</span><span className="font-bold text-slate-800">{res.reservation_number}</span></div>
         {veh && <div className="flex justify-between"><span className="text-slate-500">Véhicule</span><span className="font-bold text-slate-800">{[veh.brand_name, veh.model_name].filter(Boolean).join(' ')} — {veh.registration_number}</span></div>}
         {cust && <div className="flex justify-between"><span className="text-slate-500">Client</span><span className="font-bold text-slate-800">{cust.first_name} {cust.last_name}</span></div>}
-        {res.pickup_address && <div className="flex justify-between items-center"><span className="text-slate-500">Départ</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.pickup_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.pickup_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">📍</a></div>}
-        {res.delivery_address && <div className="flex justify-between items-center"><span className="text-slate-500">Livraison</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.delivery_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">📍</a></div>}
-        {res.pickup_address && res.delivery_address && <div className="pt-1"><a href={`https://www.google.com/maps/dir/${encodeURIComponent(res.pickup_address)}/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800">🗺 Voir itinéraire</a></div>}
+        {res.pickup_address && <div className="flex justify-between items-center"><span className="text-slate-500">Départ</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.pickup_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.pickup_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">Carte</a></div>}
+        {res.delivery_address && <div className="flex justify-between items-center"><span className="text-slate-500">Livraison</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.delivery_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">Carte</a></div>}
+        {res.pickup_address && res.delivery_address && <div className="pt-1"><a href={`https://www.google.com/maps/dir/${encodeURIComponent(res.pickup_address)}/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800">Voir itinéraire</a></div>}
       </div>
 
       {/* --- Mission Livraison --- */}

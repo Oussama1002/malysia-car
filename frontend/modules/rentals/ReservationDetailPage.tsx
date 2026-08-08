@@ -532,7 +532,7 @@ const TabMissions: React.FC<{ missions: MissionRow[]; reservation: Record<string
   if (!missions.length) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="text-4xl mb-3">🚗</div>
+        <div className="text-4xl mb-3 text-slate-300">—</div>
         <div className="text-sm font-bold text-slate-500">Aucune mission créée</div>
         <div className="text-xs text-slate-400 mt-1">Utilisez le bouton « + Mission » sur la liste des réservations</div>
       </div>
@@ -580,7 +580,7 @@ const TabMissions: React.FC<{ missions: MissionRow[]; reservation: Record<string
                 {i > 0 && <div className={`flex-1 h-0.5 mx-1 ${done ? 'bg-emerald-400' : active ? 'bg-indigo-300' : 'bg-slate-200'}`} />}
                 <div className="flex flex-col items-center gap-1">
                   <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black ${done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-500 text-white ring-4 ring-indigo-100' : 'bg-slate-100 text-slate-400'}`}>
-                    {done ? '✓' : i + 1}
+                    {done ? 'OK' : i + 1}
                   </div>
                   <span className={`text-[10px] font-bold ${done ? 'text-emerald-600' : active ? 'text-indigo-600' : 'text-slate-400'}`}>{step.label}</span>
                 </div>
@@ -596,7 +596,7 @@ const TabMissions: React.FC<{ missions: MissionRow[]; reservation: Record<string
           <div key={m.id} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">{m.mission_type === 'pickup' ? '↩' : '🚗'}</span>
+                <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${m.mission_type === 'pickup' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>{m.mission_type === 'pickup' ? 'R' : 'L'}</span>
                 <span className="text-sm font-black text-slate-800">{MISSION_TYPE_FR[m.mission_type] ?? m.mission_type}</span>
               </div>
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : m.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -629,19 +629,19 @@ const TabMissions: React.FC<{ missions: MissionRow[]; reservation: Record<string
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <span className="text-slate-400 font-bold">De :</span>
                     <span className="text-slate-600">{m.origin_address}</span>
-                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.origin_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">📍</a>
+                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.origin_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">Carte</a>
                   </div>
                 )}
                 {m.destination_address && (
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <span className="text-slate-400 font-bold">À :</span>
                     <span className="text-slate-600">{m.destination_address}</span>
-                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.destination_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">📍</a>
+                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.destination_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">Carte</a>
                   </div>
                 )}
                 {m.origin_address && m.destination_address && (
                   <a href={`https://www.google.com/maps/dir/${encodeURIComponent(m.origin_address)}/${encodeURIComponent(m.destination_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 transition">
-                    🗺 Itinéraire Google Maps
+                    Itinéraire Google Maps
                   </a>
                 )}
               </div>
