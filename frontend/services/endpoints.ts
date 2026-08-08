@@ -108,6 +108,7 @@ export const endpoints = {
     validate: (id: number | string) => `/v1/reservations/${id}/validate`,
     cancel: (id: number | string) => `/v1/reservations/${id}/cancel`,
     createMission: (id: number | string) => `/v1/reservations/${id}/create-mission`,
+    agentAvailability: '/v1/reservations/agent-availability',
     handoverPickup: (id: number | string) => `/v1/reservations/${id}/handover-pickup`,
     requestExtension: (id: number | string) => `/v1/reservations/${id}/request-extension`,
     handoverReturn: (id: number | string) => `/v1/reservations/${id}/handover-return`,

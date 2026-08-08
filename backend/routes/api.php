@@ -468,6 +468,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:reservations.cancel');
         Route::post('reservations/{reservation}/create-mission', [ReservationController::class, 'createMission'])
             ->middleware('permission:reservations.create_mission');
+        Route::post('reservations/agent-availability', [ReservationController::class, 'agentAvailability'])
+            ->middleware('permission:reservations.create_mission');
         Route::post('reservations/{reservation}/handover-pickup', [ReservationController::class, 'handoverPickup'])
             ->middleware('permission:rentals.handover_pickup');
         Route::post('reservations/{reservation}/request-extension', [ReservationController::class, 'requestExtension'])

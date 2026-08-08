@@ -85,8 +85,13 @@ export const opsApi = {
     return res.data;
   },
 
-  async createMission(reservationId: string, input: { mission_type: string; assigned_user_id?: string | null; scheduled_start_at?: string; scheduled_end_at?: string; origin_address?: string; destination_address?: string; notes?: string }): Promise<MissionDto> {
+  async createMission(reservationId: string, input: { mission_type: string; assigned_user_id?: string | null; scheduled_start_at?: string; scheduled_end_at?: string; origin_address?: string; destination_address?: string; notes?: string; create_return_mission?: boolean; return_assigned_user_id?: string | null; return_scheduled_at?: string; return_notes?: string }): Promise<MissionDto> {
     const res = await apiClient<{ data: MissionDto }>(endpoints.reservations.createMission(reservationId), { method: 'POST', body: JSON.stringify(input) });
+    return res.data;
+  },
+
+  async agentAvailability(agentId: string, scheduledAt: string, excludeReservationId?: string): Promise<{ agent_id: string; date: string; conflicts: { id: string; mission_type: string; status: string; scheduled_start_at: string; reservation?: { id: string; reservation_number: string } }[]; available: boolean }> {
+    const res = await apiClient<{ data: { agent_id: string; date: string; conflicts: { id: string; mission_type: string; status: string; scheduled_start_at: string; reservation?: { id: string; reservation_number: string } }[]; available: boolean } }>(endpoints.reservations.agentAvailability, { method: 'POST', body: JSON.stringify({ agent_id: agentId, scheduled_at: scheduledAt, exclude_reservation_id: excludeReservationId }) });
     return res.data;
   },
 

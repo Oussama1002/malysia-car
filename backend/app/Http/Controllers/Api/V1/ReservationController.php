@@ -13,7 +13,9 @@ use App\Models\RentalExtension;
 use App\Models\RentalHandoverReport;
 use App\Models\Reservation;
 use App\Models\ReservationDriver;
+use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\NotificationService;
 use App\Services\RentalAvailabilityService;
 use App\Support\PaymentMethodNormalizer;
 use Carbon\Carbon;
@@ -24,7 +26,10 @@ use Illuminate\Support\Str;
 
 class ReservationController extends Controller
 {
-    public function __construct(private readonly RentalAvailabilityService $availability) {}
+    public function __construct(
+        private readonly RentalAvailabilityService $availability,
+        private readonly NotificationService $notifications,
+    ) {}
 
     private const FLOW = [
         'draft',
@@ -45,7 +50,7 @@ class ReservationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = Reservation::query()->orderByDesc('created_at');
+        $q = Reservation::query()->with('missions:id,reservation_id,mission_type,status,assigned_user_id,scheduled_start_at')->orderByDesc('created_at');
         if ($status = $request->query('status')) {
             $q->where('status', $status);
         }
@@ -292,11 +297,18 @@ class ReservationController extends Controller
             $customerName = $customer?->customer_code ?? null;
         }
 
+        $missions = Mission::query()
+            ->where('reservation_id', $reservation->id)
+            ->with('assignedAgent:id,name,first_name,last_name,email')
+            ->orderBy('scheduled_start_at')
+            ->get();
+
         return ApiResponse::success([
             'reservation' => $reservation,
             'customer_name' => $customerName,
             'vehicle_name' => $vehicleName,
             'vehicle_registration' => $vehicle?->registration_number ?? null,
+            'missions' => $missions,
             'handover_reports' => $handoverReports,
             'extensions' => $extensions,
             'damage_reports' => $damages,
@@ -316,19 +328,25 @@ class ReservationController extends Controller
     public function createMission(Request $request, Reservation $reservation): JsonResponse
     {
         $data = $request->validate([
-            'mission_type' => ['required', 'string', 'max:50'], // delivery, pickup
+            'mission_type' => ['required', 'string', 'max:50'],
             'assigned_user_id' => ['nullable', 'uuid'],
             'scheduled_start_at' => ['nullable', 'date'],
             'scheduled_end_at' => ['nullable', 'date'],
             'origin_address' => ['nullable', 'string', 'max:255'],
             'destination_address' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
+            'create_return_mission' => ['nullable', 'boolean'],
+            'return_assigned_user_id' => ['nullable', 'uuid'],
+            'return_scheduled_at' => ['nullable', 'date'],
+            'return_notes' => ['nullable', 'string'],
         ]);
 
-        $m = DB::transaction(function () use ($reservation, $data) {
+        $reservation->load(['vehicle.brand', 'vehicle.model', 'customer']);
+
+        $result = DB::transaction(function () use ($reservation, $data) {
             $this->transitionReservation($reservation, 'pickup_scheduled');
 
-            return Mission::query()->create([
+            $delivery = Mission::query()->create([
                 'id' => (string) Str::uuid(),
                 'company_id' => $reservation->company_id,
                 'branch_id' => $reservation->branch_id,
@@ -344,9 +362,96 @@ class ReservationController extends Controller
                 'notes' => $data['notes'] ?? null,
                 'created_by' => auth()->id(),
             ]);
+
+            $pickup = null;
+            if (!empty($data['create_return_mission'])) {
+                $pickup = Mission::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'company_id' => $reservation->company_id,
+                    'branch_id' => $reservation->branch_id,
+                    'reservation_id' => $reservation->id,
+                    'vehicle_id' => $reservation->vehicle_id,
+                    'assigned_user_id' => $data['return_assigned_user_id'] ?? $data['assigned_user_id'] ?? null,
+                    'mission_type' => 'pickup',
+                    'status' => 'planned',
+                    'scheduled_start_at' => $data['return_scheduled_at'] ?? $reservation->desired_end_at,
+                    'scheduled_end_at' => $data['return_scheduled_at'] ?? $reservation->desired_end_at,
+                    'origin_address' => $data['destination_address'] ?? $reservation->delivery_address,
+                    'destination_address' => $data['origin_address'] ?? $reservation->pickup_address,
+                    'notes' => $data['return_notes'] ?? null,
+                    'created_by' => auth()->id(),
+                ]);
+            }
+
+            return ['delivery' => $delivery, 'pickup' => $pickup];
         });
 
-        return ApiResponse::success($m, null, null, 201);
+        $vehicle = $reservation->vehicle;
+        $vLabel = $vehicle ? trim(($vehicle->brand?->name ?? $vehicle->brand_name ?? '').' '.($vehicle->model?->model_name ?? $vehicle->model?->name ?? $vehicle->model_name ?? '')) : '';
+        $vFull = $vLabel ? "{$vLabel} ({$vehicle->registration_number})" : ($vehicle->registration_number ?? '');
+        $customerName = '';
+        try { $customerName = $reservation->customer?->displayName() ?? ''; } catch (\Throwable) {}
+        $mTypeLabel = $data['mission_type'] === 'pickup' ? 'Récupération' : 'Livraison';
+
+        foreach ([$result['delivery'], $result['pickup']] as $mission) {
+            if (!$mission) continue;
+            $type = $mission->mission_type === 'pickup' ? 'Récupération' : 'Livraison';
+            if ($mission->assigned_user_id) {
+                $this->notifications->notifyUser(
+                    userId: $mission->assigned_user_id,
+                    category: 'ops.mission_assigned',
+                    title: "Mission {$type} assignée",
+                    body: "Véhicule {$vFull}" . ($customerName ? " — Client {$customerName}" : ''),
+                    module: 'operations',
+                    priority: 'high',
+                    channels: ['in_app', 'email', 'sms'],
+                    entity: $reservation,
+                    linkUrl: '/missions/' . $mission->id,
+                    payload: [
+                        'mission_id' => $mission->id,
+                        'mission_type' => $mission->mission_type,
+                        'vehicle_brand' => $vehicle?->brand_name,
+                        'vehicle_model' => $vehicle?->model_name,
+                        'registration_number' => $vehicle?->registration_number,
+                        'scheduled_start_at' => $mission->scheduled_start_at,
+                        'origin_address' => $mission->origin_address,
+                        'destination_address' => $mission->destination_address,
+                    ],
+                );
+            }
+        }
+
+        return ApiResponse::success(
+            $result['pickup'] ? [$result['delivery'], $result['pickup']] : $result['delivery'],
+            null, null, 201
+        );
+    }
+
+    public function agentAvailability(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'agent_id' => ['required', 'uuid'],
+            'scheduled_at' => ['required', 'date'],
+            'exclude_reservation_id' => ['nullable', 'uuid'],
+        ]);
+
+        $date = Carbon::parse($data['scheduled_at']);
+        $conflicts = Mission::query()
+            ->where('assigned_user_id', $data['agent_id'])
+            ->where('status', '!=', 'completed')
+            ->where('status', '!=', 'failed')
+            ->whereDate('scheduled_start_at', $date->toDateString())
+            ->when($data['exclude_reservation_id'] ?? null, fn ($q, $rid) => $q->where('reservation_id', '!=', $rid))
+            ->with('reservation:id,reservation_number')
+            ->orderBy('scheduled_start_at')
+            ->get(['id', 'mission_type', 'status', 'scheduled_start_at', 'scheduled_end_at', 'reservation_id']);
+
+        return ApiResponse::success([
+            'agent_id' => $data['agent_id'],
+            'date' => $date->toDateString(),
+            'conflicts' => $conflicts,
+            'available' => $conflicts->isEmpty(),
+        ]);
     }
 
     public function confirm(Request $request, Reservation $reservation): JsonResponse

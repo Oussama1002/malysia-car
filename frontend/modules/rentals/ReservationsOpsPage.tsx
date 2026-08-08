@@ -74,7 +74,7 @@ export const ReservationsOpsPage: React.FC = () => {
   const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
   const [newClientError, setNewClientError] = useState<string | null>(null);
   const [missionModalResId, setMissionModalResId] = useState<string | null>(null);
-  const [missionForm, setMissionForm] = useState({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '' });
+  const [missionForm, setMissionForm] = useState({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '', create_return: false, return_assigned_user_id: '', return_scheduled_at: '', return_notes: '' });
   const [missionError, setMissionError] = useState<string | null>(null);
 
   const reservationsQ = useQuery({
@@ -217,13 +217,17 @@ export const ReservationsOpsPage: React.FC = () => {
         assigned_user_id: missionForm.assigned_user_id || null,
         scheduled_start_at: missionForm.scheduled_start_at || undefined,
         notes: missionForm.notes || undefined,
+        create_return_mission: missionForm.create_return || undefined,
+        return_assigned_user_id: missionForm.create_return ? (missionForm.return_assigned_user_id || null) : undefined,
+        return_scheduled_at: missionForm.create_return ? (missionForm.return_scheduled_at || undefined) : undefined,
+        return_notes: missionForm.create_return ? (missionForm.return_notes || undefined) : undefined,
       }),
     onMutate: () => setMissionError(null),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.missions });
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
       setMissionModalResId(null);
-      setMissionForm({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '' });
+      setMissionForm({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '', create_return: false, return_assigned_user_id: '', return_scheduled_at: '', return_notes: '' });
     },
     onError: (e) => setMissionError(e instanceof Error ? e.message : 'Erreur création mission'),
   });
@@ -524,7 +528,12 @@ export const ReservationsOpsPage: React.FC = () => {
                 >
                   Détail →
                 </button>
-                {r.status !== 'draft' && (
+                {(r as ReservationDto & { missions?: { id: string; mission_type: string; status: string }[] }).missions?.map((m) => (
+                  <span key={m.id} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : m.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {m.mission_type === 'pickup' ? '↩ Récup.' : '🚗 Livrais.'} {m.status === 'completed' ? '✓' : m.status === 'in_progress' ? '▶' : m.status === 'failed' ? '✗' : '⏳'}
+                  </span>
+                ))}
+                {r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && (
                   <button
                     className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
                     onClick={(e) => {
@@ -534,12 +543,16 @@ export const ReservationsOpsPage: React.FC = () => {
                         assigned_user_id: '',
                         scheduled_start_at: r.desired_start_at ? r.desired_start_at.slice(0, 16) : '',
                         notes: '',
+                        create_return: false,
+                        return_assigned_user_id: '',
+                        return_scheduled_at: r.desired_end_at ? r.desired_end_at.slice(0, 16) : '',
+                        return_notes: '',
                       });
                       setMissionError(null);
                       setMissionModalResId(r.id);
                     }}
                   >
-                    Créer mission
+                    + Mission
                   </button>
                 )}
               </div>
@@ -561,54 +574,20 @@ export const ReservationsOpsPage: React.FC = () => {
       />
 
       {/* Créer mission modal */}
-      <Modal open={!!missionModalResId} title="Créer une mission" onClose={() => setMissionModalResId(null)} widthClass="max-w-lg">
-        {(() => {
-          const res = (reservationsQ.data ?? []).find((r: ReservationDto) => r.id === missionModalResId);
-          if (!res) return null;
-          const veh = (vehiclesQ.data ?? []).find((v: FleetVehicleDto) => String(v.id) === String(res.vehicle_id));
-          const cust = (customersQ.data ?? []).find((c: CustomerDto) => String(c.id) === String(res.customer_id));
-          const agents = (usersQ.data?.data ?? []).filter((u) => u.status === 'active');
-          return (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-xs">
-                <div className="flex justify-between"><span className="text-slate-500">Réservation</span><span className="font-bold text-slate-800">{res.reservation_number}</span></div>
-                {veh && <div className="flex justify-between"><span className="text-slate-500">Véhicule</span><span className="font-bold text-slate-800">{[veh.brand_name, veh.model_name].filter(Boolean).join(' ')} — {veh.registration_number}</span></div>}
-                {cust && <div className="flex justify-between"><span className="text-slate-500">Client</span><span className="font-bold text-slate-800">{cust.first_name} {cust.last_name}</span></div>}
-                {res.pickup_address && <div className="flex justify-between"><span className="text-slate-500">Adresse départ</span><span className="font-bold text-slate-800 max-w-[60%] truncate">{res.pickup_address}</span></div>}
-                {res.delivery_address && <div className="flex justify-between"><span className="text-slate-500">Adresse livraison</span><span className="font-bold text-slate-800 max-w-[60%] truncate">{res.delivery_address}</span></div>}
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Type de mission *</label>
-                <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={missionForm.mission_type} onChange={(e) => setMissionForm((s) => ({ ...s, mission_type: e.target.value }))}>
-                  <option value="delivery">Livraison</option>
-                  <option value="pickup">Récupération</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Agent assigné</label>
-                <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={missionForm.assigned_user_id} onChange={(e) => setMissionForm((s) => ({ ...s, assigned_user_id: e.target.value }))}>
-                  <option value="">— Non assigné —</option>
-                  {agents.map((u) => <option key={u.id} value={u.id}>{u.name || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure prévue</label>
-                <input type="datetime-local" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={missionForm.scheduled_start_at} onChange={(e) => setMissionForm((s) => ({ ...s, scheduled_start_at: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Notes</label>
-                <textarea className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" rows={3} value={missionForm.notes} onChange={(e) => setMissionForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Instructions pour l'agent…" />
-              </div>
-              {missionError && <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-700">{missionError}</div>}
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" className="rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50" onClick={() => setMissionModalResId(null)}>Annuler</button>
-                <button type="button" className="rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50" disabled={createMission.isPending} onClick={() => { if (missionModalResId) createMission.mutate(missionModalResId); }}>
-                  {createMission.isPending ? 'Création…' : 'Créer la mission'}
-                </button>
-              </div>
-            </div>
-          );
-        })()}
+      <Modal open={!!missionModalResId} title="Créer une mission" onClose={() => setMissionModalResId(null)} widthClass="max-w-xl">
+        <CreateMissionModalContent
+          reservationId={missionModalResId}
+          reservations={reservationsQ.data ?? []}
+          vehicles={vehiclesQ.data ?? []}
+          customers={customersQ.data ?? []}
+          agents={(usersQ.data?.data ?? []).filter((u) => u.status === 'active')}
+          form={missionForm}
+          setForm={setMissionForm}
+          error={missionError}
+          isPending={createMission.isPending}
+          onSubmit={() => { if (missionModalResId) createMission.mutate(missionModalResId); }}
+          onClose={() => setMissionModalResId(null)}
+        />
       </Modal>
 
       {/* Nouvelle réservation modal */}
@@ -1014,3 +993,141 @@ export const ReservationsOpsPage: React.FC = () => {
   );
 };
 
+// ---------------------------------------------------------------------------
+// Agent availability badge
+// ---------------------------------------------------------------------------
+const AgentAvailabilityBadge: React.FC<{ agentId: string; scheduledAt: string; excludeReservationId?: string }> = ({ agentId, scheduledAt, excludeReservationId }) => {
+  const availQ = useQuery({
+    queryKey: ['agentAvailability', agentId, scheduledAt],
+    queryFn: () => opsApi.agentAvailability(agentId, scheduledAt, excludeReservationId),
+    enabled: !!agentId && !!scheduledAt,
+    staleTime: 30_000,
+  });
+  if (!agentId || !scheduledAt || availQ.isLoading) return null;
+  if (!availQ.data) return null;
+  if (availQ.data.available) return <span className="text-[10px] font-bold text-emerald-600">Disponible ce jour</span>;
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 space-y-1">
+      <span className="text-[10px] font-black text-amber-700">
+        {availQ.data.conflicts.length} mission(s) ce jour
+      </span>
+      {availQ.data.conflicts.map((c) => (
+        <div key={c.id} className="text-[10px] text-amber-600">
+          {c.mission_type === 'pickup' ? 'Récup.' : 'Livrais.'} — {c.scheduled_start_at ? new Date(c.scheduled_start_at).toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' }) : '?'}
+          {c.reservation?.reservation_number ? ` (${c.reservation.reservation_number})` : ''}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Create Mission modal content
+// ---------------------------------------------------------------------------
+type MissionFormState = { mission_type: string; assigned_user_id: string; scheduled_start_at: string; notes: string; create_return: boolean; return_assigned_user_id: string; return_scheduled_at: string; return_notes: string };
+
+const CreateMissionModalContent: React.FC<{
+  reservationId: string | null;
+  reservations: ReservationDto[];
+  vehicles: FleetVehicleDto[];
+  customers: CustomerDto[];
+  agents: { id: string; name: string; first_name?: string | null; last_name?: string | null; email: string }[];
+  form: MissionFormState;
+  setForm: React.Dispatch<React.SetStateAction<MissionFormState>>;
+  error: string | null;
+  isPending: boolean;
+  onSubmit: () => void;
+  onClose: () => void;
+}> = ({ reservationId, reservations, vehicles, customers, agents, form, setForm, error, isPending, onSubmit, onClose }) => {
+  const res = reservations.find((r) => r.id === reservationId);
+  if (!res) return null;
+  const veh = vehicles.find((v) => String(v.id) === String(res.vehicle_id));
+  const cust = customers.find((c) => String(c.id) === String(res.customer_id));
+  const agentName = (u: typeof agents[number]) => u.name || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email;
+
+  return (
+    <div className="space-y-4">
+      {/* Reservation context */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-xs">
+        <div className="flex justify-between"><span className="text-slate-500">Réservation</span><span className="font-bold text-slate-800">{res.reservation_number}</span></div>
+        {veh && <div className="flex justify-between"><span className="text-slate-500">Véhicule</span><span className="font-bold text-slate-800">{[veh.brand_name, veh.model_name].filter(Boolean).join(' ')} — {veh.registration_number}</span></div>}
+        {cust && <div className="flex justify-between"><span className="text-slate-500">Client</span><span className="font-bold text-slate-800">{cust.first_name} {cust.last_name}</span></div>}
+        {res.pickup_address && <div className="flex justify-between items-center"><span className="text-slate-500">Départ</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.pickup_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.pickup_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">📍</a></div>}
+        {res.delivery_address && <div className="flex justify-between items-center"><span className="text-slate-500">Livraison</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.delivery_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">📍</a></div>}
+        {res.pickup_address && res.delivery_address && <div className="pt-1"><a href={`https://www.google.com/maps/dir/${encodeURIComponent(res.pickup_address)}/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800">🗺 Voir itinéraire</a></div>}
+      </div>
+
+      {/* --- Mission Livraison --- */}
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 space-y-3">
+        <div className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Mission Livraison</div>
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Type *</label>
+          <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.mission_type} onChange={(e) => setForm((s) => ({ ...s, mission_type: e.target.value }))}>
+            <option value="delivery">Livraison</option>
+            <option value="pickup">Récupération</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Agent assigné</label>
+          <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.assigned_user_id} onChange={(e) => setForm((s) => ({ ...s, assigned_user_id: e.target.value }))}>
+            <option value="">— Non assigné —</option>
+            {agents.map((u) => <option key={u.id} value={u.id}>{agentName(u)}</option>)}
+          </select>
+          {form.assigned_user_id && form.scheduled_start_at && (
+            <div className="mt-1"><AgentAvailabilityBadge agentId={form.assigned_user_id} scheduledAt={form.scheduled_start_at} excludeReservationId={reservationId ?? undefined} /></div>
+          )}
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure prévue</label>
+          <input type="datetime-local" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.scheduled_start_at} onChange={(e) => setForm((s) => ({ ...s, scheduled_start_at: e.target.value }))} />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-600 mb-1">Notes</label>
+          <textarea className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm" rows={2} value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Instructions pour l'agent…" />
+        </div>
+      </div>
+
+      {/* --- Toggle return mission --- */}
+      <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50 transition">
+        <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-indigo-600 accent-indigo-600" checked={form.create_return} onChange={(e) => setForm((s) => ({ ...s, create_return: e.target.checked }))} />
+        <div>
+          <span className="text-sm font-bold text-slate-700">Créer aussi la mission Récupération</span>
+          <span className="block text-[10px] text-slate-400">Planifier le retour du véhicule en fin de location</span>
+        </div>
+      </label>
+
+      {/* --- Mission Récupération (conditional) --- */}
+      {form.create_return && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+          <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Mission Récupération</div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Agent assigné</label>
+            <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.return_assigned_user_id} onChange={(e) => setForm((s) => ({ ...s, return_assigned_user_id: e.target.value }))}>
+              <option value="">— Même agent —</option>
+              {agents.map((u) => <option key={u.id} value={u.id}>{agentName(u)}</option>)}
+            </select>
+            {(form.return_assigned_user_id || form.assigned_user_id) && form.return_scheduled_at && (
+              <div className="mt-1"><AgentAvailabilityBadge agentId={form.return_assigned_user_id || form.assigned_user_id} scheduledAt={form.return_scheduled_at} excludeReservationId={reservationId ?? undefined} /></div>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure retour</label>
+            <input type="datetime-local" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.return_scheduled_at} onChange={(e) => setForm((s) => ({ ...s, return_scheduled_at: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Notes retour</label>
+            <textarea className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm" rows={2} value={form.return_notes} onChange={(e) => setForm((s) => ({ ...s, return_notes: e.target.value }))} placeholder="Instructions pour la récupération…" />
+          </div>
+        </div>
+      )}
+
+      {error && <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-700">{error}</div>}
+      <div className="flex justify-end gap-3 pt-2">
+        <button type="button" className="rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50" onClick={onClose}>Annuler</button>
+        <button type="button" className="rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50" disabled={isPending} onClick={onSubmit}>
+          {isPending ? 'Création…' : form.create_return ? 'Créer 2 missions' : 'Créer la mission'}
+        </button>
+      </div>
+    </div>
+  );
+};

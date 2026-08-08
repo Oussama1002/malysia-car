@@ -47,6 +47,7 @@ function statusTone(s: string): 'success' | 'danger' | 'brand' | 'info' | 'warni
 
 const TABS = [
   { id: 'summary',    label: 'Résumé' },
+  { id: 'missions',   label: 'Missions' },
   { id: 'drivers',    label: 'Conducteurs' },
   { id: 'contract',   label: 'Contrat' },
   { id: 'checkout',   label: 'Check-Out' },
@@ -375,6 +376,7 @@ export const ReservationDetailPage: React.FC = () => {
         <div className="p-6">
           <Suspense fallback={<TabFallback />}>
             {activeTab === 'summary'    && <TabSummary data={d} />}
+            {activeTab === 'missions'   && <TabMissions missions={d?.missions ?? []} reservation={r} />}
             {activeTab === 'drivers'    && <TabDrivers reservationId={rid!} drivers={d?.drivers ?? []} onRefresh={invalidate} />}
             {activeTab === 'contract'   && <TabContract reservation={r} />}
             {activeTab === 'checkout'   && <TabCheckOut reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
@@ -518,4 +520,152 @@ export const ReservationDetailPage: React.FC = () => {
       )}
     </div>
   );
+};
+
+// ---------------------------------------------------------------------------
+// Missions tab with timeline
+// ---------------------------------------------------------------------------
+const MISSION_STATUS_FR: Record<string, string> = { planned: 'Planifiée', in_progress: 'En cours', completed: 'Terminée', failed: 'Échouée' };
+const MISSION_TYPE_FR: Record<string, string> = { delivery: 'Livraison', pickup: 'Récupération' };
+
+const TabMissions: React.FC<{ missions: MissionRow[]; reservation: Record<string, unknown> | null }> = ({ missions, reservation }) => {
+  if (!missions.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="text-4xl mb-3">🚗</div>
+        <div className="text-sm font-bold text-slate-500">Aucune mission créée</div>
+        <div className="text-xs text-slate-400 mt-1">Utilisez le bouton « + Mission » sur la liste des réservations</div>
+      </div>
+    );
+  }
+
+  const FLOW_STEPS = [
+    { key: 'reserved', label: 'Réservé' },
+    { key: 'mission_delivery', label: 'Livraison' },
+    { key: 'active', label: 'En cours' },
+    { key: 'mission_pickup', label: 'Récupération' },
+    { key: 'closed', label: 'Clôturé' },
+  ];
+
+  const resStatus = String(reservation?.status ?? 'draft');
+  const deliveryMission = missions.find((m) => m.mission_type === 'delivery');
+  const pickupMission = missions.find((m) => m.mission_type === 'pickup');
+
+  const stepDone = (key: string) => {
+    if (key === 'reserved') return resStatus !== 'draft';
+    if (key === 'mission_delivery') return deliveryMission?.status === 'completed';
+    if (key === 'active') return ['active', 'extension_requested', 'return_scheduled', 'returned', 'inspection_pending', 'damage_pending', 'billing_pending', 'closed'].includes(resStatus);
+    if (key === 'mission_pickup') return pickupMission?.status === 'completed';
+    if (key === 'closed') return resStatus === 'closed';
+    return false;
+  };
+  const stepActive = (key: string) => {
+    if (key === 'mission_delivery') return deliveryMission?.status === 'in_progress';
+    if (key === 'mission_pickup') return pickupMission?.status === 'in_progress';
+    if (key === 'active') return resStatus === 'active';
+    return false;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Timeline */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Timeline</div>
+        <div className="flex items-center justify-between">
+          {FLOW_STEPS.map((step, i) => {
+            const done = stepDone(step.key);
+            const active = stepActive(step.key);
+            return (
+              <React.Fragment key={step.key}>
+                {i > 0 && <div className={`flex-1 h-0.5 mx-1 ${done ? 'bg-emerald-400' : active ? 'bg-indigo-300' : 'bg-slate-200'}`} />}
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black ${done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-500 text-white ring-4 ring-indigo-100' : 'bg-slate-100 text-slate-400'}`}>
+                    {done ? '✓' : i + 1}
+                  </div>
+                  <span className={`text-[10px] font-bold ${done ? 'text-emerald-600' : active ? 'text-indigo-600' : 'text-slate-400'}`}>{step.label}</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Mission cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {missions.map((m) => (
+          <div key={m.id} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{m.mission_type === 'pickup' ? '↩' : '🚗'}</span>
+                <span className="text-sm font-black text-slate-800">{MISSION_TYPE_FR[m.mission_type] ?? m.mission_type}</span>
+              </div>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : m.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                {MISSION_STATUS_FR[m.status] ?? m.status}
+              </span>
+            </div>
+            {m.mission_number && <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{m.mission_number}</div>}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {m.scheduled_start_at && (
+                <div><span className="text-slate-400">Prévu</span><div className="font-bold text-slate-700">{new Date(m.scheduled_start_at).toLocaleString('fr-MA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>
+              )}
+              {m.actual_start_at && (
+                <div><span className="text-slate-400">Début réel</span><div className="font-bold text-slate-700">{new Date(m.actual_start_at).toLocaleString('fr-MA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>
+              )}
+              {m.actual_end_at && (
+                <div><span className="text-slate-400">Fin réelle</span><div className="font-bold text-emerald-700">{new Date(m.actual_end_at).toLocaleString('fr-MA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>
+              )}
+            </div>
+            {m.assigned_agent && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-black text-indigo-600">
+                  {(m.assigned_agent.name?.[0] ?? m.assigned_agent.first_name?.[0] ?? '?').toUpperCase()}
+                </span>
+                <span className="font-bold text-slate-700">{m.assigned_agent.name || `${m.assigned_agent.first_name ?? ''} ${m.assigned_agent.last_name ?? ''}`.trim()}</span>
+              </div>
+            )}
+            {(m.origin_address || m.destination_address) && (
+              <div className="space-y-1">
+                {m.origin_address && (
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-slate-400 font-bold">De :</span>
+                    <span className="text-slate-600">{m.origin_address}</span>
+                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.origin_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">📍</a>
+                  </div>
+                )}
+                {m.destination_address && (
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-slate-400 font-bold">À :</span>
+                    <span className="text-slate-600">{m.destination_address}</span>
+                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.destination_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">📍</a>
+                  </div>
+                )}
+                {m.origin_address && m.destination_address && (
+                  <a href={`https://www.google.com/maps/dir/${encodeURIComponent(m.origin_address)}/${encodeURIComponent(m.destination_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 transition">
+                    🗺 Itinéraire Google Maps
+                  </a>
+                )}
+              </div>
+            )}
+            {m.notes && <div className="text-[10px] text-slate-500 italic">{m.notes}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type MissionRow = {
+  id: string;
+  mission_number?: string;
+  mission_type: string;
+  status: string;
+  scheduled_start_at?: string | null;
+  scheduled_end_at?: string | null;
+  actual_start_at?: string | null;
+  actual_end_at?: string | null;
+  origin_address?: string | null;
+  destination_address?: string | null;
+  notes?: string | null;
+  assigned_user_id?: string | null;
+  assigned_agent?: { id: string; name?: string; first_name?: string; last_name?: string; email?: string } | null;
 };
