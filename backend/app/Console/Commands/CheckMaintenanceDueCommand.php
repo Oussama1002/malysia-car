@@ -47,8 +47,10 @@ class CheckMaintenanceDueCommand extends Command
             if (in_array($newStatus, ['due_soon', 'overdue'], true)) {
                 $severity = $newStatus === 'overdue' ? 'critical' : 'high';
                 $type = $newStatus === 'overdue' ? 'maintenance_overdue' : 'maintenance_due_soon';
-                $title = $newStatus === 'overdue' ? 'Entretien depasse' : 'Entretien bientot du';
-                $description = ($plan->maintenance_type ?? 'Maintenance').' pour '.$vehicle->registration_number;
+                $title = $newStatus === 'overdue' ? 'Entretien dépassé' : 'Entretien bientôt dû';
+                $vLabel = trim(($vehicle->brand_name ?? '').($vehicle->model_name ? ' '.$vehicle->model_name : ''));
+                $vFull = $vLabel ? "{$vLabel} ({$vehicle->registration_number})" : $vehicle->registration_number;
+                $description = ($plan->maintenance_type ?? 'Maintenance').' pour '.$vFull;
                 $this->alerts->createAlert(
                     vehicle: $vehicle,
                     type: $type,
