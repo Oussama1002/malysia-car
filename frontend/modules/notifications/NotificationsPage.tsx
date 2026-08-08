@@ -352,7 +352,7 @@ export const NotificationsPage: React.FC = () => {
                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--df-text-faint)]">Données associées</h4>
                 <div className="grid grid-cols-2 gap-3">
                   {Object.entries(selected.payload).map(([k, v]) => (
-                    <DetailRow key={k} label={translatePayloadKey(k)} value={String(v ?? '—')} />
+                    <DetailRow key={k} label={translatePayloadKey(k)} value={translatePayloadValue(k, v)} />
                   ))}
                 </div>
               </div>
@@ -424,6 +424,57 @@ function translateEntityType(raw: string): string {
     'App\\Models\\SubRentalContract': 'Sous-location',
   };
   return map[raw] ?? raw.replace(/^App\\Models\\/, '').replace(/([A-Z])/g, ' $1').trim();
+}
+
+const MAINTENANCE_TYPE_FR: Record<string, string> = {
+  OIL_CHANGE: 'Vidange',
+  TIRES: 'Pneus',
+  INSPECTION: 'Inspection',
+  BRAKES: 'Freins',
+  FILTER: 'Filtre',
+  BATTERY: 'Batterie',
+  TIMING_BELT: 'Courroie de distribution',
+  TECH_CONTROL: 'Contrôle technique',
+  OTHER: 'Autre',
+};
+
+const SEVERITY_FR: Record<string, string> = {
+  critical: 'Critique',
+  high: 'Haute',
+  medium: 'Moyenne',
+  low: 'Basse',
+  ok: 'OK',
+  due_soon: 'Bientôt dû',
+  overdue: 'En retard',
+};
+
+const STATUS_FR: Record<string, string> = {
+  active: 'Actif',
+  inactive: 'Inactif',
+  pending: 'En attente',
+  approved: 'Approuvé',
+  rejected: 'Refusé',
+  cancelled: 'Annulé',
+  completed: 'Terminé',
+  draft: 'Brouillon',
+  paid: 'Payé',
+  unpaid: 'Impayé',
+  overdue: 'En retard',
+  sent: 'Envoyé',
+  signed: 'Signé',
+  voided: 'Annulé',
+  expired: 'Expiré',
+  ok: 'OK',
+  due_soon: 'Bientôt dû',
+};
+
+function translatePayloadValue(key: string, value: unknown): string {
+  const v = String(value ?? '—');
+  if (key === 'maintenance_type') return MAINTENANCE_TYPE_FR[v] ?? v;
+  if (key === 'severity') return SEVERITY_FR[v] ?? v;
+  if (key === 'status') return STATUS_FR[v] ?? v;
+  if (key === 'type') return MAINTENANCE_TYPE_FR[v] ?? CATEGORY_FR[v] ?? v;
+  return v;
 }
 
 function translatePayloadKey(key: string): string {

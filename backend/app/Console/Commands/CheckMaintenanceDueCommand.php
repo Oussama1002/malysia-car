@@ -20,6 +20,18 @@ class CheckMaintenanceDueCommand extends Command
         parent::__construct();
     }
 
+    private const MAINTENANCE_TYPE_FR = [
+        'OIL_CHANGE' => 'Vidange',
+        'TIRES' => 'Pneus',
+        'INSPECTION' => 'Inspection',
+        'BRAKES' => 'Freins',
+        'FILTER' => 'Filtre',
+        'BATTERY' => 'Batterie',
+        'TIMING_BELT' => 'Courroie de distribution',
+        'TECH_CONTROL' => 'Contrôle technique',
+        'OTHER' => 'Autre',
+    ];
+
     public function handle(): int
     {
         $count = 0;
@@ -50,7 +62,8 @@ class CheckMaintenanceDueCommand extends Command
                 $title = $newStatus === 'overdue' ? 'Entretien dépassé' : 'Entretien bientôt dû';
                 $vLabel = trim(($vehicle->brand_name ?? '').($vehicle->model_name ? ' '.$vehicle->model_name : ''));
                 $vFull = $vLabel ? "{$vLabel} ({$vehicle->registration_number})" : $vehicle->registration_number;
-                $description = ($plan->maintenance_type ?? 'Maintenance').' pour '.$vFull;
+                $mType = self::MAINTENANCE_TYPE_FR[$plan->maintenance_type] ?? $plan->maintenance_type ?? 'Maintenance';
+                $description = "{$mType} pour {$vFull}";
                 $this->alerts->createAlert(
                     vehicle: $vehicle,
                     type: $type,
