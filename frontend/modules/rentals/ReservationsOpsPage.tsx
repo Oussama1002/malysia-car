@@ -528,33 +528,44 @@ export const ReservationsOpsPage: React.FC = () => {
                 >
                   Détail →
                 </button>
-                {(r as ReservationDto & { missions?: { id: string; mission_type: string; status: string }[] }).missions?.map((m) => (
-                  <span key={m.id} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : m.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {m.mission_type === 'pickup' ? '↩ Récup.' : '🚗 Livrais.'} {m.status === 'completed' ? '✓' : m.status === 'in_progress' ? '▶' : m.status === 'failed' ? '✗' : '⏳'}
-                  </span>
-                ))}
-                {r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && (
-                  <button
-                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMissionForm({
-                        mission_type: 'delivery',
-                        assigned_user_id: '',
-                        scheduled_start_at: r.desired_start_at ? r.desired_start_at.slice(0, 16) : '',
-                        notes: '',
-                        create_return: false,
-                        return_assigned_user_id: '',
-                        return_scheduled_at: r.desired_end_at ? r.desired_end_at.slice(0, 16) : '',
-                        return_notes: '',
-                      });
-                      setMissionError(null);
-                      setMissionModalResId(r.id);
-                    }}
-                  >
-                    + Mission
-                  </button>
-                )}
+                {(() => {
+                  const missions = (r as ReservationDto & { missions?: { id: string; mission_type: string; status: string }[] }).missions ?? [];
+                  const activeMissions = missions.filter((m) => m.status !== 'failed');
+                  const hasDelivery = activeMissions.some((m) => m.mission_type === 'delivery');
+                  const hasPickup = activeMissions.some((m) => m.mission_type === 'pickup');
+                  const canCreate = r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && (!hasDelivery || !hasPickup);
+                  return (
+                    <>
+                      {activeMissions.map((m) => (
+                        <span key={m.id} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {m.mission_type === 'pickup' ? '↩ Récup.' : '🚗 Livrais.'} {m.status === 'completed' ? '✓' : m.status === 'in_progress' ? '▶' : '⏳'}
+                        </span>
+                      ))}
+                      {canCreate && (
+                        <button
+                          className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMissionForm({
+                              mission_type: hasDelivery ? 'pickup' : 'delivery',
+                              assigned_user_id: '',
+                              scheduled_start_at: hasDelivery ? (r.desired_end_at ? r.desired_end_at.slice(0, 16) : '') : (r.desired_start_at ? r.desired_start_at.slice(0, 16) : ''),
+                              notes: '',
+                              create_return: false,
+                              return_assigned_user_id: '',
+                              return_scheduled_at: r.desired_end_at ? r.desired_end_at.slice(0, 16) : '',
+                              return_notes: '',
+                            });
+                            setMissionError(null);
+                            setMissionModalResId(r.id);
+                          }}
+                        >
+                          + Mission
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ))}

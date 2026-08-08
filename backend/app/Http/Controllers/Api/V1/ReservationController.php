@@ -341,6 +341,26 @@ class ReservationController extends Controller
             'return_notes' => ['nullable', 'string'],
         ]);
 
+        $existingTypes = Mission::query()
+            ->where('reservation_id', $reservation->id)
+            ->whereNotIn('status', ['failed'])
+            ->pluck('mission_type')
+            ->toArray();
+
+        if (in_array($data['mission_type'], $existingTypes, true)) {
+            return ApiResponse::error(
+                "Une mission de type « {$data['mission_type']} » existe déjà pour cette réservation.",
+                422
+            );
+        }
+
+        if (!empty($data['create_return_mission']) && in_array('pickup', $existingTypes, true)) {
+            return ApiResponse::error(
+                'Une mission de récupération existe déjà pour cette réservation.',
+                422
+            );
+        }
+
         $reservation->load(['vehicle.brand', 'vehicle.model', 'customer']);
 
         $result = DB::transaction(function () use ($reservation, $data) {
