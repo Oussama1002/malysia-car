@@ -289,7 +289,7 @@ export const ReservationDetailPage: React.FC = () => {
               to={`/contracts/new?from_reservation=${rid}`}
               className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
             >
-              📄 Générer contrat
+              Générer contrat
             </Link>
           )}
           {!['cancelled', 'closed', 'draft'].includes(status) && (
@@ -297,7 +297,7 @@ export const ReservationDetailPage: React.FC = () => {
               onClick={() => { setSwapError(null); setSwapOpen(true); }}
               className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white hover:bg-slate-900"
             >
-              🔁 Changer de véhicule
+              Changer de véhicule
             </button>
           )}
           {status === 'reserved' && (
@@ -315,32 +315,32 @@ export const ReservationDetailPage: React.FC = () => {
                 onClick={() => setActiveTab('checkout')}
                 className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700"
               >
-                🚗 Check-Out
+                Check-Out
               </button>
               <button
                 onClick={() => setActiveTab('checkin')}
                 className="rounded-xl bg-cyan-600 px-3 py-2 text-xs font-black text-white hover:bg-cyan-700"
               >
-                🏁 Check-In
+                Check-In
               </button>
               <button
                 onClick={() => { setActiveTab('payments'); setTimeout(() => { setPaymentError(null); setPaymentDrawerOpen(true); }, 100); }}
                 className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700"
               >
-                💳 Ajouter paiement
+                Ajouter paiement
               </button>
               <button
                 onClick={() => setActiveTab('invoices')}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
               >
-                🧾 Générer facture
+                Générer facture
               </button>
               <button
                 onClick={() => cancelM.mutate()}
                 disabled={cancelM.isPending}
                 className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 ml-auto"
               >
-                ✕ Annuler réservation
+                Annuler réservation
               </button>
             </>
           )}
@@ -440,7 +440,7 @@ export const ReservationDetailPage: React.FC = () => {
       {swapOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setSwapOpen(false)}>
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-1 text-sm font-black text-slate-900">🔁 Changer de véhicule</h3>
+            <h3 className="mb-1 text-sm font-black text-slate-900">Changer de véhicule</h3>
             <p className="mb-4 text-xs text-slate-500">
               Véhicule actuel : <span className="font-bold text-slate-700">{d?.vehicle_name ?? '—'}</span> ({d?.vehicle_registration ?? '—'})
             </p>

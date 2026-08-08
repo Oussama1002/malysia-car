@@ -440,7 +440,7 @@ export const ReservationsOpsPage: React.FC = () => {
                       to={`/contracts/new?from_reservation=${r.id}`}
                       className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
                     >
-                      📄 Générer contrat
+                      Générer contrat
                     </Link>
                     <button
                       type="button"
@@ -825,7 +825,7 @@ export const ReservationsOpsPage: React.FC = () => {
               return (
                 <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚠️</span>
+                    <span className="text-2xl font-black">!</span>
                     <div>
                       <div className="text-sm font-black text-amber-900">
                         {isStartToday ? 'Départ prévu aujourd\'hui' : 'Départ dépassé'} — contrat requis
@@ -847,7 +847,7 @@ export const ReservationsOpsPage: React.FC = () => {
                     to={`/contracts/new?from_reservation=${selected.id}`}
                     className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white shadow-md hover:bg-amber-700 transition-colors"
                   >
-                    📄 Générer le contrat maintenant
+                    Générer le contrat maintenant
                   </Link>
                 </div>
               );
@@ -881,7 +881,7 @@ export const ReservationsOpsPage: React.FC = () => {
                   to={`/contracts/new?from_reservation=${selected.id}`}
                   className="mt-2 inline-flex items-center gap-2 rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-black text-amber-800 hover:bg-amber-100 transition-colors"
                 >
-                  📄 Générer contrat depuis cette réservation
+                  Générer contrat depuis cette réservation
                 </Link>
               )}
             </div>
