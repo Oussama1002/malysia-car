@@ -70,7 +70,7 @@ class CheckMaintenanceDueCommand extends Command
                     severity: $severity,
                     title: $title,
                     description: $description,
-                    payload: ['plan_id' => $plan->id],
+                    payload: ['plan_id' => $plan->id, 'vehicle_brand' => $vehicle->brand_name, 'vehicle_model' => $vehicle->model_name, 'registration_number' => $vehicle->registration_number],
                     planId: (int) $plan->id,
                 );
                 $this->notifications->notifyRoles(

@@ -54,7 +54,7 @@ class CheckVehicleDocumentsExpiryCommand extends Command
                 severity: $severity,
                 title: $title,
                 description: $description,
-                payload: ['document_id' => $doc->id, 'days_remaining' => $days, 'type' => $doc->type],
+                payload: ['document_id' => $doc->id, 'days_remaining' => $days, 'type' => $doc->type, 'vehicle_brand' => $vehicle->brand_name, 'vehicle_model' => $vehicle->model_name, 'registration_number' => $vehicle->registration_number],
                 documentId: (int) $doc->id,
             );
             $this->notifications->notifyRoles(

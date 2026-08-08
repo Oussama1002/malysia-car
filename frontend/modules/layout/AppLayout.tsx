@@ -179,11 +179,23 @@ export const AppLayout: React.FC = () => {
     return `Il y a ${days}j`;
   };
 
-  const translateNotifText = (text: string) => {
+  const translateNotifText = (text: string, payload?: Record<string, unknown> | null) => {
     const types: Record<string, string> = { OIL_CHANGE:'Vidange', TIRES:'Pneus', BRAKES:'Freins', FILTER:'Filtre', BATTERY:'Batterie', TIMING_BELT:'Courroie de distribution', TECH_CONTROL:'Contrôle technique', INSPECTION:'Inspection' };
     let t = text;
     for (const [code, fr] of Object.entries(types)) t = t.replace(new RegExp(`\\b${code}\\b`, 'g'), fr);
-    return t.replace(/Entretien bientot du\b/g, 'Entretien bientôt dû').replace(/Entretien depasse\b/g, 'Entretien dépassé').replace(/Vehicule\b/g, 'Véhicule').replace(/expiree\b/gi, 'expirée').replace(/bientot/gi, 'bientôt');
+    t = t.replace(/Entretien bientot du\b/g, 'Entretien bientôt dû').replace(/Entretien depasse\b/g, 'Entretien dépassé').replace(/Vehicule\b/g, 'Véhicule').replace(/expiree\b/gi, 'expirée').replace(/bientot/gi, 'bientôt');
+    if (payload) {
+      const brand = payload.vehicle_brand as string | undefined;
+      const model = payload.vehicle_model as string | undefined;
+      const reg = payload.registration_number as string | undefined;
+      const vLabel = [brand, model].filter(Boolean).join(' ');
+      if (vLabel && reg) {
+        const escaped = reg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        t = t.replace(new RegExp(`pour\\s+${escaped}\\b`), `pour ${vLabel} (${reg})`);
+        t = t.replace(new RegExp(`Véhicule\\s+${escaped}\\b`), `Véhicule ${vLabel} (${reg})`);
+      }
+    }
+    return t;
   };
 
   const renderNavLink = (it: NavItem) => (
@@ -406,10 +418,10 @@ export const AppLayout: React.FC = () => {
                         <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${!n.read_at ? 'bg-[color:var(--df-brand-500)]' : 'bg-transparent'}`} />
                         <div className="min-w-0 flex-1">
                           <p className={`text-[12.5px] leading-snug ${!n.read_at ? 'font-bold text-[color:var(--df-text)]' : 'font-medium text-[color:var(--df-text-muted)]'}`}>
-                            {translateNotifText(n.title)}
+                            {translateNotifText(n.title, n.payload)}
                           </p>
                           {n.body && (
-                            <p className="mt-0.5 text-[11.5px] text-[color:var(--df-text-faint)] line-clamp-2">{translateNotifText(n.body)}</p>
+                            <p className="mt-0.5 text-[11.5px] text-[color:var(--df-text-faint)] line-clamp-2">{translateNotifText(n.body, n.payload)}</p>
                           )}
                           <p className="mt-1 text-[10px] font-semibold text-[color:var(--df-text-faint)]">{formatTimeAgo(n.created_at)}</p>
                         </div>

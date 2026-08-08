@@ -98,13 +98,11 @@ function translatePriority(raw: string): string {
   return PRIORITY_FR[raw] ?? raw;
 }
 
-function translateText(text: string): string {
+function translateText(text: string, payload?: Record<string, unknown> | null): string {
   let t = text;
-  // Translate maintenance type codes in body text
   for (const [code, fr] of Object.entries(MAINTENANCE_TYPE_FR)) {
     t = t.replace(new RegExp(`\\b${code}\\b`, 'g'), fr);
   }
-  // Fix common English titles from backend
   t = t.replace(/\bEntretien depasse\b/g, 'Entretien dépassé');
   t = t.replace(/\bEntretien bientot du\b/g, 'Entretien bientôt dû');
   t = t.replace(/\bAssurance expiree\b/gi, 'Assurance expirée');
@@ -114,6 +112,17 @@ function translateText(text: string): string {
   t = t.replace(/\bVisite technique expiree\b/gi, 'Visite technique expirée');
   t = t.replace(/\bVisite technique bientot expiree\b/gi, 'Visite technique bientôt expirée');
   t = t.replace(/\bVehicule\b/g, 'Véhicule');
+  // Enrich plate-only text with brand+model from payload
+  if (payload) {
+    const brand = payload.vehicle_brand as string | undefined;
+    const model = payload.vehicle_model as string | undefined;
+    const reg = payload.registration_number as string | undefined;
+    const vLabel = [brand, model].filter(Boolean).join(' ');
+    if (vLabel && reg) {
+      t = t.replace(new RegExp(`pour\\s+${reg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`), `pour ${vLabel} (${reg})`);
+      t = t.replace(new RegExp(`Véhicule\\s+${reg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`), `Véhicule ${vLabel} (${reg})`);
+    }
+  }
   return t;
 }
 
@@ -301,8 +310,8 @@ export const NotificationsPage: React.FC = () => {
                       />
                     )}
                   </div>
-                  <div className="mt-2 text-sm font-bold text-[color:var(--df-text)]">{translateText(n.title)}</div>
-                  {n.body && <div className="mt-1 text-[13px] text-[color:var(--df-text-muted)] line-clamp-2">{translateText(n.body)}</div>}
+                  <div className="mt-2 text-sm font-bold text-[color:var(--df-text)]">{translateText(n.title, n.payload)}</div>
+                  {n.body && <div className="mt-1 text-[13px] text-[color:var(--df-text-muted)] line-clamp-2">{translateText(n.body, n.payload)}</div>}
                   <div className="mt-2 text-[11px] font-semibold text-[color:var(--df-text-faint)]">
                     {formatTimeAgo(n.created_at)}
                   </div>
@@ -335,13 +344,13 @@ export const NotificationsPage: React.FC = () => {
 
             {/* Title */}
             <div>
-              <h3 className="text-base font-black text-[color:var(--df-text)]">{translateText(selected.title)}</h3>
+              <h3 className="text-base font-black text-[color:var(--df-text)]">{translateText(selected.title, selected.payload)}</h3>
             </div>
 
             {/* Body */}
             {selected.body && (
               <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
-                <p className="text-[color:var(--df-text)] whitespace-pre-wrap leading-relaxed">{translateText(selected.body)}</p>
+                <p className="text-[color:var(--df-text)] whitespace-pre-wrap leading-relaxed">{translateText(selected.body, selected.payload)}</p>
               </div>
             )}
 
