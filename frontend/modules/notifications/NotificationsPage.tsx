@@ -303,7 +303,6 @@ export const NotificationsPage: React.FC = () => {
                   </div>
                   <div className="mt-2 text-sm font-bold text-[color:var(--df-text)]">{translateText(n.title)}</div>
                   {n.body && <div className="mt-1 text-[13px] text-[color:var(--df-text-muted)] line-clamp-2">{translateText(n.body)}</div>}
-                  <DeliveryChips deliveries={n.deliveries} />
                   <div className="mt-2 text-[11px] font-semibold text-[color:var(--df-text-faint)]">
                     {formatTimeAgo(n.created_at)}
                   </div>
@@ -378,12 +377,6 @@ export const NotificationsPage: React.FC = () => {
             )}
 
             {/* Deliveries */}
-            {(selected.deliveries ?? []).length > 0 && (
-              <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface)] p-4 space-y-3">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--df-text-faint)]">Canaux de livraison</h4>
-                <DeliveryChips deliveries={selected.deliveries} detailed />
-              </div>
-            )}
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2 pt-2 border-t border-[color:var(--df-border)]">
