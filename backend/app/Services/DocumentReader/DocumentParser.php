@@ -394,19 +394,23 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Policy number: "N° Police", "Police N°", "N° de police", "NUMÉRO D'ORDRE", etc.
+        // Policy number / NUMÉRO D'ORDRE — require ≥5 chars with at least one digit
+        // to avoid matching noise like "Cat" from "Catégorie".
         $policyNumber = $this->labelValue($text, [
             'N°?\s*(?:de\s+)?Police',
-            'Police\s*N°?',
-            'Policy\s*N[o°]',
-            'Contract\s*N[o°]',
-            'N°?\s*Contrat',
             'NUM[ÉE]RO\s+D\'?ORDRE',
             'MERO\s+D',
             'N°?\s*d\'?ordre',
-        ], '[A-Z0-9\-\/\s]{3,30}')
-            ?? $this->firstMatch('/(?:police|contrat|ordre)\s*(?:n[°o]?\s*)?[:\-]?\s*([A-Z0-9][\w\-\/]{2,25})/iu', $text)
+            'Policy\s*N[o°]',
+            'Contract\s*N[o°]',
+            'N°?\s*Contrat',
+        ], '[A-Z0-9\-\/\s]{5,30}')
+            ?? $this->firstMatch('/(?:MERO|ORDRE|NUM[ÉE]RO)[^\n]{0,30}?(\d{2,3}[A-Z]?\s*\d{4,12})/iu', $text)
+            ?? $this->firstMatch('/(?:police|contrat)\s*(?:n[°o]?\s*)?[:\-]?\s*([A-Z0-9][\w\-\/]{4,25})/iu', $text)
             ?? $this->firstMatch('/\b(\d{2,3}[A-Z]\s*\d{6,12})\b/u', $text);
+        if ($policyNumber && ! preg_match('/\d/', $policyNumber)) {
+            $policyNumber = null;
+        }
 
         // Insurance company
         $company = $this->labelValue($text, [

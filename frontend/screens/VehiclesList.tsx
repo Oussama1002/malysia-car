@@ -898,19 +898,26 @@ const VehiclesList: React.FC = () => {
 
               {/* ── OCR Scanner ── */}
               <VehicleDocumentScanner
-                onPrefill={(data) => setFormData(fd => ({
-                  ...fd,
-                  ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
-                  ...(data.insuranceStart  ? { insuranceStart: data.insuranceStart }     : {}),
-                  ...(data.insuranceExpiry  ? { insuranceExpiry: data.insuranceExpiry }   : {}),
-                  ...(data.chassis          ? { chassis: data.chassis }                   : {}),
-                  ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
-                  ...(data.montant          ? { montant: data.montant }                   : {}),
-                  ...(data.immatProvisoire  ? { immatProvisoire: data.immatProvisoire }   : {}),
-                  ...(data.immatProvisoireExpiry  ? { immatProvisoireExpiry: data.immatProvisoireExpiry }   : {}),
-                  ...(data.techControlExpiry     ? { techControlExpiry: data.techControlExpiry }           : {}),
-                  ...(data.vignetteExpiry        ? { vignetteExpiry: data.vignetteExpiry }                 : {}),
-                }))}
+                onPrefill={(data) => setFormData(fd => {
+                  const plate = data.registration ? parsePlate(data.registration.replace(/\s+/g, '').toUpperCase()) : null;
+                  return {
+                    ...fd,
+                    ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
+                    ...(data.insuranceStart  ? { insuranceStart: data.insuranceStart }     : {}),
+                    ...(data.insuranceExpiry  ? { insuranceExpiry: data.insuranceExpiry }   : {}),
+                    ...(data.chassis          ? { chassis: data.chassis }                   : {}),
+                    ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
+                    ...(data.montant          ? { montant: data.montant }                   : {}),
+                    ...(data.immatProvisoire  ? { immatOnline: data.immatProvisoire, immatProvisoire: data.immatProvisoire } : {}),
+                    ...(data.immatProvisoireExpiry  ? { immatProvisoireExpiry: data.immatProvisoireExpiry }   : {}),
+                    ...(data.techControlExpiry     ? { techControlExpiry: data.techControlExpiry }           : {}),
+                    ...(data.vignetteExpiry        ? { vignetteExpiry: data.vignetteExpiry }                 : {}),
+                    ...(plate                      ? { platNum: plate.platNum, platLetter: plate.platLetter, platRegion: plate.platRegion } : {}),
+                    ...(data.fuelType              ? { fuel: data.fuelType }                                : {}),
+                    ...(data.miseEnCirculation     ? { miseEnCirculation: data.miseEnCirculation }          : {}),
+                    ...(data.fiscalPower           ? { cv: data.fiscalPower }                               : {}),
+                  };
+                })}
               />
 
               {/* ── Fiche Technique ── */}
