@@ -25,7 +25,7 @@ class DocumentParser
             ? $hintedType
             : $this->detectType($normalized);
 
-        Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'text_length' => mb_strlen($normalized), 'text_preview' => mb_substr($normalized, 0, 2000)]);
+        Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'text_length' => mb_strlen($normalized), 'text_full' => $normalized]);
 
         $fields = match ($type) {
             ReaderDocument::TYPE_CIN => $this->parseCin($normalized),
@@ -394,20 +394,19 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Policy number / NUMÉRO D'ORDRE — require ≥5 chars with at least one digit
-        // to avoid matching noise like "Cat" from "Catégorie".
-        $policyNumber = $this->labelValue($text, [
-            'N°?\s*(?:de\s+)?Police',
-            'NUM[ÉE]RO\s+D\'?ORDRE',
-            'MERO\s+D',
-            'N°?\s*d\'?ordre',
-            'Policy\s*N[o°]',
-            'Contract\s*N[o°]',
-            'N°?\s*Contrat',
-        ], '[A-Z0-9\-\/\s]{5,30}')
-            ?? $this->firstMatch('/(?:MERO|ORDRE|NUM[ÉE]RO)[^\n]{0,30}?(\d{2,3}[A-Z]?\s*\d{4,12})/iu', $text)
-            ?? $this->firstMatch('/(?:police|contrat)\s*(?:n[°o]?\s*)?[:\-]?\s*([A-Z0-9][\w\-\/]{4,25})/iu', $text)
-            ?? $this->firstMatch('/\b(\d{2,3}[A-Z]\s*\d{6,12})\b/u', $text);
+        // Policy number / NUMÉRO D'ORDRE — try the most reliable pattern first:
+        // a digit-heavy sequence near "ORDRE"/"MERO"/"POLICE" labels.
+        $policyNumber = $this->firstMatch('/(?:MERO|ORDRE|NUM[ÉE]RO)[^\n]{0,40}?(\d{2,3}[A-Z]?\s*\d{4,12})/iu', $text)
+            ?? $this->firstMatch('/\b(\d{2,3}[A-Z]\s*\d{6,12})\b/u', $text)
+            ?? $this->labelValue($text, [
+                'N°?\s*(?:de\s+)?Police',
+                'NUM[ÉE]RO\s+D\'?ORDRE',
+                'MERO\s+D',
+                'N°?\s*d\'?ordre',
+                'Policy\s*N[o°]',
+                'Contract\s*N[o°]',
+                'N°?\s*Contrat',
+            ], '\d[A-Z0-9\-\/\s]{4,30}');
         if ($policyNumber && ! preg_match('/\d/', $policyNumber)) {
             $policyNumber = null;
         }
