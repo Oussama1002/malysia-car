@@ -248,16 +248,16 @@ export const ReservationDetailPage: React.FC = () => {
               disabled={validateM.isPending}
               className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50 shadow-lg"
             >
-              {validateM.isPending ? 'Validation…' : '✓ Valider la réservation'}
+              {validateM.isPending ? 'Validation…' : 'Valider la réservation'}
             </button>
           </div>
         )}
 
         {/* Status change + Quick actions bar */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-6 py-3 bg-slate-50/50">
-          <div className="flex items-center gap-2 mr-4">
+        <div className="flex items-center gap-1.5 border-t border-slate-100 px-6 py-3 bg-slate-50/50 overflow-x-auto">
+          <div className="flex items-center gap-1.5 mr-2 shrink-0">
             <select
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700"
               value={statusChangeTarget || status}
               onChange={(e) => setStatusChangeTarget(e.target.value === status ? '' : e.target.value)}
             >
@@ -269,9 +269,9 @@ export const ReservationDetailPage: React.FC = () => {
               <button
                 onClick={() => changeStatusM.mutate(statusChangeTarget)}
                 disabled={changeStatusM.isPending}
-                className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="rounded-lg bg-indigo-600 px-2 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-50 shrink-0"
               >
-                {changeStatusM.isPending ? 'Changement...' : 'Appliquer'}
+                {changeStatusM.isPending ? '...' : 'Appliquer'}
               </button>
             )}
           </div>
@@ -279,94 +279,94 @@ export const ReservationDetailPage: React.FC = () => {
             <button
               onClick={() => validateM.mutate()}
               disabled={validateM.isPending}
-              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-emerald-700 disabled:opacity-50 shrink-0"
             >
-              ✓ Valider réservation
+              Valider
             </button>
           )}
           {!['cancelled', 'closed'].includes(status) && (
             <Link
               to={`/contracts/new?from_reservation=${rid}`}
-              className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
+              className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-amber-700 transition-colors shrink-0"
             >
-              Générer contrat
+              Contrat
             </Link>
           )}
           {!['cancelled', 'closed', 'draft'].includes(status) && (
             <button
               onClick={() => { setSwapError(null); setSwapOpen(true); }}
-              className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white hover:bg-slate-900"
+              className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-slate-900 shrink-0"
             >
-              Changer de véhicule
+              Changer véhicule
             </button>
           )}
           {status === 'reserved' && (
             <button
               onClick={() => confirmM.mutate()}
               disabled={confirmM.isPending}
-              className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-50 shrink-0"
             >
-              ✓ Confirmer
+              Confirmer
             </button>
           )}
           {!['cancelled', 'closed'].includes(status) && (
             <>
               <button
                 onClick={() => setActiveTab('checkout')}
-                className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700"
+                className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-emerald-700 shrink-0"
               >
                 Check-Out
               </button>
               <button
                 onClick={() => setActiveTab('checkin')}
-                className="rounded-xl bg-cyan-600 px-3 py-2 text-xs font-black text-white hover:bg-cyan-700"
+                className="rounded-lg bg-cyan-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-cyan-700 shrink-0"
               >
                 Check-In
               </button>
               <button
                 onClick={() => { setActiveTab('payments'); setTimeout(() => { setPaymentError(null); setPaymentDrawerOpen(true); }, 100); }}
-                className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700"
+                className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-violet-700 shrink-0"
               >
-                Ajouter paiement
+                Paiement
               </button>
               <button
                 onClick={() => setActiveTab('invoices')}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700 hover:bg-slate-50 shrink-0"
               >
-                Générer facture
+                Facture
               </button>
               <button
                 onClick={() => cancelM.mutate()}
                 disabled={cancelM.isPending}
-                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 ml-auto"
+                className="rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 ml-auto shrink-0"
               >
-                Annuler réservation
+                Annuler
               </button>
             </>
           )}
           {status === 'cancelled' && !deleteConfirm && (
             <button
               onClick={() => setDeleteConfirm(true)}
-              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white hover:bg-rose-700"
+              className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-rose-700 shrink-0"
             >
               Supprimer
             </button>
           )}
           {status === 'cancelled' && deleteConfirm && (
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-xs font-bold text-rose-600">Confirmer la suppression ?</span>
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+              <span className="text-[11px] font-bold text-rose-600">Supprimer ?</span>
               <button
                 onClick={() => deleteM.mutate()}
                 disabled={deleteM.isPending}
-                className="rounded-xl bg-rose-700 px-3 py-2 text-xs font-black text-white hover:bg-rose-800 disabled:opacity-50"
+                className="rounded-lg bg-rose-700 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-rose-800 disabled:opacity-50"
               >
-                {deleteM.isPending ? 'Suppression…' : 'Oui, supprimer'}
+                {deleteM.isPending ? '...' : 'Oui'}
               </button>
               <button
                 onClick={() => setDeleteConfirm(false)}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-black text-slate-600 hover:bg-slate-50"
               >
-                Annuler
+                Non
               </button>
             </div>
           )}
