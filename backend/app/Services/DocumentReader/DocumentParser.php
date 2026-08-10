@@ -31,6 +31,7 @@ class DocumentParser
             ReaderDocument::TYPE_VEHICLE_REGISTRATION => $this->parseCarteGrise($normalized),
             ReaderDocument::TYPE_CHEQUE => $this->parseCheque($normalized),
             ReaderDocument::TYPE_INSURANCE => $this->parseInsurance($normalized),
+            ReaderDocument::TYPE_PAYMENT_ATTESTATION => $this->parsePaymentAttestation($normalized),
             default => [],
         };
 
@@ -63,6 +64,10 @@ class DocumentParser
         // Moroccan CIN
         if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D[\'’]?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
             return ReaderDocument::TYPE_CIN;
+        }
+        // Payment attestation (vignette / taxe spéciale)
+        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE/u', $upper)) {
+            return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
         }
         // Insurance / assurance
         if (preg_match('/ASSURANCE|INSURANCE|POLICE\s+D[\'']?ASSURANCE|N°?\s*POLICE|ATTESTATION\s+D[\'']?ASSURANCE|COMPAGNIE\s+D[\'']?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE/u', $upper)) {
@@ -476,6 +481,73 @@ class DocumentParser
             'guarantee_end'    => $guaranteeEnd,
             'expiry_date'      => $guaranteeEnd,
             'registration_number' => $registration ? trim($registration) : null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function parsePaymentAttestation(string $text): array
+    {
+        // Registration: "Immatriculation", "Immat.", "N° Immat"
+        $registration = $this->labelValue($text, [
+            'Immatriculation',
+            'N°?\s*d[\'']?immatriculation',
+            'Immat\.?',
+            'N°?\s*Immat',
+        ], '[A-Z0-9\-\s\/]{3,20}')
+            ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text)
+            ?? $this->firstMatch('/\b(WW[\s\-]?\d{3,6}[\s\-]?[A-Z]?)\b/iu', $text);
+
+        // Fuel type: "Carburant", "Type de carburant", "Energie"
+        $fuelType = $this->labelValue($text, [
+            'Type\s+de\s+carburant',
+            'Carburant',
+            '[ÉE]nergie',
+            'Fuel\s+type',
+        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+');
+        if ($fuelType) {
+            $fuelUpper = mb_strtoupper(trim($fuelType));
+            $fuelMap = [
+                'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GO' => 'Diesel',
+                'ESSENCE' => 'Essence', 'SUPER' => 'Essence', 'SP' => 'Essence',
+                'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL',
+            ];
+            foreach ($fuelMap as $key => $val) {
+                if (str_contains($fuelUpper, $key)) {
+                    $fuelType = $val;
+                    break;
+                }
+            }
+        }
+
+        // Mise en circulation: "Mise en circulation", "Date 1ère mise en circulation"
+        $miseEnCirculation = $this->extractDate($text, [
+            'Mise\s+en\s+circulation',
+            'Date\s+(?:de\s+)?(?:1[èe]?re?\s+)?mise\s+en\s+circulation',
+            'Premi[èe]re\s+mise\s+en\s+circulation',
+            '1[èe]?re?\s+circulation',
+            'First\s+registration',
+        ]);
+
+        // Puissance fiscale: "Puissance fiscale", "CV fiscaux", "P.F."
+        $fiscalPower = $this->labelValue($text, [
+            'Puissance\s+fiscale',
+            'P\.?\s*F\.?',
+            'CV\s+fiscaux',
+            'Fiscal\s+power',
+            'Chevaux\s+fiscaux',
+        ], '\d{1,3}');
+        if (! $fiscalPower) {
+            // Try to find "X CV" pattern near fiscal/puissance context
+            if (preg_match('/(?:puissance|fiscale?|P\.?\s*F\.?)[^\n]*?(\d{1,3})\s*(?:CV|ch)/iu', $text, $m)) {
+                $fiscalPower = $m[1];
+            }
+        }
+
+        return [
+            'registration_number'    => $registration ? trim($registration) : null,
+            'fuel_type'              => $fuelType ? trim($fuelType) : null,
+            'first_registration_date' => $miseEnCirculation,
+            'fiscal_power'           => $fiscalPower ? (int) $fiscalPower : null,
         ];
     }
 
