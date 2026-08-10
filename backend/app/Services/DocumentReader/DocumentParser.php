@@ -50,7 +50,7 @@ class DocumentParser
         $upper = mb_strtoupper($text);
 
         // Carte grise / vehicle registration
-        if (preg_match('/CARTE\s*GRISE|CERTIFICAT\s+D[\'’]?IMMATRICULATION|VEHICLE\s+REGISTRATION/u', $upper)) {
+        if (preg_match('/CARTE\s*GRISE|CERTIFICAT\s+D\'?IMMATRICULATION|VEHICLE\s+REGISTRATION/u', $upper)) {
             return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
         }
         // Driving license
@@ -62,7 +62,7 @@ class DocumentParser
             return ReaderDocument::TYPE_PASSPORT;
         }
         // Moroccan CIN
-        if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D[\'’]?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
+        if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D\'?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
             return ReaderDocument::TYPE_CIN;
         }
         // Payment attestation (vignette / taxe spéciale)
@@ -70,7 +70,7 @@ class DocumentParser
             return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
         }
         // Insurance / assurance
-        if (preg_match('/ASSURANCE|INSURANCE|POLICE\s+D[\'']?ASSURANCE|N°?\s*POLICE|ATTESTATION\s+D[\'']?ASSURANCE|COMPAGNIE\s+D[\'']?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE/u', $upper)) {
+        if (preg_match('/ASSURANCE|INSURANCE|POLICE\s+D\'?ASSURANCE|N°?\s*POLICE|ATTESTATION\s+D\'?ASSURANCE|COMPAGNIE\s+D\'?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE/u', $upper)) {
             return ReaderDocument::TYPE_INSURANCE;
         }
         // Cheque / bank check
@@ -118,7 +118,7 @@ class DocumentParser
             'Date\s+of\s+birth',
             'Born\s+on',
         ]);
-        $expiryDate = $this->extractDate($text, ['Valable\s+jusqu', 'Date\s+d[\'’]expiration', 'Expiry', 'Expir']);
+        $expiryDate = $this->extractDate($text, ['Valable\s+jusqu', 'Date\s+d\'expiration', 'Expiry', 'Expir']);
         $classified = $this->classifyDatesByYear($text);
         $birthDate = $birthDate ?? $classified['birth'];
         $expiryDate = $expiryDate ?? $classified['expiry'];
@@ -163,7 +163,7 @@ class DocumentParser
             'nationality' => $mrz['nationality'] ?? $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+'),
             'address' => null,
             'issue_date' => $this->extractDate($text, ['Date\s+of\s+issue', 'Date\s+de\s+d[ée]livrance']),
-            'expiry_date' => $this->extractDate($text, ['Date\s+of\s+expiry', 'Date\s+d[\'’]expiration', 'Expiry']),
+            'expiry_date' => $this->extractDate($text, ['Date\s+of\s+expiry', 'Date\s+d\'expiration', 'Expiry']),
         ];
     }
 
@@ -285,7 +285,7 @@ class DocumentParser
     private function parseCarteGrise(string $text): array
     {
         return [
-            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°\s*d[\'’]?immatriculation', 'Registration'], '[A-Z0-9\-\s]{4,20}')
+            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°\s*d\'?immatriculation', 'Registration'], '[A-Z0-9\-\s]{4,20}')
                 ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text),
             'vin_number' => $this->firstMatch('/\b([A-HJ-NPR-Z0-9]{17})\b/u', $text)
                 ?? $this->labelValue($text, ['VIN', 'Ch[aâ]ssis', 'N°\s*ch[aâ]ssis'], '[A-Z0-9]{6,20}'),
@@ -405,7 +405,7 @@ class DocumentParser
         $company = $this->labelValue($text, [
             'Compagnie',
             'Assureur',
-            'Soci[ée]t[ée]\s+d[\'']?assurance',
+            'Soci[ée]t[ée]\s+d\'?assurance',
             'Insurance\s+Company',
             'Insurer',
         ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\'\.]+');
@@ -443,7 +443,7 @@ class DocumentParser
         // Fallback: labeled start/end dates
         if (! $guaranteeStart) {
             $guaranteeStart = $this->extractDate($text, [
-                'Date\s+d[\'']?effet',
+                'Date\s+d\'?effet',
                 'Date\s+de\s+d[ée]but',
                 'Effet\s+du',
                 'Start\s+date',
@@ -452,8 +452,8 @@ class DocumentParser
         }
         if (! $guaranteeEnd) {
             $guaranteeEnd = $this->extractDate($text, [
-                'Date\s+d[\'']?[ée]ch[ée]ance',
-                'Date\s+d[\'']?expiration',
+                'Date\s+d\'?[ée]ch[ée]ance',
+                'Date\s+d\'?expiration',
                 'Date\s+de\s+fin',
                 'Expir',
                 'Fin\s+de\s+garantie',
@@ -466,7 +466,7 @@ class DocumentParser
         // Registration / Immatriculation from the insurance doc
         $registration = $this->labelValue($text, [
             'Immatriculation',
-            'N°?\s*d[\'']?immatriculation',
+            'N°?\s*d\'?immatriculation',
             'V[ée]hicule\s+immatricul[ée]',
             'WW',
             'Immat',
@@ -490,7 +490,7 @@ class DocumentParser
         // Registration: "Immatriculation", "Immat.", "N° Immat"
         $registration = $this->labelValue($text, [
             'Immatriculation',
-            'N°?\s*d[\'']?immatriculation',
+            'N°?\s*d\'?immatriculation',
             'Immat\.?',
             'N°?\s*Immat',
         ], '[A-Z0-9\-\s\/]{3,20}')
