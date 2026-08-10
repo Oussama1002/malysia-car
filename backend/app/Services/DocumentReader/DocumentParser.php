@@ -394,15 +394,19 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Policy number: "N° Police", "Police N°", "N° de police", "Policy No"
+        // Policy number: "N° Police", "Police N°", "N° de police", "NUMÉRO D'ORDRE", etc.
         $policyNumber = $this->labelValue($text, [
             'N°?\s*(?:de\s+)?Police',
             'Police\s*N°?',
             'Policy\s*N[o°]',
             'Contract\s*N[o°]',
             'N°?\s*Contrat',
+            'NUM[ÉE]RO\s+D\'?ORDRE',
+            'MERO\s+D',
+            'N°?\s*d\'?ordre',
         ], '[A-Z0-9\-\/\s]{3,30}')
-            ?? $this->firstMatch('/(?:police|contrat)\s*(?:n[°o]?\s*)?[:\-]?\s*([A-Z0-9][\w\-\/]{2,25})/iu', $text);
+            ?? $this->firstMatch('/(?:police|contrat|ordre)\s*(?:n[°o]?\s*)?[:\-]?\s*([A-Z0-9][\w\-\/]{2,25})/iu', $text)
+            ?? $this->firstMatch('/\b(\d{2,3}[A-Z]\s*\d{6,12})\b/u', $text);
 
         // Insurance company
         $company = $this->labelValue($text, [
@@ -451,6 +455,7 @@ class DocumentParser
                 'Effet\s+du',
                 'Start\s+date',
                 'D[ée]but',
+                'P[ÉE]RIODE\s+DE',
             ]);
         }
         if (! $guaranteeEnd) {
@@ -465,17 +470,23 @@ class DocumentParser
                 'Valable\s+jusqu',
             ]);
         }
+        // Last resort: classify any dates found anywhere in the text.
+        if (! $guaranteeStart || ! $guaranteeEnd) {
+            $classified = $this->classifyDatesByYear($text);
+            $guaranteeStart = $guaranteeStart ?? $classified['issue'];
+            $guaranteeEnd = $guaranteeEnd ?? $classified['expiry'];
+        }
 
-        // Registration / Immatriculation from the insurance doc
-        $registration = $this->labelValue($text, [
-            'Immatriculation',
-            'N°?\s*d\'?immatriculation',
-            'V[ée]hicule\s+immatricul[ée]',
-            'WW',
-            'Immat',
-        ], '[A-Z0-9\-\s\/]{3,20}')
+        // Registration / Immatriculation — try WW provisional plate first (most
+        // reliable on noisy OCR), then Moroccan plate format, then label-based.
+        $registration = $this->firstMatch('/[~\s]?(WW[\s\-]?\d{3,8}[\s\-]?[A-Z]?)\b/iu', $text)
             ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text)
-            ?? $this->firstMatch('/\b(WW[\s\-]?\d{3,6}[\s\-]?[A-Z]?)\b/iu', $text);
+            ?? $this->labelValue($text, [
+                'Immatriculation',
+                'N°?\s*d\'?immatriculation',
+                'V[ée]hicule\s+immatricul[ée]',
+                'Immat',
+            ], '[A-Z0-9]{2,}[\-\s\/]?[A-Z0-9]{2,}[\-\s\/]?[A-Z0-9]*');
 
         $result = [
             'policy_number'    => $policyNumber ? trim($policyNumber) : null,
