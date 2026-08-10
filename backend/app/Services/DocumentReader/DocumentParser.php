@@ -3,6 +3,7 @@
 namespace App\Services\DocumentReader;
 
 use App\Models\ReaderDocument;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Regex / heuristic parser for the 5 document types supported in the MVP.
@@ -23,6 +24,8 @@ class DocumentParser
         $type = $hintedType && in_array($hintedType, ReaderDocument::TYPES, true)
             ? $hintedType
             : $this->detectType($normalized);
+
+        Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'text_length' => mb_strlen($normalized), 'text_preview' => mb_substr($normalized, 0, 2000)]);
 
         $fields = match ($type) {
             ReaderDocument::TYPE_CIN => $this->parseCin($normalized),
@@ -474,7 +477,7 @@ class DocumentParser
             ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text)
             ?? $this->firstMatch('/\b(WW[\s\-]?\d{3,6}[\s\-]?[A-Z]?)\b/iu', $text);
 
-        return [
+        $result = [
             'policy_number'    => $policyNumber ? trim($policyNumber) : null,
             'insurance_company' => $company ? mb_convert_case(mb_strtolower(trim($company)), MB_CASE_TITLE, 'UTF-8') : null,
             'guarantee_start'  => $guaranteeStart,
@@ -482,6 +485,8 @@ class DocumentParser
             'expiry_date'      => $guaranteeEnd,
             'registration_number' => $registration ? trim($registration) : null,
         ];
+        Log::info('DocumentParser.parseInsurance', $result);
+        return $result;
     }
 
     /** @return array<string, mixed> */
