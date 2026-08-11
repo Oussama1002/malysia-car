@@ -308,16 +308,45 @@ class DocumentParser
             }
         }
 
-        // --- Model: search near "Mod[èe]le" label on same line ---
+        // --- Model: match known models for the detected brand ---
         $model = null;
-        if (preg_match('/Mod[èeé]le\s+(\S+)/iu', $text, $mm)) {
+        $knownModels = [
+            'CLIO', 'MEGANE', 'SCENIC', 'KANGOO', 'CAPTUR', 'KADJAR', 'KOLEOS',
+            'TALISMAN', 'TWINGO', 'ZOE', 'MASTER', 'TRAFIC', 'EXPRESS', 'ARKANA',
+            'SANDERO', 'DUSTER', 'LOGAN', 'SPRING', 'JOGGER', 'STEPWAY',
+            'PARTNER', 'BERLINGO', 'RIFTER', 'EXPERT',
+            '208', '308', '2008', '3008', '5008', '508',
+            'C3', 'C4', 'C5', 'AIRCROSS', 'JUMPY', 'BERLINGO',
+            'POLO', 'GOLF', 'PASSAT', 'TIGUAN', 'TOUAREG', 'CADDY', 'TRANSPORTER',
+            'TUCSON', 'ACCENT', 'I10', 'I20', 'I30', 'ELANTRA', 'SANTA FE', 'CRETA',
+            'PICANTO', 'RIO', 'CERATO', 'SPORTAGE', 'SORENTO', 'STONIC',
+            'COROLLA', 'YARIS', 'RAV4', 'HILUX', 'LAND CRUISER', 'FORTUNER',
+            'MICRA', 'JUKE', 'QASHQAI', 'X-TRAIL', 'NAVARA', 'PATROL',
+            'FIESTA', 'FOCUS', 'KUGA', 'PUMA', 'RANGER', 'TRANSIT',
+            'CORSA', 'ASTRA', 'CROSSLAND', 'GRANDLAND', 'MOKKA',
+            'IBIZA', 'LEON', 'ARONA', 'ATECA', 'TARRACO',
+            'FABIA', 'OCTAVIA', 'KAMIQ', 'KAROQ', 'KODIAQ',
+            'SWIFT', 'VITARA', 'JIMNY', 'S-CROSS',
+            'CIVIC', 'JAZZ', 'HR-V', 'CR-V',
+            'PANDA', 'TIPO', '500', 'DOBLO', 'DUCATO', 'FIORINO',
+            'SERIE 1', 'SERIE 3', 'SERIE 5', 'X1', 'X3', 'X5',
+            'CLASSE A', 'CLASSE C', 'CLASSE E', 'GLA', 'GLC', 'GLE', 'SPRINTER', 'VITO',
+            'A1', 'A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7',
+        ];
+        foreach ($knownModels as $km) {
+            if (str_contains($upper, $km)) {
+                $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
+                break;
+            }
+        }
+        if (! $model && preg_match('/Mod[èeé]le\s+(\S+)/iu', $text, $mm)) {
             $candidate = trim($mm[1]);
             if (mb_strlen($candidate) >= 2 && preg_match('/[A-Za-z]/u', $candidate)) {
                 $model = mb_convert_case(mb_strtolower($candidate), MB_CASE_TITLE, 'UTF-8');
             }
         }
 
-        // --- Fuel type: match known types in text near carburant label ---
+        // --- Fuel type: match known types in text ---
         $fuelType = null;
         $fuelKeywords = [
             'ESSENCE' => 'Essence', 'EESANCE' => 'Essence', 'ESSANCE' => 'Essence',
@@ -331,25 +360,17 @@ class DocumentParser
             }
         }
 
-        // --- Fiscal power: search near "fiscale" with OCR variants ---
+        // --- Fiscal power: custom search near "fiscale" for any digit ---
         $fiscalPower = $this->labelValue($text, [
             'Puissance\s+fiscale',
             'P[a-zéèô]*\s+fiscale',
-            'P\.?\s*F\.?',
         ], '\d{1,3}');
-
-        // --- Nombre de places ---
-        $nbPlaces = $this->labelValue($text, [
-            'Nombre\s+de\s+places',
-            'Nb\.?\s*(?:de\s+)?places',
-        ], '\d{1,2}');
-
-        // --- Genre: include OCR variants (Gente, Ganre, ...) ---
-        $genre = $this->labelValue($text, [
-            'Gen[rt]e',
-            'Genre',
-            'Usage',
-        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+');
+        if (! $fiscalPower && preg_match('/fiscale/iu', $text, $fm, PREG_OFFSET_CAPTURE)) {
+            $window = substr($text, $fm[0][1], 80);
+            if (preg_match('/(\d{1,2})/', $window, $dm)) {
+                $fiscalPower = $dm[1];
+            }
+        }
 
         // --- Expiry date: fuzzy "fin de validité" with OCR noise ---
         $expiryDate = $this->extractDate($text, [
@@ -359,31 +380,17 @@ class DocumentParser
             'va[lh]dit[ée]',
         ]);
 
-        // --- Mise en circulation: fuzzy OCR patterns ---
-        $miseEnCirc = $this->extractDate($text, [
-            'mi[st]e\s+en\s+[a-z]*irculation',
-            'Mise\s+en\s+circulation',
-            'Premi[èe]re\s+mi[st]e\s+en',
-            'M\.?\s*C\.?\s*(?:au\s+)?Mar',
-        ]);
-
         // --- VIN / chassis ---
         $vin = $this->firstMatch('/\b([A-HJ-NPR-Z0-9]{17})\b/u', $text)
             ?? $this->labelValue($text, ['VIN', '[Cc]h[aâ]ssis', 'N°?\s*(?:du\s+)?[Cc]h[aâ]ssis'], '[A-Z0-9]{6,20}');
 
         $result = [
-            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°?\s*d\'?immatriculation'], '[A-Z0-9\-\s]{4,20}')
-                ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text),
             'vin_number' => $vin,
             'brand' => $brand,
             'model' => $model,
             'fuel_type' => $fuelType,
             'fiscal_power' => $fiscalPower ? (int) $fiscalPower : null,
-            'nb_places' => $nbPlaces ? (int) $nbPlaces : null,
-            'genre' => $genre ? trim($genre) : null,
-            'first_registration_date' => $miseEnCirc,
             'expiry_date' => $expiryDate,
-            'owner_name' => $this->labelValue($text, ['Propri[ée]taire', 'Nom\s+du\s+propri[ée]taire', 'Owner'], '.+'),
         ];
         Log::info('DocumentParser.parseCarteGrise', $result);
         return $result;

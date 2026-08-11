@@ -923,7 +923,6 @@ const VehiclesList: React.FC = () => {
                     ...(data.cgChassis            ? { chassis: data.cgChassis }                           : {}),
                     ...(data.cgFuelType           ? { fuel: data.cgFuelType }                             : {}),
                     ...(data.cgFiscalPower        ? { cv: data.cgFiscalPower }                            : {}),
-                    ...(data.cgMiseEnCirculation  ? { miseEnCirculation: data.cgMiseEnCirculation, year: parseInt(data.cgMiseEnCirculation.slice(0, 4)) || fd.year } : {}),
                   };
                 })}
               />

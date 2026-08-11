@@ -30,12 +30,9 @@ export interface ScannedVehicleData {
   cgMarque?: string;
   cgModele?: string;
   cgChassis?: string;
-  cgGenre?: string;
-  cgNbPlaces?: string;
   cgFuelType?: string;
   cgFiscalPower?: string;
   cgExpiry?: string;
-  cgMiseEnCirculation?: string;
 }
 
 export const VehicleDocumentScanner: React.FC<{
@@ -89,7 +86,7 @@ export const VehicleDocumentScanner: React.FC<{
       {carteGriseRecue && (
         <ScanSlot
           title="Carte Grise"
-          description="Marque, modèle, châssis, genre, places, fin validité"
+          description="Marque, modèle, châssis, carburant, puissance, fin validité"
           onPrefill={onPrefill}
           mapFields={mapCarteGrise}
         />
@@ -298,12 +295,9 @@ function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
     cgMarque:            str(d.brand ?? d.marque ?? d.make),
     cgModele:            str(d.model ?? d.modele),
     cgChassis:           str(d.vin_number ?? d.vin ?? d.chassis ?? d.chassis_number),
-    cgGenre:             str(d.genre ?? d.usage),
-    cgNbPlaces:          str(d.nb_places ?? d.nombre_places ?? d.seats),
     cgFuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
     cgFiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale),
     cgExpiry:            str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
-    cgMiseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation),
   };
 }
 
@@ -335,10 +329,7 @@ const FIELD_LABELS: Record<string, string> = {
   cgMarque:              'Marque',
   cgModele:              'Modèle',
   cgChassis:             'N° châssis (VIN)',
-  cgGenre:               'Genre',
-  cgNbPlaces:            'Nombre de places',
   cgFuelType:            'Carburant',
   cgFiscalPower:         'Puissance fiscale',
   cgExpiry:              'Fin de validité',
-  cgMiseEnCirculation:   'Mise en circulation',
 };
