@@ -567,12 +567,14 @@ class DocumentParser
             }
         }
 
-        return [
+        $result = [
             'registration_number'    => $registration ? trim($registration) : null,
             'fuel_type'              => $fuelType ? trim($fuelType) : null,
             'first_registration_date' => $miseEnCirculation,
             'fiscal_power'           => $fiscalPower ? (int) $fiscalPower : null,
         ];
+        Log::info('DocumentParser.parsePaymentAttestation', $result);
+        return $result;
     }
 
     /**

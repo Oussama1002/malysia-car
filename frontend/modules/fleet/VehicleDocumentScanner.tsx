@@ -224,6 +224,8 @@ const ScanSlot: React.FC<{
 // ---------------------------------------------------------------------------
 
 function str(v: unknown): string | undefined {
+  if (v === null || v === undefined) return undefined;
+  if (typeof v === 'number') return String(v);
   if (typeof v !== 'string' || !v.trim()) return undefined;
   return v.trim();
 }
