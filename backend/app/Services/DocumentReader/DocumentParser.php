@@ -471,11 +471,12 @@ class DocumentParser
                 'Valable\s+jusqu',
             ]);
         }
-        // Last resort: classify any dates found anywhere in the text.
-        if (! $guaranteeStart || ! $guaranteeEnd) {
+        // Last resort: only use classified future dates as guarantee end.
+        // Do NOT use classified 'issue' as guarantee start — it's often
+        // the attestation issuance date, not the coverage period start.
+        if (! $guaranteeEnd) {
             $classified = $this->classifyDatesByYear($text);
-            $guaranteeStart = $guaranteeStart ?? $classified['issue'];
-            $guaranteeEnd = $guaranteeEnd ?? $classified['expiry'];
+            $guaranteeEnd = $classified['expiry'];
         }
 
         // Registration / Immatriculation — try WW provisional plate first (most
