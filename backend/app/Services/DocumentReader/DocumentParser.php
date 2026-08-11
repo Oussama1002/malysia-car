@@ -287,72 +287,101 @@ class DocumentParser
     /** @return array<string, mixed> */
     private function parseCarteGrise(string $text): array
     {
-        $brand = $this->labelValue($text, ['Marque', 'Make', 'Brand'], '[A-Za-z\-]+');
-        $model = $this->labelValue($text, ['Mod[èe]le', 'Model'], '[A-Za-z0-9\-\s]+');
+        $upper = mb_strtoupper($text);
 
-        $fuelType = $this->labelValue($text, [
-            'Type\s+(?:du\s+)?carburant',
-            'Carburant',
-            '[ÉE]nergie',
-            'Fuel',
-        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+');
-        if ($fuelType) {
-            $fuelUpper = mb_strtoupper(trim($fuelType));
-            $fuelMap = [
-                'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GO' => 'Diesel',
-                'ESSENCE' => 'Essence', 'SUPER' => 'Essence', 'SP' => 'Essence',
-                'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL',
-            ];
-            foreach ($fuelMap as $key => $val) {
-                if (str_contains($fuelUpper, $key)) {
-                    $fuelType = $val;
-                    break;
-                }
+        // --- Brand: match known brands in text (labelValue too greedy on noisy OCR) ---
+        $brand = null;
+        $knownBrands = [
+            'RENAULT', 'DACIA', 'PEUGEOT', 'CITROEN', 'CITROËN', 'FIAT',
+            'VOLKSWAGEN', 'HYUNDAI', 'KIA', 'TOYOTA', 'NISSAN', 'FORD',
+            'OPEL', 'BMW', 'MERCEDES', 'AUDI', 'SEAT', 'SKODA', 'SUZUKI',
+            'MITSUBISHI', 'HONDA', 'CHEVROLET', 'MG', 'BYD', 'CUPRA',
+            'JEEP', 'LAND ROVER', 'RANGE ROVER', 'VOLVO', 'MAZDA',
+            'MINI', 'PORSCHE', 'ALFA ROMEO', 'JAGUAR', 'ISUZU',
+            'SSANGYONG', 'CHERY', 'GEELY', 'HAVAL', 'GREAT WALL',
+            'DFSK', 'CHANGAN', 'JAC', 'FOTON', 'IVECO', 'MAN',
+        ];
+        foreach ($knownBrands as $b) {
+            if (str_contains($upper, $b)) {
+                $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
+                break;
             }
         }
 
+        // --- Model: search near "Mod[èe]le" label on same line ---
+        $model = null;
+        if (preg_match('/Mod[èeé]le\s+(\S+)/iu', $text, $mm)) {
+            $candidate = trim($mm[1]);
+            if (mb_strlen($candidate) >= 2 && preg_match('/[A-Za-z]/u', $candidate)) {
+                $model = mb_convert_case(mb_strtolower($candidate), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+
+        // --- Fuel type: match known types in text near carburant label ---
+        $fuelType = null;
+        $fuelKeywords = [
+            'ESSENCE' => 'Essence', 'EESANCE' => 'Essence', 'ESSANCE' => 'Essence',
+            'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GAZOLE' => 'Diesel',
+            'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL',
+        ];
+        foreach ($fuelKeywords as $key => $val) {
+            if (str_contains($upper, $key)) {
+                $fuelType = $val;
+                break;
+            }
+        }
+
+        // --- Fiscal power: search near "fiscale" with OCR variants ---
         $fiscalPower = $this->labelValue($text, [
             'Puissance\s+fiscale',
+            'P[a-zéèô]*\s+fiscale',
             'P\.?\s*F\.?',
-            'CV\s+fiscaux',
         ], '\d{1,3}');
 
+        // --- Nombre de places ---
         $nbPlaces = $this->labelValue($text, [
             'Nombre\s+de\s+places',
             'Nb\.?\s*(?:de\s+)?places',
-            'Places',
         ], '\d{1,2}');
 
+        // --- Genre: include OCR variants (Gente, Ganre, ...) ---
         $genre = $this->labelValue($text, [
+            'Gen[rt]e',
             'Genre',
             'Usage',
         ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+');
 
+        // --- Expiry date: fuzzy "fin de validité" with OCR noise ---
         $expiryDate = $this->extractDate($text, [
+            '[FfIi]in?\s+de\s+va[lh][io]dit[ée]',
             'Fin\s+de\s+validit[ée]',
             'Validit[ée]',
-            'Valable\s+jusqu',
-            'Date\s+d\'?expiration',
+            'va[lh]dit[ée]',
         ]);
 
+        // --- Mise en circulation: fuzzy OCR patterns ---
+        $miseEnCirc = $this->extractDate($text, [
+            'mi[st]e\s+en\s+[a-z]*irculation',
+            'Mise\s+en\s+circulation',
+            'Premi[èe]re\s+mi[st]e\s+en',
+            'M\.?\s*C\.?\s*(?:au\s+)?Mar',
+        ]);
+
+        // --- VIN / chassis ---
+        $vin = $this->firstMatch('/\b([A-HJ-NPR-Z0-9]{17})\b/u', $text)
+            ?? $this->labelValue($text, ['VIN', '[Cc]h[aâ]ssis', 'N°?\s*(?:du\s+)?[Cc]h[aâ]ssis'], '[A-Z0-9]{6,20}');
+
         $result = [
-            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°?\s*d\'?immatriculation', 'Registration'], '[A-Z0-9\-\s]{4,20}')
+            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°?\s*d\'?immatriculation'], '[A-Z0-9\-\s]{4,20}')
                 ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text),
-            'vin_number' => $this->firstMatch('/\b([A-HJ-NPR-Z0-9]{17})\b/u', $text)
-                ?? $this->labelValue($text, ['VIN', 'Ch[aâ]ssis', 'N°?\s*(?:du\s+)?ch[aâ]ssis'], '[A-Z0-9]{6,20}'),
-            'brand' => $brand ? mb_convert_case(mb_strtolower(trim($brand)), MB_CASE_TITLE, 'UTF-8') : null,
-            'model' => $model ? mb_convert_case(mb_strtolower(trim($model)), MB_CASE_TITLE, 'UTF-8') : null,
-            'fuel_type' => $fuelType ? trim($fuelType) : null,
+            'vin_number' => $vin,
+            'brand' => $brand,
+            'model' => $model,
+            'fuel_type' => $fuelType,
             'fiscal_power' => $fiscalPower ? (int) $fiscalPower : null,
             'nb_places' => $nbPlaces ? (int) $nbPlaces : null,
             'genre' => $genre ? trim($genre) : null,
-            'first_registration_date' => $this->extractDate($text, [
-                'Mise\s+en\s+circulation',
-                'Date\s+(?:de\s+)?(?:1[èe]?re?\s+)?mise\s+en\s+circulation',
-                'Premi[èe]re\s+mise\s+en\s+circulation',
-                'M\.?\s*C\.?\s*(?:au\s+)?Maroc',
-                'First\s+registration',
-            ]),
+            'first_registration_date' => $miseEnCirc,
             'expiry_date' => $expiryDate,
             'owner_name' => $this->labelValue($text, ['Propri[ée]taire', 'Nom\s+du\s+propri[ée]taire', 'Owner'], '.+'),
         ];
