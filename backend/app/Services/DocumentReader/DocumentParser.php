@@ -456,7 +456,6 @@ class DocumentParser
                 'Effet\s+du',
                 'Start\s+date',
                 'D[ée]but',
-                'P[ÉE]RIODE\s+DE',
             ]);
         }
         if (! $guaranteeEnd) {
@@ -466,14 +465,21 @@ class DocumentParser
                 'Date\s+de\s+fin',
                 'Expir',
                 'Fin\s+de\s+garantie',
-                'Echéance',
+                'Ech[ée]ance',
                 'End\s+date',
                 'Valable\s+jusqu',
             ]);
         }
+        // Fallback: parse the PERIODE DE GARANTIE table with French month
+        // names. Moroccan attestations use a Jour|Mois|Année table where
+        // months are French words (Janvier, Décembre, …) that Tesseract
+        // often garbles — we match common OCR variants too.
+        if (! $guaranteeStart || ! $guaranteeEnd) {
+            $periode = $this->extractPeriodeDeGarantie($text);
+            $guaranteeStart = $guaranteeStart ?? $periode['start'];
+            $guaranteeEnd = $guaranteeEnd ?? $periode['end'];
+        }
         // Last resort: only use classified future dates as guarantee end.
-        // Do NOT use classified 'issue' as guarantee start — it's often
-        // the attestation issuance date, not the coverage period start.
         if (! $guaranteeEnd) {
             $classified = $this->classifyDatesByYear($text);
             $guaranteeEnd = $classified['expiry'];
@@ -567,6 +573,118 @@ class DocumentParser
             'first_registration_date' => $miseEnCirculation,
             'fiscal_power'           => $fiscalPower ? (int) $fiscalPower : null,
         ];
+    }
+
+    /**
+     * Parse the PERIODE DE GARANTIE table found on Moroccan insurance attestations.
+     * The table has columns Jour | Mois (French name) | Année, with DU (start)
+     * and AU (end) rows. OCR often garbles month names and years, so we match
+     * common variants and infer missing years from the issuance date.
+     *
+     * @return array{start: ?string, end: ?string}
+     */
+    private function extractPeriodeDeGarantie(string $text): array
+    {
+        $result = ['start' => null, 'end' => null];
+
+        if (! preg_match('/PERIODE/iu', $text, $pm, PREG_OFFSET_CAPTURE)) {
+            return $result;
+        }
+
+        $after = mb_substr($text, $pm[0][1]);
+        $chunk = mb_substr($after, 0, 600);
+
+        $frenchMonths = [
+            'janvier' => 1, 'janv' => 1,
+            'f[ée]vrier' => 2, 'fevrier' => 2,
+            'mars' => 3,
+            'avril' => 4,
+            'mai' => 5,
+            'juin' => 6,
+            'juillet' => 7, 'juil' => 7,
+            'ao[uû]t' => 8, 'aout' => 8,
+            'septembre' => 9, 'sept' => 9,
+            'octobre' => 10,
+            'novembre' => 11,
+            'd[ée][cv]embre' => 12, 'decembre' => 12, 'd[ée]vembre' => 12,
+        ];
+
+        $monthPositions = [];
+        $seenNums = [];
+        foreach ($frenchMonths as $pattern => $num) {
+            if (in_array($num, $seenNums, true)) {
+                continue;
+            }
+            if (preg_match('/'.$pattern.'/iu', $chunk, $mm, PREG_OFFSET_CAPTURE)) {
+                $monthPositions[] = ['month' => $num, 'pos' => $mm[0][1]];
+                $seenNums[] = $num;
+            }
+        }
+        usort($monthPositions, fn ($a, $b) => $a['pos'] <=> $b['pos']);
+
+        if (empty($monthPositions)) {
+            return $result;
+        }
+
+        $contextYear = null;
+        $contextMonth = null;
+        if (preg_match('/\b(\d{1,2})[\/\-.]\s*(\d{1,2})[\/\-.]\s*(20[12]\d)\b/', $text, $ym)) {
+            $contextYear = (int) $ym[3];
+            $contextMonth = (int) $ym[2];
+        }
+
+        $allDays = [];
+        if (preg_match_all('/\b(\d{1,2})\b/', $chunk, $dm, PREG_OFFSET_CAPTURE)) {
+            foreach ($dm[1] as $pair) {
+                $di = (int) $pair[0];
+                if ($di >= 1 && $di <= 31) {
+                    $allDays[] = ['day' => $di, 'pos' => (int) $pair[1]];
+                }
+            }
+        }
+
+        $findDayOnSameLine = function (int $monthPos) use ($chunk, $allDays): ?int {
+            $lineStart = (int) strrpos(substr($chunk, 0, $monthPos), "\n");
+            $lineEnd = strpos($chunk, "\n", $monthPos) ?: mb_strlen($chunk);
+            $best = null;
+            foreach ($allDays as $dd) {
+                if ($dd['pos'] >= $lineStart && $dd['pos'] < $lineEnd && $dd['pos'] < $monthPos) {
+                    $best = $dd['day'];
+                }
+            }
+            return $best;
+        };
+
+        $year = $contextYear ?? (int) date('Y');
+
+        if (count($monthPositions) >= 2) {
+            $startMonth = $monthPositions[0]['month'];
+            $endMonth = $monthPositions[1]['month'];
+            $startDay = $findDayOnSameLine($monthPositions[0]['pos']) ?? 1;
+            $endDay = $findDayOnSameLine($monthPositions[1]['pos'])
+                ?? (int) date('t', mktime(0, 0, 0, $endMonth, 1, $year));
+            $result['start'] = sprintf('%04d-%02d-%02d', $year, $startMonth, $startDay);
+            $result['end'] = sprintf('%04d-%02d-%02d', $year, $endMonth, $endDay);
+        } else {
+            $foundMonth = $monthPositions[0]['month'];
+            $endDay = $findDayOnSameLine($monthPositions[0]['pos'])
+                ?? (int) date('t', mktime(0, 0, 0, $foundMonth, 1, $year));
+            $result['end'] = sprintf('%04d-%02d-%02d', $year, $foundMonth, $endDay);
+
+            $monthLineStart = (int) strrpos(mb_substr($chunk, 0, $monthPositions[0]['pos']), "\n");
+            $startDay = null;
+            foreach ($allDays as $dd) {
+                if ($dd['pos'] < $monthLineStart) {
+                    $startDay = $dd['day'];
+                    break;
+                }
+            }
+            if ($startDay && $contextMonth) {
+                $result['start'] = sprintf('%04d-%02d-%02d', $year, $contextMonth, $startDay);
+            }
+        }
+
+        return $result;
     }
 
     private function parseAmount(string $raw): ?float
