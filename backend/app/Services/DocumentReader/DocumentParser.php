@@ -394,19 +394,17 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Policy number / NUMÉRO D'ORDRE — try the most reliable pattern first:
-        // a digit-heavy sequence near "ORDRE"/"MERO"/"POLICE" labels.
-        $policyNumber = $this->firstMatch('/(?:MERO|ORDRE|NUM[ÉE]RO)[^\n]{0,40}?(\d{2,3}[A-Z]?\s*\d{4,12})/iu', $text)
-            ?? $this->firstMatch('/\b(\d{2,3}[A-Z]\s*\d{6,12})\b/u', $text)
+        // Moroccan insurance policy numbers look like AU112024026094T1 or
+        // FL112023C-153426 (2 letters + digits + optional letter/dash suffix).
+        // Try that format first, then fall back to label-based extraction.
+        $policyNumber = $this->firstMatch('/\b([A-Z]{2}\d[A-Z0-9\-]{9,28})\b/u', $text)
             ?? $this->labelValue($text, [
                 'N°?\s*(?:de\s+)?Police',
-                'NUM[ÉE]RO\s+D\'?ORDRE',
-                'MERO\s+D',
-                'N°?\s*d\'?ordre',
+                'Police\s*N°?',
                 'Policy\s*N[o°]',
                 'Contract\s*N[o°]',
                 'N°?\s*Contrat',
-            ], '\d[A-Z0-9\-\/\s]{4,30}');
+            ], '[A-Z]{2}[A-Z0-9\-]{6,30}');
         if ($policyNumber && ! preg_match('/\d/', $policyNumber)) {
             $policyNumber = null;
         }
