@@ -14,6 +14,11 @@ export interface ScannedVehicleData {
   acquisitionDate?: string;
   vendeur?: string;
   montant?: string;
+  // Attestation de paiement
+  registration?: string;
+  fuelType?: string;
+  miseEnCirculation?: string;
+  fiscalPower?: string;
   // Immatriculation provisoire / WW
   immatProvisoire?: string;
   immatProvisoireExpiry?: string;
@@ -51,6 +56,12 @@ export const VehicleDocumentScanner: React.FC<{
         description="N° provisoire, date validité"
         onPrefill={onPrefill}
         mapFields={mapImmatProvisoire}
+      />
+      <ScanSlot
+        title="Attestation de paiement"
+        description="Immat., carburant, mise en circulation, puissance fiscale"
+        onPrefill={onPrefill}
+        mapFields={mapPaymentAttestation}
       />
       <ScanSlot
         title="Visite technique"
@@ -110,7 +121,9 @@ const ScanSlot: React.FC<{
     setError(null);
     setPreview(null);
     try {
-      const docType = mapFields === mapAssurance ? 'insurance' : 'other';
+      const docType = mapFields === mapAssurance ? 'insurance'
+        : mapFields === mapPaymentAttestation ? 'payment_attestation'
+        : 'other';
       const uploaded = await documentReaderApi.upload(file, docType);
       await documentReaderApi.extract(uploaded.data.id, docType);
       const done = await documentReaderApi.pollUntilDone(uploaded.data.id);
@@ -131,7 +144,7 @@ const ScanSlot: React.FC<{
         return;
       }
 
-      setPreview(cleaned);
+      setPreview(mapped);
       onPrefill(cleaned);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Échec OCR');
@@ -172,17 +185,36 @@ const ScanSlot: React.FC<{
         {error && <div className="mt-1 text-[11px] font-semibold text-rose-600">{error}</div>}
       </div>
 
-      {preview && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 space-y-1">
-          <div className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Champs détectés ✓</div>
-          {Object.entries(preview).map(([k, v]) => (
-            <div key={k} className="flex justify-between text-[10px]">
-              <span className="text-slate-500">{FIELD_LABELS[k] ?? k}</span>
-              <span className="font-semibold text-slate-800 max-w-[55%] truncate">{String(v)}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {preview && (() => {
+        const detected = Object.entries(preview).filter(([, v]) => v !== undefined && v !== '' && v !== null);
+        const missing = Object.entries(preview).filter(([, v]) => v === undefined || v === '' || v === null);
+        return (
+          <div className="space-y-2">
+            {detected.length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 space-y-1">
+                <div className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Champs détectés</div>
+                {detected.map(([k, v]) => (
+                  <div key={k} className="flex justify-between text-[10px]">
+                    <span className="text-slate-500">{FIELD_LABELS[k] ?? k}</span>
+                    <span className="font-semibold text-slate-800 max-w-[55%] truncate">{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {missing.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 space-y-1">
+                <div className="text-[10px] font-black text-amber-700 uppercase tracking-wider">Non détectés</div>
+                {missing.map(([k]) => (
+                  <div key={k} className="flex justify-between text-[10px]">
+                    <span className="text-slate-500">{FIELD_LABELS[k] ?? k}</span>
+                    <span className="font-medium text-amber-600 italic">non détecté</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -203,6 +235,15 @@ function mapAssurance(d: Record<string, unknown>): ScannedVehicleData {
     insuranceStart:   str(d.guarantee_start ?? d.date_effet ?? d.start_date ?? d.date_debut),
     insuranceExpiry:  str(d.guarantee_end ?? d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_fin),
     immatProvisoire:  str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+  };
+}
+
+function mapPaymentAttestation(d: Record<string, unknown>): ScannedVehicleData {
+  return {
+    registration:      str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    fuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
+    miseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
+    fiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale ?? d.cv_fiscaux),
   };
 }
 
@@ -247,6 +288,10 @@ const FIELD_LABELS: Record<string, string> = {
   acquisitionDate:       'Date achat',
   vendeur:               'Vendeur',
   montant:               'Montant',
+  registration:          'Immatriculation',
+  fuelType:              'Carburant',
+  miseEnCirculation:     'Mise en circulation',
+  fiscalPower:           'Puissance fiscale',
   immatProvisoire:       'N° provisoire',
   immatProvisoireExpiry: 'Validité',
   techControlExpiry:     'Exp. visite tech.',
