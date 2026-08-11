@@ -26,11 +26,22 @@ export interface ScannedVehicleData {
   techControlExpiry?: string;
   // Vignette
   vignetteExpiry?: string;
+  // Carte Grise
+  cgMarque?: string;
+  cgModele?: string;
+  cgChassis?: string;
+  cgGenre?: string;
+  cgNbPlaces?: string;
+  cgFuelType?: string;
+  cgFiscalPower?: string;
+  cgExpiry?: string;
+  cgMiseEnCirculation?: string;
 }
 
 export const VehicleDocumentScanner: React.FC<{
   onPrefill: (data: ScannedVehicleData) => void;
-}> = ({ onPrefill }) => (
+  carteGriseRecue?: boolean;
+}> = ({ onPrefill, carteGriseRecue }) => (
   <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
     <div className="text-xs font-black uppercase tracking-wider text-indigo-700">
       Scanner les documents véhicule (OCR)
@@ -75,6 +86,14 @@ export const VehicleDocumentScanner: React.FC<{
         onPrefill={onPrefill}
         mapFields={mapVignette}
       />
+      {carteGriseRecue && (
+        <ScanSlot
+          title="Carte Grise"
+          description="Marque, modèle, châssis, genre, places, fin validité"
+          onPrefill={onPrefill}
+          mapFields={mapCarteGrise}
+        />
+      )}
     </div>
   </div>
 );
@@ -123,6 +142,7 @@ const ScanSlot: React.FC<{
     try {
       const docType = mapFields === mapAssurance ? 'insurance'
         : mapFields === mapPaymentAttestation ? 'payment_attestation'
+        : mapFields === mapCarteGrise ? 'vehicle_registration'
         : 'other';
       const uploaded = await documentReaderApi.upload(file, docType);
       await documentReaderApi.extract(uploaded.data.id, docType);
@@ -273,6 +293,20 @@ function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
+function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
+  return {
+    cgMarque:            str(d.brand ?? d.marque ?? d.make),
+    cgModele:            str(d.model ?? d.modele),
+    cgChassis:           str(d.vin_number ?? d.vin ?? d.chassis ?? d.chassis_number),
+    cgGenre:             str(d.genre ?? d.usage),
+    cgNbPlaces:          str(d.nb_places ?? d.nombre_places ?? d.seats),
+    cgFuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
+    cgFiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale),
+    cgExpiry:            str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
+    cgMiseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation),
+  };
+}
+
 function mapVignette(d: Record<string, unknown>): ScannedVehicleData {
   return {
     vignetteExpiry: str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_validite ?? d.year ?? d.annee ?? d.valid_until),
@@ -298,4 +332,13 @@ const FIELD_LABELS: Record<string, string> = {
   immatProvisoireExpiry: 'Validité',
   techControlExpiry:     'Exp. visite tech.',
   vignetteExpiry:        'Exp. vignette',
+  cgMarque:              'Marque',
+  cgModele:              'Modèle',
+  cgChassis:             'N° châssis (VIN)',
+  cgGenre:               'Genre',
+  cgNbPlaces:            'Nombre de places',
+  cgFuelType:            'Carburant',
+  cgFiscalPower:         'Puissance fiscale',
+  cgExpiry:              'Fin de validité',
+  cgMiseEnCirculation:   'Mise en circulation',
 };

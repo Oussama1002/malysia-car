@@ -898,6 +898,7 @@ const VehiclesList: React.FC = () => {
 
               {/* ── OCR Scanner ── */}
               <VehicleDocumentScanner
+                carteGriseRecue={formData.carteGriseStatus === 'recue'}
                 onPrefill={(data) => setFormData(fd => {
                   const plate = data.registration ? parsePlate(data.registration.replace(/\s+/g, '').toUpperCase()) : null;
                   return {
@@ -916,6 +917,13 @@ const VehiclesList: React.FC = () => {
                     ...(data.fuelType              ? { fuel: data.fuelType }                                : {}),
                     ...(data.miseEnCirculation     ? { miseEnCirculation: data.miseEnCirculation, year: parseInt(data.miseEnCirculation.slice(0, 4)) || fd.year } : {}),
                     ...(data.fiscalPower           ? { cv: data.fiscalPower }                               : {}),
+                    // Carte Grise fields
+                    ...(data.cgMarque             ? { brand: data.cgMarque }                              : {}),
+                    ...(data.cgModele             ? { model: data.cgModele }                              : {}),
+                    ...(data.cgChassis            ? { chassis: data.cgChassis }                           : {}),
+                    ...(data.cgFuelType           ? { fuel: data.cgFuelType }                             : {}),
+                    ...(data.cgFiscalPower        ? { cv: data.cgFiscalPower }                            : {}),
+                    ...(data.cgMiseEnCirculation  ? { miseEnCirculation: data.cgMiseEnCirculation, year: parseInt(data.cgMiseEnCirculation.slice(0, 4)) || fd.year } : {}),
                   };
                 })}
               />

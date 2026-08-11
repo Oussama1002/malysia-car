@@ -287,21 +287,77 @@ class DocumentParser
     /** @return array<string, mixed> */
     private function parseCarteGrise(string $text): array
     {
-        return [
-            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°\s*d\'?immatriculation', 'Registration'], '[A-Z0-9\-\s]{4,20}')
+        $brand = $this->labelValue($text, ['Marque', 'Make', 'Brand'], '[A-Za-z\-]+');
+        $model = $this->labelValue($text, ['Mod[èe]le', 'Model'], '[A-Za-z0-9\-\s]+');
+
+        $fuelType = $this->labelValue($text, [
+            'Type\s+(?:du\s+)?carburant',
+            'Carburant',
+            '[ÉE]nergie',
+            'Fuel',
+        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+');
+        if ($fuelType) {
+            $fuelUpper = mb_strtoupper(trim($fuelType));
+            $fuelMap = [
+                'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GO' => 'Diesel',
+                'ESSENCE' => 'Essence', 'SUPER' => 'Essence', 'SP' => 'Essence',
+                'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL',
+            ];
+            foreach ($fuelMap as $key => $val) {
+                if (str_contains($fuelUpper, $key)) {
+                    $fuelType = $val;
+                    break;
+                }
+            }
+        }
+
+        $fiscalPower = $this->labelValue($text, [
+            'Puissance\s+fiscale',
+            'P\.?\s*F\.?',
+            'CV\s+fiscaux',
+        ], '\d{1,3}');
+
+        $nbPlaces = $this->labelValue($text, [
+            'Nombre\s+de\s+places',
+            'Nb\.?\s*(?:de\s+)?places',
+            'Places',
+        ], '\d{1,2}');
+
+        $genre = $this->labelValue($text, [
+            'Genre',
+            'Usage',
+        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+');
+
+        $expiryDate = $this->extractDate($text, [
+            'Fin\s+de\s+validit[ée]',
+            'Validit[ée]',
+            'Valable\s+jusqu',
+            'Date\s+d\'?expiration',
+        ]);
+
+        $result = [
+            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°?\s*d\'?immatriculation', 'Registration'], '[A-Z0-9\-\s]{4,20}')
                 ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text),
             'vin_number' => $this->firstMatch('/\b([A-HJ-NPR-Z0-9]{17})\b/u', $text)
-                ?? $this->labelValue($text, ['VIN', 'Ch[aâ]ssis', 'N°\s*ch[aâ]ssis'], '[A-Z0-9]{6,20}'),
-            'brand' => $this->labelValue($text, ['Marque', 'Make', 'Brand'], '[A-Za-z\-]+'),
-            'model' => $this->labelValue($text, ['Mod[èe]le', 'Model', 'Type'], '[A-Za-z0-9\-\s]+'),
-            'fuel_type' => $this->labelValue($text, ['Carburant', 'Energie', 'Fuel'], '[A-Za-z]+'),
+                ?? $this->labelValue($text, ['VIN', 'Ch[aâ]ssis', 'N°?\s*(?:du\s+)?ch[aâ]ssis'], '[A-Z0-9]{6,20}'),
+            'brand' => $brand ? mb_convert_case(mb_strtolower(trim($brand)), MB_CASE_TITLE, 'UTF-8') : null,
+            'model' => $model ? mb_convert_case(mb_strtolower(trim($model)), MB_CASE_TITLE, 'UTF-8') : null,
+            'fuel_type' => $fuelType ? trim($fuelType) : null,
+            'fiscal_power' => $fiscalPower ? (int) $fiscalPower : null,
+            'nb_places' => $nbPlaces ? (int) $nbPlaces : null,
+            'genre' => $genre ? trim($genre) : null,
             'first_registration_date' => $this->extractDate($text, [
-                'Date\s+de\s+1[èe]?re?\s+mise\s+en\s+circulation',
+                'Mise\s+en\s+circulation',
+                'Date\s+(?:de\s+)?(?:1[èe]?re?\s+)?mise\s+en\s+circulation',
                 'Premi[èe]re\s+mise\s+en\s+circulation',
+                'M\.?\s*C\.?\s*(?:au\s+)?Maroc',
                 'First\s+registration',
             ]),
+            'expiry_date' => $expiryDate,
             'owner_name' => $this->labelValue($text, ['Propri[ée]taire', 'Nom\s+du\s+propri[ée]taire', 'Owner'], '.+'),
         ];
+        Log::info('DocumentParser.parseCarteGrise', $result);
+        return $result;
     }
 
     /** @return array<string, mixed> */
