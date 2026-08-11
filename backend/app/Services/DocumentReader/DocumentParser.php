@@ -511,15 +511,27 @@ class DocumentParser
     /** @return array<string, mixed> */
     private function parsePaymentAttestation(string $text): array
     {
-        // Registration: "Immatriculation", "Immat.", "N° Immat"
-        $registration = $this->labelValue($text, [
-            'Immatriculation',
-            'N°?\s*d\'?immatriculation',
-            'Immat\.?',
-            'N°?\s*Immat',
-        ], '[A-Z0-9\-\s\/]{3,20}')
-            ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text)
-            ?? $this->firstMatch('/\b(WW[\s\-]?\d{3,6}[\s\-]?[A-Z]?)\b/iu', $text);
+        // Registration: Moroccan plates look like "90948 - T - 6" but OCR
+        // often splits the last digit onto the next line. Search a 200-char
+        // window after the "immatriculation" label, collapsing whitespace
+        // (including newlines) to reassemble the plate.
+        $registration = null;
+        if (preg_match('/(?:immatriculation|N°?\s*d\'?immatriculation|Immat\.?)/iu', $text, $lm, PREG_OFFSET_CAPTURE)) {
+            $window = substr($text, $lm[0][1], 200);
+            $flat = preg_replace('/[\r\n\t]+/', ' ', $window) ?? $window;
+            if (preg_match('/(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $flat, $pm)) {
+                $registration = $pm[1] . '-' . mb_strtoupper($pm[2]) . '-' . $pm[3];
+            }
+        }
+        if (! $registration) {
+            $registration = $this->firstMatch('/(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $text);
+            if ($registration && preg_match('/(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $text, $pm)) {
+                $registration = $pm[1] . '-' . mb_strtoupper($pm[2]) . '-' . $pm[3];
+            }
+        }
+        if (! $registration) {
+            $registration = $this->firstMatch('/\b(WW[\s\-]?\d{3,6}[\s\-]?[A-Z]?)\b/iu', $text);
+        }
 
         // Fuel type: "Carburant", "Type de carburant", "Energie"
         $fuelType = $this->labelValue($text, [
