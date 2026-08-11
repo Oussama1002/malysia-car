@@ -914,7 +914,7 @@ const VehiclesList: React.FC = () => {
                     ...(data.vignetteExpiry        ? { vignetteExpiry: data.vignetteExpiry }                 : {}),
                     ...(plate                      ? { platNum: plate.platNum, platLetter: plate.platLetter, platRegion: plate.platRegion } : {}),
                     ...(data.fuelType              ? { fuel: data.fuelType }                                : {}),
-                    ...(data.miseEnCirculation     ? { miseEnCirculation: data.miseEnCirculation }          : {}),
+                    ...(data.miseEnCirculation     ? { miseEnCirculation: data.miseEnCirculation, year: parseInt(data.miseEnCirculation.slice(0, 4)) || fd.year } : {}),
                     ...(data.fiscalPower           ? { cv: data.fiscalPower }                               : {}),
                   };
                 })}
