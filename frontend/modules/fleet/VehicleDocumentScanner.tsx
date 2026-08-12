@@ -134,11 +134,17 @@ const ScanSlot: React.FC<{
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScannedVehicleData | null>(null);
+  const [filePreview, setFilePreview] = useState<{ url: string; name: string; type: string } | null>(null);
 
   const handle = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
     setPreview(null);
+    if (file.type.startsWith('image/')) {
+      setFilePreview({ url: URL.createObjectURL(file), name: file.name, type: 'image' });
+    } else {
+      setFilePreview({ url: '', name: file.name, type: 'pdf' });
+    }
     try {
       const docType = mapFields === mapAssurance ? 'insurance'
         : mapFields === mapPaymentAttestation ? 'payment_attestation'
@@ -204,6 +210,23 @@ const ScanSlot: React.FC<{
         <ElapsedTimer running={loading} />
         {error && <div className="mt-1 text-[11px] font-semibold text-rose-600">{error}</div>}
       </div>
+
+      {filePreview && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+          {filePreview.type === 'image' ? (
+            <img src={filePreview.url} alt={filePreview.name}
+              className="w-full max-h-40 object-contain rounded cursor-pointer"
+              onClick={() => window.open(filePreview.url, '_blank')} />
+          ) : (
+            <div className="flex items-center gap-2 text-[11px] text-slate-600">
+              <svg className="h-5 w-5 text-rose-500 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z"/>
+              </svg>
+              <span className="truncate font-medium">{filePreview.name}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {preview && (() => {
         const detected = Object.entries(preview).filter(([, v]) => v !== undefined && v !== '' && v !== null);
