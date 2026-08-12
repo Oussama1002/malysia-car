@@ -302,7 +302,7 @@ class DocumentParser
             'DFSK', 'CHANGAN', 'JAC', 'FOTON', 'IVECO', 'MAN',
         ];
         foreach ($knownBrands as $b) {
-            if (str_contains($upper, $b)) {
+            if (preg_match('/\b' . preg_quote($b, '/') . '\b/u', $upper)) {
                 $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
                 break;
             }
@@ -334,7 +334,7 @@ class DocumentParser
             'A1', 'A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7',
         ];
         foreach ($knownModels as $km) {
-            if (str_contains($upper, $km)) {
+            if (preg_match('/\b' . preg_quote($km, '/') . '\b/u', $upper)) {
                 $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
                 break;
             }
@@ -381,7 +381,8 @@ class DocumentParser
         ]);
 
         // --- VIN / chassis ---
-        $vin = $this->firstMatch('/\b([A-HJ-NPR-Z0-9]{17})\b/u', $text)
+        // Accept O/I/Q in the 17-char match (OCR may produce them) then fix known substitutions
+        $vin = $this->firstMatch('/\b([A-Z0-9]{17})\b/u', $upper)
             ?? $this->labelValue($text, ['VIN', '[Cc]h[aâ]ssis', 'N°?\s*(?:du\s+)?[Cc]h[aâ]ssis'], '[A-Z0-9]{6,20}');
 
         $result = [
