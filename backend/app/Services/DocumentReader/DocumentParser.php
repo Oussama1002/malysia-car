@@ -364,9 +364,29 @@ class DocumentParser
             'MERCEDES' => ['CLASSE A', 'CLASSE C', 'CLASSE E', 'GLA', 'GLC', 'GLE', 'SPRINTER', 'VITO'],
             'AUDI'    => ['A1', 'A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7'],
         ];
+        // OCR-variant map: garbled text => correct model name
+        $ocrModelVariants = [
+            'CL[I1l][OoEe0]' => 'Clio',
+            'M[EÉeé]G[A4]N[EÉeé]' => 'Megane',
+            'SC[EÉeé]N[I1l]C' => 'Scenic',
+            'K[A4]NG[O0]{2}' => 'Kangoo',
+            'C[A4]PTUR' => 'Captur',
+            'K[A4]DJ[A4]R' => 'Kadjar',
+            'S[A4]ND[EÉeé]R[O0]' => 'Sandero',
+            'DUST[EÉeé]R' => 'Duster',
+            'L[O0]G[A4]N' => 'Logan',
+        ];
         $brandKey = $brand ? mb_strtoupper($brand) : null;
-        // Search brand-specific models first (substring — OCR breaks word boundaries)
-        if ($brandKey && isset($brandModels[$brandKey])) {
+
+        // Strategy 1: OCR-variant regex patterns (handles garbled text like "cLie" → Clio)
+        foreach ($ocrModelVariants as $pattern => $modelName) {
+            if (preg_match('/' . $pattern . '/iu', $flatUpper)) {
+                $model = $modelName;
+                break;
+            }
+        }
+        // Strategy 2: brand-specific exact substring match
+        if (! $model && $brandKey && isset($brandModels[$brandKey])) {
             foreach ($brandModels[$brandKey] as $km) {
                 if (str_contains($flatUpper, $km)) {
                     $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
@@ -374,7 +394,7 @@ class DocumentParser
                 }
             }
         }
-        // Fallback: all brand models, but only 4+ char names to avoid false positives
+        // Strategy 3: all brand models, 4+ char names only
         if (! $model) {
             foreach ($brandModels as $models) {
                 foreach ($models as $km) {
@@ -385,7 +405,7 @@ class DocumentParser
                 }
             }
         }
-        // Last resort: label-based
+        // Strategy 4: label-based
         if (! $model && preg_match('/Mod[èeé]le\s+(\S+)/iu', $flat, $mm)) {
             $candidate = trim($mm[1]);
             if (mb_strlen($candidate) >= 2 && preg_match('/[A-Za-z]/u', $candidate)) {
@@ -415,8 +435,8 @@ class DocumentParser
             'Puissance\s+fiscale',
             'P[a-zéèô]*\s+fiscale',
         ], '\d{1,3}');
-        // Strategy 2: fuzzy "fiscale" then window search
-        if (! $fiscalPower && preg_match('/fi[sc]{1,2}a[li]e/iu', $flat, $fm, PREG_OFFSET_CAPTURE)) {
+        // Strategy 2: fuzzy "fiscale" (OCR: "Pdéonce fiscale", etc.) then window search
+        if (! $fiscalPower && preg_match('/fi[sc]{1,2}a[li]e|fiscale/iu', $flat, $fm, PREG_OFFSET_CAPTURE)) {
             $window = substr($flat, $fm[0][1], 80);
             if (preg_match('/(\d{1,2})/', $window, $dm)) {
                 $fiscalPower = $dm[1];
@@ -426,8 +446,8 @@ class DocumentParser
         if (! $fiscalPower && preg_match('/(\d{1,2})\s*(?:CV|ch)\b/iu', $flat, $cvM)) {
             $fiscalPower = $cvM[1];
         }
-        // Strategy 4: "puissance" alone
-        if (! $fiscalPower && preg_match('/[Pp]uiss[ae]nce/u', $flat, $pm, PREG_OFFSET_CAPTURE)) {
+        // Strategy 4: any garbled "puissance" or "P...fiscale" then window
+        if (! $fiscalPower && preg_match('/P[a-zéèôd]*\s+fiscale|[Pp]uiss[ae]nce/iu', $flat, $pm, PREG_OFFSET_CAPTURE)) {
             $window = substr($flat, $pm[0][1], 80);
             if (preg_match('/(\d{1,2})/', $window, $dm)) {
                 $fiscalPower = $dm[1];
@@ -439,26 +459,21 @@ class DocumentParser
         }
 
         // --- Expiry date ---
-        // Try structured flat text first (catches "25/02/2035" near "validité")
-        $expiryDate = $this->extractDate($flat, [
+        $expiryDate = null;
+        // Strategy 1: search near "validité" variants in original multiline text
+        $expiryDate = $this->extractDate($text, [
             '[FfIi]in?\s+de\s+va[lh][io]dit[ée]',
             'Fin\s+de\s+validit[ée]',
-            'Validit[ée]',
             'va[lh]dit[ée]',
             'validit',
         ]);
-        // Fallback: search in original multiline text
-        if (! $expiryDate) {
-            $expiryDate = $this->extractDate($text, [
-                '[FfIi]in?\s+de\s+va[lh][io]dit[ée]',
-                'Fin\s+de\s+validit[ée]',
-                'Validit[ée]',
-                'va[lh]dit[ée]',
-                'validit',
-            ]);
+        // Strategy 2: direct regex — "vahdité" or "validité" followed by date within 30 chars
+        if (! $expiryDate && preg_match('/va[lh][io]?dit[ée]?\s+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/iu', $flat, $vdm)) {
+            $expiryDate = $this->canonicalizeDate($vdm[1]);
         }
-        // Fallback: any date far in the future (2030+) is likely the expiry
-        if (! $expiryDate && preg_match_all('/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/', $flat, $dateMatches, PREG_SET_ORDER)) {
+        // Strategy 3: any date with year 2030+ is likely the expiry
+        if (! $expiryDate) {
+            preg_match_all('/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/', $flat, $dateMatches, PREG_SET_ORDER);
             foreach ($dateMatches as $dm) {
                 $year = (int) $dm[3];
                 if ($year >= 2030) {
