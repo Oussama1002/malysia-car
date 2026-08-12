@@ -121,6 +121,7 @@ const VehiclesList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm());
+  const carteGriseRef = useRef<HTMLDivElement>(null);
   // ── View mode (cards / table / analysis) ────────────────────────────────
   // The 'analysis' mode merges the former /fleet/analysis page into this
   // screen so the sidebar stays short and the dirigeant has one place for
@@ -899,6 +900,7 @@ const VehiclesList: React.FC = () => {
               {/* ── OCR Scanner ── */}
               <VehicleDocumentScanner
                 carteGriseRecue={formData.carteGriseStatus === 'recue'}
+                carteGriseRef={carteGriseRef}
                 onPrefill={(data) => setFormData(fd => {
                   const plate = data.registration ? parsePlate(data.registration.replace(/\s+/g, '').toUpperCase()) : null;
                   return {
@@ -1199,13 +1201,16 @@ const VehiclesList: React.FC = () => {
                   <div className="space-y-2">
                     <label className={labelCls}>Statut Carte Grise</label>
                     <select className={selectCls} value={formData.carteGriseStatus}
-                      onChange={e => setFormData(fd => ({ ...fd, carteGriseStatus: e.target.value as 'en_attente' | 'recue' }))}>
+                      onChange={e => {
+                        const val = e.target.value as 'en_attente' | 'recue';
+                        setFormData(fd => ({ ...fd, carteGriseStatus: val }));
+                        if (val === 'recue') {
+                          setTimeout(() => carteGriseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+                        }
+                      }}>
                       <option value="en_attente">En attente</option>
                       <option value="recue">Reçue</option>
                     </select>
-                    {formData.carteGriseStatus === 'recue' && (
-                      <p className="text-[10px] text-indigo-600 font-medium">Scannez la carte grise via le scanner OCR ci-dessus</p>
-                    )}
                   </div>
                   {/* Assurance — période de garantie */}
                   <div className="space-y-2">

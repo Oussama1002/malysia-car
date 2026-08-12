@@ -38,7 +38,8 @@ export interface ScannedVehicleData {
 export const VehicleDocumentScanner: React.FC<{
   onPrefill: (data: ScannedVehicleData) => void;
   carteGriseRecue?: boolean;
-}> = ({ onPrefill, carteGriseRecue }) => (
+  carteGriseRef?: React.RefObject<HTMLDivElement | null>;
+}> = ({ onPrefill, carteGriseRecue, carteGriseRef }) => (
   <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
     <div className="text-xs font-black uppercase tracking-wider text-indigo-700">
       Scanner les documents véhicule (OCR)
@@ -84,12 +85,14 @@ export const VehicleDocumentScanner: React.FC<{
         mapFields={mapVignette}
       />
       {carteGriseRecue && (
-        <ScanSlot
-          title="Carte Grise"
-          description="Marque, modèle, châssis, carburant, puissance, fin validité"
-          onPrefill={onPrefill}
-          mapFields={mapCarteGrise}
-        />
+        <div ref={carteGriseRef}>
+          <ScanSlot
+            title="Carte Grise"
+            description="Marque, modèle, châssis, carburant, puissance, fin validité"
+            onPrefill={onPrefill}
+            mapFields={mapCarteGrise}
+          />
+        </div>
       )}
     </div>
   </div>
