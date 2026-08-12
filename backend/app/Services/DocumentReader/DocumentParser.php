@@ -308,35 +308,48 @@ class DocumentParser
             }
         }
 
-        // --- Model: match known models for the detected brand ---
+        // --- Model: brand-specific models first, then generic fallback ---
         $model = null;
-        $knownModels = [
-            'CLIO', 'MEGANE', 'SCENIC', 'KANGOO', 'CAPTUR', 'KADJAR', 'KOLEOS',
-            'TALISMAN', 'TWINGO', 'ZOE', 'MASTER', 'TRAFIC', 'EXPRESS', 'ARKANA',
-            'SANDERO', 'DUSTER', 'LOGAN', 'SPRING', 'JOGGER', 'STEPWAY',
-            'PARTNER', 'BERLINGO', 'RIFTER', 'EXPERT',
-            '208', '308', '2008', '3008', '5008', '508',
-            'C3', 'C4', 'C5', 'AIRCROSS', 'JUMPY', 'BERLINGO',
-            'POLO', 'GOLF', 'PASSAT', 'TIGUAN', 'TOUAREG', 'CADDY', 'TRANSPORTER',
-            'TUCSON', 'ACCENT', 'I10', 'I20', 'I30', 'ELANTRA', 'SANTA FE', 'CRETA',
-            'PICANTO', 'RIO', 'CERATO', 'SPORTAGE', 'SORENTO', 'STONIC',
-            'COROLLA', 'YARIS', 'RAV4', 'HILUX', 'LAND CRUISER', 'FORTUNER',
-            'MICRA', 'JUKE', 'QASHQAI', 'X-TRAIL', 'NAVARA', 'PATROL',
-            'FIESTA', 'FOCUS', 'KUGA', 'PUMA', 'RANGER', 'TRANSIT',
-            'CORSA', 'ASTRA', 'CROSSLAND', 'GRANDLAND', 'MOKKA',
-            'IBIZA', 'LEON', 'ARONA', 'ATECA', 'TARRACO',
-            'FABIA', 'OCTAVIA', 'KAMIQ', 'KAROQ', 'KODIAQ',
-            'SWIFT', 'VITARA', 'JIMNY', 'S-CROSS',
-            'CIVIC', 'JAZZ', 'HR-V', 'CR-V',
-            'PANDA', 'TIPO', '500', 'DOBLO', 'DUCATO', 'FIORINO',
-            'SERIE 1', 'SERIE 3', 'SERIE 5', 'X1', 'X3', 'X5',
-            'CLASSE A', 'CLASSE C', 'CLASSE E', 'GLA', 'GLC', 'GLE', 'SPRINTER', 'VITO',
-            'A1', 'A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7',
+        $brandModels = [
+            'RENAULT' => ['CLIO', 'MEGANE', 'SCENIC', 'KANGOO', 'CAPTUR', 'KADJAR', 'KOLEOS', 'TALISMAN', 'TWINGO', 'ZOE', 'MASTER', 'TRAFIC', 'EXPRESS', 'ARKANA'],
+            'DACIA'   => ['SANDERO', 'DUSTER', 'LOGAN', 'SPRING', 'JOGGER', 'STEPWAY'],
+            'PEUGEOT' => ['PARTNER', 'RIFTER', 'EXPERT', '208', '308', '2008', '3008', '5008', '508'],
+            'CITROEN' => ['C3', 'C4', 'C5', 'AIRCROSS', 'JUMPY', 'BERLINGO'],
+            'VOLKSWAGEN' => ['POLO', 'GOLF', 'PASSAT', 'TIGUAN', 'TOUAREG', 'CADDY', 'TRANSPORTER'],
+            'HYUNDAI' => ['TUCSON', 'ACCENT', 'I10', 'I20', 'I30', 'ELANTRA', 'SANTA FE', 'CRETA'],
+            'KIA'     => ['PICANTO', 'RIO', 'CERATO', 'SPORTAGE', 'SORENTO', 'STONIC'],
+            'TOYOTA'  => ['COROLLA', 'YARIS', 'RAV4', 'HILUX', 'LAND CRUISER', 'FORTUNER'],
+            'NISSAN'  => ['MICRA', 'JUKE', 'QASHQAI', 'X-TRAIL', 'NAVARA', 'PATROL'],
+            'FORD'    => ['FIESTA', 'FOCUS', 'KUGA', 'PUMA', 'RANGER', 'TRANSIT'],
+            'OPEL'    => ['CORSA', 'ASTRA', 'CROSSLAND', 'GRANDLAND', 'MOKKA'],
+            'SEAT'    => ['IBIZA', 'LEON', 'ARONA', 'ATECA', 'TARRACO'],
+            'SKODA'   => ['FABIA', 'OCTAVIA', 'KAMIQ', 'KAROQ', 'KODIAQ'],
+            'SUZUKI'  => ['SWIFT', 'VITARA', 'JIMNY', 'S-CROSS'],
+            'HONDA'   => ['CIVIC', 'JAZZ', 'HR-V', 'CR-V'],
+            'FIAT'    => ['PANDA', 'TIPO', '500', 'DOBLO', 'DUCATO', 'FIORINO'],
+            'BMW'     => ['SERIE 1', 'SERIE 3', 'SERIE 5', 'X1', 'X3', 'X5'],
+            'MERCEDES' => ['CLASSE A', 'CLASSE C', 'CLASSE E', 'GLA', 'GLC', 'GLE', 'SPRINTER', 'VITO'],
+            'AUDI'    => ['A1', 'A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7'],
         ];
-        foreach ($knownModels as $km) {
-            if (preg_match('/\b' . preg_quote($km, '/') . '\b/u', $upper)) {
-                $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
-                break;
+        // Search brand-specific models first
+        $brandKey = $brand ? mb_strtoupper($brand) : null;
+        if ($brandKey && isset($brandModels[$brandKey])) {
+            foreach ($brandModels[$brandKey] as $km) {
+                if (preg_match('/\b' . preg_quote($km, '/') . '\b/u', $upper)) {
+                    $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
+                    break;
+                }
+            }
+        }
+        // Fallback: search all models if brand-specific didn't match
+        if (! $model) {
+            foreach ($brandModels as $models) {
+                foreach ($models as $km) {
+                    if (preg_match('/\b' . preg_quote($km, '/') . '\b/u', $upper)) {
+                        $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
+                        break 2;
+                    }
+                }
             }
         }
         if (! $model && preg_match('/Mod[èeé]le\s+(\S+)/iu', $text, $mm)) {
@@ -360,13 +373,24 @@ class DocumentParser
             }
         }
 
-        // --- Fiscal power: custom search near "fiscale" for any digit ---
+        // --- Fiscal power: try multiple fuzzy patterns ---
         $fiscalPower = $this->labelValue($text, [
             'Puissance\s+fiscale',
             'P[a-zéèô]*\s+fiscale',
         ], '\d{1,3}');
-        if (! $fiscalPower && preg_match('/fiscale/iu', $text, $fm, PREG_OFFSET_CAPTURE)) {
+        if (! $fiscalPower && preg_match('/fi[sc]{1,2}a[li]e/iu', $text, $fm, PREG_OFFSET_CAPTURE)) {
             $window = substr($text, $fm[0][1], 80);
+            if (preg_match('/(\d{1,2})/', $window, $dm)) {
+                $fiscalPower = $dm[1];
+            }
+        }
+        // Try "CV" or "ch" near digits (e.g. "6 CV", "6cv")
+        if (! $fiscalPower && preg_match('/(\d{1,2})\s*(?:CV|ch)\b/iu', $text, $cvM)) {
+            $fiscalPower = $cvM[1];
+        }
+        // Try "puissance" alone (OCR may garble "fiscale")
+        if (! $fiscalPower && preg_match('/[Pp]uiss[ae]nce/u', $text, $pm, PREG_OFFSET_CAPTURE)) {
+            $window = substr($text, $pm[0][1], 80);
             if (preg_match('/(\d{1,2})/', $window, $dm)) {
                 $fiscalPower = $dm[1];
             }
@@ -381,9 +405,11 @@ class DocumentParser
         ]);
 
         // --- VIN / chassis ---
-        // Accept O/I/Q in the 17-char match (OCR may produce them) then fix known substitutions
-        $vin = $this->firstMatch('/\b([A-Z0-9]{17})\b/u', $upper)
-            ?? $this->labelValue($text, ['VIN', '[Cc]h[aâ]ssis', 'N°?\s*(?:du\s+)?[Cc]h[aâ]ssis'], '[A-Z0-9]{6,20}');
+        // Prefer label-based extraction (near "VIN" or "chassis"), fall back to any 17-char match
+        $vin = $this->labelValue($text, ['VIN', '[Cc]h[aâ]ssis', 'N°?\s*(?:du\s+)?[Cc]h[aâ]ssis'], '[A-Z0-9]{17}');
+        if (! $vin) {
+            $vin = $this->firstMatch('/\b([A-Z0-9]{17})\b/u', $upper);
+        }
 
         $result = [
             'vin_number' => $vin,
@@ -394,6 +420,7 @@ class DocumentParser
             'expiry_date' => $expiryDate,
         ];
         Log::info('DocumentParser.parseCarteGrise', $result);
+        Log::info('DocumentParser.parseCarteGrise.rawText', ['text' => mb_substr($text, 0, 2000)]);
         return $result;
     }
 
