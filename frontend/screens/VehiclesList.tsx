@@ -1204,11 +1204,7 @@ const VehiclesList: React.FC = () => {
                       <option value="recue">Reçue</option>
                     </select>
                     {formData.carteGriseStatus === 'recue' && (
-                      <DocPhotoUpload
-                        preview={formData.docPhotos.carteGrise}
-                        onFile={f => handleDocPhoto('carteGrise', f)}
-                        onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, carteGrise: null } }))}
-                      />
+                      <p className="text-[10px] text-indigo-600 font-medium">Scannez la carte grise via le scanner OCR ci-dessus</p>
                     )}
                   </div>
                   {/* Assurance — période de garantie */}
