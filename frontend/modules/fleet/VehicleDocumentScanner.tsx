@@ -215,7 +215,7 @@ const ScanSlot: React.FC<{
               className="w-full max-h-60 object-contain rounded cursor-pointer"
               onClick={() => window.open(docPreview.url, '_blank')} />
           ) : (
-            <iframe src={docPreview.url} title="Document"
+            <iframe src={`${docPreview.url}#toolbar=0&navpanes=0`} title="Document"
               className="w-full rounded border-0" style={{ height: '300px' }} />
           )}
         </div>
