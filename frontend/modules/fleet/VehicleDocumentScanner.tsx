@@ -157,6 +157,12 @@ const ScanSlot: React.FC<{
       }
 
       const fields = (done.data.extraction?.extracted_data ?? {}) as Record<string, unknown>;
+
+      if (typeof fields._type_mismatch === 'string') {
+        setError(fields._type_mismatch);
+        return;
+      }
+
       const mapped = mapFields(fields);
       const cleaned = Object.fromEntries(
         Object.entries(mapped).filter(([, v]) => v !== undefined && v !== '' && v !== null),

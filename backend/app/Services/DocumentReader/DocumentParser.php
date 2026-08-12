@@ -21,11 +21,30 @@ class DocumentParser
     public function parse(string $rawText, ?string $hintedType = null): array
     {
         $normalized = $this->normalize($rawText);
+        $detectedType = $this->detectType($normalized);
         $type = $hintedType && in_array($hintedType, ReaderDocument::TYPES, true)
             ? $hintedType
-            : $this->detectType($normalized);
+            : $detectedType;
 
-        Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'text_length' => mb_strlen($normalized), 'text_full' => $normalized]);
+        Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'detected' => $detectedType, 'text_length' => mb_strlen($normalized)]);
+
+        // If a specific type was expected but the document looks like something else, flag it
+        $typeMismatch = null;
+        if ($hintedType && $detectedType !== ReaderDocument::TYPE_OTHER && $detectedType !== $hintedType) {
+            $typeLabels = [
+                ReaderDocument::TYPE_INSURANCE => 'une assurance',
+                ReaderDocument::TYPE_PAYMENT_ATTESTATION => 'une attestation de paiement',
+                ReaderDocument::TYPE_VEHICLE_REGISTRATION => 'une carte grise',
+                ReaderDocument::TYPE_CHEQUE => 'un chèque',
+                ReaderDocument::TYPE_CIN => 'une CIN',
+                ReaderDocument::TYPE_PASSPORT => 'un passeport',
+                ReaderDocument::TYPE_DRIVING_LICENSE => 'un permis de conduire',
+                ReaderDocument::TYPE_RENTAL_CONTRACT => 'un contrat de location',
+            ];
+            $expectedLabel = $typeLabels[$hintedType] ?? $hintedType;
+            $actualLabel = $typeLabels[$detectedType] ?? $detectedType;
+            $typeMismatch = "Ce document semble être {$actualLabel}, pas {$expectedLabel}.";
+        }
 
         $fields = match ($type) {
             ReaderDocument::TYPE_CIN => $this->parseCin($normalized),
@@ -41,6 +60,7 @@ class DocumentParser
         return [
             'type' => $type,
             'fields' => $fields,
+            'type_mismatch' => $typeMismatch,
             'hints' => [
                 'lines' => substr_count($normalized, "\n") + 1,
                 'chars' => mb_strlen($normalized),

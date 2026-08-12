@@ -118,12 +118,17 @@ class DocumentReaderService
                     'error_message' => null,
                 ]);
 
+                $extractedData = $parsed['fields'];
+                if (! empty($parsed['type_mismatch'])) {
+                    $extractedData['_type_mismatch'] = $parsed['type_mismatch'];
+                }
+
                 return ReaderDocumentExtraction::query()->create([
                     'id' => (string) Str::uuid(),
                     'document_id' => $document->id,
                     'provider' => $ocr->provider,
                     'raw_text' => $ocr->rawText,
-                    'extracted_data' => $parsed['fields'],
+                    'extracted_data' => $extractedData,
                     'validated_data' => null,
                     'confidence_score' => $ocr->confidence,
                     'status' => ReaderDocumentExtraction::STATUS_DRAFT,
