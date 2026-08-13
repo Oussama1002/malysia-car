@@ -87,7 +87,9 @@ class DocumentParser
         // explicit checks below own their documents; this fallback is only for a
         // carte grise whose own title was garbled.
         $hasNonVehicleSignal = preg_match(
-            '/ASSURANCE|INSURANCE|COMPAGNIE|N°?\s*POLICE|P[ÉE]RIODE\s+DE\s+GARANTIE|GARANTIE\s+(?:DU|AU)|ATTESTATION\s+DE\s+PAI|TAXE\s+SP[ÉE]CIALE|VIGNETTE|CH[ÈE]QUE/u',
+            '/ASSURANCE|INSURANCE|COMPAGNIE|N°?\s*POLICE|P[ÉE]RIODE\s+DE\s+GARANTIE|GARANTIE\s+(?:DU|AU)'
+            .'|ATTESTATION\s+DE\s+PAI|PAI[EÉ]?MENT|TAXE|VIGNETTE|IMP[ÔO]T|QUITTANCE|MONTANT'
+            .'|DIRECTION\s+G[ÉE]N[ÉE]RALE|TR[ÉE]SORERIE|TIMBRE|CH[ÈE]QUE|BANQUE/u',
             $upper
         );
         if (! $hasNonVehicleSignal) {
