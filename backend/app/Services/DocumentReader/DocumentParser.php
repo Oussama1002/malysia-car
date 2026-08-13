@@ -453,34 +453,20 @@ class DocumentParser
             }
         }
 
-        // --- Fiscal power: multiple strategies ---
+        // --- Fiscal power ---
+        // Moroccan car fiscal power (CV) is realistically 3-40. We only accept a
+        // 1-2 digit value found IMMEDIATELY after the label (within ~15 chars) and
+        // in a sane range. This avoids grabbing unrelated numbers like the MRZ line
+        // ("740000001") when OCR renders the real digit as a symbol (e.g. "6" → "@").
         $fiscalPower = null;
-        // Strategy 1: label-value near "fiscale"
-        $fiscalPower = $this->labelValue($flat, [
-            'Puissance\s+fiscale',
-            'P[a-zéèô]*\s+fiscale',
-        ], '\d{1,3}');
-        // Strategy 2: fuzzy "fiscale" (OCR: "Pdéonce fiscale", etc.) then window search
-        if (! $fiscalPower && preg_match('/fi[sc]{1,2}a[li]e|fiscale/iu', $flat, $fm, PREG_OFFSET_CAPTURE)) {
-            $window = substr($flat, $fm[0][1], 80);
-            if (preg_match('/(\d{1,2})/', $window, $dm)) {
-                $fiscalPower = $dm[1];
-            }
-        }
-        // Strategy 3: "N CV" pattern
-        if (! $fiscalPower && preg_match('/(\d{1,2})\s*(?:CV|ch)\b/iu', $flat, $cvM)) {
+        $isSane = static fn (string $n): bool => (int) $n >= 1 && (int) $n <= 60;
+        // Strategy 1: "N CV" / "N ch" pattern anywhere (very specific, high confidence)
+        if (preg_match('/\b(\d{1,2})\s*(?:CV|ch)\b/iu', $flat, $cvM) && $isSane($cvM[1])) {
             $fiscalPower = $cvM[1];
         }
-        // Strategy 4: any garbled "puissance" or "P...fiscale" then window
-        if (! $fiscalPower && preg_match('/P[a-zéèôd]*\s+fiscale|[Pp]uiss[ae]nce/iu', $flat, $pm, PREG_OFFSET_CAPTURE)) {
-            $window = substr($flat, $pm[0][1], 80);
-            if (preg_match('/(\d{1,2})/', $window, $dm)) {
-                $fiscalPower = $dm[1];
-            }
-        }
-        // Strategy 5: look for the structured table pattern "fiscale  6" or "fiscale 6"
-        if (! $fiscalPower && preg_match('/(?:fiscale|FISCALE)[^A-Za-z0-9]*(\d{1,2})/u', $flat, $fpm)) {
-            $fiscalPower = $fpm[1];
+        // Strategy 2: a digit right after "fiscale" (or garbled variants), short window
+        if (! $fiscalPower && preg_match('/(?:fi[sc]{1,2}a[li]e|fiscale)[^0-9A-Za-z]{0,15}(\d{1,2})\b/iu', $flat, $fm) && $isSane($fm[1])) {
+            $fiscalPower = $fm[1];
         }
 
         // --- Expiry date ---
