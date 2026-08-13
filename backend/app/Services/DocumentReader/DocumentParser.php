@@ -133,12 +133,10 @@ class DocumentParser
         if (preg_match('/PASSPORT|PASSEPORT|REPUBLIQUE.*MAROC.*PASS/u', $upper)) {
             return ReaderDocument::TYPE_PASSPORT;
         }
-        // Moroccan CIN
-        if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D\'?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
-            return ReaderDocument::TYPE_CIN;
-        }
-        // Payment attestation (vignette / taxe spéciale)
-        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE/u', $upper)) {
+        // Payment attestation (vignette / taxe spéciale annuelle). Checked before
+        // the generic CIN "ROYAUME DU MAROC" rule below, which every Moroccan
+        // government document shares.
+        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|QUITTANCE|VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|TAXE\s+ANNUELLE|DIRECTION\s+G[ÉE]N[ÉE]RALE\s+DES\s+IMP[ÔO]TS|TR[ÉE]SORERIE\s+G[ÉE]N[ÉE]RALE|\bTSAV\b|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE/u', $upper)) {
             return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
         }
         // Insurance / assurance
@@ -152,6 +150,12 @@ class DocumentParser
         // Rental contract
         if (preg_match('/CONTRAT\s+DE\s+LOCATION|RENTAL\s+AGREEMENT|CONTRAT\s+LOCATION/u', $upper)) {
             return ReaderDocument::TYPE_RENTAL_CONTRACT;
+        }
+        // Moroccan CIN — LAST resort. "ROYAUME DU MAROC" alone is too generic
+        // (it's on carte grise, attestation de paiement, autorisation…), so this
+        // runs only after every specific document type has had its chance.
+        if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D\'?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
+            return ReaderDocument::TYPE_CIN;
         }
 
         return ReaderDocument::TYPE_OTHER;
