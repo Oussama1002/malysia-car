@@ -468,8 +468,21 @@ class DocumentParser
                 break;
             }
         }
-        // Fuzzy fallback: OCR often mangles "Essence" (Ee/Es/Ea, s→5, c→e).
-        if (! $fuelType && preg_match('/E[EAS5][ES5][AEO0]N[CE][EG]/u', $flatUpper)) {
+        // Label-based fallback: read the word after the "carburant" label (OCR
+        // may render it "darburant"/"garburant") and classify by its first
+        // letters. Handles heavy garbling like "Essarice" → Essence.
+        if (! $fuelType && preg_match('/[a-z]arburant[^A-Za-z]+([A-Za-z]{3,})/iu', $flat, $cm)) {
+            $w = mb_strtoupper($cm[1]);
+            if (preg_match('/^E[ES]/u', $w)) {          // Essence / Essarice / Eesance
+                $fuelType = 'Essence';
+            } elseif (preg_match('/^(GA|GO|DI)/u', $w)) { // Gasoil / Gazole / Diesel
+                $fuelType = 'Diesel';
+            } elseif (preg_match('/^(HY|EL|GP)/u', $w)) { // Hybride / Électrique / GPL
+                $fuelType = ['HY' => 'Hybride', 'EL' => 'Électrique', 'GP' => 'GPL'][mb_substr($w, 0, 2)] ?? null;
+            }
+        }
+        // Fuzzy fallbacks anywhere in the text.
+        if (! $fuelType && preg_match('/E[EAS5][ES5][AEO0]?N?[CR][IE1]?CE|ESSAR/u', $flatUpper)) {
             $fuelType = 'Essence';
         }
         if (! $fuelType && preg_match('/G[A4][SZ5][O0][IL1]|D[I1]E[SZ5]E[LI1]/u', $flatUpper)) {
