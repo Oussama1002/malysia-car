@@ -35,7 +35,7 @@ class CheckMaintenanceDueCommand extends Command
     public function handle(): int
     {
         $count = 0;
-        $plans = VehicleMaintenancePlan::query()->with('vehicle')->where('is_active', true)->get();
+        $plans = VehicleMaintenancePlan::query()->with(['vehicle.brand', 'vehicle.model'])->where('is_active', true)->get();
         foreach ($plans as $plan) {
             $vehicle = $plan->vehicle;
             if (!$vehicle) continue;
@@ -60,30 +60,40 @@ class CheckMaintenanceDueCommand extends Command
                 $severity = $newStatus === 'overdue' ? 'critical' : 'high';
                 $type = $newStatus === 'overdue' ? 'maintenance_overdue' : 'maintenance_due_soon';
                 $title = $newStatus === 'overdue' ? 'Entretien dépassé' : 'Entretien bientôt dû';
-                $vLabel = trim(($vehicle->brand_name ?? '').($vehicle->model_name ? ' '.$vehicle->model_name : ''));
+                // Prefer the stored brand/model columns; fall back to the related
+                // brand/model records when those columns were never populated.
+                $brandName = $vehicle->brand_name ?: ($vehicle->brand->name ?? '');
+                $modelName = $vehicle->model_name ?: ($vehicle->model->name ?? '');
+                $vLabel = trim($brandName.($modelName ? ' '.$modelName : ''));
                 $vFull = $vLabel ? "{$vLabel} ({$vehicle->registration_number})" : $vehicle->registration_number;
                 $mType = self::MAINTENANCE_TYPE_FR[$plan->maintenance_type] ?? $plan->maintenance_type ?? 'Maintenance';
                 $description = "{$mType} pour {$vFull}";
-                $this->alerts->createAlert(
+                $alert = $this->alerts->createAlert(
                     vehicle: $vehicle,
                     type: $type,
                     severity: $severity,
                     title: $title,
                     description: $description,
-                    payload: ['plan_id' => $plan->id, 'vehicle_brand' => $vehicle->brand_name, 'vehicle_model' => $vehicle->model_name, 'registration_number' => $vehicle->registration_number],
+                    payload: ['plan_id' => $plan->id, 'vehicle_brand' => $brandName, 'vehicle_model' => $modelName, 'registration_number' => $vehicle->registration_number],
                     planId: (int) $plan->id,
                 );
-                $this->notifications->notifyRoles(
-                    roleCodes: ['GESTIONNAIRE_FLOTTE', 'DIRECTEUR', 'ADMIN'],
-                    category: 'fleet.'.$type,
-                    title: $title,
-                    body: $description,
-                    module: 'fleet',
-                    priority: $severity,
-                    entity: $vehicle,
-                    linkUrl: '/fleet/'.$vehicle->id,
-                );
-                $count++;
+                // Only notify when a NEW alert was created. createAlert dedupes by
+                // vehicle+type+open, so an already-open alert (same issue, or a
+                // duplicate plan, or a prior scheduled run) won't re-notify. This
+                // stops the notification pile-up on every run.
+                if ($alert->wasRecentlyCreated) {
+                    $this->notifications->notifyRoles(
+                        roleCodes: ['GESTIONNAIRE_FLOTTE', 'DIRECTEUR', 'ADMIN'],
+                        category: 'fleet.'.$type,
+                        title: $title,
+                        body: $description,
+                        module: 'fleet',
+                        priority: $severity,
+                        entity: $vehicle,
+                        linkUrl: '/fleet/'.$vehicle->id,
+                    );
+                    $count++;
+                }
             }
         }
 
