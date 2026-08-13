@@ -72,8 +72,33 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Carte grise / vehicle registration
+        // Carte grise / vehicle registration — explicit title
         if (preg_match('/CARTE\s*GRISE|CERTIFICAT\s+D\'?IMMATRICULATION|VEHICLE\s+REGISTRATION/u', $upper)) {
+            return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
+        }
+        // Carte grise fallback: heavily garbled OCR loses the title but keeps
+        // vehicle-specific fields. "ROYAUME DU MAROC" also appears on a CIN, so
+        // require 2+ vehicle-only tokens to beat the CIN check below.
+        $vehicleSignals = 0;
+        foreach ([
+            'MMATRICULATION',   // (i)mmatriculation
+            'CARBURANT',
+            'CHASSIS', 'DUHASSIS',
+            'CYLINDRE',
+            'PUISSANCE',
+            'NOMBRE DE PLACE',
+            'MISE EN CIRCULATION',
+            'LOU[ÉE] SANS CHAUFFEUR',
+        ] as $sig) {
+            if (preg_match('/' . $sig . '/u', $upper)) {
+                $vehicleSignals++;
+            }
+        }
+        // VF/VIN prefix is a strong single signal
+        if (preg_match('/\bV[F0O]1[A-Z0-9]{6,}/u', $upper)) {
+            $vehicleSignals += 2;
+        }
+        if ($vehicleSignals >= 2) {
             return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
         }
         // Driving license
