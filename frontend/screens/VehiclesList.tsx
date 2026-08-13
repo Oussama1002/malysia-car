@@ -903,6 +903,17 @@ const VehiclesList: React.FC = () => {
                 carteGriseRef={carteGriseRef}
                 onPrefill={(data) => setFormData(fd => {
                   const plate = data.registration ? parsePlate(data.registration.replace(/\s+/g, '').toUpperCase()) : null;
+                  // Match OCR brand/model text against the DB dropdown lists so the
+                  // <select>s (bound to brand_id/model_id) actually populate.
+                  const norm = (s: string) => s.trim().toLowerCase();
+                  const cgBrand = data.cgMarque
+                    ? brands.find(b => norm(b.name) === norm(data.cgMarque!))
+                      ?? brands.find(b => norm(b.name).includes(norm(data.cgMarque!)) || norm(data.cgMarque!).includes(norm(b.name)))
+                    : undefined;
+                  const cgModel = (cgBrand && data.cgModele)
+                    ? cgBrand.models.find(m => norm(m.name) === norm(data.cgModele!))
+                      ?? cgBrand.models.find(m => norm(m.name).includes(norm(data.cgModele!)) || norm(data.cgModele!).includes(norm(m.name)))
+                    : undefined;
                   return {
                     ...fd,
                     ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
@@ -919,9 +930,11 @@ const VehiclesList: React.FC = () => {
                     ...(data.fuelType              ? { fuel: data.fuelType }                                : {}),
                     ...(data.miseEnCirculation     ? { miseEnCirculation: data.miseEnCirculation, year: parseInt(data.miseEnCirculation.slice(0, 4)) || fd.year } : {}),
                     ...(data.fiscalPower           ? { cv: data.fiscalPower }                               : {}),
-                    // Carte Grise fields
+                    // Carte Grise fields — set both the text and the matched dropdown IDs
                     ...(data.cgMarque             ? { brand: data.cgMarque }                              : {}),
+                    ...(cgBrand                   ? { brand_id: cgBrand.id }                              : {}),
                     ...(data.cgModele             ? { model: data.cgModele }                              : {}),
+                    ...(cgModel                   ? { model_id: cgModel.id }                              : {}),
                     ...(data.cgChassis            ? { chassis: data.cgChassis }                           : {}),
                     ...(data.cgFuelType           ? { fuel: data.cgFuelType }                             : {}),
                     ...(data.cgFiscalPower        ? { cv: data.cgFiscalPower }                            : {}),
