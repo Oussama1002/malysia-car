@@ -206,6 +206,7 @@ class DocumentReaderService
                 ReaderDocument::TYPE_DRIVING_LICENSE => 'Permis de conduire',
                 ReaderDocument::TYPE_VEHICLE_REGISTRATION => 'Carte grise',
                 ReaderDocument::TYPE_RENTAL_CONTRACT => 'Contrat de location',
+                ReaderDocument::TYPE_AUTORISATION_CIRCULATION => 'Autorisation de circulation',
                 default => $document->file_name,
             };
             // Don't double-attach if the same file is linked again.

@@ -26,6 +26,7 @@ class ReaderDocument extends Model
     public const TYPE_CHEQUE = 'cheque';
     public const TYPE_INSURANCE = 'insurance';
     public const TYPE_PAYMENT_ATTESTATION = 'payment_attestation';
+    public const TYPE_AUTORISATION_CIRCULATION = 'autorisation_circulation';
     public const TYPE_OTHER = 'other';
 
     public const TYPES = [
@@ -37,6 +38,7 @@ class ReaderDocument extends Model
         self::TYPE_CHEQUE,
         self::TYPE_INSURANCE,
         self::TYPE_PAYMENT_ATTESTATION,
+        self::TYPE_AUTORISATION_CIRCULATION,
         self::TYPE_OTHER,
     ];
 

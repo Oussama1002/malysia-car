@@ -22,6 +22,8 @@ export interface ScannedVehicleData {
   // Immatriculation provisoire / WW
   immatProvisoire?: string;
   immatProvisoireExpiry?: string;
+  // Autorisation de circulation
+  autorisationExpiry?: string;
   // Visite technique
   techControlExpiry?: string;
   // Vignette
@@ -55,16 +57,10 @@ export const VehicleDocumentScanner: React.FC<{
         mapFields={mapAssurance}
       />
       <ScanSlot
-        title="Facture d'achat"
-        description="Marque, modèle, VIN, date, vendeur, montant"
+        title="Autorisation de circulation"
+        description="Immat., N° WW, marque, carburant, mise en circulation, validité"
         onPrefill={onPrefill}
-        mapFields={mapFacture}
-      />
-      <ScanSlot
-        title="Immat. provisoire / WW"
-        description="N° provisoire, date validité"
-        onPrefill={onPrefill}
-        mapFields={mapImmatProvisoire}
+        mapFields={mapAutorisation}
       />
       <ScanSlot
         title="Attestation de paiement"
@@ -146,6 +142,7 @@ const ScanSlot: React.FC<{
       const docType = mapFields === mapAssurance ? 'insurance'
         : mapFields === mapPaymentAttestation ? 'payment_attestation'
         : mapFields === mapCarteGrise ? 'vehicle_registration'
+        : mapFields === mapAutorisation ? 'autorisation_circulation'
         : 'other';
       const uploaded = await documentReaderApi.upload(file, docType);
       await documentReaderApi.extract(uploaded.data.id, docType);
@@ -291,21 +288,14 @@ function mapPaymentAttestation(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
-function mapFacture(d: Record<string, unknown>): ScannedVehicleData {
+function mapAutorisation(d: Record<string, unknown>): ScannedVehicleData {
   return {
-    marque:          str(d.brand ?? d.marque ?? d.make ?? d.manufacturer),
-    modele:          str(d.model ?? d.modele ?? d.model_name),
-    chassis:         str(d.vin ?? d.chassis ?? d.chassis_number ?? d.serial_number ?? d.vehicle_identification_number),
-    acquisitionDate: str(d.purchase_date ?? d.date_achat ?? d.invoice_date ?? d.date_facture ?? d.sale_date),
-    vendeur:         str(d.seller ?? d.vendeur ?? d.dealer ?? d.vendor ?? d.sold_by),
-    montant:         str(d.amount ?? d.montant ?? d.total ?? d.price ?? d.prix ?? d.total_amount),
-  };
-}
-
-function mapImmatProvisoire(d: Record<string, unknown>): ScannedVehicleData {
-  return {
-    immatProvisoire:       str(d.provisional_number ?? d.numero_provisoire ?? d.registration_number ?? d.plate_number ?? d.ww_number),
-    immatProvisoireExpiry: str(d.validity_date ?? d.date_validite ?? d.expiry_date ?? d.date_expiration ?? d.valid_until),
+    registration:       str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    immatProvisoire:    str(d.ww_number ?? d.provisional_number ?? d.numero_provisoire),
+    cgMarque:           str(d.brand ?? d.marque ?? d.make),
+    fuelType:           str(d.fuel_type ?? d.carburant ?? d.energie),
+    miseEnCirculation:  str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
+    autorisationExpiry: str(d.authorization_expiry ?? d.valid_until ?? d.expiry_date ?? d.date_validite),
   };
 }
 
@@ -347,8 +337,9 @@ const FIELD_LABELS: Record<string, string> = {
   fuelType:              'Carburant',
   miseEnCirculation:     'Mise en circulation',
   fiscalPower:           'Puissance fiscale',
-  immatProvisoire:       'N° provisoire',
+  immatProvisoire:       'N° provisoire / WW',
   immatProvisoireExpiry: 'Validité',
+  autorisationExpiry:    'Autorisation valable jusqu\'au',
   techControlExpiry:     'Exp. visite tech.',
   vignetteExpiry:        'Exp. vignette',
   cgMarque:              'Marque',

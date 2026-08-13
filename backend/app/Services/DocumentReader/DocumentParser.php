@@ -40,6 +40,7 @@ class DocumentParser
                 ReaderDocument::TYPE_PASSPORT => 'un passeport',
                 ReaderDocument::TYPE_DRIVING_LICENSE => 'un permis de conduire',
                 ReaderDocument::TYPE_RENTAL_CONTRACT => 'un contrat de location',
+                ReaderDocument::TYPE_AUTORISATION_CIRCULATION => 'une autorisation de circulation',
             ];
             $expectedLabel = $typeLabels[$hintedType] ?? $hintedType;
             $actualLabel = $typeLabels[$detectedType] ?? $detectedType;
@@ -54,6 +55,7 @@ class DocumentParser
             ReaderDocument::TYPE_CHEQUE => $this->parseCheque($normalized),
             ReaderDocument::TYPE_INSURANCE => $this->parseInsurance($normalized),
             ReaderDocument::TYPE_PAYMENT_ATTESTATION => $this->parsePaymentAttestation($normalized),
+            ReaderDocument::TYPE_AUTORISATION_CIRCULATION => $this->parseAutorisationCirculation($normalized),
             default => [],
         };
 
@@ -72,6 +74,12 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
+        // Autorisation de circulation — distinctive title (allow OCR noise in
+        // the middle word: "circulation"/"drcutation"). Checked before the carte
+        // grise heuristic since it shares vehicle vocabulary.
+        if (preg_match('/AUTORISATION\s+DE\s+C[Ii]?RC[UO]?[Ll]?[Aa]?T[Ii][O0]N|AUTORISATION\s+VALABLE/u', $upper)) {
+            return ReaderDocument::TYPE_AUTORISATION_CIRCULATION;
+        }
         // Carte grise / vehicle registration — explicit title
         if (preg_match('/CARTE\s*GRISE|CERTIFICAT\s+D\'?IMMATRICULATION|VEHICLE\s+REGISTRATION/u', $upper)) {
             return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
@@ -89,7 +97,8 @@ class DocumentParser
         $hasNonVehicleSignal = preg_match(
             '/ASSURANCE|INSURANCE|COMPAGNIE|N°?\s*POLICE|P[ÉE]RIODE\s+DE\s+GARANTIE|GARANTIE\s+(?:DU|AU)'
             .'|ATTESTATION\s+DE\s+PAI|PAI[EÉ]?MENT|TAXE|VIGNETTE|IMP[ÔO]T|QUITTANCE|MONTANT'
-            .'|DIRECTION\s+G[ÉE]N[ÉE]RALE|TR[ÉE]SORERIE|TIMBRE|CH[ÈE]QUE|BANQUE/u',
+            .'|DIRECTION\s+G[ÉE]N[ÉE]RALE|TR[ÉE]SORERIE|TIMBRE|CH[ÈE]QUE|BANQUE'
+            .'|AUTORISATION|MINIST[ÈE]RE\s+DU\s+TRANSPORT/u',
             $upper
         );
         if (! $hasNonVehicleSignal) {
@@ -901,6 +910,95 @@ class DocumentParser
             'fiscal_power'           => $fiscalPower ? (int) $fiscalPower : null,
         ];
         Log::info('DocumentParser.parsePaymentAttestation', $result);
+        return $result;
+    }
+
+    /**
+     * Parse a Moroccan "Autorisation de circulation" (transport ministry permit
+     * for rental vehicles). Clean, well-structured document, so label-based
+     * extraction works well.
+     *
+     * @return array<string, mixed>
+     */
+    private function parseAutorisationCirculation(string $text): array
+    {
+        $flat = preg_replace('/[\r\n\t]+/', ' ', $text) ?? $text;
+        $flatUpper = mb_strtoupper($flat);
+
+        // Registration: "N° d'immatriculation : 90948-T-6"
+        $registration = null;
+        if (preg_match('/immatriculation[^0-9]{0,20}(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $flat, $pm)) {
+            $registration = $pm[1].'-'.mb_strtoupper($pm[2]).'-'.$pm[3];
+        }
+        if (! $registration && preg_match('/(\d{1,6})\s*[-–—|]\s*([A-Z])\s*[-–—|]\s*(\d{1,3})/u', $flat, $pm)) {
+            $registration = $pm[1].'-'.mb_strtoupper($pm[2]).'-'.$pm[3];
+        }
+
+        // WW / provisional number: "N° WW : 497707 WW"
+        $wwNumber = null;
+        if (preg_match('/(\d{4,7})\s*WW\b/iu', $flat, $wm)) {
+            $wwNumber = 'WW'.$wm[1];
+        } elseif (preg_match('/\bWW\s*[:\-]?\s*(\d{4,7})/iu', $flat, $wm)) {
+            $wwNumber = 'WW'.$wm[1];
+        }
+
+        // Brand: known brands + fuzzy fallback.
+        $knownBrands = [
+            'RENAULT', 'DACIA', 'PEUGEOT', 'CITROEN', 'CITROËN', 'FIAT', 'VOLKSWAGEN',
+            'HYUNDAI', 'KIA', 'TOYOTA', 'NISSAN', 'FORD', 'OPEL', 'BMW', 'MERCEDES',
+            'AUDI', 'SEAT', 'SKODA', 'SUZUKI', 'HONDA', 'MITSUBISHI', 'CHEVROLET', 'MG',
+        ];
+        $brand = null;
+        foreach ($knownBrands as $b) {
+            if (mb_strlen($b) >= 4 && str_contains($flatUpper, $b)) {
+                $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
+                break;
+            }
+        }
+        if (! $brand) {
+            $longBrands = array_values(array_filter($knownBrands, fn ($b) => mb_strlen($b) >= 4));
+            $match = $this->fuzzyBestMatch($flatUpper, $longBrands, 0.34);
+            if ($match !== null) {
+                $brand = mb_convert_case(mb_strtolower($match), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+
+        // Fuel type.
+        $fuelType = null;
+        foreach (['ESSENCE' => 'Essence', 'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel',
+            'GAZOLE' => 'Diesel', 'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL'] as $k => $v) {
+            if (str_contains($flatUpper, $k)) {
+                $fuelType = $v;
+                break;
+            }
+        }
+
+        // Mise en circulation date.
+        $miseEnCirculation = $this->extractDate($text, [
+            'Date\s+(?:de\s+)?mise\s+en\s+circulation',
+            'Mise\s+en\s+circulation',
+            'Premi[èe]re\s+mise\s+en\s+circulation',
+        ]);
+
+        // Authorization expiry: "Autorisation valable jusqu'au 24/01/2030".
+        $expiryDate = $this->extractDate($text, [
+            'valable\s+jusqu\'?au',
+            'Autorisation\s+valable',
+            'jusqu\'?au',
+        ]);
+        if (! $expiryDate && preg_match('/valable[^0-9]{0,20}(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})/iu', $flat, $em)) {
+            $expiryDate = $this->canonicalizeDate($em[1]);
+        }
+
+        $result = [
+            'registration_number'     => $registration,
+            'ww_number'               => $wwNumber,
+            'brand'                   => $brand,
+            'fuel_type'               => $fuelType,
+            'first_registration_date' => $miseEnCirculation,
+            'authorization_expiry'    => $expiryDate,
+        ];
+        Log::info('DocumentParser.parseAutorisationCirculation', $result);
         return $result;
     }
 

@@ -6,6 +6,10 @@ export type ReaderDocumentType =
   | 'driving_license'
   | 'vehicle_registration'
   | 'rental_contract'
+  | 'cheque'
+  | 'insurance'
+  | 'payment_attestation'
+  | 'autorisation_circulation'
   | 'other';
 
 export type ReaderDocumentStatus = 'pending' | 'processing' | 'extracted' | 'validated' | 'failed';
