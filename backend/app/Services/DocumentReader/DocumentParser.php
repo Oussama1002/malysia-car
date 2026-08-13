@@ -79,27 +79,40 @@ class DocumentParser
         // Carte grise fallback: heavily garbled OCR loses the title but keeps
         // vehicle-specific fields. "ROYAUME DU MAROC" also appears on a CIN, so
         // require 2+ vehicle-only tokens to beat the CIN check below.
-        $vehicleSignals = 0;
-        foreach ([
-            'MMATRICULATION',   // (i)mmatriculation
-            'CARBURANT',
-            'CHASSIS', 'DUHASSIS',
-            'CYLINDRE',
-            'PUISSANCE',
-            'NOMBRE DE PLACE',
-            'MISE EN CIRCULATION',
-            'LOU[ÉE] SANS CHAUFFEUR',
-        ] as $sig) {
-            if (preg_match('/' . $sig . '/u', $upper)) {
-                $vehicleSignals++;
+        //
+        // BUT other vehicle-related documents (insurance, vignette payment,
+        // cheque) also mention the plate/chassis/carburant, so this heuristic
+        // must NOT fire when the doc carries a clear signal for one of those —
+        // otherwise a genuine assurance gets misread as a carte grise. Those
+        // explicit checks below own their documents; this fallback is only for a
+        // carte grise whose own title was garbled.
+        $hasNonVehicleSignal = preg_match(
+            '/ASSURANCE|INSURANCE|COMPAGNIE|N°?\s*POLICE|P[ÉE]RIODE\s+DE\s+GARANTIE|GARANTIE\s+(?:DU|AU)|ATTESTATION\s+DE\s+PAI|TAXE\s+SP[ÉE]CIALE|VIGNETTE|CH[ÈE]QUE/u',
+            $upper
+        );
+        if (! $hasNonVehicleSignal) {
+            $vehicleSignals = 0;
+            foreach ([
+                'MMATRICULATION',   // (i)mmatriculation
+                'CARBURANT',
+                'CHASSIS', 'DUHASSIS',
+                'CYLINDRE',
+                'PUISSANCE',
+                'NOMBRE DE PLACE',
+                'MISE EN CIRCULATION',
+                'LOU[ÉE] SANS CHAUFFEUR',
+            ] as $sig) {
+                if (preg_match('/' . $sig . '/u', $upper)) {
+                    $vehicleSignals++;
+                }
             }
-        }
-        // VF/VIN prefix is a strong single signal
-        if (preg_match('/\bV[F0O]1[A-Z0-9]{6,}/u', $upper)) {
-            $vehicleSignals += 2;
-        }
-        if ($vehicleSignals >= 2) {
-            return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
+            // VF/VIN prefix is a strong single signal
+            if (preg_match('/\bV[F0O]1[A-Z0-9]{6,}/u', $upper)) {
+                $vehicleSignals += 2;
+            }
+            if ($vehicleSignals >= 2) {
+                return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
+            }
         }
         // Driving license
         if (preg_match('/PERMIS\s+DE\s+CONDUIRE|DRIVING\s+LIC[EÉ]NCE|DRIVER\s+LICENSE/u', $upper)) {
