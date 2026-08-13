@@ -438,12 +438,28 @@ class DocumentParser
             }
         }
 
-        // --- Fuel type: match known types (substring on flat text) ---
+        // --- Brand from model: a detected model is far more specific than a
+        // keyword brand match (a 2-char "MG" easily matches OCR noise). If the
+        // model belongs to a known brand, that brand wins. Fixes "Clio" being
+        // paired with a stray "Mg" instead of Renault.
+        if ($model) {
+            $modelUpper = mb_strtoupper($model);
+            foreach ($brandModels as $bName => $models) {
+                foreach ($models as $km) {
+                    if ($km === $modelUpper) {
+                        $brand = mb_convert_case(mb_strtolower($bName), MB_CASE_TITLE, 'UTF-8');
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        // --- Fuel type: known types + fuzzy fallback for garbled OCR ---
         $fuelType = null;
         $fuelKeywords = [
             'ESSENCE' => 'Essence', 'EESANCE' => 'Essence', 'ESSANCE' => 'Essence',
-            'ESENCE' => 'Essence', 'ESSENC' => 'Essence',
-            'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GAZOLE' => 'Diesel',
+            'ESENCE' => 'Essence', 'ESSENC' => 'Essence', 'ESSONCE' => 'Essence',
+            'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GAZOLE' => 'Diesel', 'GASOLE' => 'Diesel',
             'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL',
         ];
         foreach ($fuelKeywords as $key => $val) {
@@ -451,6 +467,13 @@ class DocumentParser
                 $fuelType = $val;
                 break;
             }
+        }
+        // Fuzzy fallback: OCR often mangles "Essence" (Ee/Es/Ea, s→5, c→e).
+        if (! $fuelType && preg_match('/E[EAS5][ES5][AEO0]N[CE][EG]/u', $flatUpper)) {
+            $fuelType = 'Essence';
+        }
+        if (! $fuelType && preg_match('/G[A4][SZ5][O0][IL1]|D[I1]E[SZ5]E[LI1]/u', $flatUpper)) {
+            $fuelType = 'Diesel';
         }
 
         // --- Fiscal power ---
