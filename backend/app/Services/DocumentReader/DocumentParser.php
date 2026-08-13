@@ -365,6 +365,16 @@ class DocumentParser
                 }
             }
         }
+        // Fallback: fuzzy — closest known brand to any token (handles heavy OCR
+        // garbling like "SRENAUET"/"reauldvyt" → Renault). Only brands 4+ chars
+        // so short codes (MG, JAC) can't false-match noise.
+        if (! $brand) {
+            $longBrands = array_values(array_filter($knownBrands, fn ($b) => mb_strlen($b) >= 4));
+            $match = $this->fuzzyBestMatch($flatUpper, $longBrands, 0.34);
+            if ($match !== null) {
+                $brand = mb_convert_case(mb_strtolower($match), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
 
         // --- Model: brand-specific models first, then generic fallback ---
         $model = null;
@@ -430,7 +440,20 @@ class DocumentParser
                 }
             }
         }
-        // Strategy 4: label-based
+        // Strategy 4: fuzzy — closest known model to any token. Prefer the
+        // detected brand's models, then all 4+ char models. Handles garbling
+        // like "cLie"/"CLIQ" → Clio.
+        if (! $model) {
+            $modelPool = ($brandKey && isset($brandModels[$brandKey]))
+                ? $brandModels[$brandKey]
+                : array_merge(...array_values($brandModels));
+            $modelPool = array_values(array_filter($modelPool, fn ($m) => mb_strlen($m) >= 4));
+            $match = $this->fuzzyBestMatch($flatUpper, $modelPool, 0.34);
+            if ($match !== null) {
+                $model = mb_convert_case(mb_strtolower($match), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+        // Strategy 5: label-based (last resort — raw word after "Modèle")
         if (! $model && preg_match('/Mod[èeé]le\s+(\S+)/iu', $flat, $mm)) {
             $candidate = trim($mm[1]);
             if (mb_strlen($candidate) >= 2 && preg_match('/[A-Za-z]/u', $candidate)) {
@@ -488,6 +511,17 @@ class DocumentParser
         if (! $fuelType && preg_match('/G[A4][SZ5][O0][IL1]|D[I1]E[SZ5]E[LI1]/u', $flatUpper)) {
             $fuelType = 'Diesel';
         }
+        // Fuzzy: closest known fuel word to any token.
+        if (! $fuelType) {
+            $fuelCanon = [
+                'ESSENCE' => 'Essence', 'DIESEL' => 'Diesel', 'GASOIL' => 'Diesel',
+                'GAZOLE' => 'Diesel', 'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique',
+            ];
+            $match = $this->fuzzyBestMatch($flatUpper, array_keys($fuelCanon), 0.34);
+            if ($match !== null) {
+                $fuelType = $fuelCanon[$match];
+            }
+        }
 
         // --- Fiscal power ---
         // Moroccan car fiscal power (CV) is realistically 3-40. We only accept a
@@ -531,19 +565,30 @@ class DocumentParser
         }
 
         // --- VIN / chassis ---
-        // Look for VF1... pattern (Renault VINs start with VF1) or any 17-char alnum near "chassis"
         $vin = null;
-        // Strategy 1: find VIN pattern starting with known prefixes (VF1, WBA, WDD, etc.)
+        // Strategy 1: exact Renault prefix VF1 + 14 chars.
         if (preg_match('/\b(VF1[A-Z0-9]{14})\b/u', $flatUpper, $vinM)) {
             $vin = $vinM[1];
         }
-        // Strategy 2: label-based extraction
+        // Strategy 2: label-based extraction (near "chassis"/"VIN").
         if (! $vin) {
             $vin = $this->labelValue($flat, ['VIN', '[Cc]h[aâ]ssis', 'N°?\s*(?:du\s+)?[Cc]h[aâ]ssis'], '[A-Z0-9]{17}');
         }
-        // Strategy 3: any 17-char alphanumeric sequence
+        // Strategy 3: any 17-char alphanumeric sequence.
         if (! $vin) {
             $vin = $this->firstMatch('/\b([A-Z0-9]{17})\b/u', $flatUpper);
+        }
+        // Best-effort cleanup on a 17-char VIN:
+        if ($vin && mb_strlen($vin) === 17) {
+            // Correct the world-manufacturer prefix from the known brand — OCR
+            // routinely misreads it (e.g. Renault "VF1" read as "VFA"). Only the
+            // first 3 chars, and only when they already look close.
+            $wmi = ['Renault' => 'VF1', 'Dacia' => 'UU1', 'Peugeot' => 'VF3', 'Citroën' => 'VF7', 'Citroen' => 'VF7'];
+            if ($brand && isset($wmi[$brand]) && mb_substr($vin, 0, 2) === mb_substr($wmi[$brand], 0, 2)) {
+                $vin = $wmi[$brand].mb_substr($vin, 3);
+            }
+            // VINs never contain I, O or Q — OCR usually means 1, 0, 0 there.
+            $vin = strtr($vin, ['I' => '1', 'O' => '0', 'Q' => '0']);
         }
 
         $result = [
@@ -974,6 +1019,55 @@ class DocumentParser
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
+
+    /**
+     * Find the candidate closest to any word in $text using Levenshtein distance.
+     *
+     * OCR garbles known words unpredictably ("RENAULT" → "SRENAUET", "reauldvyt";
+     * "CLIO" → "cLie"). Exact/substring matching misses these, but the garbled
+     * token is still the *nearest* option by edit distance. We tokenise the text,
+     * compare every token (and adjacent token pairs, since OCR often splits or
+     * glues words) against each candidate, and return the best candidate whose
+     * normalised distance (edits ÷ candidate length) is within $maxRatio.
+     *
+     * @param  list<string>  $candidates  UPPERCASE option values to match against.
+     */
+    private function fuzzyBestMatch(string $text, array $candidates, float $maxRatio = 0.34): ?string
+    {
+        $tokens = preg_split('/[^A-Z0-9]+/u', mb_strtoupper($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($tokens === []) {
+            return null;
+        }
+        // Also consider adjacent pairs joined, to survive OCR word splits.
+        $pairs = [];
+        for ($i = 0, $n = count($tokens); $i < $n - 1; $i++) {
+            $pairs[] = $tokens[$i].$tokens[$i + 1];
+        }
+        $all = array_merge($tokens, $pairs);
+
+        $best = null;
+        $bestRatio = $maxRatio;
+        foreach ($candidates as $cand) {
+            $len = mb_strlen($cand);
+            if ($len < 3) {
+                continue;
+            }
+            foreach ($all as $tok) {
+                // Skip tokens whose length is wildly off — can't be a near match.
+                if (abs(mb_strlen($tok) - $len) > max(2, (int) ceil($len * 0.5))) {
+                    continue;
+                }
+                $dist = levenshtein($tok, $cand);
+                $ratio = $dist / $len;
+                if ($ratio < $bestRatio) {
+                    $bestRatio = $ratio;
+                    $best = $cand;
+                }
+            }
+        }
+
+        return $best;
+    }
 
     private function normalize(string $text): string
     {

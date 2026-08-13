@@ -17,6 +17,45 @@ const GAMME_OPTIONS = ['CLASS', 'SPORT', 'MINI', 'UTL', 'AUTO MINI', 'SPORT 4x4'
 const CATEGORIE_OPTIONS = ['Particulier', 'Utilitaire', 'Commercial', 'Tourisme', 'Moto'];
 const VEHICLE_TYPE_OPTIONS = ['Berline', 'SUV', 'Citadine', 'Break', 'Coupé', 'Cabriolet', 'Monospace', 'Pick-up', 'Van', 'Camion'];
 
+// Levenshtein edit distance — used to fuzzy-match noisy OCR values (e.g.
+// "reauldvyt") to the closest known dropdown option ("Renault").
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let cur = new Array<number>(n + 1);
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[n];
+}
+
+// Pick the option whose name is closest to `value` (exact → substring → fuzzy).
+// Returns undefined if nothing is within the edit-distance threshold.
+function closestOption<T extends { name: string }>(value: string, options: T[]): T | undefined {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const v = norm(value);
+  if (!v) return undefined;
+  const exact = options.find(o => norm(o.name) === v);
+  if (exact) return exact;
+  const sub = options.find(o => norm(o.name).includes(v) || v.includes(norm(o.name)));
+  if (sub) return sub;
+  let best: T | undefined; let bestRatio = 0.4;
+  for (const o of options) {
+    const name = norm(o.name);
+    if (Math.abs(name.length - v.length) > Math.max(2, Math.ceil(name.length * 0.5))) continue;
+    const ratio = levenshtein(v, name) / Math.max(name.length, 1);
+    if (ratio < bestRatio) { bestRatio = ratio; best = o; }
+  }
+  return best;
+}
+
 const DocPhotoUpload: React.FC<{
   preview: string | null;
   onFile: (f: File) => void;
@@ -903,17 +942,11 @@ const VehiclesList: React.FC = () => {
                 carteGriseRef={carteGriseRef}
                 onPrefill={(data) => setFormData(fd => {
                   const plate = data.registration ? parsePlate(data.registration.replace(/\s+/g, '').toUpperCase()) : null;
-                  // Match OCR brand/model text against the DB dropdown lists so the
-                  // <select>s (bound to brand_id/model_id) actually populate.
-                  const norm = (s: string) => s.trim().toLowerCase();
-                  const cgBrand = data.cgMarque
-                    ? brands.find(b => norm(b.name) === norm(data.cgMarque!))
-                      ?? brands.find(b => norm(b.name).includes(norm(data.cgMarque!)) || norm(data.cgMarque!).includes(norm(b.name)))
-                    : undefined;
-                  const cgModel = (cgBrand && data.cgModele)
-                    ? cgBrand.models.find(m => norm(m.name) === norm(data.cgModele!))
-                      ?? cgBrand.models.find(m => norm(m.name).includes(norm(data.cgModele!)) || norm(data.cgModele!).includes(norm(m.name)))
-                    : undefined;
+                  // Match OCR brand/model text against the DB dropdown lists
+                  // (exact → substring → fuzzy) so the <select>s (bound to
+                  // brand_id/model_id) populate even from noisy OCR text.
+                  const cgBrand = data.cgMarque ? closestOption<VehicleBrandOption>(data.cgMarque, brands) : undefined;
+                  const cgModel = (cgBrand && data.cgModele) ? closestOption<VehicleModelOption>(data.cgModele, cgBrand.models) : undefined;
                   return {
                     ...fd,
                     ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
