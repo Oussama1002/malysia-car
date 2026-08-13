@@ -51,14 +51,25 @@ class TesseractOcrProvider implements OcrProviderInterface
         $isPinkDoc = in_array($docType, ['driving_license', 'cin'], true);
 
         $needsCleanup = false;
+        $convertedSource = null;
         if ($ext === 'pdf') {
             $imagePaths = $this->renderPdfPages($absolutePath);
             $needsCleanup = true;
         } else {
+            // Tesseract only reads jpg/jpeg/png natively. Convert anything else
+            // (HEIC/HEIF from iPhones, WebP, TIFF, BMP, GIF) to PNG first via
+            // ImageMagick so all image formats work, not just the three.
+            $source = $absolutePath;
+            if (! in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
+                $convertedSource = $this->convertToPng($absolutePath);
+                if ($convertedSource !== null) {
+                    $source = $convertedSource;
+                }
+            }
             // Phone cameras produce 12+ MP images — resize to max 2400px
             // longest edge before OCR so Tesseract runs in ~5-10s not 60s.
-            $resized = $this->downsizeImage($absolutePath);
-            $imagePaths = [$resized ?? $absolutePath];
+            $resized = $this->downsizeImage($source);
+            $imagePaths = [$resized ?? $source];
             $needsCleanup = $resized !== null;
         }
 
@@ -94,9 +105,39 @@ class TesseractOcrProvider implements OcrProviderInterface
                     }
                 }
             }
+            if ($convertedSource !== null && $convertedSource !== $absolutePath) {
+                @unlink($convertedSource);
+            }
         }
 
         return new OcrResult(rawText: trim($text), confidence: null, provider: $this->name());
+    }
+
+    /**
+     * Convert an image in any ImageMagick-readable format (HEIC/HEIF from
+     * iPhones, WebP, TIFF, BMP, GIF…) to a PNG that Tesseract can read. Returns
+     * the temp PNG path, or null if conversion isn't possible (ImageMagick
+     * missing, or missing the HEIC delegate) — the caller then falls back to the
+     * original file.
+     */
+    private function convertToPng(string $imagePath): ?string
+    {
+        try {
+            $tmp = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_conv_'.bin2hex(random_bytes(6)).'.png';
+            // `[0]` takes the first frame/page for multi-frame inputs (animated
+            // GIF, multi-page TIFF).
+            $process = new Process([
+                $this->convertBin,
+                $imagePath.'[0]',
+                $tmp,
+            ]);
+            $process->setTimeout(60);
+            $process->mustRun();
+
+            return is_file($tmp) ? $tmp : null;
+        } catch (Throwable) {
+            return null; // ImageMagick missing / unsupported format — use original.
+        }
     }
 
     private function runTesseract(string $image, string $lang): string

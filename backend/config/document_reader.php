@@ -31,6 +31,6 @@ return [
     'upload' => [
         // 15 MB by default. Keep aligned with the controller validation rule.
         'max_size_kb' => (int) env('DOC_READER_MAX_KB', 15 * 1024),
-        'allowed_mimes' => ['pdf', 'jpg', 'jpeg', 'png'],
+        'allowed_mimes' => ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'heic', 'heif'],
     ],
 ];

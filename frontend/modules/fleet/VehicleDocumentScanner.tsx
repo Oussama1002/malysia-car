@@ -202,11 +202,14 @@ const ScanSlot: React.FC<{
             Photo
           </button>
         </div>
-        <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden"
+        <input ref={inputRef} type="file" accept="image/*,application/pdf,.pdf,.heic,.heif,.webp,.tiff,.bmp" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void handle(f); e.target.value = ''; }} />
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+        {/* Camera capture: accept="image/*" without `capture` so the OS shows the
+            native "Take Photo" option (the `capture` attribute forces an inline
+            camera that renders black in many mobile / in-app browsers). */}
+        <input ref={cameraRef} type="file" accept="image/*" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void handle(f); e.target.value = ''; }} />
-        <div className="mt-1 text-[10px] text-slate-500">PDF, JPG, PNG · 15 Mo max</div>
+        <div className="mt-1 text-[10px] text-slate-500">Image ou PDF · 15 Mo max</div>
         <ElapsedTimer running={loading} />
         {error && <div className="mt-1 text-[11px] font-semibold text-rose-600">{error}</div>}
       </div>

@@ -78,7 +78,7 @@ class DocumentReaderController extends Controller
 
         $maxKb = (int) config('document_reader.upload.max_size_kb', 15 * 1024);
         $data = $request->validate([
-            'file' => ['required', 'file', 'max:'.$maxKb, 'mimes:pdf,jpg,jpeg,png'],
+            'file' => ['required', 'file', 'max:'.$maxKb, 'mimes:pdf,jpg,jpeg,png,webp,gif,bmp,tif,tiff,heic,heif'],
             'document_type' => ['nullable', 'string', 'in:'.implode(',', ReaderDocument::TYPES)],
         ]);
 
