@@ -41,7 +41,14 @@ class TesseractOcrProvider implements OcrProviderInterface
         }
 
         $lang = (string) ($options['lang'] ?? $this->defaultLang);
+        $docType = (string) ($options['doc_type'] ?? '');
         $ext = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
+
+        // The pink-watermark red-channel preprocessing is tuned for the Moroccan
+        // permis / CIN. On a plain grayscale carte grise it destroys thin digit
+        // strokes (turns "6"→"@", garbles VIN digits), so apply only to the
+        // pink docs and use gentle grayscale contrast for everything else.
+        $isPinkDoc = in_array($docType, ['driving_license', 'cin'], true);
 
         $needsCleanup = false;
         if ($ext === 'pdf') {
@@ -58,24 +65,24 @@ class TesseractOcrProvider implements OcrProviderInterface
         try {
             $text = '';
             foreach ($imagePaths as $i => $image) {
-                // Suppress the pink Moroccan permis watermark when ImageMagick
-                // is available. No-op for hosts without `convert` or for already
-                // grayscale inputs.
-                $this->preprocessImage($image);
+                // Pink docs (permis/CIN): red-channel watermark suppression.
+                // Everything else: gentle grayscale + mild contrast that keeps
+                // thin digit strokes intact.
+                $this->preprocessImage($image, $isPinkDoc);
                 $text .= $this->runTesseract($image, $lang)."\n\n";
 
-                // Second, narrow OCR pass on the VERSO (page 2 of a PDF) with a
-                // digit-only character whitelist + sparse-text PSM. The default
-                // multilingual pass mangles the "Fin de validité 15/09/2030"
-                // line into letter garbage ("ECO" / "PR ET RTE") because the
-                // surrounding decoration looks letter-like. Constraining the
-                // recogniser to digits + date separators recovers the digits
-                // when they exist. Appended to $text so the date classifier
-                // picks up the new readings; front-side fields are unaffected.
-                if ($ext === 'pdf' && $i >= 1) {
+                // Digit-focused second pass. For the permis this targets the
+                // verso (page 2). For the carte grise the whole document is a
+                // dense field table, so run it on every page to recover the VIN,
+                // fiscal power and expiry digits that the multilingual pass
+                // mangles (letters pulled out of numbers). Appended so the
+                // classifier can pick up cleaner digit readings.
+                $runDigitPass = ($ext === 'pdf' && $i >= 1)
+                    || $docType === 'vehicle_registration';
+                if ($runDigitPass) {
                     $digits = $this->runTesseractDigits($image);
                     if ($digits !== '') {
-                        $text .= "\n--- verso digit pass ---\n".$digits."\n";
+                        $text .= "\n--- digit pass ---\n".$digits."\n";
                     }
                 }
             }
@@ -178,23 +185,38 @@ class TesseractOcrProvider implements OcrProviderInterface
      * Best-effort: if ImageMagick isn't installed, the call fails silently and
      * Tesseract still gets the original colour PNG (no regression).
      */
-    private function preprocessImage(string $imagePath): void
+    private function preprocessImage(string $imagePath, bool $isPinkDoc = true): void
     {
         if (! is_file($imagePath)) {
             return;
         }
+
+        if ($isPinkDoc) {
+            // Pink permis/CIN: isolate the red channel to drop the watermark,
+            // then aggressive contrast to recover the digits underneath.
+            $args = [
+                '-colorspace', 'sRGB',
+                '-channel', 'R',
+                '-separate',
+                '+channel',
+                '-sharpen', '0x1',
+                '-level', '20%,90%',
+            ];
+        } else {
+            // Plain scans (carte grise, etc.): gentle grayscale + mild contrast.
+            // No channel dropping, no hard threshold — preserves thin digit
+            // strokes so "6" stays "6" and VIN characters survive.
+            $args = [
+                '-colorspace', 'Gray',
+                '-normalize',
+                '-sharpen', '0x1',
+            ];
+        }
+
         $process = new Process([
             $this->convertBin,
             $imagePath,
-            '-colorspace', 'sRGB',
-            '-channel', 'R',
-            '-separate',
-            '+channel',
-            // Light sharpening helps small digits survive the threshold.
-            '-sharpen', '0x1',
-            // Threshold ~60 % cleans residual watermark fragments without
-            // eating thin strokes in the digits.
-            '-level', '20%,90%',
+            ...$args,
             $imagePath,
         ]);
         $process->setTimeout(60);
@@ -278,8 +300,10 @@ class TesseractOcrProvider implements OcrProviderInterface
                                 // alone can never yield the expiry date. Each
                                 // page is still capped by -scale-to, so two
                                 // pages stay bounded.
-            '-r', '150',        // base DPI (overridden by -scale-to for large pages)
-            '-scale-to', '2480', // cap longest dimension at 2 480 px (~A4 @ 300 DPI).
+            '-r', '300',        // base DPI (overridden by -scale-to for large pages)
+            '-scale-to', '3508', // cap longest dimension at 3 508 px (~A4 @ 300 DPI);
+                                 // small fields like the VIN and fiscal-power digit
+                                 // need the extra resolution to be read correctly.
             '-png',
             // Render in COLOUR (no -gray) so the preprocessing step can isolate
             // the red channel: on the pink-watermarked Moroccan permis verso,

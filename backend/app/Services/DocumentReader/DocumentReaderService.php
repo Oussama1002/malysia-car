@@ -108,7 +108,7 @@ class DocumentReaderService
         $absolute = $disk->path($document->file_path);
 
         try {
-            $ocr = $this->ocr->extract($absolute);
+            $ocr = $this->ocr->extract($absolute, ['doc_type' => $hintedType ?? $document->document_type]);
             $parsed = $this->parser->parse($ocr->rawText, $hintedType ?? $document->document_type);
 
             return DB::transaction(function () use ($document, $ocr, $parsed) {
