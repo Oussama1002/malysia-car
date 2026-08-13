@@ -722,17 +722,31 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Moroccan insurance policy numbers look like AU112024026094T1 or
-        // FL112023C-153426 (2 letters + digits + optional letter/dash suffix).
-        // Try that format first, then fall back to label-based extraction.
-        $policyNumber = $this->firstMatch('/\b([A-Z]{2}\d[A-Z0-9\-]{9,28})\b/u', $text)
-            ?? $this->labelValue($text, [
-                'N°?\s*(?:de\s+)?Police',
+        // Moroccan insurance policy numbers look like AO1120240260041 or
+        // FL112023C-153426 (2-3 letters + digits + optional letter/dash suffix).
+        //
+        // Priority 1: the "Numéro de police" label (allow OCR garbling of the
+        // label). This is the reliable anchor and, crucially, it distinguishes
+        // the real policy number from the "NUMÉRO D'ORDRE" (which starts with
+        // digits, e.g. "05 D 186203815", and must NOT be used).
+        $policyNumber = null;
+        if (preg_match('/Num[ée]?ro?\s*(?:de\s+)?police[^A-Za-z0-9]{0,18}([A-Z]{2,3}\d[A-Z0-9\-.]{5,28})/iu', $text, $pm)) {
+            $policyNumber = rtrim($pm[1], '.-');
+        }
+        // Priority 2: the Moroccan policy format anywhere (2 letters + digit + …).
+        // The numéro d'ordre starts with digits so this won't grab it.
+        if (! $policyNumber) {
+            $policyNumber = $this->firstMatch('/\b([A-Z]{2}\d[A-Z0-9\-]{9,28})\b/u', $text);
+        }
+        // Priority 3: other policy-number labels.
+        if (! $policyNumber) {
+            $policyNumber = $this->labelValue($text, [
                 'Police\s*N°?',
                 'Policy\s*N[o°]',
                 'Contract\s*N[o°]',
                 'N°?\s*Contrat',
             ], '[A-Z]{2}[A-Z0-9\-]{6,30}');
+        }
         if ($policyNumber && ! preg_match('/\d/', $policyNumber)) {
             $policyNumber = null;
         }
