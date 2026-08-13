@@ -847,13 +847,13 @@ class DocumentParser
         if (preg_match('/(?:immatriculation|N°?\s*d\'?immatriculation|Immat\.?)/iu', $text, $lm, PREG_OFFSET_CAPTURE)) {
             $window = substr($text, $lm[0][1], 200);
             $flat = preg_replace('/[\r\n\t]+/', ' ', $window) ?? $window;
-            if (preg_match('/(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $flat, $pm)) {
+            if (preg_match('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $flat, $pm)) {
                 $registration = $pm[1] . '-' . mb_strtoupper($pm[2]) . '-' . $pm[3];
             }
         }
         if (! $registration) {
-            $registration = $this->firstMatch('/(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $text);
-            if ($registration && preg_match('/(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $text, $pm)) {
+            $registration = $this->firstMatch('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $text);
+            if ($registration && preg_match('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $text, $pm)) {
                 $registration = $pm[1] . '-' . mb_strtoupper($pm[2]) . '-' . $pm[3];
             }
         }
@@ -931,10 +931,10 @@ class DocumentParser
 
         // Registration: "N° d'immatriculation : 90948-T-6"
         $registration = null;
-        if (preg_match('/immatriculation[^0-9]{0,20}(\d{1,6})\s*[-–—|]\s*([A-Z]{1,3})\s*[-–—|]\s*(\d{1,3})/iu', $flat, $pm)) {
+        if (preg_match('/immatriculation[^0-9]{0,20}(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $flat, $pm)) {
             $registration = $pm[1].'-'.mb_strtoupper($pm[2]).'-'.$pm[3];
         }
-        if (! $registration && preg_match('/(\d{1,6})\s*[-–—|]\s*([A-Z])\s*[-–—|]\s*(\d{1,3})/u', $flat, $pm)) {
+        if (! $registration && preg_match('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z])\s*[-–—|.·:]\s*(\d{1,3})/u', $flat, $pm)) {
             $registration = $pm[1].'-'.mb_strtoupper($pm[2]).'-'.$pm[3];
         }
 
@@ -985,12 +985,17 @@ class DocumentParser
         ]);
 
         // Authorization expiry: "Autorisation valable jusqu'au 24/01/2030".
+        // OCR badly garbles this line ("valable jusqu'au" → "velabictacgusy"),
+        // so try clean labels first, then fuzzy variants of "valable"/"autoris".
         $expiryDate = $this->extractDate($text, [
             'valable\s+jusqu\'?au',
             'Autorisation\s+valable',
             'jusqu\'?au',
+            'Autoris[a-zô]+\s+v[eéa]l[a-z]+',   // "Autorisotion velab..."
+            'v[eéa]l[a-z]{2,}b[a-z]*',           // "velabictacgusy"
         ]);
-        if (! $expiryDate && preg_match('/valable[^0-9]{0,20}(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})/iu', $flat, $em)) {
+        // Fuzzy fallback: a date sitting right after a garbled "valab/velab" token.
+        if (! $expiryDate && preg_match('/v[eéa]l[a-z]*b[a-z]*[^0-9]{0,15}(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})/iu', $flat, $em)) {
             $expiryDate = $this->canonicalizeDate($em[1]);
         }
 
