@@ -339,7 +339,10 @@ export const PaymentForm: React.FC<{
    *  global invoiced balance, so already-paid amounts on this reservation are
    *  reflected. */
   reservationBalance?: number;
-}> = ({ submitting, error, onCancel, onSubmit, initialValues, reservationBalance }) => {
+  /** Reservation's vehicle id — used to auto-select the matching contract
+   *  (same customer + vehicle), since there's no stored reservation→contract link. */
+  reservationVehicleId?: string;
+}> = ({ submitting, error, onCancel, onSubmit, initialValues, reservationBalance, reservationVehicleId }) => {
   const [form, setForm] = useState<PaymentCreatePayload>({
     customer_id: initialValues?.customer_id ?? '',
     contract_id: initialValues?.contract_id,
@@ -427,6 +430,18 @@ export const PaymentForm: React.FC<{
 
   const set = <K extends keyof PaymentCreatePayload>(field: K, value: PaymentCreatePayload[K]) =>
     setForm((f) => ({ ...f, [field]: value }));
+
+  // When opened from a reservation, auto-select the matching contract. There is
+  // no stored reservation→contract link, but a contract generated from the
+  // reservation shares its customer AND vehicle — match on both.
+  useEffect(() => {
+    if (!reservationVehicleId || !form.customer_id || form.contract_id) return;
+    const match = (contractsQ.data as Array<ContractMin & { customerId?: string; vehicleId?: string }> | undefined)
+      ?.find((c) => c.customerId === form.customer_id && c.vehicleId === reservationVehicleId);
+    if (match) {
+      setForm((f) => ({ ...f, contract_id: String(match.id) }));
+    }
+  }, [contractsQ.data, reservationVehicleId, form.customer_id, form.contract_id]);
 
   return (
     <form
