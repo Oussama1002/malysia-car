@@ -8,6 +8,7 @@ export type IconName =
   | 'home' | 'car' | 'users' | 'doc' | 'credit' | 'coin' | 'alert'
   | 'marketplace' | 'map' | 'sparkles' | 'mobile' | 'bell' | 'key'
   | 'audit' | 'gear' | 'search' | 'plus' | 'minus' | 'close' | 'check'
+  | 'chat'
   | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'chevron-up'
   | 'sun' | 'moon' | 'density' | 'filter' | 'download' | 'upload'
   | 'arrow-up' | 'arrow-down' | 'arrow-right' | 'trend-up' | 'trend-down'
@@ -32,6 +33,7 @@ const MAP: Record<IconName, React.ReactNode> = {
   sparkles: P('M12 3v4m0 10v4m9-9h-4M7 12H3m14.5-6.5-2.8 2.8m-5.4 5.4-2.8 2.8m0-11 2.8 2.8m5.4 5.4 2.8 2.8'),
   mobile: P('M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 15h2'),
   bell: P('M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.7V5a2 2 0 1 0-4 0v.3A6 6 0 0 0 6 11v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9'),
+  chat: P('M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-4 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9ZM8 9h8M8 12h5'),
   key: P('M15 7a4 4 0 1 1 0 8 4 4 0 0 1-3.7-2.5L3 21l2-2 2 2 2-2 2.3-2.3A4 4 0 0 1 15 7Zm0 2.5h.01'),
   audit: P('M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14h6m-6-4h3'),
   gear: P('M10.3 4.3c.4-1.7 2.9-1.7 3.4 0a1.7 1.7 0 0 0 2.6 1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 0 0 1 2.6c1.7.4 1.7 2.9 0 3.4a1.7 1.7 0 0 0-1 2.6c.9 1.5-.8 3.3-2.4 2.4a1.7 1.7 0 0 0-2.6 1c-.4 1.7-2.9 1.7-3.4 0a1.7 1.7 0 0 0-2.6-1c-1.5.9-3.3-.8-2.4-2.4a1.7 1.7 0 0 0-1-2.6c-1.7-.4-1.7-2.9 0-3.4a1.7 1.7 0 0 0 1-2.6c-.9-1.5.8-3.3 2.4-2.4a1.7 1.7 0 0 0 2.6-1ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'),

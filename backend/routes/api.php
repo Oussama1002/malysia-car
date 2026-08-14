@@ -132,6 +132,15 @@ Route::prefix('v1')->group(function () {
         Route::get('branches', [BranchController::class, 'index']);
 
         // ==================================================================
+        // Internal chat (discussion) — 1-to-1 messaging between users
+        // ==================================================================
+        Route::get('chat/users', [\App\Http\Controllers\Api\V1\ChatController::class, 'users']);
+        Route::get('chat/conversations', [\App\Http\Controllers\Api\V1\ChatController::class, 'conversations']);
+        Route::get('chat/messages', [\App\Http\Controllers\Api\V1\ChatController::class, 'messages']);
+        Route::post('chat/messages', [\App\Http\Controllers\Api\V1\ChatController::class, 'send']);
+        Route::get('chat/unread-count', [\App\Http\Controllers\Api\V1\ChatController::class, 'unreadCount']);
+
+        // ==================================================================
         // Notifications (in-app + delivery tracking; retry: ADMIN / DIRECTEUR)
         // ==================================================================
         Route::get('notifications', [NotificationController::class, 'index'])

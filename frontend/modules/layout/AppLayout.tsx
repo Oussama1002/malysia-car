@@ -14,6 +14,7 @@ import { AICopilotDrawer, AICopilotFab } from '@/modules/shared/components/AICop
 import { AppBreadcrumbs } from '@/modules/layout/AppBreadcrumbs';
 import { GROUPS, type NavItem } from '@/modules/layout/navConfig';
 import { notificationsApi, type NotificationDto } from '@/services/notificationsApi';
+import { chatApi } from '@/services/chatApi';
 import { maintenanceApi } from '@/services/maintenanceApi';
 import { isExperimentalEnabled, isModuleHiddenInDemo } from '@/config/runtimeFlags';
 
@@ -83,6 +84,12 @@ export const AppLayout: React.FC = () => {
     refetchInterval: 30000,
   });
   const unreadCount = unreadQ.data?.data?.unread ?? 0;
+  const chatUnreadQ = useQuery({
+    queryKey: ['chat', 'unread-count'],
+    queryFn: () => chatApi.unreadCount(),
+    refetchInterval: 20000,
+  });
+  const chatUnread = chatUnreadQ.data?.data?.unread ?? 0;
   const maintenanceQ = useQuery({
     queryKey: ['fleet', 'maintenance', 'alerts', 'badge'],
     queryFn: () => maintenanceApi.alerts(),
@@ -363,6 +370,21 @@ export const AppLayout: React.FC = () => {
               );
             })}
           </div>
+
+          <button
+            type="button"
+            className="df-btn df-btn--subtle df-btn--sm df-btn--icon relative"
+            aria-label="Discussions"
+            title="Discussions"
+            onClick={() => navigate('/chat')}
+          >
+            <Icon name="chat" size={16} />
+            {chatUnread > 0 && (
+              <span className="absolute -top-1.5 -end-1.5 min-w-4 rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-[color:var(--df-surface-solid)]">
+                {chatUnread > 99 ? '99+' : chatUnread}
+              </span>
+            )}
+          </button>
 
           <div className="relative" ref={notifRef}>
             <button type="button" className="df-btn df-btn--subtle df-btn--sm df-btn--icon relative" aria-label="Notifications" onClick={() => setNotifOpen((v) => !v)}>
