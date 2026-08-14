@@ -55,7 +55,9 @@ class VehiclePhotoController extends Controller
         $vehicle->update(['photo_file_id' => $fileId]);
 
         return ApiResponse::success([
-            'photoUrl' => Storage::disk('public')->url($path),
+            // Serve through the app's public file route (see PublicFileController)
+            // instead of the static /storage path, which the web server 403s.
+            'photoUrl' => rtrim((string) config('app.url'), '/').'/api/v1/files/'.$fileId,
         ]);
     }
 

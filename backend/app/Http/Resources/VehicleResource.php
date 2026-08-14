@@ -79,7 +79,9 @@ class VehicleResource extends JsonResource
             return null;
         }
 
-        return Storage::disk($file->storage_disk)->url($file->storage_path);
+        // Serve through the app's public file route rather than the static
+        // /storage path, which the web server 403s (permissions / nginx rules).
+        return rtrim((string) config('app.url'), '/').'/api/v1/files/'.$v->photo_file_id;
     }
 }
 

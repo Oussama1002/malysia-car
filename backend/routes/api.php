@@ -97,6 +97,12 @@ Route::prefix('v1')->group(function () {
     // GPS provider webhook (public — provider API key/HMAC/IP controls)
     Route::post('gps/webhooks/{provider}', [GpsWebhookController::class, 'handle']);
 
+    // Public file streaming (vehicle photos, etc.). Serves only is_public files
+    // by their files-table id — bypasses the static /storage path that the web
+    // server 403s, and works from <img> tags (which can't send auth headers).
+    Route::get('files/{id}', [\App\Http\Controllers\Api\V1\PublicFileController::class, 'show'])
+        ->middleware('throttle:120,1');
+
     // Public electronic-signature endpoints (tokenized, no auth).
     // The opaque one-time token in the URL is the only capability; throttled
     // to blunt token brute-forcing.
