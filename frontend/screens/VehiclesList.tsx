@@ -1272,13 +1272,13 @@ const VehiclesList: React.FC = () => {
                   {/* Visite Tech */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Visite Tech.</label>
-                    <input type="date" required className={inputCls} value={formData.techControlExpiry}
+                    <input type="date" className={inputCls} value={formData.techControlExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, techControlExpiry: e.target.value }))} />
                   </div>
                   {/* Vignette */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Vignette</label>
-                    <input type="date" required className={inputCls} value={formData.vignetteExpiry}
+                    <input type="date" className={inputCls} value={formData.vignetteExpiry}
                       onChange={e => setFormData(fd => ({ ...fd, vignetteExpiry: e.target.value }))} />
                   </div>
                 </div>
