@@ -2,79 +2,23 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { canAccessModule, type ModuleKey } from '@/domain/appRole';
+import { canAccessModule } from '@/domain/appRole';
 import { useAuthSession } from '@/modules/auth/AuthContext';
 import { setLanguage } from '@/i18n';
 import { useUIPrefs } from '@/providers/UIPreferencesProvider';
-import { Icon, type IconName } from '@/modules/shared/components/Icon';
+import { Icon } from '@/modules/shared/components/Icon';
 import { ThemeToggle } from '@/modules/shared/components/ThemeToggle';
 import { DensityToggle } from '@/modules/shared/components/DensityToggle';
 import { CommandPalette, useCommandPaletteShortcut } from '@/modules/shared/components/CommandPalette';
 import { AICopilotDrawer, AICopilotFab } from '@/modules/shared/components/AICopilot';
 import { AppBreadcrumbs } from '@/modules/layout/AppBreadcrumbs';
+import { GROUPS, type NavItem } from '@/modules/layout/navConfig';
 import { notificationsApi, type NotificationDto } from '@/services/notificationsApi';
 import { maintenanceApi } from '@/services/maintenanceApi';
 import { isExperimentalEnabled, isModuleHiddenInDemo } from '@/config/runtimeFlags';
 
-type NavItem = { to: string; module: ModuleKey; labelKey: string; icon: IconName };
-type NavGroup = { key: string; labelKey: string; items: NavItem[] };
-
-const GROUPS: NavGroup[] = [
-  {
-    key: 'overview',
-    labelKey: 'nav.group.overview',
-    items: [{ to: '/dashboard', module: 'dashboard', labelKey: 'nav.dashboard', icon: 'home' }],
-  },
-  {
-    key: 'operations',
-    labelKey: 'nav.group.operations',
-    items: [
-      { to: '/fleet', module: 'fleet', labelKey: 'nav.fleet', icon: 'car' },
-      // 'Conformité véhicules' AND 'Analyse de parc' moved out of the sidebar —
-      // both are now reached via toggles/buttons on /fleet (VehiclesList). The
-      // /fleet/compliance route is kept for deep links; /fleet/analysis now
-      // redirects to /fleet (see AppRoutes).
-      { to: '/fleet/sub-rentals', module: 'subRentals', labelKey: 'nav.subRentals', icon: 'key' },
-      { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },
-      { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
-      // Réservations module = contracts list + rental operations as tabs.
-      // The standalone /rentals entry was merged in (redirects to the
-      // Locations tab); see ContractsModulePage + AppRoutes.
-      { to: '/contracts', module: 'contracts', labelKey: 'nav.contractsSidebar', icon: 'calendar' },
-      { to: '/used-cars', module: 'usedCars', labelKey: 'nav.usedCars', icon: 'marketplace' },
-    ],
-  },
-  {
-    key: 'finance',
-    labelKey: 'nav.group.finance',
-    items: [
-      { to: '/credit', module: 'credit', labelKey: 'nav.credit', icon: 'credit' },
-      { to: '/finance', module: 'finance', labelKey: 'nav.finance', icon: 'coin' },
-      { to: '/finance/fixed-charges', module: 'finance', labelKey: 'nav.fixedCharges', icon: 'receipt' },
-      { to: '/accounting', module: 'accounting', labelKey: 'nav.accounting', icon: 'calculator' },
-      { to: '/arrears', module: 'arrears', labelKey: 'nav.arrears', icon: 'alert' },
-    ],
-  },
-  {
-    key: 'intelligence',
-    labelKey: 'nav.group.intelligence',
-    items: [
-      { to: '/ai', module: 'ai', labelKey: 'nav.ai', icon: 'sparkles' },
-      { to: '/mobile-ops', module: 'mobileOps', labelKey: 'nav.mobileOps', icon: 'mobile' },
-    ],
-  },
-  {
-    key: 'system',
-    labelKey: 'nav.group.system',
-    items: [
-      { to: '/notifications', module: 'notifications', labelKey: 'nav.notifications', icon: 'bell' },
-      { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'folder' },
-      { to: '/documents/reader', module: 'documents', labelKey: 'nav.documentReader', icon: 'scan' },
-      { to: '/audit', module: 'audit', labelKey: 'nav.audit', icon: 'audit' },
-      { to: '/settings', module: 'settings', labelKey: 'nav.settings', icon: 'gear' },
-    ],
-  },
-];
+// Departments/sub-departments now live in navConfig.ts (shared with the
+// Départements hub page). GROUPS + NavItem are imported above.
 
 function useBreadcrumb(): { group: string; current: string } {
   const { t } = useTranslation();
@@ -242,6 +186,17 @@ export const AppLayout: React.FC = () => {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-1">
+        <div className="mb-3">
+          <NavLink
+            to="/hub"
+            className={({ isActive }) => `df-nav-link ${isActive ? 'df-nav-link--active' : ''}`}
+            onClick={() => setMobileOpen(false)}
+            title={sidebarCollapsed ? 'Départements' : undefined}
+          >
+            <Icon name="marketplace" size={18} />
+            {!sidebarCollapsed && <span className="truncate">Départements</span>}
+          </NavLink>
+        </div>
         {groups.map((g) => (
           <div key={g.key} className="mb-3">
             {!sidebarCollapsed && <div className="df-nav-section">{t(g.labelKey)}</div>}
