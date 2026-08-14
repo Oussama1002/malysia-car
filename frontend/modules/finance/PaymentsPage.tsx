@@ -342,7 +342,10 @@ export const PaymentForm: React.FC<{
   /** Reservation's vehicle id — used to auto-select the matching contract
    *  (same customer + vehicle), since there's no stored reservation→contract link. */
   reservationVehicleId?: string;
-}> = ({ submitting, error, onCancel, onSubmit, initialValues, reservationBalance, reservationVehicleId }) => {
+  /** Reservation's invoice id (from the reservation detail) — auto-selected in
+   *  the Facture dropdown when present. */
+  reservationInvoiceId?: string;
+}> = ({ submitting, error, onCancel, onSubmit, initialValues, reservationBalance, reservationVehicleId, reservationInvoiceId }) => {
   const [form, setForm] = useState<PaymentCreatePayload>({
     customer_id: initialValues?.customer_id ?? '',
     contract_id: initialValues?.contract_id,
@@ -442,6 +445,13 @@ export const PaymentForm: React.FC<{
       setForm((f) => ({ ...f, contract_id: String(match.id) }));
     }
   }, [contractsQ.data, reservationVehicleId, form.customer_id, form.contract_id]);
+
+  // Auto-select the reservation's invoice (resolved by the reservation detail).
+  useEffect(() => {
+    if (reservationInvoiceId && !form.invoice_id) {
+      setForm((f) => ({ ...f, invoice_id: reservationInvoiceId }));
+    }
+  }, [reservationInvoiceId, form.invoice_id]);
 
   return (
     <form
