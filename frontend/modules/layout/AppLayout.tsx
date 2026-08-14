@@ -43,6 +43,25 @@ export const AppLayout: React.FC = () => {
   const notifRef = useRef<HTMLDivElement>(null);
   const crumb = useBreadcrumb();
 
+  // Collapsible sidebar department groups (persisted). A group key present in
+  // the set is collapsed; absent = expanded (default all expanded).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('df.sidebar.collapsedGroups');
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { localStorage.setItem('df.sidebar.collapsedGroups', JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   useCommandPaletteShortcut(() => setCmdOpen(true));
 
   const groups = useMemo(() => {
@@ -186,27 +205,41 @@ export const AppLayout: React.FC = () => {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-1">
-        <div className="mb-3">
-          <NavLink
-            to="/hub"
-            className={({ isActive }) => `df-nav-link ${isActive ? 'df-nav-link--active' : ''}`}
-            onClick={() => setMobileOpen(false)}
-            title={sidebarCollapsed ? 'Départements' : undefined}
-          >
-            <Icon name="marketplace" size={18} />
-            {!sidebarCollapsed && <span className="truncate">Départements</span>}
-          </NavLink>
-        </div>
-        {groups.map((g) => (
-          <div key={g.key} className="mb-3">
-            {!sidebarCollapsed && <div className="df-nav-section">{t(g.labelKey)}</div>}
-            <div className="flex flex-col gap-0.5">
-              {g.items.map((it) => (
-                <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
-              ))}
+        {groups.map((g) => {
+          // Collapsed icon-rail: no room for dropdown headers, show items flat.
+          if (sidebarCollapsed) {
+            return (
+              <div key={g.key} className="mb-3 flex flex-col gap-0.5">
+                {g.items.map((it) => (
+                  <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
+                ))}
+              </div>
+            );
+          }
+          const open = !collapsedGroups.has(g.key);
+          return (
+            <div key={g.key} className="mb-1.5">
+              <button
+                type="button"
+                onClick={() => toggleGroup(g.key)}
+                className="df-nav-link w-full"
+                aria-expanded={open}
+              >
+                <Icon name={g.icon} size={18} />
+                <span className="truncate">{t(g.labelKey)}</span>
+                <Icon name="chevron-down" size={14}
+                  className={`ms-auto text-[color:var(--df-text-faint)] transition-transform ${open ? '' : '-rotate-90'}`} />
+              </button>
+              {open && (
+                <div className="mt-0.5 flex flex-col gap-0.5 ps-3">
+                  {g.items.map((it) => (
+                    <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="border-t border-[color:var(--df-border)] p-3">

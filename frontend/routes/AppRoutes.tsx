@@ -8,7 +8,6 @@ import { ResetPasswordPage } from '@/modules/auth/ResetPasswordPage';
 import { PublicSignaturePage } from '@/modules/signature/PublicSignaturePage';
 import { AppLayout } from '@/modules/layout/AppLayout';
 import { ExecutiveDashboardPage } from '@/modules/dashboard/ExecutiveDashboardPage';
-import { DepartmentsHubPage } from '@/modules/hub/DepartmentsHubPage';
 import { FleetListPage } from '@/modules/fleet/FleetListPage';
 import { FleetVehicleDetailPage } from '@/modules/fleet/FleetVehicleDetailPage';
 import { FleetMaintenanceDashboardPage } from '@/modules/fleet/FleetMaintenanceDashboardPage';
@@ -149,7 +148,6 @@ export default function AppRoutes(): React.ReactElement {
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/hub" element={<DepartmentsHubPage />} />
             <Route
               path="/dashboard"
               element={
