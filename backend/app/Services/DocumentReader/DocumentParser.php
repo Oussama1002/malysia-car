@@ -827,16 +827,19 @@ class DocumentParser
             $guaranteeEnd = $classified['expiry'];
         }
 
-        // Registration / Immatriculation — try WW provisional plate first (most
-        // reliable on noisy OCR), then Moroccan plate format, then label-based.
-        $registration = $this->firstMatch('/[~\s]?(WW[\s\-]?\d{3,8}[\s\-]?[A-Z]?)\b/iu', $text)
-            ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text)
-            ?? $this->labelValue($text, [
-                'Immatriculation',
-                'N°?\s*d\'?immatriculation',
-                'V[ée]hicule\s+immatricul[ée]',
-                'Immat',
-            ], '[A-Z0-9]{2,}[\-\s\/]?[A-Z0-9]{2,}[\-\s\/]?[A-Z0-9]*');
+        // Registration / Immatriculation. On insurance attestations the vehicle
+        // is usually on a WW provisional plate. OCR garbles the second "W"
+        // (WM/WN/WA/WH…) and can insert a stray letter ("WMY497707"), so match
+        // that shape and normalise to "WW<digits>". No generic label-based
+        // fallback here — it grabbed arbitrary OCR noise ("dena") and produced a
+        // bogus provisional number.
+        $registration = null;
+        if (preg_match('/\bW[WMNAHVY][A-Z]?\s*[-.]?\s*(\d{4,7})\b/iu', $text, $wm)) {
+            $registration = 'WW'.$wm[1];
+        }
+        if (! $registration) {
+            $registration = $this->firstMatch('/\b(\d{1,6}\s*[-|.·:]\s*[A-Z]{1,3}\s*[-|.·:]\s*\d{1,3})\b/u', $text);
+        }
 
         $result = [
             'policy_number'    => $policyNumber ? trim($policyNumber) : null,

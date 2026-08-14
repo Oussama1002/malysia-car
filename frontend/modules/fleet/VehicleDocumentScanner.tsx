@@ -272,13 +272,25 @@ function str(v: unknown): string | undefined {
   return v.trim();
 }
 
+// A "N° provisoire / WW" must be a WW plate: WW + 4-7 digits. Accepts the WW
+// possibly garbled by OCR (WM/WN/WA + optional stray letter) and normalises to
+// "WW<digits>". Returns undefined for anything else, so the field shows
+// "non détecté" instead of a bogus value like "dena".
+function wwStr(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s) return undefined;
+  const up = s.toUpperCase();
+  const m = up.match(/W[WMNAHVY][A-Z]?\s*[-.]?\s*(\d{4,7})/) || up.match(/(\d{4,7})\s*W[WMNAHVY]/);
+  return m ? 'WW' + m[1] : undefined;
+}
+
 function mapAssurance(d: Record<string, unknown>): ScannedVehicleData {
   return {
     insuranceCompany: str(d.insurance_company ?? d.company_name ?? d.compagnie ?? d.insurer),
     numeroPolice:     str(d.policy_number ?? d.numero_police ?? d.policy_no ?? d.contract_number),
     insuranceStart:   str(d.guarantee_start ?? d.date_effet ?? d.start_date ?? d.date_debut),
     insuranceExpiry:  str(d.guarantee_end ?? d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_fin),
-    immatProvisoire:  str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    immatProvisoire:  wwStr(d.registration_number ?? d.immatriculation ?? d.plate_number ?? d.ww_number),
   };
 }
 
@@ -294,7 +306,7 @@ function mapPaymentAttestation(d: Record<string, unknown>): ScannedVehicleData {
 function mapAutorisation(d: Record<string, unknown>): ScannedVehicleData {
   return {
     registration:       str(d.registration_number ?? d.immatriculation ?? d.plate_number),
-    immatProvisoire:    str(d.ww_number ?? d.provisional_number ?? d.numero_provisoire),
+    immatProvisoire:    wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire ?? d.registration_number),
     cgMarque:           str(d.brand ?? d.marque ?? d.make),
     fuelType:           str(d.fuel_type ?? d.carburant ?? d.energie),
     miseEnCirculation:  str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
