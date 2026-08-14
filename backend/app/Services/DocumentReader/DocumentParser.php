@@ -659,38 +659,38 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Check number — usually 7-digit number printed at the bottom (MICR line)
-        // or labelled "N° du chèque", "Chèque N°", etc.
+        // Check number — Moroccan cheques print "Chèque : série AXA N° 283359"
+        // (6 digits), and again in the MICR line. Try the label, then the
+        // "série … N° <digits>" shape, then a standalone 6-8 digit run.
         $checkNumber = $this->labelValue($text, [
             'N°\s*(?:du\s*)?ch[èe]que',
             'Ch[èe]que\s*N°',
             'Check\s*No',
             'Cheque\s*No',
         ], '\d{5,10}')
-            ?? $this->firstMatch('/\b(\d{7})\b/u', $text);
+            ?? $this->firstMatch('/s[ée]rie\s+[A-Z0-9]{2,5}\s+N[°o]?\s*[:.]*\s*(\d{5,8})/iu', $text)
+            ?? $this->firstMatch('/\bN[°o]\s*[:.]*\s*(\d{6,8})\b/u', $text)
+            ?? $this->firstMatch('/\b(\d{6,7})\b/u', $text);
 
-        // Bank name — look for known Moroccan banks or a "Banque" label
-        $bank = $this->labelValue($text, [
-            'Banque',
-            'Bank',
-            'Établissement',
-        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\']+');
-        if (! $bank) {
-            // Try to detect known Moroccan bank names
-            $moroccanBanks = [
-                'ATTIJARIWAFA', 'AWB', 'BMCE', 'BANK OF AFRICA', 'BOA',
-                'BANQUE POPULAIRE', 'BP', 'BMCI', 'SOCIETE GENERALE',
-                'SGMB', 'CIH', 'CIH BANK', 'CREDIT DU MAROC', 'CDM',
-                'CREDIT AGRICOLE', 'CAM', 'AL BARID BANK', 'CFG BANK',
-                'BANK AL MAGHRIB', 'BAM', 'ARAB BANK', 'CITIBANK',
-                'UMNIA BANK', 'AL AKHDAR BANK', 'BTI BANK',
-            ];
-            foreach ($moroccanBanks as $bk) {
-                if (str_contains($upper, $bk)) {
-                    $bank = $bk;
-                    break;
-                }
+        // Bank name — check the known Moroccan banks FIRST (a bare "Bank" label
+        // otherwise matches the "…wafa bank" suffix and captures noise).
+        $bank = null;
+        $moroccanBanks = [
+            'ATTIJARIWAFA', 'AWB', 'BMCE', 'BANK OF AFRICA', 'BOA',
+            'BANQUE POPULAIRE', 'BMCI', 'SOCIETE GENERALE',
+            'SGMB', 'CIH BANK', 'CIH', 'CREDIT DU MAROC', 'CDM',
+            'CREDIT AGRICOLE', 'CAM', 'AL BARID BANK', 'CFG BANK',
+            'BANK AL MAGHRIB', 'ARAB BANK', 'CITIBANK',
+            'UMNIA BANK', 'AL AKHDAR BANK', 'BTI BANK',
+        ];
+        foreach ($moroccanBanks as $bk) {
+            if (str_contains($upper, $bk)) {
+                $bank = $bk;
+                break;
             }
+        }
+        if (! $bank) {
+            $bank = $this->labelValue($text, ['Banque', 'Établissement'], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\']+');
         }
 
         // Amount — look for numeric amount with decimals (Moroccan cheques show amount in digits)
@@ -716,6 +716,12 @@ class DocumentParser
                 }
             }
         }
+        // Fallback: parse the amount written in words ("Sept Mille Dirhams" →
+        // 7000). Cheques always spell the amount out, and on noisy scans the
+        // digits ("#7000,00#") garble worse than the words.
+        if (! $amount) {
+            $amount = $this->parseFrenchAmountWords($text);
+        }
 
         // Date — cheques have a date (usually DD/MM/YYYY)
         $checkDate = $this->extractDate($text, [
@@ -737,6 +743,64 @@ class DocumentParser
             'amount' => $amount,
             'check_date' => $checkDate,
         ];
+    }
+
+    /**
+     * Parse a French amount written in words, as on a cheque ("Sept Mille
+     * Dirhams" → 7000). Best-effort: tolerates OCR truncation of "mille"→"m"
+     * and stops at "dirham". Returns null when no number words are found.
+     */
+    private function parseFrenchAmountWords(string $text): ?float
+    {
+        // Strip accents, lowercase, keep only letters/spaces/hyphens.
+        $t = mb_strtolower($text, 'UTF-8');
+        $t = strtr($t, ['é' => 'e', 'è' => 'e', 'ê' => 'e', 'à' => 'a', 'â' => 'a', 'î' => 'i', 'ô' => 'o', 'û' => 'u', 'ç' => 'c']);
+        // Limit to the amount line: from "payez" up to "ordre"/"compte"/"dirham"
+        // (whichever comes first). This excludes the account-holder name below
+        // (e.g. "M ELHADI") so a stray "M" can't be misread as "mille".
+        if (preg_match('/pa[iy]e[sz]?[^a-z]*(.*?)(?:dirham|ordre|compte)/su', $t, $m)) {
+            $t = $m[1];
+        }
+        $tokens = preg_split('/[^a-z]+/u', $t, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $units = [
+            'zero' => 0, 'un' => 1, 'une' => 1, 'deux' => 2, 'trois' => 3, 'quatre' => 4,
+            'cinq' => 5, 'six' => 6, 'sept' => 7, 'huit' => 8, 'neuf' => 9, 'dix' => 10,
+            'onze' => 11, 'douze' => 12, 'treize' => 13, 'quatorze' => 14, 'quinze' => 15,
+            'seize' => 16, 'vingt' => 20, 'trente' => 30, 'quarante' => 40, 'cinquante' => 50,
+            'soixante' => 60, 'cent' => 100, 'cents' => 100,
+        ];
+
+        $total = 0;
+        $current = 0;
+        $found = false;
+        foreach ($tokens as $tok) {
+            if (isset($units[$tok])) {
+                $val = $units[$tok];
+                if ($val === 100) {
+                    $current = ($current === 0 ? 1 : $current) * 100;
+                } else {
+                    $current += $val;
+                }
+                $found = true;
+            } elseif ($tok === 'mille' || $tok === 'mil') {
+                $total += ($current === 0 ? 1 : $current) * 1000;
+                $current = 0;
+                $found = true;
+            } elseif ($tok === 'm' && $current > 0) {
+                // OCR-truncated "mille" — only when a number precedes it.
+                $total += $current * 1000;
+                $current = 0;
+                $found = true;
+            } elseif ($tok === 'million' || $tok === 'millions') {
+                $total += ($current === 0 ? 1 : $current) * 1000000;
+                $current = 0;
+                $found = true;
+            }
+        }
+        $total += $current;
+
+        return ($found && $total > 0) ? (float) $total : null;
     }
 
     /** @return array<string, mixed> */
