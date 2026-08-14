@@ -433,6 +433,7 @@ export const ReservationDetailPage: React.FC = () => {
             customer_id: r?.customer_id ?? '',
             reservation_id: rid ?? '',
           }}
+          reservationBalance={balance}
         />
       </DrawerPanel>
 

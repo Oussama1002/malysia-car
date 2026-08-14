@@ -12,15 +12,37 @@ const fmtDate = (v: string | null | undefined) =>
 const METHOD_FR: Record<string, string> = {
   cash: 'Espèces',
   cheque: 'Chèque',
+  check: 'Chèque',
   bank_transfer: 'Virement',
+  transfer: 'Virement',
+  wire: 'Virement',
   card: 'Carte',
+  credit_card: 'Carte',
+  debit_card: 'Carte',
   mobile: 'Mobile',
+  mobile_money: 'Mobile',
+  wallet: 'Portefeuille',
+  online: 'En ligne',
+  other: 'Autre',
 };
 
 const STATUS_FR: Record<string, { label: string; cls: string }> = {
   received:  { label: 'Reçu', cls: 'bg-emerald-100 text-emerald-700' },
   allocated: { label: 'Alloué', cls: 'bg-indigo-100 text-indigo-700' },
+  completed: { label: 'Terminé', cls: 'bg-emerald-100 text-emerald-700' },
+  paid:      { label: 'Payé', cls: 'bg-emerald-100 text-emerald-700' },
   pending:   { label: 'En attente', cls: 'bg-amber-100 text-amber-700' },
+  processing:{ label: 'En cours', cls: 'bg-amber-100 text-amber-700' },
+  failed:    { label: 'Échoué', cls: 'bg-rose-100 text-rose-700' },
+  refunded:  { label: 'Remboursé', cls: 'bg-slate-100 text-slate-600' },
+  cancelled: { label: 'Annulé', cls: 'bg-slate-100 text-slate-600' },
+  partial:   { label: 'Partiel', cls: 'bg-amber-100 text-amber-700' },
+};
+
+// Normalise a raw enum value to a French label, tolerating unknown values.
+const frLabel = (map: Record<string, string>, v: unknown, fallback = '—'): string => {
+  const key = String(v ?? '').toLowerCase();
+  return map[key] ?? (v ? String(v) : fallback);
 };
 
 const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
@@ -81,12 +103,12 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {payments.map((p: any) => {
-                  const badge = STATUS_FR[p.status] ?? { label: p.status ?? '—', cls: 'bg-slate-100 text-slate-600' };
+                  const badge = STATUS_FR[String(p.status ?? '').toLowerCase()] ?? { label: p.status ?? '—', cls: 'bg-slate-100 text-slate-600' };
                   return (
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-slate-600">{fmtDate(p.payment_date)}</td>
                       <td className="px-4 py-3 text-right font-black text-slate-800">{fmtMad(Number(p.amount ?? 0))}</td>
-                      <td className="px-4 py-3 text-slate-600">{METHOD_FR[p.payment_method] ?? p.payment_method ?? '—'}</td>
+                      <td className="px-4 py-3 text-slate-600">{frLabel(METHOD_FR, p.payment_method)}</td>
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">{p.external_reference || p.check_number || p.payment_number || '—'}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>

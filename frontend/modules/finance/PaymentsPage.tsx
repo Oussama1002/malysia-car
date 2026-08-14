@@ -311,7 +311,12 @@ export const PaymentForm: React.FC<{
   onCancel: () => void;
   onSubmit: (p: PaymentCreatePayload) => void;
   initialValues?: Partial<PaymentCreatePayload>;
-}> = ({ submitting, error, onCancel, onSubmit, initialValues }) => {
+  /** When the form is opened for a specific reservation, its remaining balance
+   *  (total − déjà payé). Shown as "Solde à payer" instead of the customer's
+   *  global invoiced balance, so already-paid amounts on this reservation are
+   *  reflected. */
+  reservationBalance?: number;
+}> = ({ submitting, error, onCancel, onSubmit, initialValues, reservationBalance }) => {
   const [form, setForm] = useState<PaymentCreatePayload>({
     customer_id: initialValues?.customer_id ?? '',
     contract_id: initialValues?.contract_id,
@@ -442,8 +447,18 @@ export const PaymentForm: React.FC<{
       {form.customer_id && (
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs font-bold uppercase text-slate-500">Solde à payer</div>
-            {balanceQ.isLoading ? (
+            <div className="text-xs font-bold uppercase text-slate-500">
+              {reservationBalance !== undefined ? 'Restant sur la réservation' : 'Solde à payer'}
+            </div>
+            {reservationBalance !== undefined ? (
+              // Reservation-specific remaining = total − déjà payé (accounts for
+              // earlier payments on this reservation).
+              <div className="mt-1">
+                <span className={`text-lg font-black ${reservationBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  {formatCurrencyMad(reservationBalance)}
+                </span>
+              </div>
+            ) : balanceQ.isLoading ? (
               <div className="mt-1 text-sm text-slate-400">Chargement...</div>
             ) : balanceQ.data ? (
               <div className="mt-1">
@@ -480,8 +495,8 @@ export const PaymentForm: React.FC<{
         </div>
       )}
 
-      {/* ── Contrat / Réservation / Facture ──────────────────── */}
-      <div className="grid gap-3 md:grid-cols-3">
+      {/* ── Contrat / Réservation / Facture (chacun sur sa ligne) ── */}
+      <div className="grid gap-3 grid-cols-1">
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Contrat</label>
           <select
