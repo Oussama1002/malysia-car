@@ -436,14 +436,25 @@ export const PaymentForm: React.FC<{
 
   // When opened from a reservation, auto-select the matching contract. There is
   // no stored reservation→contract link, but a contract generated from the
-  // reservation shares its customer AND vehicle — match on both.
+  // reservation shares its customer AND vehicle. A customer can have several
+  // contracts on the same vehicle (e.g. an old cancelled one), so exclude dead
+  // statuses and pick the most relevant live contract.
   useEffect(() => {
     if (!reservationVehicleId || !form.customer_id || form.contract_id) return;
-    const match = (contractsQ.data as Array<ContractMin & { customerId?: string; vehicleId?: string }> | undefined)
-      ?.find((c) => c.customerId === form.customer_id && c.vehicleId === reservationVehicleId);
-    if (match) {
-      setForm((f) => ({ ...f, contract_id: String(match.id) }));
-    }
+    const all = (contractsQ.data as Array<ContractMin & { customerId?: string; vehicleId?: string; startDate?: string }> | undefined) ?? [];
+    const candidates = all.filter((c) => c.customerId === form.customer_id && c.vehicleId === reservationVehicleId);
+    if (candidates.length === 0) return;
+    const dead = ['cancelled', 'terminated', 'rejected', 'expired', 'closed', 'completed'];
+    const live = candidates.filter((c) => !dead.includes(String(c.status).toLowerCase()));
+    const pool = live.length > 0 ? live : candidates;
+    const rank = (s: string): number =>
+      ({ active: 0, approved: 1, signed: 2, pending: 3, draft: 4 } as Record<string, number>)[String(s).toLowerCase()] ?? 9;
+    pool.sort((a, b) => {
+      const r = rank(a.status) - rank(b.status);
+      if (r !== 0) return r;
+      return String(b.startDate ?? '').localeCompare(String(a.startDate ?? '')); // most recent first
+    });
+    setForm((f) => ({ ...f, contract_id: String(pool[0].id) }));
   }, [contractsQ.data, reservationVehicleId, form.customer_id, form.contract_id]);
 
   // Auto-select the reservation's invoice (resolved by the reservation detail).
