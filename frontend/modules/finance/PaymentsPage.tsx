@@ -305,6 +305,29 @@ export const PaymentsPage: React.FC = () => {
 /* Payment creation form                                                   */
 /* ════════════════════════════════════════════════════════════════════════ */
 
+interface ChequeOcrResult {
+  check_number?: string;
+  bank?: string;
+  check_date?: string;
+  amount?: number;
+}
+
+/**
+ * Send a cheque image/PDF to the OCR endpoint and return the extracted fields.
+ * Uses apiClient so the request carries the real auth token (df_session) and
+ * the configured API base — the previous inline fetch read a non-existent
+ * "auth_token" key and hit a hardcoded URL, causing "Unauthenticated".
+ */
+async function scanCheque(file: File): Promise<ChequeOcrResult> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await apiClient<{ data?: ChequeOcrResult }>('/v1/cheque-ocr', {
+    method: 'POST',
+    body: fd,
+  });
+  return res.data ?? {};
+}
+
 export const PaymentForm: React.FC<{
   submitting: boolean;
   error: string | null;
@@ -639,27 +662,16 @@ export const PaymentForm: React.FC<{
                   setChequeScanning(true);
                   setChequeOcrError(null);
                   try {
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    const res = await fetch('/api/v1/cheque-ocr', {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
-                      body: fd,
-                    });
-                    const json = await res.json();
-                    if (json.data) {
-                      setForm((f) => ({
-                        ...f,
-                        check_number: json.data.check_number ?? f.check_number,
-                        check_bank: json.data.bank ?? f.check_bank,
-                        check_date: json.data.check_date ?? f.check_date,
-                        amount: json.data.amount ?? f.amount,
-                      }));
-                    } else {
-                      setChequeOcrError(json.message ?? 'OCR a échoué');
-                    }
-                  } catch {
-                    setChequeOcrError('Erreur réseau lors du scan OCR');
+                    const data = await scanCheque(file);
+                    setForm((f) => ({
+                      ...f,
+                      check_number: data.check_number ?? f.check_number,
+                      check_bank: data.bank ?? f.check_bank,
+                      check_date: data.check_date ?? f.check_date,
+                      amount: data.amount ?? f.amount,
+                    }));
+                  } catch (err) {
+                    setChequeOcrError(err instanceof Error ? err.message : 'Échec du scan OCR');
                   } finally {
                     setChequeScanning(false);
                     e.target.value = '';
@@ -680,27 +692,16 @@ export const PaymentForm: React.FC<{
                   setChequeScanning(true);
                   setChequeOcrError(null);
                   try {
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    const res = await fetch('/api/v1/cheque-ocr', {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
-                      body: fd,
-                    });
-                    const json = await res.json();
-                    if (json.data) {
-                      setForm((f) => ({
-                        ...f,
-                        check_number: json.data.check_number ?? f.check_number,
-                        check_bank: json.data.bank ?? f.check_bank,
-                        check_date: json.data.check_date ?? f.check_date,
-                        amount: json.data.amount ?? f.amount,
-                      }));
-                    } else {
-                      setChequeOcrError(json.message ?? 'OCR a échoué');
-                    }
-                  } catch {
-                    setChequeOcrError('Erreur réseau lors du scan OCR');
+                    const data = await scanCheque(file);
+                    setForm((f) => ({
+                      ...f,
+                      check_number: data.check_number ?? f.check_number,
+                      check_bank: data.bank ?? f.check_bank,
+                      check_date: data.check_date ?? f.check_date,
+                      amount: data.amount ?? f.amount,
+                    }));
+                  } catch (err) {
+                    setChequeOcrError(err instanceof Error ? err.message : 'Échec du scan OCR');
                   } finally {
                     setChequeScanning(false);
                     e.target.value = '';
