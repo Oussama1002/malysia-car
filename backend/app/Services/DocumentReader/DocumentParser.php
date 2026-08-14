@@ -296,7 +296,22 @@ class DocumentParser
             'Expiry',
             'Expir',
             '4b\s*\.',
-        ]) ?? $classified['expiry'];
+        ]);
+        // The expiry (Fin de validité) is always AFTER the délivrance date. On a
+        // Moroccan permis the recto shows "délivré … Le 27/08/2020" and the verso
+        // shows "Fin de validité 15/09/2030" — OCR frequently grabs the earlier
+        // délivrance date as the expiry. If the matched expiry isn't strictly
+        // after the issue date, discard it and prefer the future-dated result.
+        if ($expiry && $issue && $expiry <= $issue) {
+            $expiry = null;
+        }
+        if (! $expiry) {
+            $expiry = $classified['expiry'];   // classifier only returns a future date
+        }
+        // Never let the expiry equal the issue date, whatever the source.
+        if ($expiry && $issue && $expiry === $issue) {
+            $expiry = null;
+        }
 
         // Birth-year sanity vs issue date. Driving age in Morocco is 18 — at
         // minimum 16 with provisional categories — so a birth year less than
@@ -344,12 +359,19 @@ class DocumentParser
             ?? $this->longestMatch('/\b[A-Z]{1,2}\d{5,8}\b/u', $text)
             ?? $this->longestMatch('/\b[A-Z]{1,2}\d{3,8}\b/u', $text);
 
+        // Nationality: a Moroccan permis is headed "ROYAUME DU MAROC".
+        $nationality = null;
+        if (preg_match('/ROYAUME\s+DU\s+MAROC|\bMAROC\b|MOROCCO/iu', $text)) {
+            $nationality = 'Maroc';
+        }
+
         return [
             'license_number' => $licenseNumber,
             'first_name' => $names['first_name'] ?? null,
             'last_name' => $names['last_name'] ?? null,
             'full_name' => $names['full_name'] ?? null,
             'national_id_number' => $cin,
+            'nationality' => $nationality,
             'date_of_birth' => $birth,
             'categories' => $categories,
             'issue_date' => $issue,

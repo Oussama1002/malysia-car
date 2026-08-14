@@ -345,6 +345,11 @@ function mapLicenseFields(extracted: Record<string, unknown>): ScannedIdentity {
   return {
     first_name: first,
     last_name: last,
+    // The Permis also carries the CIN (N° C.N.I.E) and, via "ROYAUME DU MAROC",
+    // the nationality — forward both so the client form is prefilled from the
+    // permis alone.
+    national_id_number: asString(extracted.national_id_number),
+    nationality: normalizeNationality(extracted.nationality),
     date_of_birth: asString(extracted.date_of_birth),
     driving_license_number: asString(extracted.license_number),
     driving_license_expiry: asString(extracted.expiry_date),
