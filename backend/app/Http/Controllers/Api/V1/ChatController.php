@@ -9,6 +9,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Internal 1-to-1 chat between users (polling-based). All endpoints are scoped
@@ -70,7 +72,8 @@ class ChatController extends Controller
                 'name' => $u?->name ?? 'Utilisateur',
                 'role' => $u?->role,
                 'avatar' => $u?->avatar ?? null,
-                'last_message' => $info['last']->body,
+                'last_message' => $info['last']->body
+                    ?: ($info['last']->attachment_file_id ? '📎 Pièce jointe' : ''),
                 'last_at' => $info['last']->created_at?->toIso8601String(),
                 'last_from_me' => (string) $info['last']->sender_id === (string) $me->id,
                 'unread' => $info['unread'],
@@ -96,14 +99,10 @@ class ChatController extends Controller
             })
             ->orderBy('created_at')
             ->limit(500)
-            ->get()
-            ->map(fn (ChatMessage $m) => [
-                'id' => (string) $m->id,
-                'body' => $m->body,
-                'from_me' => (string) $m->sender_id === (string) $me->id,
-                'created_at' => $m->created_at?->toIso8601String(),
-                'read_at' => $m->read_at?->toIso8601String(),
-            ]);
+            ->get();
+
+        $files = $this->filesFor($thread->pluck('attachment_file_id')->filter()->all());
+        $threadOut = $thread->map(fn (ChatMessage $m) => $this->serialize($m, $me->id, $files));
 
         // Mark incoming messages from this peer as read.
         ChatMessage::query()
@@ -112,17 +111,21 @@ class ChatController extends Controller
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
-        return ApiResponse::success($thread);
+        return ApiResponse::success($threadOut);
     }
 
-    /** POST /v1/chat/messages — send { recipient_id, body }. */
+    /** POST /v1/chat/messages — send { recipient_id, body?, file? } (multipart). */
     public function send(Request $request): JsonResponse
     {
         $me = $request->user();
         $data = $request->validate([
             'recipient_id' => ['required', 'uuid'],
-            'body' => ['required', 'string', 'max:5000'],
+            'body' => ['nullable', 'string', 'max:5000'],
+            'file' => ['nullable', 'file', 'max:15360', 'mimes:jpg,jpeg,png,webp,gif,bmp,heic,heif,pdf,doc,docx,xls,xlsx,csv,txt,zip'],
         ]);
+        if (blank($data['body'] ?? null) && ! $request->hasFile('file')) {
+            return ApiResponse::error('Message vide.', 422);
+        }
 
         // Recipient must be a real, different user.
         $recipient = User::query()
@@ -133,20 +136,82 @@ class ChatController extends Controller
             return ApiResponse::error('Destinataire introuvable.', 404);
         }
 
+        $attachmentFileId = null;
+        if ($request->hasFile('file')) {
+            $attachmentFileId = $this->storeAttachment($request->file('file'), $me);
+        }
+
         $msg = ChatMessage::query()->create([
             'company_id' => $me->company_id,
             'sender_id' => $me->id,
             'recipient_id' => $recipient->id,
-            'body' => $data['body'],
+            'body' => $data['body'] ?? null,
+            'attachment_file_id' => $attachmentFileId,
         ]);
 
-        return ApiResponse::success([
-            'id' => (string) $msg->id,
-            'body' => $msg->body,
-            'from_me' => true,
-            'created_at' => $msg->created_at?->toIso8601String(),
-            'read_at' => null,
-        ], null, null, 201);
+        $files = $this->filesFor(array_filter([$attachmentFileId]));
+
+        return ApiResponse::success($this->serialize($msg, $me->id, $files), null, null, 201);
+    }
+
+    /* Store an uploaded chat attachment in the files table (served publicly by
+     * its UUID via /api/v1/files/{id}, like vehicle photos). Returns file id. */
+    private function storeAttachment(\Illuminate\Http\UploadedFile $file, User $me): string
+    {
+        $ext = $file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin';
+        $name = Str::uuid().'.'.$ext;
+        $path = $file->storeAs('chat/attachments', $name, 'public');
+        $fileId = (string) Str::uuid();
+        DB::table('files')->insert([
+            'id' => $fileId,
+            'company_id' => $me->company_id,
+            'original_name' => $file->getClientOriginalName(),
+            'stored_name' => $name,
+            'storage_disk' => 'public',
+            'storage_path' => $path,
+            'mime_type' => $file->getMimeType(),
+            'extension' => $ext,
+            'file_size' => $file->getSize(),
+            'is_public' => 1,
+            'uploaded_by' => $me->id,
+            'created_at' => now(),
+        ]);
+
+        return $fileId;
+    }
+
+    /** Look up file rows by id, keyed by id. @param array<int,string> $ids */
+    private function filesFor(array $ids): \Illuminate\Support\Collection
+    {
+        if ($ids === []) {
+            return collect();
+        }
+
+        return DB::table('files')->whereIn('id', $ids)->get()->keyBy('id');
+    }
+
+    /** Serialize a message row (+ optional attachment) for the API. */
+    private function serialize(ChatMessage $m, string $meId, \Illuminate\Support\Collection $files): array
+    {
+        $attachment = null;
+        if ($m->attachment_file_id && ($f = $files->get($m->attachment_file_id))) {
+            $mime = (string) ($f->mime_type ?? '');
+            $attachment = [
+                'name' => $f->original_name,
+                'mime' => $mime,
+                'is_image' => str_starts_with($mime, 'image/'),
+                'url' => rtrim((string) config('app.url'), '/').'/api/v1/files/'.$m->attachment_file_id,
+            ];
+        }
+
+        return [
+            'id' => (string) $m->id,
+            'body' => $m->body,
+            'from_me' => (string) $m->sender_id === (string) $meId,
+            'created_at' => $m->created_at?->toIso8601String(),
+            'read_at' => $m->read_at?->toIso8601String(),
+            'attachment' => $attachment,
+        ];
     }
 
     /** GET /v1/chat/unread-count — total unread messages for the badge. */
