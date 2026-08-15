@@ -22,10 +22,12 @@ class ChatController extends Controller
     public function users(Request $request): JsonResponse
     {
         $me = $request->user();
+        // NB: `name` is a computed accessor, not a column — never orderBy('name').
         $users = User::query()
             ->where('id', '!=', $me->id)
-            ->orderBy('name')
             ->get()
+            ->sortBy(fn (User $u) => mb_strtolower((string) $u->name))
+            ->values()
             ->map(fn (User $u) => [
                 'id' => (string) $u->id,
                 'name' => $u->name,
