@@ -26,6 +26,7 @@ import { ApiError } from '@/services/apiError';
 
 const CONTRACT_STATUS_FR: Record<string, string> = {
   draft: 'Brouillon', active: 'Actif', signed: 'Signé', pending: 'En attente',
+  approved: 'Approuvé', rejected: 'Rejeté', expired: 'Expiré', closed: 'Clôturé',
   terminated: 'Résilié', completed: 'Terminé', cancelled: 'Annulé', suspended: 'Suspendu',
 };
 const RESERVATION_STATUS_FR: Record<string, string> = {
@@ -567,7 +568,7 @@ export const PaymentForm: React.FC<{
             <option value="">-- Aucun --</option>
             {filteredContracts.map((c) => (
               <option key={String(c.id)} value={String(c.id)}>
-                {c.reference ?? (c as any).contract_number ?? c.id} — {CONTRACT_STATUS_FR[c.status] ?? c.status}
+                {c.reference ?? (c as any).contract_number ?? c.id} — {CONTRACT_STATUS_FR[String(c.status).toLowerCase()] ?? c.status}
               </option>
             ))}
           </select>
