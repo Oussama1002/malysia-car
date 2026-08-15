@@ -16,12 +16,13 @@ use Illuminate\Support\Facades\DB;
  */
 class ChatController extends Controller
 {
-    /** GET /v1/chat/users — other users in the company you can message. */
+    /** GET /v1/chat/users — other users you can message. Mirrors the app's
+     *  canonical user list (UserController@index applies no company filter),
+     *  excluding yourself. */
     public function users(Request $request): JsonResponse
     {
         $me = $request->user();
         $users = User::query()
-            ->when($me->company_id, fn ($q) => $q->where('company_id', $me->company_id))
             ->where('id', '!=', $me->id)
             ->orderBy('name')
             ->get()
@@ -121,9 +122,8 @@ class ChatController extends Controller
             'body' => ['required', 'string', 'max:5000'],
         ]);
 
-        // Recipient must be a real, different user in the same company.
+        // Recipient must be a real, different user.
         $recipient = User::query()
-            ->when($me->company_id, fn ($q) => $q->where('company_id', $me->company_id))
             ->where('id', $data['recipient_id'])
             ->where('id', '!=', $me->id)
             ->first();
