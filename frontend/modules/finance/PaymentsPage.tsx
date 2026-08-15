@@ -435,18 +435,19 @@ export const PaymentForm: React.FC<{
     setForm((f) => ({ ...f, [field]: value }));
 
   // When opened from a reservation, auto-select the matching contract. There is
-  // no stored reservation→contract link, but a contract generated from the
-  // reservation shares its customer AND vehicle. A customer can have several
-  // contracts on the same vehicle (e.g. an old cancelled one), so exclude dead
-  // statuses and pick the most relevant live contract.
+  // no stored reservation→contract link. A contract generated from the
+  // reservation shares the customer; the vehicle can differ after a vehicle
+  // SWAP, so it's only a tiebreaker. We match by customer, EXCLUDE cancelled/
+  // dead contracts, prefer a live contract on the reservation's vehicle, and
+  // never fall back to a cancelled one.
   useEffect(() => {
-    if (!reservationVehicleId || !form.customer_id || form.contract_id) return;
+    if (!form.customer_id || form.contract_id) return;
     const all = (contractsQ.data as Array<ContractMin & { customerId?: string; vehicleId?: string; startDate?: string }> | undefined) ?? [];
-    const candidates = all.filter((c) => c.customerId === form.customer_id && c.vehicleId === reservationVehicleId);
-    if (candidates.length === 0) return;
     const dead = ['cancelled', 'terminated', 'rejected', 'expired', 'closed', 'completed'];
-    const live = candidates.filter((c) => !dead.includes(String(c.status).toLowerCase()));
-    const pool = live.length > 0 ? live : candidates;
+    const live = all.filter((c) => c.customerId === form.customer_id && !dead.includes(String(c.status).toLowerCase()));
+    if (live.length === 0) return; // no live contract → leave unselected
+    const vehicleMatch = reservationVehicleId ? live.filter((c) => c.vehicleId === reservationVehicleId) : [];
+    const pool = vehicleMatch.length > 0 ? vehicleMatch : live;
     const rank = (s: string): number =>
       ({ active: 0, approved: 1, signed: 2, pending: 3, draft: 4 } as Record<string, number>)[String(s).toLowerCase()] ?? 9;
     pool.sort((a, b) => {

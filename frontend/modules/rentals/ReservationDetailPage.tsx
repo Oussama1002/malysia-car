@@ -158,6 +158,18 @@ export const ReservationDetailPage: React.FC = () => {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['reservation', rid] });
 
+  // Ensure a draft invoice exists for the reservation total, then refresh so
+  // the payment form can auto-select it. Idempotent (returns existing invoice).
+  const ensureInvoiceM = useMutation({
+    mutationFn: () => apiClient(`/v1/reservations/${rid}/ensure-invoice`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+  });
+  const openPaymentDrawer = () => {
+    setPaymentError(null);
+    setPaymentDrawerOpen(true);
+    if (rid) ensureInvoiceM.mutate();
+  };
+
   if (detailQ.isLoading) {
     return (
       <div className="flex items-center justify-center py-24 text-sm text-slate-500 font-semibold">
@@ -324,7 +336,7 @@ export const ReservationDetailPage: React.FC = () => {
                 Check-In
               </button>
               <button
-                onClick={() => { setActiveTab('payments'); setTimeout(() => { setPaymentError(null); setPaymentDrawerOpen(true); }, 100); }}
+                onClick={() => { setActiveTab('payments'); setTimeout(openPaymentDrawer, 100); }}
                 className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-violet-700 shrink-0"
               >
                 Paiement
@@ -408,7 +420,7 @@ export const ReservationDetailPage: React.FC = () => {
             {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
             {activeTab === 'extensions' && <TabExtensions reservationId={rid!} extensions={d?.extensions ?? []} onRefresh={invalidate} />}
             {activeTab === 'damages'    && <TabDamages reservationId={rid!} damages={d?.damage_reports ?? []} onRefresh={invalidate} />}
-            {activeTab === 'payments'   && <TabPayments data={d} onAddPayment={() => { setPaymentError(null); setPaymentDrawerOpen(true); }} />}
+            {activeTab === 'payments'   && <TabPayments data={d} onAddPayment={openPaymentDrawer} />}
             {activeTab === 'invoices'   && <TabInvoices reservationId={rid!} invoices={d?.invoices ?? []} data={d} onRefresh={invalidate} />}
             {activeTab === 'history'    && <TabHistory history={d?.history ?? []} />}
           </Suspense>
