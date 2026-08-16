@@ -1,8 +1,30 @@
 import React, { useState } from 'react';
+import { getApiBase } from '@/services/apiClient';
 
 interface Props {
   data: any;
   onAddPayment?: () => void;
+}
+
+// Download the payment receipt PDF via an authenticated fetch (an <a> link
+// can't send the Bearer token). The token lives in df_session.
+async function downloadReceipt(paymentId: string, paymentNumber?: string): Promise<void> {
+  const base = getApiBase();
+  let token = '';
+  try { token = JSON.parse(localStorage.getItem('df_session') ?? '{}').token ?? ''; } catch { /* ignore */ }
+  const res = await fetch(`${base}/v1/payments/${paymentId}/receipt`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/pdf' },
+  });
+  if (!res.ok) throw new Error('Échec du téléchargement du reçu');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `recu-${paymentNumber ?? paymentId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 const TYPE_FR: Record<string, string> = {
@@ -123,7 +145,14 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
                           {badge.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => downloadReceipt(p.id, p.payment_number).catch(() => {})}
+                          className="mr-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-violet-700 hover:bg-violet-50"
+                        >
+                          Reçu PDF
+                        </button>
                         <button
                           type="button"
                           onClick={() => setDetail(p)}
@@ -210,7 +239,14 @@ const PaymentDetailModal: React.FC<{ p: any; onClose: () => void }> = ({ p, onCl
           </div>
         )}
 
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex justify-between">
+          <button
+            type="button"
+            onClick={() => downloadReceipt(p.id, p.payment_number).catch(() => {})}
+            className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-black text-white hover:bg-violet-700"
+          >
+            Télécharger le reçu
+          </button>
           <button type="button" onClick={onClose} className="rounded-xl bg-slate-800 px-4 py-2 text-xs font-black text-white hover:bg-slate-900">
             Fermer
           </button>

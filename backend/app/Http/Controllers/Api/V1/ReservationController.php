@@ -15,6 +15,7 @@ use App\Models\Reservation;
 use App\Models\ReservationDriver;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\ReservationInvoiceService;
 use App\Services\NotificationService;
 use App\Services\RentalAvailabilityService;
 use App\Support\PaymentMethodNormalizer;
@@ -827,89 +828,11 @@ class ReservationController extends Controller
      * Returns the existing linked invoice if there already is one. Used so the
      * payment form has a facture to select.
      */
-    public function ensureInvoice(Request $request, Reservation $reservation): JsonResponse
+    public function ensureInvoice(Request $request, Reservation $reservation, ReservationInvoiceService $invoices): JsonResponse
     {
-        // Échéance = the reservation's end date (fall back to +7 days).
-        $dueDate = $reservation->desired_end_at
-            ? $reservation->desired_end_at->toDateString()
-            : now()->addDays(7)->toDateString();
+        $invoice = $invoices->ensure($reservation, $request->user()?->id);
 
-        $existing = Invoice::query()
-            ->where('customer_id', $reservation->customer_id)
-            ->whereHas('lines', fn ($lq) => $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]))
-            ->orderByDesc('issue_date')
-            ->first();
-        if ($existing) {
-            // Bring an existing draft up to "issued" and align its due date.
-            $changed = false;
-            if ($existing->status === 'draft') {
-                $existing->status = 'issued';
-                $changed = true;
-            }
-            if ((string) $existing->due_date !== (string) $dueDate) {
-                $existing->due_date = $dueDate;
-                $changed = true;
-            }
-            if ($changed) {
-                $existing->save();
-            }
-
-            return ApiResponse::success($existing->fresh('lines'));
-        }
-
-        $invoice = DB::transaction(function () use ($reservation, $request, $dueDate) {
-            $base = (float) ($reservation->estimated_price ?? 0);
-            $extensions = (float) RentalExtension::query()
-                ->where('reservation_id', $reservation->id)
-                ->where('status', 'applied')
-                ->sum('additional_amount');
-            $damages = (float) RentalDamageReport::query()
-                ->where('reservation_id', $reservation->id)
-                ->sum(DB::raw('COALESCE(final_cost, estimated_cost)'));
-            $total = max(0, $base + $extensions + $damages);
-
-            $invoice = Invoice::query()->create([
-                'id' => (string) Str::uuid(),
-                'company_id' => $reservation->company_id,
-                'branch_id' => $reservation->branch_id,
-                'invoice_number' => $this->generateRentalInvoiceNumber(),
-                'invoice_type' => 'service',
-                'customer_id' => $reservation->customer_id,
-                'contract_id' => null,
-                'issue_date' => now()->toDateString(),
-                'due_date' => $dueDate,
-                'currency_code' => 'MAD',
-                'status' => 'issued',
-                'created_by' => $request->user()?->id,
-            ]);
-
-            InvoiceLine::query()->create([
-                'id' => (string) Str::uuid(),
-                'invoice_id' => $invoice->id,
-                'position' => 1,
-                'line_type' => 'service',
-                'description' => 'Location '.$reservation->reservation_number,
-                'quantity' => 1,
-                'unit_price' => $total,
-                'discount_amount' => 0,
-                'tax_rate' => 0,
-                'tax_amount' => 0,
-                'line_total' => $total,
-                'metadata' => [
-                    'reservation_id' => $reservation->id,
-                    'base_amount' => $base,
-                    'extensions' => $extensions,
-                    'damages' => $damages,
-                ],
-            ]);
-            $invoice->refresh();
-            $invoice->recalculateTotals();
-            $invoice->save();
-
-            return $invoice;
-        });
-
-        return ApiResponse::success($invoice->fresh('lines'), null, null, 201);
+        return ApiResponse::success($invoice->fresh('lines'));
     }
 
     // ── Driver CRUD ──────────────────────────────────────────────────────

@@ -718,6 +718,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:payments.view');
         Route::get('payments/{payment}', [PaymentController::class, 'show'])
             ->middleware('permission:payments.view');
+        Route::get('payments/{payment}/receipt', [PaymentController::class, 'receipt'])
+            ->middleware('permission:payments.view');
         Route::post('payments', [PaymentController::class, 'store'])
             ->middleware('permission:payments.create');
         Route::post('payments/{payment}/allocate', [PaymentController::class, 'allocate'])

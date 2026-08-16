@@ -8,8 +8,10 @@ use App\Models\ContractInstallment;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
+use App\Models\Reservation;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
+use App\Services\ReservationInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -123,12 +125,23 @@ class PaymentController extends Controller
 
             if (! empty($data['allocations'])) {
                 $this->allocatePayment($payment, $data['allocations'], optional($request->user())->id);
-            } elseif (! empty($data['invoice_id'])) {
-                // No explicit allocation, but a facture was selected — auto-allocate
-                // this payment (or advance) to it so the invoice leaves "draft"
-                // and reflects the amount received.
-                $invoice = Invoice::find($data['invoice_id']);
+            } else {
+                // No explicit allocation. Resolve the invoice: the one selected on
+                // the form, else the reservation's invoice (create/issue it if
+                // needed). This runs server-side so it never depends on the
+                // frontend having finished loading the invoice id.
+                $invoice = ! empty($data['invoice_id']) ? Invoice::find($data['invoice_id']) : null;
+                if (! $invoice && ! empty($data['reservation_id'])) {
+                    $reservation = Reservation::find($data['reservation_id']);
+                    if ($reservation) {
+                        $invoice = app(ReservationInvoiceService::class)->ensure($reservation, optional($request->user())->id);
+                        $payment->invoice_id = $invoice->id;
+                        $payment->save();
+                    }
+                }
                 if ($invoice) {
+                    // Auto-allocate this payment (or advance) so the invoice leaves
+                    // "draft" and reflects the amount received.
                     $due = (float) ($invoice->amount_due ?? 0);
                     if ($due <= 0) {
                         $due = (float) ($invoice->total_amount ?? 0);
@@ -166,6 +179,42 @@ class PaymentController extends Controller
         );
 
         return ApiResponse::success($payment->fresh(['allocations', 'customer']), null, null, 201);
+    }
+
+    /** GET /v1/payments/{payment}/receipt — download a payment receipt PDF. */
+    public function receipt(Request $request, Payment $payment): \Symfony\Component\HttpFoundation\Response
+    {
+        $payment->load(['customer.individualProfile', 'customer.companyProfile']);
+        $invoice = $payment->invoice_id ? Invoice::find($payment->invoice_id) : null;
+
+        $customer = $payment->customer;
+        $customerName = '—';
+        if ($customer) {
+            if (method_exists($customer, 'displayName')) {
+                $customerName = $customer->displayName();
+            } else {
+                $ind = trim(($customer->individualProfile->first_name ?? '').' '.($customer->individualProfile->last_name ?? ''));
+                $customerName = $ind !== '' ? $ind : ($customer->companyProfile->legal_name ?? '—');
+            }
+        }
+
+        $methods = [
+            'cash' => 'Espèces', 'cheque' => 'Chèque', 'check' => 'Chèque',
+            'bank_transfer' => 'Virement', 'transfer' => 'Virement', 'card' => 'Carte',
+            'mobile' => 'Mobile', 'wallet' => 'Portefeuille', 'online' => 'En ligne',
+        ];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.receipt', [
+            'payment' => $payment,
+            'invoice' => $invoice,
+            'customerName' => $customerName,
+            'company' => null,
+            'methodLabel' => $methods[strtolower((string) $payment->payment_method)] ?? ($payment->payment_method ?? '—'),
+            'reference' => $payment->external_reference ?: $payment->bank_reference,
+            'title' => 'Reçu '.($payment->payment_number ?? ''),
+        ]);
+
+        return $pdf->download('recu-'.($payment->payment_number ?? substr($payment->id, 0, 8)).'.pdf');
     }
 
     public function allocate(Request $request, Payment $payment): JsonResponse
