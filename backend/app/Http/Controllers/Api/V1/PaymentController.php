@@ -123,6 +123,25 @@ class PaymentController extends Controller
 
             if (! empty($data['allocations'])) {
                 $this->allocatePayment($payment, $data['allocations'], optional($request->user())->id);
+            } elseif (! empty($data['invoice_id'])) {
+                // No explicit allocation, but a facture was selected — auto-allocate
+                // this payment (or advance) to it so the invoice leaves "draft"
+                // and reflects the amount received.
+                $invoice = Invoice::find($data['invoice_id']);
+                if ($invoice) {
+                    $due = (float) ($invoice->amount_due ?? 0);
+                    if ($due <= 0) {
+                        $due = (float) ($invoice->total_amount ?? 0);
+                    }
+                    $alloc = $due > 0 ? min((float) $data['amount'], $due) : (float) $data['amount'];
+                    if ($alloc > 0) {
+                        $this->allocatePayment(
+                            $payment,
+                            [['invoice_id' => $invoice->id, 'amount_allocated' => $alloc]],
+                            optional($request->user())->id,
+                        );
+                    }
+                }
             }
         });
 
