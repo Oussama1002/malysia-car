@@ -497,10 +497,11 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:rentals.damage_report');
         Route::post('reservations/{reservation}/close-billing', [ReservationController::class, 'closeBilling'])
             ->middleware('permission:rentals.close_billing');
-        // Idempotent: create-or-return a draft invoice for the reservation total
+        // Idempotent: create-or-return an issued invoice for the reservation total
         // (does not close the reservation) so the payment form has a facture.
+        // Gated on payment creation — anyone who can record a payment can issue it.
         Route::post('reservations/{reservation}/ensure-invoice', [ReservationController::class, 'ensureInvoice'])
-            ->middleware('permission:invoices.create');
+            ->middleware('permission:payments.create');
 
         // Reservation drivers CRUD
         Route::post('reservations/{reservation}/drivers', [ReservationController::class, 'storeDriver'])
