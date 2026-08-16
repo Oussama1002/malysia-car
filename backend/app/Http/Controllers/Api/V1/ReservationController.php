@@ -829,16 +829,35 @@ class ReservationController extends Controller
      */
     public function ensureInvoice(Request $request, Reservation $reservation): JsonResponse
     {
+        // Échéance = the reservation's end date (fall back to +7 days).
+        $dueDate = $reservation->desired_end_at
+            ? $reservation->desired_end_at->toDateString()
+            : now()->addDays(7)->toDateString();
+
         $existing = Invoice::query()
             ->where('customer_id', $reservation->customer_id)
             ->whereHas('lines', fn ($lq) => $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]))
             ->orderByDesc('issue_date')
             ->first();
         if ($existing) {
+            // Bring an existing draft up to "issued" and align its due date.
+            $changed = false;
+            if ($existing->status === 'draft') {
+                $existing->status = 'issued';
+                $changed = true;
+            }
+            if ((string) $existing->due_date !== (string) $dueDate) {
+                $existing->due_date = $dueDate;
+                $changed = true;
+            }
+            if ($changed) {
+                $existing->save();
+            }
+
             return ApiResponse::success($existing->fresh('lines'));
         }
 
-        $invoice = DB::transaction(function () use ($reservation, $request) {
+        $invoice = DB::transaction(function () use ($reservation, $request, $dueDate) {
             $base = (float) ($reservation->estimated_price ?? 0);
             $extensions = (float) RentalExtension::query()
                 ->where('reservation_id', $reservation->id)
@@ -858,9 +877,9 @@ class ReservationController extends Controller
                 'customer_id' => $reservation->customer_id,
                 'contract_id' => null,
                 'issue_date' => now()->toDateString(),
-                'due_date' => now()->addDays(7)->toDateString(),
+                'due_date' => $dueDate,
                 'currency_code' => 'MAD',
-                'status' => 'draft',
+                'status' => 'issued',
                 'created_by' => $request->user()?->id,
             ]);
 
