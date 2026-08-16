@@ -716,7 +716,7 @@ export const PaymentForm: React.FC<{
                   }
                 }}
               />
-              {chequeScanning ? '⏳ Analyse en cours...' : '📄 Importer un fichier'}
+              {chequeScanning ? 'Analyse en cours...' : 'Importer un fichier'}
             </label>
             <label className="df-btn df-btn--ghost flex-1 cursor-pointer justify-center text-center text-xs">
               <input
@@ -746,7 +746,7 @@ export const PaymentForm: React.FC<{
                   }
                 }}
               />
-              {chequeScanning ? '⏳ Analyse...' : '📷 Prendre une photo'}
+              {chequeScanning ? 'Analyse...' : 'Prendre une photo'}
             </label>
           </div>
 
