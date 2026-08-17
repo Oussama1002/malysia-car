@@ -37,6 +37,7 @@ const CATEGORY_FR: Record<string, string> = {
   'contract_expiry': 'Contrat bientôt expiré',
   'contracts.expiring': 'Contrat bientôt expiré',
   'rentals.return_due': 'Retour prévu',
+  'rentals.confirmation_due': 'Réservation à confirmer',
   'invoice.overdue': 'Facture en retard',
   'payment.received': 'Paiement reçu',
   'arrears.detected': 'Impayé détecté',
@@ -389,6 +390,17 @@ export const NotificationsPage: React.FC = () => {
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2 pt-2 border-t border-[color:var(--df-border)]">
+              {typeof selected.payload?.whatsapp_url === 'string' && (
+                <a
+                  href={selected.payload.whatsapp_url as string}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="df-btn text-xs text-white"
+                  style={{ background: '#25D366', borderColor: '#25D366' }}
+                >
+                  Confirmer via WhatsApp
+                </a>
+              )}
               <button
                 type="button"
                 className="df-btn df-btn--primary text-xs"
