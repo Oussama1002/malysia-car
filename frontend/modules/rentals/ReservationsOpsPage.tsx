@@ -460,26 +460,22 @@ export const ReservationsOpsPage: React.FC = () => {
         </div>
       )}
 
-      <header className="flex items-center justify-end gap-2">
-        <div className="flex gap-2 shrink-0">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
-            onClick={() => setAvailCheckOpen(true)}
-          >
-            🔍 Vérifier disponibilité
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700"
-            onClick={() => setNewResOpen(true)}
-          >
-            + Nouvelle réservation
-          </button>
-        </div>
-      </header>
-
-      <SearchFilterBar placeholder="Filtrer réservations…" value={q} onChange={setQ} />
+      <SearchFilterBar placeholder="Filtrer réservations…" value={q} onChange={setQ}>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
+          onClick={() => setAvailCheckOpen(true)}
+        >
+          🔍 Vérifier disponibilité
+        </button>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700"
+          onClick={() => setNewResOpen(true)}
+        >
+          + Nouvelle réservation
+        </button>
+      </SearchFilterBar>
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
