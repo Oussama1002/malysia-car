@@ -641,6 +641,10 @@ export const ReservationsOpsPage: React.FC = () => {
               <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_end_at} onChange={(e) => setForm((s) => ({ ...s, desired_end_at: e.target.value }))} />
             </div>
             <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Prix estimé (MAD)</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Prix estimé (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Adresse pickup</label>
               <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Optionnel" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
             </div>
@@ -648,7 +652,6 @@ export const ReservationsOpsPage: React.FC = () => {
               <label className="mb-1 block text-xs font-bold text-slate-500">Adresse livraison</label>
               <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Optionnel" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
             </div>
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold md:col-span-2" placeholder="Prix estimé (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
           </div>
           {formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>
