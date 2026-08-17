@@ -104,7 +104,7 @@ export const InvoiceDetailPage: React.FC = () => {
                 Encaisser
               </button>
             )}
-            <GeneratePdfButton kind="invoice" entityId={String(i.id)} />
+            <GeneratePdfButton kind="invoice" entityId={String(i.id)} className="df-btn df-btn--dark" />
           </div>
         </div>
       </div>

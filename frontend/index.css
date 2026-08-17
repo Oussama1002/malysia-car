@@ -339,6 +339,13 @@ body {
   color: var(--df-success-600);
 }
 
+.df-btn--dark {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
+}
+.df-btn--dark:hover:not(:disabled) { background: #1e293b; }
+
 /* --- Input --- */
 .df-input {
   width: 100%;
