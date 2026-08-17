@@ -38,6 +38,7 @@ const CATEGORY_FR: Record<string, string> = {
   'contracts.expiring': 'Contrat bientôt expiré',
   'rentals.return_due': 'Retour prévu',
   'rentals.confirmation_due': 'Réservation à confirmer',
+  'rentals.contract_todo': 'Contrat à générer',
   'invoice.overdue': 'Facture en retard',
   'payment.received': 'Paiement reçu',
   'arrears.detected': 'Impayé détecté',

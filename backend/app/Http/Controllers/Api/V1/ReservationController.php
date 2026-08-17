@@ -158,12 +158,28 @@ class ReservationController extends Controller
                     entity: $r,
                     linkUrl: "/reservations/{$r->id}",
                 );
+                $this->remindCreateContract($ns, $r);
             }
         } catch (\Throwable) {
             // Non-blocking — notification failure shouldn't abort reservation
         }
 
         return ApiResponse::success($r, null, null, 201);
+    }
+
+    /** Reminder to generate the rental contract for a confirmed reservation. */
+    private function remindCreateContract(NotificationService $ns, Reservation $r): void
+    {
+        $ns->notifyRoles(
+            ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'],
+            'rentals.contract_todo',
+            "Contrat à générer — {$r->reservation_number}",
+            "La réservation {$r->reservation_number} est confirmée. Pensez à générer le contrat de location.",
+            'rentals',
+            'high',
+            entity: $r,
+            linkUrl: "/contracts/new?from_reservation={$r->id}",
+        );
     }
 
     /**
@@ -206,6 +222,7 @@ class ReservationController extends Controller
                 entity: $reservation->fresh(),
                 linkUrl: "/reservations/{$reservation->id}",
             );
+            $this->remindCreateContract($ns, $reservation->fresh());
         } catch (\Throwable) {
             // Non-blocking
         }
