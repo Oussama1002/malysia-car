@@ -168,6 +168,10 @@ export const ContractWizardPage: React.FC = () => {
   const [newClientError, setNewClientError] = useState<string | null>(null);
   const [prefillBanner, setPrefillBanner] = useState<string | null>(null);
   const [prefillLoading, setPrefillLoading] = useState(false);
+  // Names carried straight from the reservation so the client/vehicle show
+  // instantly, before the full lists finish loading.
+  const [prefillClientName, setPrefillClientName] = useState<string | null>(null);
+  const [prefillVehicleName, setPrefillVehicleName] = useState<string | null>(null);
   const prefillDoneRef = useRef(false);
   const step = STEPS[stepIdx];
 
@@ -181,6 +185,9 @@ export const ContractWizardPage: React.FC = () => {
       try {
         const res = await apiClient<{ data: { reservation: any } }>(`/v1/reservations/${reservationId}`);
         const r = res.data?.reservation ?? res.data ?? res;
+        // The reservation detail carries the resolved names — show them right away.
+        setPrefillClientName((res.data as any)?.customer_name ?? null);
+        setPrefillVehicleName((res.data as any)?.vehicle_name ?? null);
         const startDate: string | null = r.desired_start_at
           ? String(r.desired_start_at).slice(0, 10)
           : null;
@@ -662,6 +669,13 @@ export const ContractWizardPage: React.FC = () => {
                   </div>
                 </div>
 
+                {!selectedClient && prefillClientName && (
+                  <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
+                    <h4 className="text-[15px] font-bold">{prefillClientName}</h4>
+                    <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)]">Chargement des détails du client…</div>
+                  </div>
+                )}
+
                 {selectedClient && (
                   <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -726,6 +740,13 @@ export const ContractWizardPage: React.FC = () => {
                     </p>
                   )}
                 </div>
+
+                {!selectedVehicle && prefillVehicleName && (
+                  <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
+                    <div className="text-[15px] font-bold">{prefillVehicleName}</div>
+                    <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)]">Chargement des détails du véhicule…</div>
+                  </div>
+                )}
 
                 {selectedVehicle && (
                   <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
