@@ -524,6 +524,14 @@ export const ReservationsOpsPage: React.FC = () => {
                 >
                   Détail →
                 </button>
+                {r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && (
+                  <button
+                    className="rounded-2xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); nav(`/contracts/new?from_reservation=${r.id}`); }}
+                  >
+                    Générer contrat
+                  </button>
+                )}
                 {(() => {
                   const missions = (r as ReservationDto & { missions?: { id: string; mission_type: string; status: string }[] }).missions ?? [];
                   const activeMissionsRaw = missions.filter((m) => m.status !== 'failed');
