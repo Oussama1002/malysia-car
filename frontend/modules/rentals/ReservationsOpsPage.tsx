@@ -623,12 +623,15 @@ export const ReservationsOpsPage: React.FC = () => {
                 <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
               ))}
             </select>
-            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
-              <option value="SHORT_RENTAL">Location courte durée</option>
-              <option value="LONG_RENTAL">Location longue durée</option>
-              <option value="LLD">LLD</option>
-              <option value="LOA">LOA</option>
-            </select>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Type</label>
+              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
+                <option value="SHORT_RENTAL">Location courte durée</option>
+                <option value="LONG_RENTAL">Location longue durée</option>
+                <option value="LLD">LLD</option>
+                <option value="LOA">LOA</option>
+              </select>
+            </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
               <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_start_at} onChange={(e) => setForm((s) => ({ ...s, desired_start_at: e.target.value }))} />
