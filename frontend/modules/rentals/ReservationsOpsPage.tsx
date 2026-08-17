@@ -607,25 +607,16 @@ export const ReservationsOpsPage: React.FC = () => {
       <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="flex items-stretch gap-2">
-              <select className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
-                if (e.target.value === '__new__') { setNewClientError(null); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
-                setForm((s) => ({ ...s, customer_id: e.target.value }));
-              }}>
-                <option value="">Client…</option>
-                {customerOptions.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
-                <option value="__new__">+ Nouveau client</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => { setNewClientError(null); setNewClientDrawerOpen(true); }}
-                className="shrink-0 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white hover:bg-indigo-700 whitespace-nowrap"
-              >
-                + Nouveau
-              </button>
-            </div>
+            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
+              if (e.target.value === '__new__') { setNewClientError(null); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
+              setForm((s) => ({ ...s, customer_id: e.target.value }));
+            }}>
+              <option value="">Client…</option>
+              {customerOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+              <option value="__new__">+ Nouveau client</option>
+            </select>
             <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
               <option value="">Véhicule…</option>
               {vehicleOptions.map((v) => (
