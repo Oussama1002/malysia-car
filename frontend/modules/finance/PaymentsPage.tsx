@@ -35,7 +35,7 @@ const RESERVATION_STATUS_FR: Record<string, string> = {
   completed: 'Terminée', pending: 'En attente',
 };
 const INVOICE_STATUS_FR: Record<string, string> = {
-  draft: 'Brouillon', sent: 'Envoyée', paid: 'Payée', partial: 'Partielle',
+  draft: 'Brouillon', issued: 'Émise', sent: 'Envoyée', paid: 'Payée', partial: 'Partielle',
   overdue: 'En retard', cancelled: 'Annulée', credited: 'Avoir',
 };
 import { DataTable } from '@/modules/shared/components/DataTable';
@@ -600,7 +600,7 @@ export const PaymentForm: React.FC<{
               const amt = Number((inv as any).total_amount ?? inv.total_amount_mad);
               return (
                 <option key={inv.id} value={inv.id}>
-                  {inv.invoice_number} — {INVOICE_STATUS_FR[inv.status] ?? inv.status}{isFinite(amt) ? ` — ${formatCurrencyMad(amt)}` : ''}
+                  {inv.invoice_number} — {INVOICE_STATUS_FR[String(inv.status).toLowerCase()] ?? inv.status}{isFinite(amt) ? ` — ${formatCurrencyMad(amt)}` : ''}
                 </option>
               );
             })}
