@@ -524,17 +524,6 @@ const VehicleInfoCard: React.FC<{
           </button>
           <button
             type="button"
-            disabled
-            title="Fonctionnalité à venir"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-[11px] font-bold text-slate-400 cursor-not-allowed"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
-              <rect x="5" y="11" width="14" height="10" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 018 0v4" />
-            </svg>
-            Immobiliser
-          </button>
-          <button
-            type="button"
             onClick={() => {
               if (v.assignedClientId) onNavigate(`/customers/${v.assignedClientId}`);
             }}

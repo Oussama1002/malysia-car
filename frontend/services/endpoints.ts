@@ -66,10 +66,6 @@ export const endpoints = {
     list: '/v1/contract-templates',
     one: (id: number | string) => `/v1/contract-templates/${id}`,
   },
-  finance: {
-    schedule: '/v1/finance/schedule',
-    payments: '/v1/finance/payments',
-  },
   arrears: {
     cases: '/v1/arrears/cases',
   },
