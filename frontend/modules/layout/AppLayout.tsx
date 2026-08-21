@@ -168,14 +168,15 @@ export const AppLayout: React.FC = () => {
     return t;
   };
 
-  const renderNavLink = (it: NavItem) => (
+  const renderNavLink = (it: NavItem, indent = true) => (
     <NavLink
       to={it.to}
       className={({ isActive }) => `df-nav-link ${isActive ? 'df-nav-link--active' : ''}`}
+      style={indent ? undefined : { paddingInlineStart: 16 }}
       onClick={() => setMobileOpen(false)}
       title={sidebarCollapsed ? t(it.labelKey) : undefined}
     >
-      <Icon name={it.icon} size={18} />
+      <Icon name={it.icon} size={16} className="shrink-0 opacity-70" />
       {!sidebarCollapsed && <span className="truncate">{t(it.labelKey)}</span>}
       {!sidebarCollapsed && it.to === '/fleet' && criticalMaintenanceCount > 0 && (
         <span className="ms-auto rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
@@ -187,58 +188,43 @@ export const AppLayout: React.FC = () => {
 
   const Sidebar = (
     <aside className="df-sidebar">
-      <div className="flex items-center gap-3 px-4 py-4">
-        <div className="df-heroMark flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
-          <Icon name="bolt" size={20} />
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-4 py-5">
+        <div className="df-heroMark flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+          <Icon name="bolt" size={18} />
         </div>
         {!sidebarCollapsed && (
-          <div className="min-w-0">
-            <div className="text-sm font-black tracking-tight text-[color:var(--df-text)]">DriveFlow <span className="text-[10px] font-bold text-[color:var(--df-text-faint)]">OS</span></div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">Automobile & Leasing</div>
-          </div>
+          <span className="text-[17px] font-bold tracking-tight text-[color:var(--df-text)]">DriveFlow</span>
         )}
       </div>
 
-      <div className="mx-3 mb-3">
-        <button
-          type="button"
-          onClick={() => setCmdOpen(true)}
-          className="flex h-10 w-full items-center gap-2 rounded-xl border border-[color:var(--df-border-strong)] bg-[color:var(--df-surface-sunk)] px-3 text-[12px] text-[color:var(--df-text-muted)] transition hover:bg-[color:var(--df-surface)]"
-        >
-          <Icon name="search" size={14} />
-          {!sidebarCollapsed && <span className="flex-1 text-start">Rechercher…</span>}
-          {!sidebarCollapsed && <span className="df-kbd">⌘K</span>}
-        </button>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 py-1">
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-1">
         {groups.map((g) => {
-          // Collapsed icon-rail: no room for dropdown headers, show items flat.
           if (sidebarCollapsed) {
             return (
-              <div key={g.key} className="mb-3 flex flex-col gap-0.5">
+              <div key={g.key} className="mb-2 flex flex-col">
                 {g.items.map((it) => (
-                  <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
+                  <React.Fragment key={it.to}>{renderNavLink(it, false)}</React.Fragment>
                 ))}
               </div>
             );
           }
           const open = !collapsedGroups.has(g.key);
           return (
-            <div key={g.key} className="mb-1.5">
+            <div key={g.key} className="mb-0.5">
               <button
                 type="button"
                 onClick={() => toggleGroup(g.key)}
-                className="df-nav-link w-full"
+                className="df-nav-group-header"
                 aria-expanded={open}
               >
-                <Icon name={g.icon} size={18} />
+                <Icon name={g.icon} size={18} className="shrink-0 opacity-60" />
                 <span className="truncate">{t(g.labelKey)}</span>
-                <Icon name="chevron-down" size={14}
-                  className={`ms-auto text-[color:var(--df-text-faint)] transition-transform ${open ? '' : '-rotate-90'}`} />
+                <Icon name="chevron-down" size={14} className="df-nav-group-chevron" />
               </button>
               {open && (
-                <div className="mt-0.5 flex flex-col gap-0.5 ps-3">
+                <div className="flex flex-col">
                   {g.items.map((it) => (
                     <React.Fragment key={it.to}>{renderNavLink(it)}</React.Fragment>
                   ))}
@@ -249,54 +235,20 @@ export const AppLayout: React.FC = () => {
         })}
       </nav>
 
-      <div className="border-t border-[color:var(--df-border)] p-3">
-        {!sidebarCollapsed && (
-          <div className="mb-3 relative group">
-            <div className="flex items-center gap-3 rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface)] p-2.5 cursor-pointer hover:border-[color:var(--df-brand-500)] transition-colors">
-              <img
-                src={session?.user.avatar ?? `https://i.pravatar.cc/100?u=${encodeURIComponent(session?.user.email ?? '')}`}
-                alt=""
-                className="h-9 w-9 rounded-xl border border-[color:var(--df-border)] flex-shrink-0"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-bold">{session?.user.name}</div>
-                <div className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">
-                  {session?.user.role.replaceAll('_', ' ')}
-                </div>
-              </div>
-              <Icon name="chevron-up" size={12} className="text-[color:var(--df-text-faint)] flex-shrink-0" />
-            </div>
-            {/* Dropdown */}
-            <div className="absolute bottom-full left-0 right-0 mb-1 hidden group-hover:block z-50">
-              <div className="rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] shadow-2xl overflow-hidden py-1">
-                <NavLink to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-[13px] font-semibold hover:bg-[color:var(--df-surface-elev)] transition-colors">
-                  <Icon name="user" size={14} className="text-[color:var(--df-text-faint)]" />
-                  Mon profil
-                </NavLink>
-                <NavLink to="/agence" className="flex items-center gap-3 px-4 py-2.5 text-[13px] font-semibold hover:bg-[color:var(--df-surface-elev)] transition-colors">
-                  <Icon name="pin" size={14} className="text-[color:var(--df-text-faint)]" />
-                  Mon agence
-                </NavLink>
-                <div className="h-px bg-[color:var(--df-border)] my-1" />
-                <button
-                  onClick={logout}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                >
-                  <Icon name="log-out" size={14} />
-                  Déconnexion
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+      {/* Bottom: Déconnexion */}
+      <div className="border-t border-[color:var(--df-border)] px-4 py-3">
         <button
           type="button"
-          onClick={toggleSidebar}
-          className="df-btn df-btn--subtle df-btn--sm w-full"
+          onClick={() => {
+            void (async () => {
+              await logout();
+              navigate('/login', { replace: true });
+            })();
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-[13.5px] font-semibold text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-950/30"
         >
-          <Icon name={sidebarCollapsed ? 'chevron-right' : 'chevron-left'} size={14} />
-          {!sidebarCollapsed && 'Réduire'}
+          <Icon name="log-out" size={18} />
+          {!sidebarCollapsed && <span className="uppercase tracking-wider text-[12px] font-bold">Déconnexion</span>}
         </button>
       </div>
     </aside>
