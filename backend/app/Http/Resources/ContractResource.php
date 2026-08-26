@@ -26,6 +26,7 @@ class ContractResource extends JsonResource
             'signatureStatus' => $c->signature_status,
             'customerId' => $c->customer_id,
             'vehicleId' => $c->vehicle_id,
+            'reservationId' => $c->reservation_id,
             'templateId' => $c->template_id,
             'creditApplicationId' => $c->credit_application_id,
             'startDate' => optional($c->start_date)?->toDateString(),

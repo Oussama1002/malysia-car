@@ -49,6 +49,9 @@ class ContractController extends Controller
         if ($vehicleId = $request->query('vehicle_id')) {
             $q->where('vehicle_id', $vehicleId);
         }
+        if ($reservationId = $request->query('reservation_id')) {
+            $q->where('reservation_id', $reservationId);
+        }
 
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
         $page = $q->orderByDesc('updated_at')->paginate($per);
@@ -103,6 +106,7 @@ class ContractController extends Controller
             $c->contract_type = $data['contract_type'];
             $c->customer_id = $data['customer_id'];
             $c->vehicle_id = $data['vehicle_id'] ?? null;
+            $c->reservation_id = $data['reservation_id'] ?? null;
             $c->template_id = $data['template_id'] ?? null;
             $c->credit_application_id = $data['credit_application_id'] ?? null;
             $c->status = $data['status'] ?? 'draft';

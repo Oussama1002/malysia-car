@@ -99,14 +99,18 @@ export const ReservationsOpsPage: React.FC = () => {
     const activeContracts = (allContractsQ.data ?? []).filter(
       (c: any) => !dead.has(String(c.status ?? '').toLowerCase()),
     );
+    const directIds = new Set<string>();
     const byKey = new Set<string>();
     for (const c of activeContracts) {
+      const rsv = (c as any).reservationId ?? (c as any).reservation_id;
+      if (rsv) directIds.add(String(rsv));
       const cust = String((c as any).customerId ?? (c as any).customer_id ?? '');
       const veh = String((c as any).vehicleId ?? (c as any).vehicle_id ?? '');
       if (cust && veh) byKey.add(`${cust}|${veh}`);
     }
-    const ids = new Set<string>();
+    const ids = new Set<string>(directIds);
     for (const r of ((reservationsQ.data ?? []) as ReservationDto[])) {
+      // Legacy fallback: contracts pre-dating reservation_id linkage.
       if (byKey.has(`${r.customer_id}|${r.vehicle_id}`)) ids.add(String(r.id));
     }
     return ids;

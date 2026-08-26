@@ -100,6 +100,7 @@ const CONTRACT_TYPES: {
 interface WizardState {
   clientId: string | number | null;
   vehicleId: string | number | null;
+  sourceReservationId: string | null;
   type: ContractType;
   durationMonths: number;
   monthlyRentMad: number;
@@ -119,6 +120,7 @@ interface WizardState {
 const INITIAL: WizardState = {
   clientId: null,
   vehicleId: null,
+  sourceReservationId: null,
   type: 'LLD',
   durationMonths: 0,
   monthlyRentMad: 0,
@@ -227,6 +229,7 @@ export const ContractWizardPage: React.FC = () => {
           ...prev,
           clientId: r.customer_id ?? null,
           vehicleId: r.vehicle_id ?? null,
+          sourceReservationId: reservationId,
           type: contractType,
           startDate,
           endDate,
@@ -407,6 +410,7 @@ export const ContractWizardPage: React.FC = () => {
       type: state.type,
       clientId: state.clientId ?? '',
       vehicleId: state.vehicleId ?? undefined,
+      reservationId: state.sourceReservationId ?? undefined,
       amountMad: totalAmount,
       startDate: state.startDate ?? new Date().toISOString().slice(0, 10),
       endDate: state.endDate ?? undefined,

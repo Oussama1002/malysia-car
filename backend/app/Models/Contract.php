@@ -38,6 +38,7 @@ class Contract extends Model
         'contract_type',
         'customer_id',
         'vehicle_id',
+        'reservation_id',
         'template_id',
         'credit_application_id',
         'status',

@@ -26,6 +26,7 @@ class StoreContractRequest extends ApiFormRequest
             'contract_type' => ['required', 'string', 'max:50'],
             'customer_id' => ['required', 'uuid'],
             'vehicle_id' => ['nullable', 'uuid'],
+            'reservation_id' => ['nullable', 'uuid'],
             'template_id' => ['nullable', 'uuid'],
             'credit_application_id' => ['nullable', 'uuid'],
             'status' => ['nullable', 'string', 'max:50'],

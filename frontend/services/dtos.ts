@@ -109,6 +109,7 @@ export interface ContractDto {
   customerId?: number | string;
   clientId?: number | string;
   vehicleId?: number | string;
+  reservationId?: string | null;
   status: string;
   startDate: string;
   endDate?: string;

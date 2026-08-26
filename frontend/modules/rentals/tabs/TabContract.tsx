@@ -10,21 +10,33 @@ interface Props {
 const DEAD_STATUSES = new Set(['cancelled', 'terminated', 'rejected', 'expired']);
 
 const TabContract: React.FC<Props> = ({ reservation }) => {
+  const reservationId = String(reservation?.id ?? '');
   const customerId = String(reservation?.customer_id ?? '');
   const vehicleId  = String(reservation?.vehicle_id ?? '');
 
-  const contractQ = useQuery({
-    queryKey: ['contracts', 'for-reservation', customerId, vehicleId],
+  // Match by reservation_id first (reliable when the contract was generated
+  // via the wizard after the reservation-linkage change), then fall back to
+  // customer+vehicle for older contracts that pre-date the column.
+  const directQ = useQuery({
+    queryKey: ['contracts', 'by-reservation', reservationId],
+    queryFn: async () => contractsApi.list({ reservation_id: reservationId } as any),
+    enabled: !!reservationId,
+    staleTime: 60_000,
+  });
+
+  const legacyQ = useQuery({
+    queryKey: ['contracts', 'by-customer-vehicle', customerId, vehicleId],
     queryFn: async () => contractsApi.list({ customer_id: customerId, vehicle_id: vehicleId }),
-    enabled: !!customerId && !!vehicleId,
+    enabled: !!customerId && !!vehicleId && (directQ.data ?? []).length === 0,
     staleTime: 60_000,
   });
 
   const activeContract = useMemo(() => {
-    return (contractQ.data ?? []).find(
+    const pool = [...(directQ.data ?? []), ...(legacyQ.data ?? [])];
+    return pool.find(
       (c: any) => !DEAD_STATUSES.has(String(c.status ?? '').toLowerCase()),
     );
-  }, [contractQ.data]);
+  }, [directQ.data, legacyQ.data]);
 
   if (activeContract) {
     const ref = (activeContract as any).contract_number
