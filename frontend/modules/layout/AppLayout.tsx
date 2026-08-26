@@ -68,14 +68,19 @@ export const AppLayout: React.FC = () => {
   const groups = useMemo(() => {
     const role = session?.user.role ?? 'AGENT_COMMERCIAL';
     const showExperimental = isExperimentalEnabled();
-    return GROUPS.map((g) => ({
-      ...g,
-      items: g.items.filter((it) => {
-        if (it.module === 'ai' && !showExperimental) return false;
-        if (isModuleHiddenInDemo(it.module)) return false;
-        return canAccessModule(role, it.module);
-      }),
-    })).filter((g) => g.items.length > 0);
+    return GROUPS
+      // Intelligence (AI + Ops terrain) is hidden from the desktop/tablet
+      // sidebar — Ops terrain lives on mobile, AI is still experimental.
+      .filter((g) => g.key !== 'intelligence')
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((it) => {
+          if (it.module === 'ai' && !showExperimental) return false;
+          if (isModuleHiddenInDemo(it.module)) return false;
+          return canAccessModule(role, it.module);
+        }),
+      }))
+      .filter((g) => g.items.length > 0);
   }, [session?.user.role]);
 
   const unreadQ = useQuery({
