@@ -43,9 +43,20 @@ export const DocumentsCenterPage: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-black text-slate-900">Centre documentaire</h1>
-        <p className="text-sm text-slate-500">Référentiel unique des pièces KYC, flotte, sinistres, missions et PDFs générés.</p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">Centre documentaire</h1>
+          <p className="text-sm text-slate-500">Référentiel unique des pièces KYC, flotte, sinistres, missions et PDFs générés.</p>
+        </div>
+        <Link
+          to="/documents/reader"
+          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-[13px] font-bold text-white shadow-sm transition hover:bg-indigo-700"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2m8-16h2a2 2 0 0 1 2 2v2m0 8v2a2 2 0 0 1-2 2h-2M9 12h6" />
+          </svg>
+          Softnovation Document Reader
+        </Link>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
