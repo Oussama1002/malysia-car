@@ -1,13 +1,61 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { contractsApi } from '@/services/contractsApi';
 
 interface Props {
   reservation: any;
 }
 
+const DEAD_STATUSES = new Set(['cancelled', 'terminated', 'rejected', 'expired']);
+
 const TabContract: React.FC<Props> = ({ reservation }) => {
-  // The contract is generated via the wizard and linked externally.
-  // This tab shows contract status and actions.
+  const customerId = String(reservation?.customer_id ?? '');
+  const vehicleId  = String(reservation?.vehicle_id ?? '');
+
+  const contractQ = useQuery({
+    queryKey: ['contracts', 'for-reservation', customerId, vehicleId],
+    queryFn: async () => contractsApi.list({ customer_id: customerId, vehicle_id: vehicleId }),
+    enabled: !!customerId && !!vehicleId,
+    staleTime: 60_000,
+  });
+
+  const activeContract = useMemo(() => {
+    return (contractQ.data ?? []).find(
+      (c: any) => !DEAD_STATUSES.has(String(c.status ?? '').toLowerCase()),
+    );
+  }, [contractQ.data]);
+
+  if (activeContract) {
+    const ref = (activeContract as any).contract_number
+      ?? (activeContract as any).contractNumber
+      ?? (activeContract as any).reference
+      ?? (activeContract as any).id;
+    const status = String((activeContract as any).status ?? '').toLowerCase();
+    return (
+      <div className="space-y-6">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
+          <div className="mb-2 text-4xl">✅</div>
+          <h3 className="mb-1 text-sm font-black text-emerald-900">Contrat déjà généré</h3>
+          <p className="mb-4 text-xs text-emerald-800">
+            Un contrat lié à ce client et ce véhicule existe déjà — pas besoin d'en générer un autre.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-900 border border-emerald-200">
+              Réf. <span className="font-black">{ref}</span> · <span className="uppercase">{status}</span>
+            </div>
+            <Link
+              to={`/contracts/${(activeContract as any).id}`}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700"
+            >
+              Ouvrir le contrat →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-slate-100 p-6 text-center">

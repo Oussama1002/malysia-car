@@ -15,6 +15,7 @@ import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanne
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
 import { listBranches, listUsers } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
+import { contractsApi } from '@/services/contractsApi';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -82,6 +83,34 @@ export const ReservationsOpsPage: React.FC = () => {
     queryFn: async () => opsApi.reservations(),
     enabled: hasBackend(),
   });
+
+  // Contracts are used to hide "Generer contrat" when a reservation already
+  // has one. Contracts don't carry a direct reservation_id, so the match is
+  // customer_id + vehicle_id with a non-dead status.
+  const allContractsQ = useQuery({
+    queryKey: ['contracts', 'all', { for: 'reservations-page' }],
+    queryFn: async () => contractsApi.list(),
+    enabled: hasBackend(),
+    staleTime: 60_000,
+  });
+
+  const reservationsWithContract = useMemo<Set<string>>(() => {
+    const dead = new Set(['cancelled', 'terminated', 'rejected', 'expired']);
+    const activeContracts = (allContractsQ.data ?? []).filter(
+      (c: any) => !dead.has(String(c.status ?? '').toLowerCase()),
+    );
+    const byKey = new Set<string>();
+    for (const c of activeContracts) {
+      const cust = String((c as any).customerId ?? (c as any).customer_id ?? '');
+      const veh = String((c as any).vehicleId ?? (c as any).vehicle_id ?? '');
+      if (cust && veh) byKey.add(`${cust}|${veh}`);
+    }
+    const ids = new Set<string>();
+    for (const r of ((reservationsQ.data ?? []) as ReservationDto[])) {
+      if (byKey.has(`${r.customer_id}|${r.vehicle_id}`)) ids.add(String(r.id));
+    }
+    return ids;
+  }, [allContractsQ.data, reservationsQ.data]);
 
   const customersQ = useQuery({
     queryKey: queryKeys.customers.all,
@@ -389,7 +418,9 @@ export const ReservationsOpsPage: React.FC = () => {
   }, [reservationsQ.data]);
 
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-  const visibleUrgent = urgentReservations.filter((r) => !dismissedIds.has(r.id));
+  const visibleUrgent = urgentReservations.filter(
+    (r) => !dismissedIds.has(r.id) && !reservationsWithContract.has(String(r.id)),
+  );
 
   return (
     <div className="space-y-6">
@@ -436,12 +467,14 @@ export const ReservationsOpsPage: React.FC = () => {
                     >
                       Voir détail
                     </button>
-                    <Link
-                      to={`/contracts/new?from_reservation=${r.id}`}
-                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
-                    >
-                      Générer contrat
-                    </Link>
+                    {!reservationsWithContract.has(String(r.id)) && (
+                      <Link
+                        to={`/contracts/new?from_reservation=${r.id}`}
+                        className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
+                      >
+                        Générer contrat
+                      </Link>
+                    )}
                     <button
                       type="button"
                       onClick={() => setDismissedIds((s) => new Set([...s, r.id]))}
@@ -524,7 +557,7 @@ export const ReservationsOpsPage: React.FC = () => {
                 >
                   Détail →
                 </button>
-                {r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && (
+                {r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && !reservationsWithContract.has(String(r.id)) && (
                   <button
                     className="rounded-2xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
                     onClick={(e) => { e.stopPropagation(); nav(`/contracts/new?from_reservation=${r.id}`); }}
@@ -826,6 +859,8 @@ export const ReservationsOpsPage: React.FC = () => {
               const PRE_CONTRACT = ['reserved', 'confirmed', 'pickup_scheduled', 'draft'];
               const needsContract = PRE_CONTRACT.includes(selected.status);
               if (!needsContract || (!isStartToday && !isStartPast)) return null;
+              // Already has a contract → skip the reminder
+              if (reservationsWithContract.has(String(selected.id))) return null;
               const clientLabel = customerOptions.find((c) => c.id === selected.customer_id)?.label.split(' (')[0] ?? '—';
               const vehicleLabel = vehicleOptions.find((v) => v.id === selected.vehicle_id)?.label ?? '—';
               const price = selected.estimated_price ? `${Number(selected.estimated_price).toLocaleString('fr-MA')} MAD` : '—';
