@@ -584,65 +584,66 @@ const VehiclesList: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-10">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
+      {/* Header — title row */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Parc Automobile</h1>
           <p className="text-slate-500 font-medium">Suivi temps réel de la flotte et conformité.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <input type="text" placeholder="Rechercher (Immat, Modèle...)"
-              className="pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl w-full md:w-64 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium text-sm"
-              value={search} onChange={e => setSearch(e.target.value)} />
-            <svg className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          </div>
-          {/*
-            Conformité véhicules entry-point.
-            Moved out of the sidebar (AppLayout.tsx); the Flotte module owns
-            its sub-navigation in one place. Indigo filled style matches the
-            page's primary action language so the button is discoverable for
-            users who used to reach this page via the sidebar.
-          */}
+        <div className="flex items-center gap-2">
+          {/* Secondary utility actions — outline style, less visual weight */}
           <Link
             to="/fleet/compliance"
             title="Tableau de conformité véhicules (assurance, visite technique, vignette)"
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 whitespace-nowrap"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-indigo-50 transition-all whitespace-nowrap"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
             Conformité
           </Link>
-
-          {/* PDF download */}
-          <button onClick={downloadParcPDF}
-            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 whitespace-nowrap">
+          <button
+            type="button"
+            onClick={downloadParcPDF}
+            title="Exporter la liste des véhicules en PDF"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-rose-200 text-rose-700 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-rose-50 transition-all whitespace-nowrap"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            PDF
+            Exporter PDF
           </button>
-
-          {/* View toggle — cards / table / analyse (rentabilité par véhicule) */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl">
-            <button onClick={() => switchView('cards')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'cards' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              title="Vue cartes">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-            </button>
-            <button onClick={() => switchView('table')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              title="Vue liste">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-            </button>
-            <button onClick={() => switchView('analysis')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'analysis' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              title="Analyse de parc (rentabilité, coûts, marge par véhicule)">
-              {/* bar-chart icon */}
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6m6 13V11M3 19v-4m18 4h.01M3 5h.01M3 19h18" /></svg>
-            </button>
-          </div>
-          <button onClick={() => handleOpenModal()}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 whitespace-nowrap">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+          {/* Primary action — filled, prominent */}
+          <button
+            type="button"
+            onClick={() => handleOpenModal()}
+            className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
             Ajouter
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar — search + view toggle */}
+      <div className="flex flex-wrap items-center gap-3 -mt-4">
+        <div className="relative group flex-1 min-w-[260px] max-w-md">
+          <input type="text" placeholder="Rechercher (Immat, Modèle...)"
+            className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl w-full focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium text-sm"
+            value={search} onChange={e => setSearch(e.target.value)} />
+          <svg className="w-4 h-4 absolute left-4 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
+          <button onClick={() => switchView('cards')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'cards' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Vue cartes">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+          </button>
+          <button onClick={() => switchView('table')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Vue liste">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+          </button>
+          <button onClick={() => switchView('analysis')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'analysis' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Analyse de parc (rentabilité, coûts, marge par véhicule)">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6m6 13V11M3 19v-4m18 4h.01M3 5h.01M3 19h18" /></svg>
           </button>
         </div>
       </div>
