@@ -13,7 +13,10 @@ export const LoginPage: React.FC = () => {
   const { login } = useAuthSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/dashboard';
+  const isMobile = typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 767px)').matches;
+  const defaultLanding = isMobile ? '/mobile-ops' : '/dashboard';
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? defaultLanding;
   const [showPassword, setShowPassword] = useState(false);
 
   const {

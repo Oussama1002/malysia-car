@@ -134,6 +134,12 @@ function SettingsRoleGate({ children }: { children: React.ReactNode }): React.Re
   return <>{children}</>;
 }
 
+function HomeRedirect(): React.ReactElement {
+  const isMobile = typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 767px)').matches;
+  return <Navigate to={isMobile ? '/mobile-ops' : '/dashboard'} replace />;
+}
+
 export default function AppRoutes(): React.ReactElement {
   return (
     <>
@@ -148,7 +154,7 @@ export default function AppRoutes(): React.ReactElement {
 
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<HomeRedirect />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route
               path="/dashboard"
