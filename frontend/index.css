@@ -508,6 +508,11 @@ select.df-input { cursor: pointer; }
 .df-nav-group-header:hover {
   background: var(--df-surface);
 }
+.df-nav-group-header--active {
+  color: var(--df-brand-600);
+  background: color-mix(in srgb, var(--df-brand-500) 8%, transparent);
+}
+[data-theme="dark"] .df-nav-group-header--active { color: #c2c9ff; }
 .df-nav-group-header .df-nav-group-chevron {
   margin-inline-start: auto;
   color: var(--df-text-faint);

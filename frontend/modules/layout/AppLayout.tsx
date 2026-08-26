@@ -210,6 +210,22 @@ export const AppLayout: React.FC = () => {
               </div>
             );
           }
+          // Single-item group → render as a flat top-level link (no dropdown).
+          if (g.items.length === 1) {
+            const only = g.items[0];
+            return (
+              <div key={g.key} className="mb-0.5">
+                <NavLink
+                  to={only.to}
+                  className={({ isActive }) => `df-nav-group-header ${isActive ? 'df-nav-group-header--active' : ''}`}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Icon name={g.icon} size={18} className="shrink-0 opacity-60" />
+                  <span className="truncate">{t(g.labelKey)}</span>
+                </NavLink>
+              </div>
+            );
+          }
           const open = !collapsedGroups.has(g.key);
           return (
             <div key={g.key} className="mb-0.5">
