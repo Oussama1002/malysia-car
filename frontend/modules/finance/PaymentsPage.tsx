@@ -225,7 +225,27 @@ export const PaymentsPage: React.FC = () => {
           {
             key: 'status',
             header: 'Statut',
-            render: (r) => <StatusBadge label={PAYMENT_STATUS_LABEL[r.status]} tone={paymentStatusTone(r.status)} />,
+            render: (r) => {
+              const raw = (r.status ?? '').toString().toLowerCase();
+              const alloc = Number(r.amount_allocated ?? 0);
+              const total = Number(r.amount ?? 0);
+              // Derive a display status when the backend value is empty or unrecognised.
+              const derived: 'allocated' | 'partial' | 'received' | 'refunded' | 'reversed' =
+                raw === 'refunded' ? 'refunded'
+                : raw === 'reversed' ? 'reversed'
+                : total > 0 && alloc >= total ? 'allocated'
+                : alloc > 0 ? 'partial'
+                : 'received';
+              const labelMap: Record<string, string> = { ...PAYMENT_STATUS_LABEL, partial: 'Partiel' };
+              const toneMap: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
+                allocated: 'success',
+                partial: 'warning',
+                received: 'info',
+                refunded: 'warning',
+                reversed: 'danger',
+              };
+              return <StatusBadge label={labelMap[derived]} tone={toneMap[derived]} />;
+            },
           },
           {
             key: 'actions',
