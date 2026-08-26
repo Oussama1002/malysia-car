@@ -276,6 +276,44 @@ export const ExecutiveDashboardPage: React.FC = () => {
         </div>
       </section>
 
+      {/* ── Accès rapide ─────────────────────────────────────────────────── */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[color:var(--df-text-muted)]">
+            Accès rapide
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            { to: '/contracts?tab=locations', icon: 'calendar', label: 'Réservations',     tone: 'var(--df-brand-500)' },
+            { to: '/contracts/new',           icon: 'sign',     label: 'Nouveau contrat',  tone: 'var(--df-info-500)' },
+            { to: '/customers',               icon: 'users',    label: 'Clients',          tone: 'var(--df-success-500)' },
+            { to: '/fleet',                   icon: 'car',      label: 'Flotte',           tone: 'var(--df-warning-500)' },
+            { to: '/finance/payments',        icon: 'coin',     label: 'Paiements',        tone: 'var(--df-brand-600)' },
+            { to: '/documents/reader',        icon: 'scan',     label: 'Scanner document', tone: 'var(--df-danger-500)' },
+          ].map((a) => (
+            <Link
+              key={a.to}
+              to={a.to}
+              className="group flex flex-col items-start gap-2 rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4 transition hover:border-[color:var(--df-brand-500)] hover:shadow-md"
+            >
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-xl transition group-hover:scale-110"
+                style={{
+                  background: `color-mix(in srgb, ${a.tone} 12%, transparent)`,
+                  color: a.tone,
+                }}
+              >
+                <Icon name={a.icon as any} size={20} />
+              </div>
+              <div className="text-[12.5px] font-bold leading-tight text-[color:var(--df-text)]">
+                {a.label}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       {/* ── Notifications & alerts center (top priority) ─────────────────── */}
       <NotificationsAlertsSection />
 
