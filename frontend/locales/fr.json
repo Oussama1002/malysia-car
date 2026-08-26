@@ -1,7 +1,7 @@
 {
   "app": { "name": "DriveFlow OS", "tagline": "Automobile & Leasing" },
   "nav": {
-    "dashboard": "Cockpit direction",
+    "dashboard": "Tableau de bord",
     "fleet": "Flotte",
     "fleetCompliance": "Conformité véhicules",
     "fleetAnalysis": "Analyse de parc",
@@ -27,7 +27,7 @@
     "rentals": "Réservations / Locations",
     "subRentals": "Sous-location",
     "group": {
-      "overview": "Vue d'ensemble",
+      "overview": "Tableau de bord",
       "operations": "Opérations",
       "finance": "Finance & risque",
       "intelligence": "Intelligence",
