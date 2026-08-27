@@ -220,14 +220,36 @@ const VehiclesList: React.FC = () => {
   const videoCameraRef = useRef<HTMLInputElement>(null);
   const selectedPhotoFiles = useRef<File[]>([]);
 
+  // Vehicles with an active reservation should display as "Réservé", not
+  // "Dispo" — matched by reservation.vehicle_id when status is in the pre-
+  // handover / active window.
+  const [reservedVehicleIds, setReservedVehicleIds] = useState<Set<string>>(new Set());
+  const ACTIVE_RESERVATION_STATUSES = React.useMemo(
+    () => new Set(['draft', 'reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested']),
+    [],
+  );
+
   useEffect(() => {
     fetchVehicles();
     if (getApiBase()) {
       apiClient<{ data: VehicleBrandOption[] }>('/v1/vehicle-brands')
         .then(res => setBrands(res.data))
         .catch(() => setBrands([]));
+
+      // Reservations feed the "Réservé" state.
+      apiClient<{ data: any[] }>('/v1/reservations?per_page=200')
+        .then((res) => {
+          const ids = new Set<string>();
+          for (const r of res.data ?? []) {
+            if (ACTIVE_RESERVATION_STATUSES.has(String(r.status ?? '').toLowerCase()) && r.vehicle_id) {
+              ids.add(String(r.vehicle_id));
+            }
+          }
+          setReservedVehicleIds(ids);
+        })
+        .catch(() => setReservedVehicleIds(new Set()));
     }
-  }, []);
+  }, [ACTIVE_RESERVATION_STATUSES]);
 
   useEffect(() => {
     let result = vehicles;
@@ -547,11 +569,33 @@ const VehiclesList: React.FC = () => {
   const inputCls = 'w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold';
   const selectCls = inputCls;
   const labelCls = 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1';
+  /**
+   * Effective display status — an AVAILABLE vehicle that carries an active
+   * reservation should read as "Réservé", not "Disponible".
+   */
+  const displayStatusFor = (v: any): { code: string; label: string; tone: string } => {
+    const raw = String(v?.status ?? '').toUpperCase();
+    if (raw === 'AVAILABLE' && v?.id && reservedVehicleIds.has(String(v.id))) {
+      return { code: 'RESERVED', label: 'Réservé', tone: 'bg-amber-100 text-amber-700 border-amber-200' };
+    }
+    if (raw === 'AVAILABLE')   return { code: 'AVAILABLE',   label: 'Disponible',  tone: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+    if (raw === 'RENTED')      return { code: 'RENTED',      label: 'Louée',       tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+    if (raw === 'MAINTENANCE') return { code: 'MAINTENANCE', label: 'Maintenance', tone: 'bg-orange-100 text-orange-700 border-orange-200' };
+    if (raw === 'IN_REPAIR')   return { code: 'IN_REPAIR',   label: 'Réparation',  tone: 'bg-rose-100 text-rose-700 border-rose-200' };
+    if (raw === 'BLOCKED' || raw === 'UNAVAILABLE') return { code: raw, label: 'Indisponible', tone: 'bg-slate-100 text-slate-700 border-slate-200' };
+    return { code: raw || 'UNKNOWN', label: v?.status || 'Inconnu', tone: 'bg-slate-100 text-slate-700 border-slate-200' };
+  };
+
   const totalVehicles = vehicles.length;
   const availableVehicles = vehicles.filter((v: any) => {
     const status = String(v.status ?? '').toUpperCase();
     const availability = String(v.availability_status ?? '').toLowerCase();
-    return status === 'AVAILABLE' || availability === 'available';
+    const isAvail = status === 'AVAILABLE' || availability === 'available';
+    return isAvail && !reservedVehicleIds.has(String(v.id));
+  }).length;
+  const reservedVehicles = vehicles.filter((v: any) => {
+    const status = String(v.status ?? '').toUpperCase();
+    return status === 'AVAILABLE' && reservedVehicleIds.has(String(v.id));
   }).length;
   const rentedVehicles = vehicles.filter((v: any) => {
     const status = String(v.status ?? '').toUpperCase();
@@ -659,6 +703,7 @@ const VehiclesList: React.FC = () => {
         {[
           ['Total', totalVehicles],
           ['Disponibles', availableVehicles],
+          ['Réservés', reservedVehicles],
           ['En location', rentedVehicles],
           ['Maintenance', maintenanceVehicles],
           ['Réparation', repairVehicles],
@@ -744,9 +789,14 @@ const VehiclesList: React.FC = () => {
                   <td className="px-5 py-3 text-slate-600 text-center whitespace-nowrap">{(v as any).cv ?? '—'}</td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{(v as any).fuel || '—'}</td>
                   <td className="px-5 py-3 whitespace-nowrap">
-                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border ${getStatusColor(v.status)}`}>
-                      {v.status === 'AVAILABLE' ? 'Disponible' : v.status === 'RENTED' ? 'Louée' : 'Maintenance'}
-                    </span>
+                    {(() => {
+                      const ds = displayStatusFor(v);
+                      return (
+                        <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border ${ds.tone}`}>
+                          {ds.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -875,9 +925,14 @@ const VehiclesList: React.FC = () => {
                   </div>
               }
               <div className="absolute top-6 right-6">
-                <span className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border shadow-lg ${getStatusColor(v.status)}`}>
-                  {v.status === 'AVAILABLE' ? 'Disponible' : v.status === 'RENTED' ? 'Louée' : 'Maintenance'}
-                </span>
+                {(() => {
+                  const ds = displayStatusFor(v);
+                  return (
+                    <span className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border shadow-lg ${ds.tone}`}>
+                      {ds.label}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/50 shadow-lg">
                 <p className="text-xs font-black text-slate-900 tracking-tighter font-mono">{v.registration}</p>
