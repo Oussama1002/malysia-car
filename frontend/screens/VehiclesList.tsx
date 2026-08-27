@@ -269,9 +269,15 @@ const VehiclesList: React.FC = () => {
   const fetchVehicles = async () => {
     if (getApiBase()) {
       try {
-        const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200');
+        const [vehiclesRes, subRentalsRes] = await Promise.all([
+          apiClient<{ data: any[] }>('/v1/vehicles?per_page=200'),
+          // Sub-rental (sous-location) vehicles should surface on the fleet list
+          // too. Failing quietly if the endpoint is unavailable keeps the
+          // owned-fleet view working for users without the sub_rental module.
+          apiClient<{ data: any[] }>('/v1/sub-rentals?per_page=200').catch(() => ({ data: [] })),
+        ]);
         setLoadError(null);
-        setVehicles(res.data.map((v: any): Vehicle => ({
+        const owned: Vehicle[] = vehiclesRes.data.map((v: any): Vehicle => ({
           id: v.id,
           brand_id: v.brand_id ?? null,
           model_id: v.model_id ?? null,
@@ -287,7 +293,46 @@ const VehiclesList: React.FC = () => {
           pricePerDay: v.pricePerDay ?? 0,
           photoUrl: v.photoUrl ?? null,
           ...(v as any),
-        })));
+        }));
+
+        // Only surface sub-rentals that don't shadow an owned vehicle (matched
+        // on registration) and that aren't fully wound down.
+        const ownedPlates = new Set(owned.map((v) => String(v.registration ?? '').toUpperCase().trim()).filter(Boolean));
+        const DEAD_SL = new Set(['closed', 'cancelled', 'returned']);
+        const subRentals: Vehicle[] = (subRentalsRes.data ?? [])
+          .filter((sr: any) => !DEAD_SL.has(String(sr.status ?? '').toLowerCase()))
+          .map((sr: any): Vehicle | null => {
+            const ext = sr.external_vehicle_identity ?? {};
+            const reg = String(ext.registration_number ?? sr.vehicle?.registration ?? '').toUpperCase().trim();
+            if (reg && ownedPlates.has(reg)) return null; // sub-rental linked to an owned vehicle
+            const brand = ext.brand_name ?? (sr.vehicle as any)?.brand ?? '';
+            const model = ext.model_name ?? (sr.vehicle as any)?.model ?? '';
+            return {
+              id: `sr:${sr.id}`,
+              brand_id: null,
+              model_id: null,
+              brand,
+              model,
+              year: ext.year ?? new Date().getFullYear(),
+              registration: reg,
+              registrationCard: '',
+              insuranceExpiry: '',
+              techControlExpiry: '',
+              vignetteExpiry: '',
+              status: 'AVAILABLE' as VehicleStatus,
+              pricePerDay: Number(sr.daily_cost ?? 0),
+              photoUrl: null,
+              // Marker used by displayStatusFor and card render to show the SL chip.
+              _sub_rental: true,
+              _sub_rental_status: sr.status,
+              _sub_rental_id: sr.id,
+              _supplier: sr.supplier_agency?.name ?? '',
+              _end_date: sr.end_date,
+            } as any;
+          })
+          .filter((v: any): v is Vehicle => v !== null);
+
+        setVehicles([...owned, ...subRentals]);
         return;
       } catch (err: any) {
         setVehicles([]);
@@ -573,8 +618,14 @@ const VehiclesList: React.FC = () => {
    * Effective display status — an AVAILABLE vehicle that carries an active
    * reservation should read as "Réservé", not "Disponible".
    */
+  const ficheUrlFor = (v: any): string =>
+    v?._sub_rental && v?._sub_rental_id ? `/fleet/sub-rentals/${v._sub_rental_id}` : `/fleet/${v.id}`;
+
   const displayStatusFor = (v: any): { code: string; label: string; tone: string } => {
     const raw = String(v?.status ?? '').toUpperCase();
+    if (v?._sub_rental) {
+      return { code: 'SUB_RENTAL', label: 'Sous-location', tone: 'bg-violet-100 text-violet-700 border-violet-200' };
+    }
     if (raw === 'AVAILABLE' && v?.id && reservedVehicleIds.has(String(v.id))) {
       return { code: 'RESERVED', label: 'Réservé', tone: 'bg-amber-100 text-amber-700 border-amber-200' };
     }
@@ -588,15 +639,18 @@ const VehiclesList: React.FC = () => {
 
   const totalVehicles = vehicles.length;
   const availableVehicles = vehicles.filter((v: any) => {
+    if (v._sub_rental) return false;
     const status = String(v.status ?? '').toUpperCase();
     const availability = String(v.availability_status ?? '').toLowerCase();
     const isAvail = status === 'AVAILABLE' || availability === 'available';
     return isAvail && !reservedVehicleIds.has(String(v.id));
   }).length;
   const reservedVehicles = vehicles.filter((v: any) => {
+    if (v._sub_rental) return false;
     const status = String(v.status ?? '').toUpperCase();
     return status === 'AVAILABLE' && reservedVehicleIds.has(String(v.id));
   }).length;
+  const subRentalVehicles = vehicles.filter((v: any) => !!v._sub_rental).length;
   const rentedVehicles = vehicles.filter((v: any) => {
     const status = String(v.status ?? '').toUpperCase();
     return status === 'RENTED' || status === 'UNDER_LOA' || status === 'UNDER_CREDIT';
@@ -704,6 +758,7 @@ const VehiclesList: React.FC = () => {
           ['Total', totalVehicles],
           ['Disponibles', availableVehicles],
           ['Réservés', reservedVehicles],
+          ['Sous-location', subRentalVehicles],
           ['En location', rentedVehicles],
           ['Maintenance', maintenanceVehicles],
           ['Réparation', repairVehicles],
@@ -779,7 +834,14 @@ const VehiclesList: React.FC = () => {
               )}
               {filteredVehicles.map((v, idx) => (
                 <tr key={v.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/40'}`}>
-                  <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">{v.registration}</td>
+                  <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span>{v.registration || '—'}</span>
+                      {(v as any)._sub_rental && (
+                        <span title="Sous-location" className="bg-violet-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black tracking-wider">SL</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{(v as any).immatOnline || '—'}</td>
                   <td className="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">{v.brand || '—'}</td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.model || '—'}</td>
@@ -800,11 +862,13 @@ const VehiclesList: React.FC = () => {
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <Link to={`/fleet/${v.id}`} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">Fiche</Link>
-                      <button onClick={() => handleOpenModal(v)} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">Éditer</button>
-                      <button onClick={() => handleDelete(v.id)} className="p-1.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
+                      <Link to={ficheUrlFor(v)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">Fiche</Link>
+                      {!(v as any)._sub_rental && <button onClick={() => handleOpenModal(v)} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">Éditer</button>}
+                      {!(v as any)._sub_rental && (
+                        <button onClick={() => handleDelete(v.id)} className="p-1.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -934,8 +998,18 @@ const VehiclesList: React.FC = () => {
                   );
                 })()}
               </div>
-              <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/50 shadow-lg">
-                <p className="text-xs font-black text-slate-900 tracking-tighter font-mono">{v.registration}</p>
+              <div className="absolute bottom-6 left-6 flex items-center gap-2">
+                <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/50 shadow-lg">
+                  <p className="text-xs font-black text-slate-900 tracking-tighter font-mono">{v.registration || '—'}</p>
+                </div>
+                {(v as any)._sub_rental && (
+                  <span
+                    title={(v as any)._supplier ? `Sous-location · ${(v as any)._supplier}` : 'Véhicule en sous-location'}
+                    className="bg-violet-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest shadow-lg"
+                  >
+                    SL
+                  </span>
+                )}
               </div>
             </div>
             <div className="p-8 space-y-6 flex-1 flex flex-col">
@@ -965,11 +1039,13 @@ const VehiclesList: React.FC = () => {
                 ))}
               </div>
               <div className="pt-6 border-t border-slate-100 mt-auto flex gap-3">
-                <Link to={`/fleet/${v.id}`} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all text-center">Voir fiche</Link>
-                <button onClick={() => handleOpenModal(v)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Éditer</button>
-                <button onClick={() => handleDelete(v.id)} className="w-14 py-4 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
+                <Link to={ficheUrlFor(v)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all text-center">Voir fiche</Link>
+                {!(v as any)._sub_rental && <button onClick={() => handleOpenModal(v)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Éditer</button>}
+                {!(v as any)._sub_rental && (
+                  <button onClick={() => handleDelete(v.id)} className="w-14 py-4 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                )}
               </div>
             </div>
           </div>
