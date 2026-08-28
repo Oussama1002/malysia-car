@@ -52,6 +52,21 @@ class SubRentalService
                 'created_by'               => $userId,
             ]);
 
+            // Ensure a Vehicle row exists straight away — even for draft
+            // sub-rentals — so the SL vehicle shows up on the fleet list, in
+            // reservation & contract vehicle pickers, and elsewhere the app
+            // filters on vehicle_id. If only external_vehicle_identity is
+            // provided, we spin up a temporary vehicle here.
+            if (! $contract->vehicle_id && ! empty($contract->external_vehicle_identity)) {
+                $vehicle = $this->createTemporaryVehicleIfNeeded($contract, $userId);
+                $contract->vehicle_id = $vehicle->id;
+                $contract->save();
+            } elseif ($contract->vehicle_id) {
+                Vehicle::whereKey($contract->vehicle_id)->update([
+                    'ownership_status' => 'sub_rented',
+                ]);
+            }
+
             return $contract;
         });
     }

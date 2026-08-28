@@ -299,9 +299,24 @@ const VehiclesList: React.FC = () => {
         // on registration) and that aren't fully wound down.
         const ownedPlates = new Set(owned.map((v) => String(v.registration ?? '').toUpperCase().trim()).filter(Boolean));
         const DEAD_SL = new Set(['closed', 'cancelled', 'returned']);
+        const ownedIds = new Set(owned.map((v) => String(v.id)));
         const subRentals: Vehicle[] = (subRentalsRes.data ?? [])
           .filter((sr: any) => !DEAD_SL.has(String(sr.status ?? '').toLowerCase()))
           .map((sr: any): Vehicle | null => {
+            // Sub-rentals now materialise a Vehicle row on create — if that row
+            // is already in the owned list, just tag it as SL and drop the
+            // duplicate row from the merge.
+            if (sr.vehicle_id && ownedIds.has(String(sr.vehicle_id))) {
+              const target = owned.find((v) => String(v.id) === String(sr.vehicle_id));
+              if (target) {
+                (target as any)._sub_rental = true;
+                (target as any)._sub_rental_id = sr.id;
+                (target as any)._sub_rental_status = sr.status;
+                (target as any)._supplier = sr.supplier_agency?.name ?? '';
+                (target as any)._end_date = sr.end_date;
+              }
+              return null;
+            }
             const ext = sr.external_vehicle_identity ?? {};
             const reg = String(ext.registration_number ?? sr.vehicle?.registration ?? '').toUpperCase().trim();
             if (reg && ownedPlates.has(reg)) return null; // sub-rental linked to an owned vehicle
