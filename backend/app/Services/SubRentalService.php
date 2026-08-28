@@ -277,6 +277,8 @@ class SubRentalService
             'branch_id'            => $contract->branch_id,
             'vehicle_code'         => 'SL-' . strtoupper(Str::random(6)),
             'registration_number'  => $identity['registration_number'] ?? ('SL-' . strtoupper(Str::random(6))),
+            'brand_name'           => $identity['brand_name'] ?? null,
+            'model_name'           => $identity['model_name'] ?? null,
             'color'                => $identity['color'] ?? null,
             'year'                 => $identity['year'] ?? null,
             'mileage_current'      => $identity['mileage'] ?? 0,
@@ -287,7 +289,8 @@ class SubRentalService
             'notes'                => 'Véhicule sous-location - ' . ($contract->supplierAgency->name ?? ''),
         ]);
 
-        // Link brand and model if provided
+        // Link brand and model if provided so the vehicle joins the referential
+        // (VehicleBrand / VehicleModel) and appears in brand/model filters.
         if (!empty($identity['brand_name'])) {
             $brand = \App\Models\VehicleBrand::firstOrCreate(
                 ['name' => $identity['brand_name'], 'company_id' => $contract->company_id],
