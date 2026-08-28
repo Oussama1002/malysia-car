@@ -28,6 +28,7 @@ class Vehicle extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'company_id',
         'branch_id',
         'vehicle_code',

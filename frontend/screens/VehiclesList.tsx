@@ -638,7 +638,9 @@ const VehiclesList: React.FC = () => {
 
   const displayStatusFor = (v: any): { code: string; label: string; tone: string } => {
     const raw = String(v?.status ?? '').toUpperCase();
-    if (v?._sub_rental) {
+    const ownership = String(v?.ownership_status ?? v?.ownershipStatus ?? '').toLowerCase();
+    const isSubRental = !!v?._sub_rental || ownership === 'sub_rented' || ownership === 'sub_rental';
+    if (isSubRental) {
       return { code: 'SUB_RENTAL', label: 'Sous-location', tone: 'bg-violet-100 text-violet-700 border-violet-200' };
     }
     if (raw === 'AVAILABLE' && v?.id && reservedVehicleIds.has(String(v.id))) {
@@ -653,19 +655,26 @@ const VehiclesList: React.FC = () => {
   };
 
   const totalVehicles = vehicles.length;
+  const isSL = (v: any) => {
+    const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
+    return !!v._sub_rental || ownership === 'sub_rented' || ownership === 'sub_rental';
+  };
   const availableVehicles = vehicles.filter((v: any) => {
-    if (v._sub_rental) return false;
+    if (isSL(v)) return false;
     const status = String(v.status ?? '').toUpperCase();
     const availability = String(v.availability_status ?? '').toLowerCase();
     const isAvail = status === 'AVAILABLE' || availability === 'available';
     return isAvail && !reservedVehicleIds.has(String(v.id));
   }).length;
   const reservedVehicles = vehicles.filter((v: any) => {
-    if (v._sub_rental) return false;
+    if (isSL(v)) return false;
     const status = String(v.status ?? '').toUpperCase();
     return status === 'AVAILABLE' && reservedVehicleIds.has(String(v.id));
   }).length;
-  const subRentalVehicles = vehicles.filter((v: any) => !!v._sub_rental).length;
+  const subRentalVehicles = vehicles.filter((v: any) => {
+    const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
+    return !!v._sub_rental || ownership === 'sub_rented' || ownership === 'sub_rental';
+  }).length;
   const rentedVehicles = vehicles.filter((v: any) => {
     const status = String(v.status ?? '').toUpperCase();
     return status === 'RENTED' || status === 'UNDER_LOA' || status === 'UNDER_CREDIT';
@@ -852,7 +861,7 @@ const VehiclesList: React.FC = () => {
                   <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span>{v.registration || '—'}</span>
-                      {(v as any)._sub_rental && (
+                      {((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
                         <span title="Sous-location" className="bg-violet-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black tracking-wider">SL</span>
                       )}
                     </div>
@@ -878,8 +887,8 @@ const VehiclesList: React.FC = () => {
                   <td className="px-5 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <Link to={ficheUrlFor(v)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">Fiche</Link>
-                      {!(v as any)._sub_rental && <button onClick={() => handleOpenModal(v)} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">Éditer</button>}
-                      {!(v as any)._sub_rental && (
+                      {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && <button onClick={() => handleOpenModal(v)} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">Éditer</button>}
+                      {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
                         <button onClick={() => handleDelete(v.id)} className="p-1.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
@@ -1017,7 +1026,7 @@ const VehiclesList: React.FC = () => {
                 <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/50 shadow-lg">
                   <p className="text-xs font-black text-slate-900 tracking-tighter font-mono">{v.registration || '—'}</p>
                 </div>
-                {(v as any)._sub_rental && (
+                {((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
                   <span
                     title={(v as any)._supplier ? `Sous-location · ${(v as any)._supplier}` : 'Véhicule en sous-location'}
                     className="bg-violet-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest shadow-lg"
@@ -1055,8 +1064,8 @@ const VehiclesList: React.FC = () => {
               </div>
               <div className="pt-6 border-t border-slate-100 mt-auto flex gap-3">
                 <Link to={ficheUrlFor(v)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all text-center">Voir fiche</Link>
-                {!(v as any)._sub_rental && <button onClick={() => handleOpenModal(v)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Éditer</button>}
-                {!(v as any)._sub_rental && (
+                {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && <button onClick={() => handleOpenModal(v)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Éditer</button>}
+                {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
                   <button onClick={() => handleDelete(v.id)} className="w-14 py-4 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   </button>

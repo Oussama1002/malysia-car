@@ -261,7 +261,7 @@ class SubRentalService
         }
     }
 
-    private function createTemporaryVehicleIfNeeded(SubRentalContract $contract, string $userId): Vehicle
+    public function createTemporaryVehicleIfNeeded(SubRentalContract $contract, string $userId): Vehicle
     {
         $identity = $contract->external_vehicle_identity ?? [];
 
