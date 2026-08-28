@@ -387,14 +387,42 @@ export const ReservationsOpsPage: React.FC = () => {
   const formSlotBlocked = Boolean(formAvailabilityQ.data && formAvailabilityQ.data.available === false);
   const confirmSlotBlocked = Boolean(confirmAvailabilityQ.data && confirmAvailabilityQ.data.available === false);
 
+  // Vehicle IDs that already carry an active reservation — used to annotate
+  // the picker so users see "Réservé" instead of "Disponible" for them.
+  const reservedVehicleIds = useMemo(() => {
+    const ACTIVE = new Set(['draft', 'reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested']);
+    const s = new Set<string>();
+    for (const r of ((reservationsQ.data ?? []) as ReservationDto[])) {
+      if (ACTIVE.has(String(r.status ?? '').toLowerCase()) && r.vehicle_id) {
+        s.add(String(r.vehicle_id));
+      }
+    }
+    return s;
+  }, [reservationsQ.data]);
+
   const vehicleOptions = useMemo(
     () =>
-      (vehiclesQ.data ?? []).map((v) => ({
-        id: String(v.id),
-        label: `${v.brand} ${v.model} · ${v.registration}`,
-        status: String((v as any).status ?? ''),
-      })),
-    [vehiclesQ.data]
+      (vehiclesQ.data ?? []).map((v) => {
+        const rawStatus = String((v as any).status ?? '').toUpperCase();
+        const ownership = String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase();
+        const isSubRental = ownership === 'sub_rented' || ownership === 'sub_rental';
+        const isReserved = reservedVehicleIds.has(String(v.id));
+        let statusFr: string;
+        if (isSubRental) statusFr = 'Sous-location';
+        else if (rawStatus === 'AVAILABLE' && isReserved) statusFr = 'Réservé';
+        else if (rawStatus === 'AVAILABLE') statusFr = 'Disponible';
+        else if (rawStatus === 'RENTED') statusFr = 'Loué';
+        else if (rawStatus === 'MAINTENANCE') statusFr = 'Maintenance';
+        else if (rawStatus === 'IN_REPAIR') statusFr = 'Réparation';
+        else statusFr = rawStatus || '';
+        const prefix = isSubRental ? '🟣 SL · ' : '';
+        return {
+          id: String(v.id),
+          label: `${prefix}${v.brand} ${v.model} · ${v.registration}`,
+          status: statusFr,
+        };
+      }),
+    [vehiclesQ.data, reservedVehicleIds]
   );
 
   if (!hasBackend()) {
