@@ -271,23 +271,50 @@ class SubRentalService
             ]);
         }
 
-        $vehicle = Vehicle::create([
-            'id'                   => (string) Str::uuid(),
-            'company_id'           => $contract->company_id,
-            'branch_id'            => $contract->branch_id,
-            'vehicle_code'         => 'SL-' . strtoupper(Str::random(6)),
-            'registration_number'  => $identity['registration_number'] ?? ('SL-' . strtoupper(Str::random(6))),
-            'brand_name'           => $identity['brand_name'] ?? null,
-            'model_name'           => $identity['model_name'] ?? null,
-            'color'                => $identity['color'] ?? null,
-            'year'                 => $identity['year'] ?? null,
-            'mileage_current'      => $identity['mileage'] ?? 0,
-            'status'               => 'available',
-            'ownership_status'     => 'sub_rented',
-            'availability_status'  => 'available',
-            'acquisition_type'     => 'sub_rental',
-            'notes'                => 'Véhicule sous-location - ' . ($contract->supplierAgency->name ?? ''),
-        ]);
+        $plate = $identity['registration_number'] ?? null;
+
+        // Reuse an existing vehicle with the same plate (case-insensitive) so
+        // re-activating a contract or having a manually-created row does not
+        // trip the vehicles_registration_number_unique constraint.
+        $vehicle = null;
+        if (!empty($plate)) {
+            $vehicle = Vehicle::withoutGlobalScopes()
+                ->whereRaw('UPPER(TRIM(registration_number)) = ?', [strtoupper(trim($plate))])
+                ->first();
+        }
+
+        if ($vehicle) {
+            // Existing row — update ownership + refresh missing display fields
+            // so it reads as a sub-location vehicle from now on.
+            $vehicle->company_id          = $vehicle->company_id ?: $contract->company_id;
+            $vehicle->branch_id           = $vehicle->branch_id ?: $contract->branch_id;
+            $vehicle->ownership_status    = 'sub_rented';
+            $vehicle->availability_status = $vehicle->availability_status ?: 'available';
+            $vehicle->acquisition_type    = $vehicle->acquisition_type ?: 'sub_rental';
+            if (empty($vehicle->brand_name) && !empty($identity['brand_name'])) $vehicle->brand_name = $identity['brand_name'];
+            if (empty($vehicle->model_name) && !empty($identity['model_name'])) $vehicle->model_name = $identity['model_name'];
+            if (empty($vehicle->color) && !empty($identity['color'])) $vehicle->color = $identity['color'];
+            if (empty($vehicle->year) && !empty($identity['year'])) $vehicle->year = $identity['year'];
+            if ((int) ($vehicle->mileage_current ?? 0) === 0 && !empty($identity['mileage'])) $vehicle->mileage_current = $identity['mileage'];
+        } else {
+            $vehicle = Vehicle::create([
+                'id'                   => (string) Str::uuid(),
+                'company_id'           => $contract->company_id,
+                'branch_id'            => $contract->branch_id,
+                'vehicle_code'         => 'SL-' . strtoupper(Str::random(6)),
+                'registration_number'  => $plate ?? ('SL-' . strtoupper(Str::random(6))),
+                'brand_name'           => $identity['brand_name'] ?? null,
+                'model_name'           => $identity['model_name'] ?? null,
+                'color'                => $identity['color'] ?? null,
+                'year'                 => $identity['year'] ?? null,
+                'mileage_current'      => $identity['mileage'] ?? 0,
+                'status'               => 'available',
+                'ownership_status'     => 'sub_rented',
+                'availability_status'  => 'available',
+                'acquisition_type'     => 'sub_rental',
+                'notes'                => 'Véhicule sous-location - ' . ($contract->supplierAgency->name ?? ''),
+            ]);
+        }
 
         // Link brand and model if provided so the vehicle joins the referential
         // (VehicleBrand / VehicleModel) and appears in brand/model filters.
