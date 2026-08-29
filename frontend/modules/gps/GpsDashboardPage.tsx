@@ -46,7 +46,6 @@ const STATUS_META: Record<string, { label: string; color: string; tone: 'success
   MAINTENANCE: { label: 'Maintenance', color: '#f59e0b', tone: 'warning' },
   BLOCKED: { label: 'Bloqué', color: '#ef4444', tone: 'danger' },
   SOLD: { label: 'Vendu', color: '#64748b', tone: 'neutral' },
-  SUB_RENTAL: { label: 'Sous-location', color: '#8b5cf6', tone: 'brand' },
 };
 
 const ACTIVE_RESERVATION_STATUSES = new Set([
@@ -56,10 +55,13 @@ const ACTIVE_RESERVATION_STATUSES = new Set([
 
 function effectiveStatusFor(v: any, reservedIds: Set<string>): string {
   const raw = String(v?.status ?? '').toUpperCase();
-  const ownership = String(v?.ownership_status ?? v?.ownershipStatus ?? '').toLowerCase();
-  if (ownership === 'sub_rented' || ownership === 'sub_rental') return 'SUB_RENTAL';
   if (raw === 'AVAILABLE' && reservedIds.has(String(v?.id))) return 'RESERVED';
   return raw || 'AVAILABLE';
+}
+
+function isSubRental(v: any): boolean {
+  const ownership = String(v?.ownership_status ?? v?.ownershipStatus ?? '').toLowerCase();
+  return ownership === 'sub_rented' || ownership === 'sub_rental';
 }
 
 const FILTER_GROUPS: { key: string; label: string; match: string[] }[] = [
@@ -368,7 +370,17 @@ export const GpsDashboardPage: React.FC = () => {
                       <Icon name="car" size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-bold">{v.brand} {v.model}</div>
+                      <div className="flex items-center gap-1.5">
+                        {isSubRental(v) && (
+                          <span
+                            title="Véhicule en sous-location"
+                            className="rounded bg-violet-600 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-white"
+                          >
+                            SL
+                          </span>
+                        )}
+                        <div className="truncate text-[13px] font-bold">{v.brand} {v.model}</div>
+                      </div>
                       <div className="truncate font-mono text-[11px] text-[color:var(--df-text-muted)]">{v.registration}</div>
                     </div>
                     <StatusChip label={meta.label} tone={meta.tone} />
@@ -457,7 +469,12 @@ const VehicleInfoCard: React.FC<{
       <div className="px-3 pb-3 pt-2.5 space-y-2.5">
         {/* Vehicle title */}
         <div>
-          <div className="text-[15px] font-black text-slate-900">{v.brand} {v.model} {v.version ?? ''}</div>
+          <div className="flex items-center gap-1.5">
+            {isSubRental(v) && (
+              <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-white">SL</span>
+            )}
+            <div className="text-[15px] font-black text-slate-900">{v.brand} {v.model} {v.version ?? ''}</div>
+          </div>
           <div className="font-mono text-[11px] font-bold text-slate-500">{v.registration}</div>
         </div>
 
