@@ -320,8 +320,8 @@ class SubRentalService
         // (VehicleBrand / VehicleModel) and appears in brand/model filters.
         if (!empty($identity['brand_name'])) {
             $brand = \App\Models\VehicleBrand::firstOrCreate(
-                ['name' => $identity['brand_name'], 'company_id' => $contract->company_id],
-                ['company_id' => $contract->company_id, 'name' => $identity['brand_name']]
+                ['name' => $identity['brand_name']],
+                ['name' => $identity['brand_name']]
             );
             $vehicle->brand_id = $brand->id;
         }
