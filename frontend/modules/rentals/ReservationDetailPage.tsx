@@ -490,12 +490,24 @@ export const ReservationDetailPage: React.FC = () => {
                   {(vehiclesQ.data ?? [])
                     .filter((v: any) => v.id !== r?.vehicle_id)
                     .map((v: any) => {
-                      const brand = v.brand?.name ?? v.brand_name ?? '';
-                      const model = v.model?.model_name ?? v.model?.name ?? v.model_name ?? '';
+                      const brand = v.brand?.name ?? v.brand ?? v.brand_name ?? '';
+                      const model = v.model?.model_name ?? v.model?.name ?? v.model ?? v.model_name ?? '';
                       const reg = v.registration_number ?? v.registration ?? '';
+                      const ownership = String(v.ownership_status ?? '').toLowerCase();
+                      const isSL = ownership === 'sub_rented' || ownership === 'sub_rental';
+                      const rawStatus = String(v.status ?? v.availability_status ?? '').toLowerCase();
+                      const statusFr =
+                        rawStatus === 'available' ? 'Disponible'
+                        : rawStatus === 'rented'   ? 'Loué'
+                        : rawStatus === 'maintenance' ? 'Maintenance'
+                        : rawStatus === 'in_repair'   ? 'Réparation'
+                        : rawStatus === 'blocked' || rawStatus === 'unavailable' ? 'Indisponible'
+                        : rawStatus || 'Inconnu';
+                      const nameLabel = [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule';
+                      const prefix = isSL ? '🟣 SL · ' : '';
                       return (
                         <option key={v.id} value={v.id}>
-                          {brand} {model} · {reg} {v.availability_status === 'available' ? '✓' : `(${v.availability_status})`}
+                          {prefix}{nameLabel} · {reg} ({statusFr})
                         </option>
                       );
                     })}
