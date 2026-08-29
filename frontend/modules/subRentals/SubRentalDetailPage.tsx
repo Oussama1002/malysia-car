@@ -256,8 +256,20 @@ export const SubRentalDetailPage: React.FC = () => {
                 <InfoRow label="Coût journalier" value={`${Number(c.daily_cost).toLocaleString('fr-MA')} MAD`} />
                 <InfoRow label="Coût total" value={`${Number(c.total_cost).toLocaleString('fr-MA')} MAD`} />
                 <InfoRow label="Caution" value={c.deposit_amount ? `${Number(c.deposit_amount).toLocaleString('fr-MA')} MAD` : '—'} />
-                <InfoRow label="Mode de paiement" value={c.payment_method} />
-                <InfoRow label="Statut paiement" value={c.payment_status} />
+                <InfoRow label="Mode de paiement" value={
+                  c.payment_method === 'cash' ? 'Espèces'
+                    : c.payment_method === 'bank_transfer' ? 'Virement'
+                    : c.payment_method === 'cheque' ? 'Chèque'
+                    : c.payment_method === 'card' ? 'Carte'
+                    : c.payment_method === 'other' ? 'Autre'
+                    : c.payment_method
+                } />
+                <InfoRow label="Statut paiement" value={
+                  c.payment_status === 'paid' ? 'Payé'
+                    : c.payment_status === 'partial' ? 'Partiellement payé'
+                    : c.payment_status === 'unpaid' ? 'Impayé'
+                    : c.payment_status
+                } />
               </div>
             </div>
             {c.notes && (
