@@ -493,7 +493,7 @@ export const ReservationDetailPage: React.FC = () => {
                       const brand = v.brand?.name ?? v.brand ?? v.brand_name ?? '';
                       const model = v.model?.model_name ?? v.model?.name ?? v.model ?? v.model_name ?? '';
                       const reg = v.registration_number ?? v.registration ?? '';
-                      const ownership = String(v.ownership_status ?? '').toLowerCase();
+                      const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
                       const isSL = ownership === 'sub_rented' || ownership === 'sub_rental';
                       const rawStatus = String(v.status ?? v.availability_status ?? '').toLowerCase();
                       const statusFr =
