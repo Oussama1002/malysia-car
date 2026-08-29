@@ -407,9 +407,10 @@ export const ReservationsOpsPage: React.FC = () => {
         const ownership = String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase();
         const isSubRental = ownership === 'sub_rented' || ownership === 'sub_rental';
         const isReserved = reservedVehicleIds.has(String(v.id));
+        // Real availability — the SL prefix already tells the user it is a
+        // sub-rental, so status stays the actual disponibilité state.
         let statusFr: string;
-        if (isSubRental) statusFr = 'Sous-location';
-        else if (rawStatus === 'AVAILABLE' && isReserved) statusFr = 'Réservé';
+        if (rawStatus === 'AVAILABLE' && isReserved) statusFr = 'Réservé';
         else if (rawStatus === 'AVAILABLE') statusFr = 'Disponible';
         else if (rawStatus === 'RENTED') statusFr = 'Loué';
         else if (rawStatus === 'MAINTENANCE') statusFr = 'Maintenance';
