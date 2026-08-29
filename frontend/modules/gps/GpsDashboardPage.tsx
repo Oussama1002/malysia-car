@@ -11,6 +11,7 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { useUIPrefs } from '@/providers/UIPreferencesProvider';
 import type { FleetVehicleDto, GpsAlertDto } from '@/services/dtos';
 import { gpsApi } from '@/services/gpsApi';
+import { opsApi } from '@/services/opsApi';
 
 // Leaflet default icon fix
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,7 +38,7 @@ function fakeCoords(id: number | string): [number, number] {
 
 const STATUS_META: Record<string, { label: string; color: string; tone: 'success' | 'warning' | 'info' | 'danger' | 'neutral' | 'brand' }> = {
   AVAILABLE: { label: 'Disponible', color: '#10b981', tone: 'success' },
-  RESERVED: { label: 'Réservé', color: '#5b5bf4', tone: 'brand' },
+  RESERVED: { label: 'Réservé', color: '#f59e0b', tone: 'warning' },
   RENTED: { label: 'En location', color: '#22d3ee', tone: 'info' },
   UNDER_LOA: { label: 'LOA active', color: '#22d3ee', tone: 'info' },
   UNDER_CREDIT: { label: 'Crédit auto', color: '#22d3ee', tone: 'info' },
@@ -45,7 +46,21 @@ const STATUS_META: Record<string, { label: string; color: string; tone: 'success
   MAINTENANCE: { label: 'Maintenance', color: '#f59e0b', tone: 'warning' },
   BLOCKED: { label: 'Bloqué', color: '#ef4444', tone: 'danger' },
   SOLD: { label: 'Vendu', color: '#64748b', tone: 'neutral' },
+  SUB_RENTAL: { label: 'Sous-location', color: '#8b5cf6', tone: 'brand' },
 };
+
+const ACTIVE_RESERVATION_STATUSES = new Set([
+  'draft', 'reserved', 'confirmed', 'pickup_scheduled',
+  'handed_over', 'active', 'extension_requested',
+]);
+
+function effectiveStatusFor(v: any, reservedIds: Set<string>): string {
+  const raw = String(v?.status ?? '').toUpperCase();
+  const ownership = String(v?.ownership_status ?? v?.ownershipStatus ?? '').toLowerCase();
+  if (ownership === 'sub_rented' || ownership === 'sub_rental') return 'SUB_RENTAL';
+  if (raw === 'AVAILABLE' && reservedIds.has(String(v?.id))) return 'RESERVED';
+  return raw || 'AVAILABLE';
+}
 
 const FILTER_GROUPS: { key: string; label: string; match: string[] }[] = [
   { key: 'all', label: 'Tous', match: [] },
@@ -125,6 +140,23 @@ export const GpsDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const vehicles = useQuery({ queryKey: queryKeys.fleet.all, queryFn: async () => gpsApi.fleetVehicles() });
   const alerts = useQuery({ queryKey: queryKeys.gps.alerts, queryFn: async () => gpsApi.alerts() });
+  const reservationsQ = useQuery({
+    queryKey: [...queryKeys.reservations, 'gps'],
+    queryFn: async () => opsApi.reservations(),
+    staleTime: 60_000,
+  });
+
+  const reservedVehicleIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of ((reservationsQ.data ?? []) as any[])) {
+      if (ACTIVE_RESERVATION_STATUSES.has(String(r.status ?? '').toLowerCase()) && r.vehicle_id) {
+        s.add(String(r.vehicle_id));
+      }
+    }
+    return s;
+  }, [reservationsQ.data]);
+
+  const statusOf = (v: any) => effectiveStatusFor(v, reservedVehicleIds);
   const geofencesQ = useQuery({ queryKey: [...queryKeys.gps.geofences], queryFn: async () => gpsApi.geofences() });
   const geofences = geofencesQ.data ?? [];
 
@@ -136,7 +168,7 @@ export const GpsDashboardPage: React.FC = () => {
   const all = vehicles.data ?? [];
   const filtered = useMemo(() => {
     const grp = FILTER_GROUPS.find((g) => g.key === filter);
-    const base = !grp || grp.match.length === 0 ? all : all.filter((v) => grp.match.includes(v.status));
+    const base = !grp || grp.match.length === 0 ? all : all.filter((v) => grp.match.includes(statusOf(v)));
     if (!query.trim()) return base;
     const q = query.toLowerCase();
     return base.filter(
@@ -235,7 +267,7 @@ export const GpsDashboardPage: React.FC = () => {
                 <MapController focus={focus} />
                 {filtered.map((v) => {
                   const pos = fakeCoords(v.id);
-                  const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+                  const meta = STATUS_META[statusOf(v)] ?? STATUS_META.AVAILABLE;
                   const isSelected = selectedId === v.id;
                   return (
                     <Marker
@@ -269,6 +301,7 @@ export const GpsDashboardPage: React.FC = () => {
                   vehicle={selected}
                   onClose={() => setSelectedId(null)}
                   onNavigate={navigate}
+                  reservedIds={reservedVehicleIds}
                 />
               </div>
             )}
@@ -317,7 +350,7 @@ export const GpsDashboardPage: React.FC = () => {
             </div>
             <div className="max-h-[380px] overflow-y-auto px-2 pb-2">
               {filtered.map((v) => {
-                const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+                const meta = STATUS_META[statusOf(v)] ?? STATUS_META.AVAILABLE;
                 const isSel = selectedId === v.id;
                 return (
                   <button
@@ -377,8 +410,9 @@ const VehicleInfoCard: React.FC<{
   vehicle: FleetVehicleDto;
   onClose: () => void;
   onNavigate: ReturnType<typeof useNavigate>;
-}> = ({ vehicle: v, onClose, onNavigate }) => {
-  const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+  reservedIds?: Set<string>;
+}> = ({ vehicle: v, onClose, onNavigate, reservedIds }) => {
+  const meta = STATUS_META[effectiveStatusFor(v, reservedIds ?? new Set())] ?? STATUS_META.AVAILABLE;
   const gps = fakeGpsData(v.id, v.status);
 
   const fuelColor = gps.fuel >= 50 ? '#10b981' : gps.fuel >= 25 ? '#f59e0b' : '#ef4444';
