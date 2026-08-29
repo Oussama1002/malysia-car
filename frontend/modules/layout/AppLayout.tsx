@@ -173,24 +173,10 @@ export const AppLayout: React.FC = () => {
     return t;
   };
 
-  const currentLoc = useLocation();
-  const isNavItemActive = (to: string): boolean => {
-    const [path, search = ''] = to.split('?');
-    if (currentLoc.pathname !== path && !currentLoc.pathname.startsWith(path + '/')) return false;
-    if (!search) return true;
-    const wanted = new URLSearchParams(search);
-    const actual = new URLSearchParams(currentLoc.search);
-    for (const [k, v] of wanted.entries()) {
-      if ((actual.get(k) ?? '') !== v) return false;
-    }
-    return true;
-  };
-
   const renderNavLink = (it: NavItem, indent = true) => (
     <NavLink
       to={it.to}
-      end={it.to.includes('?')}
-      className={() => `df-nav-link ${isNavItemActive(it.to) ? 'df-nav-link--active' : ''}`}
+      className={({ isActive }) => `df-nav-link ${isActive ? 'df-nav-link--active' : ''}`}
       style={indent ? undefined : { paddingInlineStart: 16 }}
       onClick={() => setMobileOpen(false)}
       title={sidebarCollapsed ? t(it.labelKey) : undefined}

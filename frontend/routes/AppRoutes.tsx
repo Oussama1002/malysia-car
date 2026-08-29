@@ -16,7 +16,8 @@ import { FleetComplianceDashboardPage } from '@/modules/fleet/FleetComplianceDas
 import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
-import { ContractsModulePage } from '@/modules/contracts/ContractsModulePage';
+import { ContractsPage } from '@/modules/contracts/ContractsPage';
+import { RentalsPage } from '@/modules/rentals/RentalsPage';
 import { ReservationDetailPage } from '@/modules/rentals/ReservationDetailPage';
 import { ContractWizardPage } from '@/modules/contracts/ContractWizardPage';
 import { ContractDetailPage } from '@/modules/contracts/ContractDetailPage';
@@ -256,16 +257,21 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
 
-            {/*
-              /contracts is now the "Réservations" module shell: a tabbed page
-              hosting both the contracts list and the rental operations
-              (formerly /rentals). See ContractsModulePage.
-            */}
+            {/* Contrats and Réservations are now two separate pages, one per
+                sidebar entry — no in-page tab switcher. */}
             <Route
               path="/contracts"
               element={
                 <ModuleGate module="contracts">
-                  <ContractsModulePage />
+                  <ContractsPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/reservations"
+              element={
+                <ModuleGate module="contracts">
+                  <RentalsPage />
                 </ModuleGate>
               }
             />
@@ -756,8 +762,7 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
-            <Route path="/rentals" element={<Navigate to="/contracts?tab=locations" replace />} />
-            <Route path="/reservations" element={<Navigate to="/contracts?tab=locations" replace />} />
+            <Route path="/rentals" element={<Navigate to="/reservations" replace />} />
 
             {/* Sous-location */}
             <Route

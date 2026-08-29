@@ -285,7 +285,7 @@ export const ExecutiveDashboardPage: React.FC = () => {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
-            { to: '/contracts?tab=locations', icon: 'calendar', label: 'Réservations',     tone: 'var(--df-brand-500)' },
+            { to: '/reservations',            icon: 'calendar', label: 'Réservations',     tone: 'var(--df-brand-500)' },
             { to: '/contracts/new',           icon: 'sign',     label: 'Nouveau contrat',  tone: 'var(--df-info-500)' },
             { to: '/customers',               icon: 'users',    label: 'Clients',          tone: 'var(--df-success-500)' },
             { to: '/fleet',                   icon: 'car',      label: 'Flotte',           tone: 'var(--df-warning-500)' },

@@ -30,7 +30,7 @@ type AppTile = {
 };
 
 const APPS: AppTile[] = [
-  { to: '/contracts?tab=locations', icon: 'calendar',    label: 'Réservations',   tone: '#5b5bf4' },
+  { to: '/reservations',            icon: 'calendar',    label: 'Réservations',   tone: '#5b5bf4' },
   { to: '/customers',               icon: 'users',       label: 'Clients',        tone: '#22c55e' },
   { to: '/fleet',                   icon: 'car',         label: 'Flotte',         tone: '#f59e0b' },
   { to: '/contracts',               icon: 'sign',        label: 'Contrats',       tone: '#06b6d4' },
