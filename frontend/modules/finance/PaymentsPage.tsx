@@ -23,6 +23,33 @@ import { endpoints } from '@/services/endpoints';
 import { queryKeys } from '@/services/queryKeys';
 import { ApiError } from '@/services/apiError';
 
+/**
+ * Unpack any error (including Laravel 422 validation bags and 500 exceptions
+ * with a body) into readable text. Falls back to the raw HTTP message.
+ */
+function extractError(e: unknown): string {
+  if (e instanceof ApiError) {
+    const body = e.body as { message?: string; error?: string; errors?: Record<string, string[]>; exception?: string; file?: string; line?: number } | null;
+    const parts: string[] = [];
+    if (body?.message) parts.push(body.message);
+    if (body?.error) parts.push(body.error);
+    if (body?.errors) {
+      for (const list of Object.values(body.errors)) {
+        if (Array.isArray(list)) for (const m of list) parts.push(String(m));
+      }
+    }
+    // Include exception class + file:line so a 500 tells the user what actually broke
+    if (body?.exception) {
+      const loc = body.file ? ` @ ${String(body.file).split(/[\\/]/).pop()}:${body.line ?? '?'}` : '';
+      parts.push(`${body.exception}${loc}`);
+    }
+    if (parts.length === 0) parts.push(e.message || `HTTP ${e.status}`);
+    return Array.from(new Set(parts)).join(' · ');
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 /* ── French status labels ──────────────────────────────────────────── */
 
 const CONTRACT_STATUS_FR: Record<string, string> = {
@@ -98,7 +125,7 @@ export const PaymentsPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['payments'] });
       setCreateOpen(false);
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur'),
+    onError: (e) => setError(extractError(e)),
   });
 
   const allocateMut = useMutation({
@@ -110,7 +137,7 @@ export const PaymentsPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['payments'] });
       setAllocateOpenPayment(null);
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur'),
+    onError: (e) => setError(extractError(e)),
   });
 
   const rows = listQ.data?.data ?? [];

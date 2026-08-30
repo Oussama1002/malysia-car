@@ -36,6 +36,20 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // HandleCors never runs when the inner pipeline throws; browsers then report a CORS failure on 500s.
         $exceptions->respond(function (SymfonyResponse $response, \Throwable $e, \Illuminate\Http\Request $request) {
+            // Expose the real exception message (+ file:line + class) on API 5xx
+            // responses so the frontend does not just show "Server Error". Only
+            // for authenticated API callers — keeps unauthenticated callers on
+            // the generic response.
+            if ($request->is('api/*') && $response->getStatusCode() >= 500 && $request->user()) {
+                $payload = json_decode($response->getContent() ?: '{}', true) ?: [];
+                $payload['message'] = $e->getMessage() ?: ($payload['message'] ?? 'Server Error');
+                $payload['exception'] = class_basename($e);
+                $payload['file'] = $e->getFile();
+                $payload['line'] = $e->getLine();
+                $response->setContent(json_encode($payload));
+                $response->headers->set('Content-Type', 'application/json');
+            }
+
             if (! $request->headers->has('Origin') || ! $request->is('api/*')) {
                 return $response;
             }
