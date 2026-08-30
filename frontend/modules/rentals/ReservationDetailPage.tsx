@@ -601,24 +601,87 @@ export const ReservationDetailPage: React.FC = () => {
             {/* Swap history */}
             {(swapsQ.data ?? []).length > 0 && (
               <div className="mt-5 border-t border-slate-100 pt-4">
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Historique des changements</div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {(swapsQ.data ?? []).map((s: any) => (
-                    <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs">
-                      <div>
-                        <span className="font-bold text-slate-700">
-                          {s.old_vehicle?.brand?.name ?? ''} {s.old_vehicle?.model?.model_name ?? s.old_vehicle?.model?.name ?? ''}
-                        </span>
-                        <span className="mx-1 text-slate-400">→</span>
-                        <span className="font-bold text-slate-900">
-                          {s.new_vehicle?.brand?.name ?? ''} {s.new_vehicle?.model?.model_name ?? s.new_vehicle?.model?.name ?? ''}
-                        </span>
+                <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Historique des changements ({(swapsQ.data ?? []).length})
+                </div>
+                <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                  {(swapsQ.data ?? []).map((s: any) => {
+                    const vehLabel = (v: any) => {
+                      const brand = v?.brand?.name ?? v?.brand_name ?? v?.brand ?? '';
+                      const model = v?.model?.model_name ?? v?.model?.name ?? v?.model_name ?? v?.model ?? '';
+                      const reg = v?.registration_number ?? v?.registration ?? '—';
+                      return { name: [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule', plate: reg };
+                    };
+                    const userName = (u: any) =>
+                      u ? ([u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || '—') : '—';
+                    const fmtDT = (iso?: string | null) => {
+                      if (!iso) return '—';
+                      const d = new Date(iso);
+                      return d.toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    };
+                    const oldV = vehLabel(s.old_vehicle);
+                    const newV = vehLabel(s.new_vehicle);
+                    const tone =
+                      s.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      : s.status === 'rejected' ? 'bg-rose-100 text-rose-700 border-rose-200'
+                      : 'bg-amber-100 text-amber-700 border-amber-200';
+                    const statusFr = s.status === 'approved' ? 'Validé' : s.status === 'rejected' ? 'Refusé' : 'En attente';
+                    return (
+                      <div key={s.id} className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ancien véhicule</div>
+                            <div className="font-bold text-slate-700">{oldV.name}</div>
+                            <div className="font-mono text-[11px] text-slate-500">{oldV.plate}</div>
+                          </div>
+                          <div className="mt-4 text-slate-400">→</div>
+                          <div className="min-w-0 text-right">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nouveau véhicule</div>
+                            <div className="font-black text-slate-900">{newV.name}</div>
+                            <div className="font-mono text-[11px] text-slate-500">{newV.plate}</div>
+                          </div>
+                          <span className={`ms-auto rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${tone}`}>
+                            {statusFr}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-2 text-[11px]">
+                          <div>
+                            <span className="font-bold text-slate-400">Demandé par :</span>{' '}
+                            <span className="font-semibold text-slate-700">{userName(s.requested_by_user)}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-400">Le :</span>{' '}
+                            <span className="font-semibold text-slate-700">{fmtDT(s.requested_at ?? s.created_at)}</span>
+                          </div>
+                          {(s.status === 'approved' || s.status === 'rejected') && (
+                            <>
+                              <div>
+                                <span className="font-bold text-slate-400">{s.status === 'approved' ? 'Validé par :' : 'Refusé par :'}</span>{' '}
+                                <span className="font-semibold text-slate-700">{userName(s.resolved_by_user)}</span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-400">Le :</span>{' '}
+                                <span className="font-semibold text-slate-700">{fmtDT(s.resolved_at)}</span>
+                              </div>
+                            </>
+                          )}
+                          {s.reason && (
+                            <div className="col-span-2">
+                              <span className="font-bold text-slate-400">Motif :</span>{' '}
+                              <span className="italic text-slate-700">{s.reason}</span>
+                            </div>
+                          )}
+                          {s.status === 'rejected' && s.rejection_reason && (
+                            <div className="col-span-2">
+                              <span className="font-bold text-slate-400">Motif de refus :</span>{' '}
+                              <span className="italic text-rose-700">{s.rejection_reason}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${s.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : s.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {s.status === 'approved' ? 'Validé' : s.status === 'rejected' ? 'Refusé' : 'En attente'}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

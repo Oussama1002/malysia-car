@@ -29,7 +29,12 @@ class VehicleSwapController extends Controller
     public function index(Request $request): JsonResponse
     {
         $q = VehicleSwapRequest::query()
-            ->with(['oldVehicle.brand', 'oldVehicle.model', 'newVehicle.brand', 'newVehicle.model'])
+            ->with([
+                'oldVehicle.brand', 'oldVehicle.model',
+                'newVehicle.brand', 'newVehicle.model',
+                'requestedByUser:id,first_name,last_name,email',
+                'resolvedByUser:id,first_name,last_name,email',
+            ])
             ->orderByDesc('requested_at');
 
         if ($contractId = $request->query('contract_id')) {

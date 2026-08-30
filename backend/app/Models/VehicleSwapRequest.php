@@ -59,4 +59,14 @@ class VehicleSwapRequest extends Model
     {
         return $this->belongsTo(Customer::class);
     }
+
+    public function requestedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function resolvedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resolved_by');
+    }
 }
