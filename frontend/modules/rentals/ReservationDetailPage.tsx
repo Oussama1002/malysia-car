@@ -3,6 +3,56 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { ApiError } from '@/services/apiError';
+
+/**
+ * Map backend rental / reservation error codes and English fallbacks to
+ * French sentences so users see readable messages instead of raw enum values
+ * (e.g. "overlapping_reservation") or Laravel English messages.
+ */
+const RENTAL_ERROR_FR: Record<string, string> = {
+  overlapping_reservation: 'Une autre réservation se chevauche sur cette période.',
+  active_contract_overlap: 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
+  overlapping_mission: 'Une mission est planifiée pour ce véhicule sur ce créneau.',
+  vehicle_in_maintenance: 'Un ordre de réparation est en cours sur ce véhicule.',
+  vehicle_in_scheduled_maintenance: 'Maintenance planifiée en cours.',
+  vehicle_accident_hold: 'Dossier sinistre ouvert sur ce véhicule.',
+  vehicle_not_found: 'Véhicule introuvable.',
+  invalid_range: 'Plage de dates invalide.',
+  vehicle_status_unavailable: 'Statut flotte : véhicule non louable.',
+  vehicle_availability_flag: 'Véhicule marqué indisponible à la location.',
+  // Common Laravel English messages
+  'Another reservation overlaps this period.': 'Une autre réservation se chevauche sur cette période.',
+  'An active finance or lease contract overlaps this period.': 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
+  'A mission is scheduled for this vehicle during this period.': 'Une mission est planifiée pour ce véhicule sur ce créneau.',
+  'Vehicle has an open repair order.': 'Un ordre de réparation est en cours sur ce véhicule.',
+};
+
+function translateError(msg: string): string {
+  return RENTAL_ERROR_FR[msg] ?? msg;
+}
+
+/**
+ * Turn any error (Laravel 422 validation body included) into a full list of
+ * French messages, so the drawer shows every problem instead of the first
+ * one followed by "(and N more errors)".
+ */
+function formatErrorList(err: unknown, fallback: string): string[] {
+  if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+    const body = err.body as { errors?: Record<string, string[]>; message?: string };
+    const bag = body.errors ?? {};
+    const items: string[] = [];
+    for (const list of Object.values(bag)) {
+      if (Array.isArray(list)) {
+        for (const raw of list) items.push(translateError(String(raw)));
+      }
+    }
+    if (items.length > 0) return Array.from(new Set(items));
+    if (body.message) return [translateError(body.message).replace(/\s*\(and \d+ more errors?\)\.?$/i, '')];
+  }
+  if (err instanceof Error) return [translateError(err.message)];
+  return [fallback];
+}
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { PaymentForm } from '@/modules/finance/PaymentsPage';
@@ -77,7 +127,7 @@ export const ReservationDetailPage: React.FC = () => {
   const [swapOpen, setSwapOpen] = useState(false);
   const [swapVehicleId, setSwapVehicleId] = useState('');
   const [swapReason, setSwapReason] = useState('');
-  const [swapError, setSwapError] = useState<string | null>(null);
+  const [swapError, setSwapError] = useState<string[] | null>(null);
   const [swapMode, setSwapMode] = useState<'instant' | 'request'>('instant');
 
   const detailQ = useQuery({
@@ -145,7 +195,7 @@ export const ReservationDetailPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['reservation', rid] });
       qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
     },
-    onError: (e) => setSwapError(e instanceof Error ? e.message : 'Erreur lors du changement'),
+    onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors du changement')),
   });
   const swapRequestM = useMutation({
     mutationFn: () => opsApi.requestVehicleSwap({ reservation_id: rid!, new_vehicle_id: swapVehicleId, reason: swapReason || undefined }),
@@ -153,7 +203,7 @@ export const ReservationDetailPage: React.FC = () => {
       setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
       qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
     },
-    onError: (e) => setSwapError(e instanceof Error ? e.message : 'Erreur lors de la demande'),
+    onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors de la demande')),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['reservation', rid] });
@@ -524,9 +574,14 @@ export const ReservationDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {swapError && (
+            {swapError && swapError.length > 0 && (
               <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
-                {swapError}
+                <div className="mb-1 font-black">
+                  {swapError.length === 1 ? 'Changement impossible' : `Changement impossible (${swapError.length} problèmes)`}
+                </div>
+                <ul className="list-inside list-disc space-y-0.5">
+                  {swapError.map((m, i) => <li key={i}>{m}</li>)}
+                </ul>
               </div>
             )}
 
