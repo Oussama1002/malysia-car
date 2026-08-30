@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { ApiError } from '@/services/apiError';
+import { queryKeys } from '@/services/queryKeys';
 
 /**
  * Map backend rental / reservation error codes and English fallbacks to
@@ -157,20 +158,20 @@ export const ReservationDetailPage: React.FC = () => {
 
   const validateM = useMutation({
     mutationFn: () => opsApi.validateReservation(rid!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
   });
   const confirmM = useMutation({
     mutationFn: () => opsApi.confirmReservation(rid!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
   });
   const cancelM = useMutation({
     mutationFn: () => opsApi.cancelReservation(rid!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
   });
   const [statusChangeTarget, setStatusChangeTarget] = useState('');
   const changeStatusM = useMutation({
     mutationFn: (newStatus: string) => opsApi.changeReservationStatus(rid!, newStatus),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); setStatusChangeTarget(''); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); setStatusChangeTarget(''); },
   });
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteM = useMutation({
@@ -194,6 +195,7 @@ export const ReservationDetailPage: React.FC = () => {
       setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
       qc.invalidateQueries({ queryKey: ['reservation', rid] });
       qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
+      qc.invalidateQueries({ queryKey: queryKeys.reservations });
     },
     onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors du changement')),
   });
@@ -206,13 +208,16 @@ export const ReservationDetailPage: React.FC = () => {
     onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors de la demande')),
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['reservation', rid] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['reservation', rid] });
+    qc.invalidateQueries({ queryKey: queryKeys.reservations });
+  };
 
   // Ensure a draft invoice exists for the reservation total, then refresh so
   // the payment form can auto-select it. Idempotent (returns existing invoice).
   const ensureInvoiceM = useMutation({
     mutationFn: () => apiClient(`/v1/reservations/${rid}/ensure-invoice`, { method: 'POST' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
   });
   const openPaymentDrawer = () => {
     setPaymentError(null);
