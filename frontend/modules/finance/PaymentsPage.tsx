@@ -183,39 +183,6 @@ export const PaymentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Quick filters ─────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Vues :</span>
-        <button
-          type="button"
-          onClick={() => setFilters((f) => ({ ...f, payment_method: undefined, page: 1 }))}
-          className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-            !filters.payment_method
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Tous
-        </button>
-        <button
-          type="button"
-          onClick={() => setFilters((f) => ({ ...f, payment_method: 'check', page: 1 }))}
-          className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-            filters.payment_method === 'check'
-              ? 'bg-amber-600 text-white shadow-sm'
-              : 'border border-amber-200 bg-white text-amber-700 hover:bg-amber-50'
-          }`}
-        >
-          💵 Chèques
-          {(() => {
-            const pendingCount = rows.filter((r) => r.payment_method === 'check' && (r.cheque_status ?? 'pending') === 'pending').length;
-            return pendingCount > 0 ? (
-              <span className="ml-1.5 rounded-full bg-white/30 px-1.5 text-[10px] font-black">{pendingCount} en attente</span>
-            ) : null;
-          })()}
-        </button>
-      </div>
-
       {/* ── Table ────────────────────────────────────────────────── */}
       <DataTable<Payment>
         loading={listQ.isLoading}
@@ -247,16 +214,6 @@ export const PaymentsPage: React.FC = () => {
           { key: 'method', header: 'Mode', render: (r) => PAYMENT_METHOD_LABEL[r.payment_method] ?? r.payment_method },
           { key: 'date', header: 'Date', render: (r) => formatDate(r.payment_date) },
           { key: 'amount', header: 'Montant', render: (r) => formatCurrencyMad(Number(r.amount)) },
-          {
-            key: 'unallocated',
-            header: 'Non alloué',
-            render: (r) =>
-              Number(r.amount_unallocated) > 0 ? (
-                <span className="font-bold text-amber-700">{formatCurrencyMad(Number(r.amount_unallocated))}</span>
-              ) : (
-                <span className="text-emerald-700">0</span>
-              ),
-          },
           {
             key: 'status',
             header: 'Statut',
