@@ -378,8 +378,15 @@ class PaymentController extends Controller
     private function generatePaymentNumber(): string
     {
         $prefix = 'PAY-' . now()->format('Ym') . '-';
-        $last = Payment::where('payment_number', 'like', $prefix . '%')
-            ->orderByDesc('payment_number')->value('payment_number');
+        // withTrashed + withoutGlobalScopes so soft-deleted payments (bounced
+        // cheques) and cross-tenant rows still occupy their sequence number.
+        // Otherwise a bounced payment leaves its number reusable, which trips
+        // payments_payment_number_unique the next time we try to insert it.
+        $last = Payment::withTrashed()
+            ->withoutGlobalScopes()
+            ->where('payment_number', 'like', $prefix . '%')
+            ->orderByDesc('payment_number')
+            ->value('payment_number');
         $seq = $last ? (int) substr($last, strlen($prefix)) + 1 : 1;
 
         return $prefix . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
