@@ -5,6 +5,7 @@ import {
   createPayment,
   listPayments,
   listInvoices,
+  updateChequeStatus,
   PAYMENT_METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
   PAYMENT_TYPE_LABEL,
@@ -83,6 +84,7 @@ export const PaymentsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [allocateOpenPayment, setAllocateOpenPayment] = useState<Payment | null>(null);
+  const [detailOpenPayment, setDetailOpenPayment] = useState<Payment | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const listQ = useQuery({
@@ -181,6 +183,39 @@ export const PaymentsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ── Quick filters ─────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Vues :</span>
+        <button
+          type="button"
+          onClick={() => setFilters((f) => ({ ...f, payment_method: undefined, page: 1 }))}
+          className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+            !filters.payment_method
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Tous
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilters((f) => ({ ...f, payment_method: 'check', page: 1 }))}
+          className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+            filters.payment_method === 'check'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'border border-amber-200 bg-white text-amber-700 hover:bg-amber-50'
+          }`}
+        >
+          💵 Chèques
+          {(() => {
+            const pendingCount = rows.filter((r) => r.payment_method === 'check' && (r.cheque_status ?? 'pending') === 'pending').length;
+            return pendingCount > 0 ? (
+              <span className="ml-1.5 rounded-full bg-white/30 px-1.5 text-[10px] font-black">{pendingCount} en attente</span>
+            ) : null;
+          })()}
+        </button>
+      </div>
+
       {/* ── Table ────────────────────────────────────────────────── */}
       <DataTable<Payment>
         loading={listQ.isLoading}
@@ -248,20 +283,42 @@ export const PaymentsPage: React.FC = () => {
             },
           },
           {
+            key: 'cheque',
+            header: 'Chèque',
+            render: (r) => {
+              if (r.payment_method !== 'check') return <span className="text-slate-300">—</span>;
+              const s = String(r.cheque_status ?? 'pending');
+              const tone = s === 'cleared' ? 'success' : s === 'bounced' ? 'danger' : 'warning';
+              const label = s === 'cleared' ? 'Encaissé' : s === 'bounced' ? 'Rejeté' : 'En attente';
+              return <StatusBadge label={label} tone={tone} />;
+            },
+          },
+          {
             key: 'actions',
             header: '',
-            render: (r) =>
-              Number(r.amount_unallocated) > 0 ? (
+            render: (r) => (
+              <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   className="df-btn df-btn--ghost text-xs"
-                  onClick={() => {
-                    setError(null);
-                    setAllocateOpenPayment(r);
-                  }}
+                  onClick={() => setDetailOpenPayment(r)}
                 >
-                  Allouer
+                  Détail
                 </button>
-              ) : null,
+                {Number(r.amount_unallocated) > 0 && (
+                  <button
+                    type="button"
+                    className="df-btn df-btn--ghost text-xs"
+                    onClick={() => {
+                      setError(null);
+                      setAllocateOpenPayment(r);
+                    }}
+                  >
+                    Allouer
+                  </button>
+                )}
+              </div>
+            ),
           },
         ]}
       />
@@ -288,6 +345,24 @@ export const PaymentsPage: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* ── Detail drawer ────────────────────────────────────────── */}
+      <DrawerPanel
+        open={!!detailOpenPayment}
+        title={`Paiement ${detailOpenPayment?.payment_number ?? ''}`}
+        onClose={() => setDetailOpenPayment(null)}
+      >
+        {detailOpenPayment && (
+          <PaymentDetailView
+            payment={detailOpenPayment}
+            onClose={() => setDetailOpenPayment(null)}
+            onChanged={(p) => {
+              qc.invalidateQueries({ queryKey: ['payments'] });
+              setDetailOpenPayment(p);
+            }}
+          />
+        )}
+      </DrawerPanel>
 
       {/* ── Create drawer ────────────────────────────────────────── */}
       <DrawerPanel open={createOpen} title="Nouveau paiement client" onClose={() => setCreateOpen(false)}>
@@ -348,6 +423,169 @@ async function scanCheque(file: File): Promise<ChequeOcrResult> {
   });
   return res.data ?? {};
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   Payment detail view — full payment info + cheque status management.
+   ──────────────────────────────────────────────────────────────────────── */
+
+const PaymentDetailView: React.FC<{
+  payment: Payment;
+  onClose: () => void;
+  onChanged: (p: Payment) => void;
+}> = ({ payment, onClose, onChanged }) => {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [bounceReason, setBounceReason] = useState('');
+
+  const isCheque = payment.payment_method === 'check';
+  const chequeStatus = String(payment.cheque_status ?? 'pending');
+
+  const setCheque = async (
+    status: 'pending' | 'cleared' | 'bounced',
+    reason?: string,
+  ) => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await updateChequeStatus(payment.id, {
+        cheque_status: status,
+        ...(status === 'cleared' ? { cashed_at: new Date().toISOString() } : {}),
+        ...(status === 'bounced' ? { bounce_reason: reason || undefined } : {}),
+      });
+      qc.invalidateQueries({ queryKey: ['payments'] });
+      onChanged(res.data);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const alloc = Number(payment.amount_allocated ?? 0);
+  const total = Number(payment.amount ?? 0);
+  const unalloc = Number(payment.amount_unallocated ?? 0);
+
+  const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div className="grid grid-cols-3 gap-3 border-b border-slate-100 py-2 last:border-b-0">
+      <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="col-span-2 text-sm font-semibold text-slate-800">{value ?? '—'}</div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 p-5 text-white">
+        <div className="text-[11px] font-bold uppercase tracking-widest opacity-80">Montant</div>
+        <div className="mt-1 text-3xl font-black">{formatCurrencyMad(total)}</div>
+        <div className="mt-2 text-xs opacity-90">
+          Alloué : <span className="font-bold">{formatCurrencyMad(alloc)}</span>
+          {' · '}Non alloué : <span className="font-bold">{formatCurrencyMad(unalloc)}</span>
+        </div>
+      </div>
+
+      {/* Cheque management */}
+      {isCheque && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-sm font-black text-amber-900">Gestion du chèque</div>
+            <StatusBadge
+              label={chequeStatus === 'cleared' ? 'Encaissé' : chequeStatus === 'bounced' ? 'Rejeté' : 'En attente'}
+              tone={chequeStatus === 'cleared' ? 'success' : chequeStatus === 'bounced' ? 'danger' : 'warning'}
+            />
+          </div>
+          <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
+            <div><span className="font-bold text-amber-800">N° chèque :</span> <span className="text-slate-800">{payment.check_number ?? '—'}</span></div>
+            <div><span className="font-bold text-amber-800">Banque :</span> <span className="text-slate-800">{payment.check_bank ?? '—'}</span></div>
+            <div><span className="font-bold text-amber-800">Date chèque :</span> <span className="text-slate-800">{payment.check_date ? formatDate(payment.check_date) : '—'}</span></div>
+            {payment.cheque_cashed_at && (
+              <div><span className="font-bold text-amber-800">Encaissé le :</span> <span className="text-slate-800">{formatDate(payment.cheque_cashed_at)}</span></div>
+            )}
+            {payment.cheque_bounce_reason && (
+              <div className="col-span-2"><span className="font-bold text-amber-800">Motif de rejet :</span> <span className="italic text-rose-700">{payment.cheque_bounce_reason}</span></div>
+            )}
+          </div>
+
+          {chequeStatus !== 'cleared' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCheque('cleared')}
+              className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+            >
+              ✓ Marquer comme encaissé
+            </button>
+          )}
+          {chequeStatus === 'cleared' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCheque('pending')}
+              className="w-full rounded-xl border border-amber-300 bg-white py-2.5 text-xs font-black uppercase tracking-wider text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            >
+              ↩ Revenir en attente
+            </button>
+          )}
+          {chequeStatus !== 'bounced' && (
+            <div className="mt-2">
+              <input
+                type="text"
+                className="mb-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                placeholder="Motif de rejet (optionnel)"
+                value={bounceReason}
+                onChange={(e) => setBounceReason(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setCheque('bounced', bounceReason)}
+                className="w-full rounded-xl border border-rose-300 bg-white py-2.5 text-xs font-black uppercase tracking-wider text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+              >
+                ✗ Marquer comme rejeté
+              </button>
+            </div>
+          )}
+          {err && <div className="mt-2 text-xs font-semibold text-rose-700">{err}</div>}
+        </div>
+      )}
+
+      {/* Details */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-2 text-xs font-black uppercase tracking-widest text-slate-500">Détails</div>
+        <Row label="N° paiement" value={<span className="font-mono">{payment.payment_number}</span>} />
+        <Row label="Date" value={formatDate(payment.payment_date)} />
+        <Row label="Client" value={payment.customer?.full_name ?? payment.customer?.customer_code ?? '—'} />
+        <Row label="Type" value={payment.payment_type ? (PAYMENT_TYPE_LABEL[payment.payment_type] ?? payment.payment_type) : '—'} />
+        <Row label="Mode" value={PAYMENT_METHOD_LABEL[payment.payment_method] ?? payment.payment_method} />
+        <Row label="Sens" value={payment.payment_direction === 'incoming' ? 'Entrant (encaissement)' : 'Sortant (remboursement)'} />
+        <Row label="Devise" value={payment.currency_code ?? 'MAD'} />
+        {payment.external_reference && <Row label="Référence" value={payment.external_reference} />}
+        {payment.notes && <Row label="Notes" value={<span className="italic">{payment.notes}</span>} />}
+      </div>
+
+      {/* Allocations */}
+      {payment.allocations && payment.allocations.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="mb-2 text-xs font-black uppercase tracking-widest text-slate-500">Allocations ({payment.allocations.length})</div>
+          <div className="space-y-2">
+            {payment.allocations.map((a: any) => (
+              <div key={a.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                <div className="font-semibold text-slate-800">
+                  {a.invoice?.invoice_number ?? a.invoice_id?.slice(0, 8) ?? '—'}
+                </div>
+                <div className="font-bold text-emerald-700">{formatCurrencyMad(Number(a.amount_allocated))}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button type="button" onClick={onClose} className="df-btn df-btn--ghost">Fermer</button>
+      </div>
+    </div>
+  );
+};
 
 export const PaymentForm: React.FC<{
   submitting: boolean;

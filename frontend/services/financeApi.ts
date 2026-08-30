@@ -137,6 +137,9 @@ export interface Payment {
   check_number?: string | null;
   check_date?: string | null;
   check_bank?: string | null;
+  cheque_status?: 'pending' | 'cleared' | 'bounced' | null;
+  cheque_cashed_at?: string | null;
+  cheque_bounce_reason?: string | null;
   notes?: string | null;
   customer?: { id: string; full_name?: string | null; customer_code?: string | null } | null;
   bank_account?: BankAccount | null;
@@ -349,6 +352,16 @@ export function getPayment(id: string): Promise<{ data: Payment }> {
 
 export function createPayment(payload: PaymentCreatePayload): Promise<{ data: Payment }> {
   return apiClient<{ data: Payment }>(`/v1/payments`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateChequeStatus(
+  id: string,
+  payload: { cheque_status: 'pending' | 'cleared' | 'bounced'; cashed_at?: string; bounce_reason?: string },
+): Promise<{ data: Payment }> {
+  return apiClient<{ data: Payment }>(`/v1/payments/${id}/cheque-status`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export function allocatePayment(id: string, payload: AllocatePayload): Promise<{ data: Payment }> {

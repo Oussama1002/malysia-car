@@ -724,6 +724,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:payments.create');
         Route::post('payments/{payment}/allocate', [PaymentController::class, 'allocate'])
             ->middleware('permission:payments.allocate');
+        Route::post('payments/{payment}/cheque-status', [PaymentController::class, 'updateChequeStatus'])
+            ->middleware('permission:payments.update');
         Route::delete('payment-allocations/{allocation}', [PaymentController::class, 'removeAllocation'])
             ->middleware('permission:payments.unallocate');
 

@@ -263,6 +263,30 @@ class PaymentController extends Controller
         return ApiResponse::message('Allocation removed');
     }
 
+    public function updateChequeStatus(Request $request, Payment $payment): JsonResponse
+    {
+        if ($payment->payment_method !== 'check') {
+            return ApiResponse::error('Ce paiement n\'est pas un chèque.', 422);
+        }
+
+        $data = $request->validate([
+            'cheque_status' => ['required', 'in:pending,cleared,bounced'],
+            'cashed_at' => ['nullable', 'date'],
+            'bounce_reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $payment->cheque_status = $data['cheque_status'];
+        $payment->cheque_cashed_at = $data['cheque_status'] === 'cleared'
+            ? ($data['cashed_at'] ?? now())
+            : null;
+        $payment->cheque_bounce_reason = $data['cheque_status'] === 'bounced'
+            ? ($data['bounce_reason'] ?? null)
+            : null;
+        $payment->save();
+
+        return ApiResponse::success($payment->fresh());
+    }
+
     private function allocatePayment(Payment $payment, array $allocations, ?string $userId): void
     {
         $already = (float) $payment->allocations()->sum('amount_allocated');
