@@ -409,7 +409,16 @@ const PaymentDetailView: React.FC<{
         ...(status === 'cleared' ? { cashed_at: new Date().toISOString() } : {}),
         ...(status === 'bounced' ? { bounce_reason: reason || undefined } : {}),
       });
+      // Refresh every list that could be showing this payment (paiements page,
+      // reservation payments tab, dashboards, treasury...).
       qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: ['reservation'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      // A bounced cheque removes the payment entirely — close the drawer.
+      if (status === 'bounced') {
+        onClose();
+        return;
+      }
       onChanged(res.data);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erreur');

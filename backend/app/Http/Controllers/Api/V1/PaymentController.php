@@ -275,14 +275,45 @@ class PaymentController extends Controller
             'bounce_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $payment->cheque_status = $data['cheque_status'];
-        $payment->cheque_cashed_at = $data['cheque_status'] === 'cleared'
-            ? ($data['cashed_at'] ?? now())
-            : null;
-        $payment->cheque_bounce_reason = $data['cheque_status'] === 'bounced'
-            ? ($data['bounce_reason'] ?? null)
-            : null;
-        $payment->save();
+        $touchedInvoices = [];
+        DB::transaction(function () use ($payment, $data, &$touchedInvoices) {
+            $payment->cheque_status = $data['cheque_status'];
+            $payment->cheque_cashed_at = $data['cheque_status'] === 'cleared'
+                ? ($data['cashed_at'] ?? now())
+                : null;
+            $payment->cheque_bounce_reason = $data['cheque_status'] === 'bounced'
+                ? ($data['bounce_reason'] ?? null)
+                : null;
+
+            // A bounced cheque means the money never landed — unwind allocations
+            // so the invoice reverts to its owed state, flip the payment status
+            // to "reversed", and soft-delete it so the reservation Paiements
+            // list no longer counts it.
+            if ($data['cheque_status'] === 'bounced') {
+                foreach ($payment->allocations()->get() as $alloc) {
+                    if ($alloc->invoice_id) $touchedInvoices[] = $alloc->invoice_id;
+                    $alloc->delete();
+                }
+                $payment->amount_allocated = 0;
+                $payment->amount_unallocated = (float) $payment->amount;
+                $payment->status = 'reversed';
+                $payment->save();
+                $payment->delete(); // soft-delete
+            } else {
+                // Cleared / back-to-pending: keep the payment as-is, just
+                // record the new cheque status.
+                if ($payment->trashed()) {
+                    $payment->restore();
+                }
+                $payment->save();
+            }
+        });
+
+        foreach (array_unique($touchedInvoices) as $invoiceId) {
+            if ($invoice = Invoice::find($invoiceId)) {
+                $invoice->refreshPaymentStatus();
+            }
+        }
 
         return ApiResponse::success($payment->fresh());
     }
