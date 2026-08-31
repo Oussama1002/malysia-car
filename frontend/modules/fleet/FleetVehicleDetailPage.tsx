@@ -447,7 +447,17 @@ export const FleetVehicleDetailPage: React.FC = () => {
               </table>
             </div>
           </SectionCard>
-          <MovementForms vehicleId={id!} onDone={() => invalidateVehicle()} />
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+            <div className="flex items-start gap-3">
+              <span className="text-lg leading-none">📡</span>
+              <div>
+                <div className="font-black">Mouvements automatiques</div>
+                <div className="mt-0.5 text-xs text-indigo-700/90">
+                  Les mouvements (départs, arrêts, kilométrage, carburant) sont enregistrés automatiquement à partir du boîtier GPS du véhicule. Aucune saisie manuelle n'est nécessaire.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
