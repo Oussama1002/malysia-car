@@ -361,14 +361,31 @@ export const FleetVehicleDetailPage: React.FC = () => {
     refetchInterval: 60000,
   });
   const maintenanceVehicleAlerts = (maintenanceAlertsQ.data?.data?.alerts ?? []).filter((a) => a.vehicle?.id === id);
-  const complianceVehicleAlerts = (vehicleQ.data?.complianceAlerts ?? []).map((a) => ({
-    id: a.id,
-    title: a.title,
-    source: 'compliance' as const,
-  }));
-  const vehicleAlerts = [
-    ...maintenanceVehicleAlerts.map((a) => ({ id: a.id, title: a.title, source: 'maintenance' as const })),
-    ...complianceVehicleAlerts,
+  const complianceVehicleAlerts: any[] = (vehicleQ.data?.complianceAlerts ?? []);
+  const vehicleAlerts: Array<{
+    id: string;
+    source: 'maintenance' | 'compliance';
+    title: string;
+    description?: string | null;
+    severity?: string | null;
+    triggeredAt?: string | null;
+  }> = [
+    ...maintenanceVehicleAlerts.map((a) => ({
+      id: a.id,
+      source: 'maintenance' as const,
+      title: a.title,
+      description: a.description,
+      severity: a.severity,
+      triggeredAt: a.triggeredAt,
+    })),
+    ...complianceVehicleAlerts.map((a: any) => ({
+      id: a.id,
+      source: 'compliance' as const,
+      title: a.title ?? 'Alerte conformité',
+      description: a.description ?? a.message ?? null,
+      severity: a.severity ?? null,
+      triggeredAt: a.triggered_at ?? a.triggeredAt ?? a.created_at ?? null,
+    })),
   ];
   const invalidate = (keys: string[]) => qc.invalidateQueries({ queryKey: ['vehicle', id, ...keys] });
   const invalidateVehicle = () => qc.invalidateQueries({ queryKey: ['vehicle', id] });
@@ -426,11 +443,47 @@ export const FleetVehicleDetailPage: React.FC = () => {
       )}
       {vehicleAlerts.length > 0 && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <div className="mb-1 text-sm font-bold text-red-800">Alertes automatiques</div>
-          <ul className="space-y-1 text-xs text-red-700">
-            {vehicleAlerts.slice(0, 5).map((alert) => (
-              <li key={`${alert.source}-${alert.id}`}>• {alert.title}</li>
-            ))}
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-black text-red-800">Alertes automatiques</div>
+            <span className="text-[10px] font-bold text-red-600">{vehicleAlerts.length} alerte{vehicleAlerts.length > 1 ? 's' : ''}</span>
+          </div>
+          <ul className="space-y-2">
+            {vehicleAlerts.slice(0, 6).map((alert) => {
+              const sev = String(alert.severity ?? '').toLowerCase();
+              const sevTone =
+                sev === 'critical' ? 'bg-red-600 text-white'
+                : sev === 'high'   ? 'bg-red-100 text-red-800 border border-red-300'
+                : sev === 'normal' ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                : 'bg-slate-100 text-slate-700 border border-slate-200';
+              const sevLabel =
+                sev === 'critical' ? 'Critique'
+                : sev === 'high'   ? 'Élevée'
+                : sev === 'normal' ? 'Normale'
+                : sev === 'low'    ? 'Faible'
+                : '—';
+              const when = alert.triggeredAt
+                ? new Date(alert.triggeredAt).toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : null;
+              return (
+                <li key={`${alert.source}-${alert.id}`} className="rounded-lg border border-red-200 bg-white px-3 py-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-black text-red-900">{alert.title}</div>
+                      {alert.description && (
+                        <div className="mt-0.5 text-[11px] text-slate-700">{alert.description}</div>
+                      )}
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${sevTone}`}>
+                      {sevLabel}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] font-semibold text-slate-500">
+                    <span className="uppercase tracking-wider">{alert.source === 'maintenance' ? '🔧 Maintenance' : '📋 Conformité'}</span>
+                    {when && <span>Déclenchée le {when}</span>}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
