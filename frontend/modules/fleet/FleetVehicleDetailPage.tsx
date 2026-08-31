@@ -296,6 +296,64 @@ export const FleetVehicleDetailPage: React.FC = () => {
   });
 
   const veh = vehicleQ.data?.vehicle as Record<string, any> | undefined;
+
+  // Reservations + contracts feed the effective status (Réservé / En location
+  // / Sous-location) — the raw v.status stays AVAILABLE even when the vehicle
+  // is bound to a live reservation or contract, which mislead users.
+  const reservationsForVehicleQ = useQuery({
+    queryKey: ['reservations', 'for-vehicle', id],
+    queryFn: async () => (await apiClient<{ data: any[] }>(`/v1/reservations?per_page=100&vehicle_id=${id}`)).data ?? [],
+    enabled: !!id && !!getApiBase(),
+    staleTime: 30_000,
+  });
+  const contractsForVehicleQ = useQuery({
+    queryKey: ['contracts', 'for-vehicle', id],
+    queryFn: async () => (await apiClient<{ data: any[] }>(`/v1/contracts?per_page=100&vehicle_id=${id}`)).data ?? [],
+    enabled: !!id && !!getApiBase(),
+    staleTime: 30_000,
+  });
+
+  const hasActiveReservation = (reservationsForVehicleQ.data ?? []).some((r: any) => {
+    const s = String(r.status ?? '').toLowerCase();
+    return ['draft','reserved','confirmed','pickup_scheduled','handed_over','active','extension_requested'].includes(s);
+  });
+  const hasActiveContract = (contractsForVehicleQ.data ?? []).some((c: any) => {
+    const s = String(c.status ?? '').toLowerCase();
+    return !['cancelled','terminated','rejected','expired','draft'].includes(s);
+  });
+  const veh_ownership = String(veh?.ownership_status ?? veh?.ownershipStatus ?? '').toLowerCase();
+  const isSL = veh_ownership === 'sub_rented' || veh_ownership === 'sub_rental';
+
+  // Effective display status. RENTED/MAINTENANCE/etc from the DB always win.
+  const effectiveStatus = (() => {
+    const raw = String(veh?.status ?? '').toUpperCase();
+    if (raw !== 'AVAILABLE') return raw;
+    if (hasActiveContract)   return 'RENTED';       // finance / lease contract
+    if (hasActiveReservation) return 'RESERVED';     // reservation window
+    return 'AVAILABLE';
+  })();
+  const statusLabelFR: Record<string, string> = {
+    AVAILABLE:   'Disponible',
+    RENTED:      'En location',
+    RESERVED:    'Réservé',
+    MAINTENANCE: 'Maintenance',
+    IN_REPAIR:   'Réparation',
+    BLOCKED:     'Bloqué',
+    UNAVAILABLE: 'Indisponible',
+    SOLD:        'Vendu',
+    SCRAPPED:    'Rebut',
+  };
+  const statusColorFR: Record<string, string> = {
+    AVAILABLE:   'bg-emerald-100 text-emerald-700',
+    RENTED:      'bg-indigo-100 text-indigo-700',
+    RESERVED:    'bg-amber-100 text-amber-700',
+    MAINTENANCE: 'bg-orange-100 text-orange-700',
+    IN_REPAIR:   'bg-rose-100 text-rose-700',
+    BLOCKED:     'bg-red-100 text-red-700',
+    UNAVAILABLE: 'bg-slate-100 text-slate-600',
+    SOLD:        'bg-slate-100 text-slate-600',
+    SCRAPPED:    'bg-slate-100 text-slate-600',
+  };
   const maintenanceAlertsQ = useQuery({
     queryKey: ['fleet', 'maintenance', 'alerts', 'vehicle', id],
     queryFn: () => maintenanceApi.alerts(),
@@ -341,8 +399,16 @@ export const FleetVehicleDetailPage: React.FC = () => {
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[color:var(--df-text-muted)]">
             <span className="font-mono">{veh.registration}</span>
+            {isSL && (
+              <>
+                <span>•</span>
+                <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-black tracking-wider text-white">SL</span>
+              </>
+            )}
             <span>•</span>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${statusColor[veh.status] ?? 'bg-slate-100 text-slate-600'}`}>{veh.status}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${statusColorFR[effectiveStatus] ?? 'bg-slate-100 text-slate-600'}`}>
+              {statusLabelFR[effectiveStatus] ?? effectiveStatus}
+            </span>
             {veh.mileageKm && <><span>•</span><span>{veh.mileageKm.toLocaleString('fr-MA')} km</span></>}
           </div>
         </div>
