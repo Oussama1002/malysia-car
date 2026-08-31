@@ -159,11 +159,18 @@ function monthsBetween(start: string, end: string): number {
  * leftover days (0–30). "2 mois et 5 jours" is more accurate than the
  * blanket "2 mois" the old helper produced for anything under 90 days.
  */
+interface WizardChequeScan {
+  check_number?: string;
+  bank?: string;
+  check_date?: string;
+  amount?: number;
+  existing_payment?: { payment_number: string; amount?: number; payment_date?: string | null } | null;
+}
 /** Send a cheque image/PDF to the OCR endpoint and return extracted fields. */
-async function scanCheque(file: File): Promise<{ check_number?: string; bank?: string; check_date?: string; amount?: number }> {
+async function scanCheque(file: File): Promise<WizardChequeScan> {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await apiClient<{ data?: { check_number?: string; bank?: string; check_date?: string; amount?: number } }>('/v1/cheque-ocr', {
+  const res = await apiClient<{ data?: WizardChequeScan }>('/v1/cheque-ocr', {
     method: 'POST',
     body: fd,
   });
@@ -446,6 +453,15 @@ export const ContractWizardPage: React.FC = () => {
     setScanError((e) => { const { [paymentId]: _, ...rest } = e; return rest; });
     try {
       const data = await scanCheque(file);
+      // Refuse the prefill and warn the user when this cheque already backs
+      // a live payment.
+      if (data.existing_payment) {
+        setScanError((prev) => ({
+          ...prev,
+          [paymentId]: `Ce chèque a déjà été utilisé pour le paiement ${data.existing_payment!.payment_number}. Un même chèque ne peut pas être payé deux fois.`,
+        }));
+        return;
+      }
       setState((s) => ({
         ...s,
         payments: s.payments.map((p) => p.id === paymentId ? {

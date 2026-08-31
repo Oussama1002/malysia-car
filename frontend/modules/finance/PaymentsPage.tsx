@@ -390,6 +390,14 @@ interface ChequeOcrResult {
   bank?: string;
   check_date?: string;
   amount?: number;
+  existing_payment?: {
+    payment_id: string;
+    payment_number: string;
+    amount: number;
+    payment_date?: string | null;
+    bank?: string | null;
+    status?: string | null;
+  } | null;
 }
 
 /**
@@ -610,6 +618,34 @@ export const PaymentForm: React.FC<{
   });
   const [chequeScanning, setChequeScanning] = useState(false);
   const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
+  const [chequeDuplicate, setChequeDuplicate] = useState<NonNullable<ChequeOcrResult['existing_payment']> | null>(null);
+
+  const applyChequeScan = async (file: File) => {
+    setChequeScanning(true);
+    setChequeOcrError(null);
+    setChequeDuplicate(null);
+    try {
+      const data = await scanCheque(file);
+      // Refuse to prefill and warn the user when the scanned cheque already
+      // backs a live payment. The user can still enter another cheque number
+      // manually — the guard fires again on server-side submit.
+      if (data.existing_payment) {
+        setChequeDuplicate(data.existing_payment);
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        check_number: data.check_number ?? f.check_number,
+        check_bank: data.bank ?? f.check_bank,
+        check_date: data.check_date ?? f.check_date,
+        amount: data.amount ?? f.amount,
+      }));
+    } catch (err) {
+      setChequeOcrError(err instanceof Error ? err.message : 'Échec du scan OCR');
+    } finally {
+      setChequeScanning(false);
+    }
+  };
 
   /* ── Load catalogue data ──────────────────────────────────────── */
 
@@ -947,24 +983,8 @@ export const PaymentForm: React.FC<{
                 className="hidden"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (!file) return;
-                  setChequeScanning(true);
-                  setChequeOcrError(null);
-                  try {
-                    const data = await scanCheque(file);
-                    setForm((f) => ({
-                      ...f,
-                      check_number: data.check_number ?? f.check_number,
-                      check_bank: data.bank ?? f.check_bank,
-                      check_date: data.check_date ?? f.check_date,
-                      amount: data.amount ?? f.amount,
-                    }));
-                  } catch (err) {
-                    setChequeOcrError(err instanceof Error ? err.message : 'Échec du scan OCR');
-                  } finally {
-                    setChequeScanning(false);
-                    e.target.value = '';
-                  }
+                  if (file) await applyChequeScan(file);
+                  e.target.value = '';
                 }}
               />
               {chequeScanning ? 'Analyse en cours...' : 'Importer un fichier'}
@@ -977,29 +997,37 @@ export const PaymentForm: React.FC<{
                 className="hidden"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (!file) return;
-                  setChequeScanning(true);
-                  setChequeOcrError(null);
-                  try {
-                    const data = await scanCheque(file);
-                    setForm((f) => ({
-                      ...f,
-                      check_number: data.check_number ?? f.check_number,
-                      check_bank: data.bank ?? f.check_bank,
-                      check_date: data.check_date ?? f.check_date,
-                      amount: data.amount ?? f.amount,
-                    }));
-                  } catch (err) {
-                    setChequeOcrError(err instanceof Error ? err.message : 'Échec du scan OCR');
-                  } finally {
-                    setChequeScanning(false);
-                    e.target.value = '';
-                  }
+                  if (file) await applyChequeScan(file);
+                  e.target.value = '';
                 }}
               />
               {chequeScanning ? 'Analyse...' : 'Prendre une photo'}
             </label>
           </div>
+
+          {chequeDuplicate && (
+            <div className="rounded-xl border border-rose-300 bg-rose-50 px-3.5 py-3 text-xs">
+              <div className="mb-1 flex items-center gap-2 font-black text-rose-800">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" /></svg>
+                Chèque déjà enregistré
+              </div>
+              <div className="text-rose-700 leading-snug">
+                Ce chèque a déjà été utilisé pour le paiement{' '}
+                <span className="font-mono font-bold">{chequeDuplicate.payment_number}</span>
+                {chequeDuplicate.amount ? <> ({formatCurrencyMad(chequeDuplicate.amount)}</> : null}
+                {chequeDuplicate.payment_date ? <>{chequeDuplicate.amount ? ' · ' : ' ('}{formatDate(chequeDuplicate.payment_date)}</> : null}
+                {(chequeDuplicate.amount || chequeDuplicate.payment_date) ? ')' : null}.
+                {' '}Un même chèque ne peut pas être payé deux fois.
+              </div>
+              <button
+                type="button"
+                onClick={() => setChequeDuplicate(null)}
+                className="mt-2 rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-100"
+              >
+                Fermer
+              </button>
+            </div>
+          )}
 
           {chequeOcrError && (
             <div className="rounded bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
