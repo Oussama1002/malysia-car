@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { subRentalApi, type SubRentalContract, type SubRentalStatus } from '@/services/subRentalApi';
 import { getApiBase } from '@/services/apiClient';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { SubRentalCreatePage } from './SubRentalCreatePage';
 
 type Filter = '' | 'active' | 'draft' | 'due_soon' | 'overdue' | 'returned' | 'closed';
 
@@ -34,6 +36,9 @@ function KpiCard({ label, value, color }: { label: string; value: string | numbe
 export const SubRentalsPage: React.FC = () => {
   const apiReady = !!getApiBase();
   const [filter, setFilter] = useState<Filter>('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const navigate = useNavigate();
+  const qc = useQueryClient();
 
   const dashQ = useQuery({
     queryKey: ['sub-rentals', 'dashboard'],
@@ -91,12 +96,13 @@ export const SubRentalsPage: React.FC = () => {
           >
             Agences fournisseurs
           </Link>
-          <Link
-            to="/fleet/sub-rentals/new"
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             + Nouveau contrat
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -215,6 +221,25 @@ export const SubRentalsPage: React.FC = () => {
           </table>
         )}
       </div>
+
+      {/* Nouveau contrat — drawer */}
+      <DrawerPanel
+        open={createOpen}
+        title="Nouveau contrat de sous-location"
+        onClose={() => setCreateOpen(false)}
+      >
+        {createOpen && (
+          <SubRentalCreatePage
+            embedded
+            onCancel={() => setCreateOpen(false)}
+            onCreated={(id) => {
+              setCreateOpen(false);
+              qc.invalidateQueries({ queryKey: ['sub-rentals'] });
+              navigate(`/fleet/sub-rentals/${id}`);
+            }}
+          />
+        )}
+      </DrawerPanel>
     </div>
   );
 };

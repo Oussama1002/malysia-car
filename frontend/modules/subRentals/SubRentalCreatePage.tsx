@@ -72,7 +72,20 @@ const DOC_CATEGORIES = [
 ] as const;
 type DocCategoryKey = typeof DOC_CATEGORIES[number]['key'];
 
-export const SubRentalCreatePage: React.FC = () => {
+interface SubRentalCreatePageProps {
+  /** When true, render without the outer page shell (title, spacing) — suits a drawer. */
+  embedded?: boolean;
+  /** Called after successful creation. Overrides the default navigate-to-detail. */
+  onCreated?: (id: string) => void;
+  /** Called when the user clicks Annuler. Overrides the default navigate-back. */
+  onCancel?: () => void;
+}
+
+export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
+  embedded = false,
+  onCreated,
+  onCancel,
+}) => {
   const navigate = useNavigate();
   const apiReady = !!getApiBase();
   const [form, setForm] = useState<FormState>(INITIAL);
@@ -164,7 +177,11 @@ export const SubRentalCreatePage: React.FC = () => {
       if (id) {
         try { await uploadAttachments(id); } catch { /* ignore */ }
       }
-      navigate(id ? `/fleet/sub-rentals/${id}` : '/fleet/sub-rentals');
+      if (onCreated && id) {
+        onCreated(id);
+      } else {
+        navigate(id ? `/fleet/sub-rentals/${id}` : '/fleet/sub-rentals');
+      }
     },
     onError: (e: unknown) => {
       const msg = (e as any)?.data?.message ?? (e as Error)?.message ?? 'Erreur lors de la création.';
@@ -224,11 +241,13 @@ export const SubRentalCreatePage: React.FC = () => {
   const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Nouveau contrat de sous-location</h1>
-        <p className="text-sm text-slate-500">Renseignez les informations du contrat avec le fournisseur.</p>
-      </div>
+    <div className={embedded ? 'space-y-6' : 'max-w-2xl space-y-6'}>
+      {!embedded && (
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Nouveau contrat de sous-location</h1>
+          <p className="text-sm text-slate-500">Renseignez les informations du contrat avec le fournisseur.</p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Supplier */}
@@ -497,7 +516,7 @@ export const SubRentalCreatePage: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/fleet/sub-rentals')}
+            onClick={() => (onCancel ? onCancel() : navigate('/fleet/sub-rentals'))}
             className="rounded-xl border border-slate-200 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Annuler
