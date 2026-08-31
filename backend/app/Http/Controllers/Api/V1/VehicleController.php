@@ -189,11 +189,15 @@ class VehicleController extends Controller
         // Fallback lookup — the current_* columns aren't kept in sync when a
         // reservation or contract is created, so derive live data by scanning
         // active rows for this vehicle. Never overrides an explicit value.
+        // Priority: live states first (active > handed_over > extension_requested),
+        // then scheduled (pickup_scheduled > confirmed > reserved), draft last.
+        // Ties break on the most recently updated row.
         if (! $currentReservation) {
             $currentReservation = \App\Models\Reservation::query()
                 ->where('vehicle_id', $vehicle->id)
                 ->whereIn('status', ['draft','reserved','confirmed','pickup_scheduled','handed_over','active','extension_requested'])
-                ->orderByDesc('desired_start_at')
+                ->orderByRaw("FIELD(status, 'active','handed_over','extension_requested','pickup_scheduled','confirmed','reserved','draft')")
+                ->orderByDesc('updated_at')
                 ->first();
         }
         if (! $currentContract) {
