@@ -30,6 +30,8 @@ interface PaymentEntry {
   amount: number | '';
   reference: string;
   chequeNumber: string;
+  chequeBank?: string;
+  chequeDate?: string;
 }
 
 interface Step {
@@ -157,6 +159,17 @@ function monthsBetween(start: string, end: string): number {
  * leftover days (0–30). "2 mois et 5 jours" is more accurate than the
  * blanket "2 mois" the old helper produced for anything under 90 days.
  */
+/** Send a cheque image/PDF to the OCR endpoint and return extracted fields. */
+async function scanCheque(file: File): Promise<{ check_number?: string; bank?: string; check_date?: string; amount?: number }> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await apiClient<{ data?: { check_number?: string; bank?: string; check_date?: string; amount?: number } }>('/v1/cheque-ocr', {
+    method: 'POST',
+    body: fd,
+  });
+  return res.data ?? {};
+}
+
 function durationBetween(start: string, end: string): { months: number; days: number } {
   const s = new Date(start);
   const e = new Date(end);
@@ -179,6 +192,8 @@ export const ContractWizardPage: React.FC = () => {
   const { session } = useAuthSession();
   const [stepIdx, setStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
+  const [scanningPayment, setScanningPayment] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftBusy, setDraftBusy] = useState(false);
@@ -426,6 +441,28 @@ export const ContractWizardPage: React.FC = () => {
     setState((s) => ({ ...s, payments: s.payments.map((p) => p.id === id ? { ...p, [key]: value } : p) }));
   }
 
+  async function handleChequeScan(paymentId: string, file: File): Promise<void> {
+    setScanningPayment(paymentId);
+    setScanError((e) => { const { [paymentId]: _, ...rest } = e; return rest; });
+    try {
+      const data = await scanCheque(file);
+      setState((s) => ({
+        ...s,
+        payments: s.payments.map((p) => p.id === paymentId ? {
+          ...p,
+          chequeNumber: data.check_number ?? p.chequeNumber,
+          chequeBank:   data.bank ?? p.chequeBank,
+          chequeDate:   data.check_date ?? p.chequeDate,
+          amount:       data.amount != null ? Number(data.amount) : p.amount,
+        } : p),
+      }));
+    } catch (e) {
+      setScanError((prev) => ({ ...prev, [paymentId]: e instanceof Error ? e.message : 'Erreur OCR' }));
+    } finally {
+      setScanningPayment(null);
+    }
+  }
+
   function buildCreatePayload(status?: 'draft' | 'pending_approval') {
     const primary = state.payments[0];
     return {
@@ -443,8 +480,10 @@ export const ContractWizardPage: React.FC = () => {
       notes: state.notes,
       paymentMethod: primary?.method ?? 'virement',
       paymentTerms: state.paymentTerms || undefined,
-      bankReference: state.payments.map((p) => p.reference).filter(Boolean).join(', ') || undefined,
+      bankReference: state.payments.map((p) => p.reference || p.chequeBank).filter(Boolean).join(', ') || undefined,
       chequeNumber: state.payments.map((p) => p.chequeNumber).filter(Boolean).join(', ') || undefined,
+      chequeBank: state.payments.map((p) => p.chequeBank).filter(Boolean).join(', ') || undefined,
+      chequeDate: state.payments.map((p) => p.chequeDate).filter(Boolean).join(', ') || undefined,
       expectedPaymentDay: state.expectedPaymentDay === '' ? undefined : Number(state.expectedPaymentDay),
       status,
     } as any;
@@ -973,9 +1012,52 @@ export const ContractWizardPage: React.FC = () => {
                           </Field>
                         )}
                         {p.method === 'cheque' && (
-                          <Field label="N° chèque">
-                            <input className="df-input" value={p.chequeNumber} onChange={(e) => updatePayment(p.id, 'chequeNumber', e.target.value)} />
-                          </Field>
+                          <>
+                            <Field label="N° chèque">
+                              <input className="df-input" value={p.chequeNumber} onChange={(e) => updatePayment(p.id, 'chequeNumber', e.target.value)} />
+                            </Field>
+                            <Field label="Banque">
+                              <input className="df-input" placeholder="Ex : Attijariwafa" value={p.chequeBank ?? ''} onChange={(e) => updatePayment(p.id, 'chequeBank', e.target.value)} />
+                            </Field>
+                            <Field label="Date chèque">
+                              <input type="date" className="df-input" value={p.chequeDate ?? ''} onChange={(e) => updatePayment(p.id, 'chequeDate', e.target.value)} />
+                            </Field>
+                            <div className="md:col-span-2">
+                              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2.5">
+                                <span className="text-lg leading-none">📷</span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-black text-indigo-900">Scanner le chèque</div>
+                                  <div className="text-[11px] text-indigo-700/80">Extraction automatique du n°, banque, date et montant.</div>
+                                </div>
+                                <label
+                                  htmlFor={`cheque-scan-${p.id}`}
+                                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition ${
+                                    scanningPayment === p.id
+                                      ? 'bg-indigo-400 text-white cursor-wait'
+                                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                  }`}
+                                >
+                                  <Icon name="scan" size={12} />
+                                  {scanningPayment === p.id ? 'Analyse…' : 'Importer / Photo'}
+                                </label>
+                                <input
+                                  id={`cheque-scan-${p.id}`}
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  className="hidden"
+                                  disabled={scanningPayment === p.id}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleChequeScan(p.id, file);
+                                    e.target.value = '';
+                                  }}
+                                />
+                              </div>
+                              {scanError[p.id] && (
+                                <div className="mt-1 text-[11px] font-semibold text-rose-700">⚠ {scanError[p.id]}</div>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
