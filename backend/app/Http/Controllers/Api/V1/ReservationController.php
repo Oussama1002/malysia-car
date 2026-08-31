@@ -958,6 +958,19 @@ class ReservationController extends Controller
         $reservation->status = $to;
         $reservation->save();
         AuditLogger::statusChanged($reservation, $from, $to, $request?->user(), $request, module: 'rentals');
+
+        // Cancelling a reservation must cancel any still-pending mission (a
+        // Livraison / Recuperation planned but not yet done) so the row stops
+        // advertising Livrais. Planifiee everywhere.
+        if ($to === 'cancelled') {
+            Mission::query()
+                ->where('reservation_id', $reservation->id)
+                ->whereNotIn('status', ['completed', 'failed', 'cancelled'])
+                ->update([
+                    'status' => 'cancelled',
+                    'updated_at' => now(),
+                ]);
+        }
     }
 
     private function generateReservationNumber(): string
