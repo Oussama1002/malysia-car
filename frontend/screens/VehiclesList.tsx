@@ -1,8 +1,10 @@
 ﻿
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/mockApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { queryKeys } from '@/services/queryKeys';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Vehicle, VehicleStatus } from '../types';
 import { VehicleDocumentScanner } from '@/modules/fleet/VehicleDocumentScanner';
@@ -222,12 +224,27 @@ const VehiclesList: React.FC = () => {
 
   // Vehicles with an active reservation should display as "Réservé", not
   // "Dispo" — matched by reservation.vehicle_id when status is in the pre-
-  // handover / active window.
-  const [reservedVehicleIds, setReservedVehicleIds] = useState<Set<string>>(new Set());
-  const ACTIVE_RESERVATION_STATUSES = React.useMemo(
+  // handover / active window. Uses react-query so cancelling / deleting a
+  // reservation from anywhere else refreshes the flag automatically.
+  const ACTIVE_RESERVATION_STATUSES = useMemo(
     () => new Set(['draft', 'reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested']),
     [],
   );
+  const reservationsQ = useQuery({
+    queryKey: queryKeys.reservations,
+    queryFn: async () => (await apiClient<{ data: any[] }>('/v1/reservations?per_page=200')).data ?? [],
+    enabled: !!getApiBase(),
+    staleTime: 30_000,
+  });
+  const reservedVehicleIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of (reservationsQ.data ?? [])) {
+      if (ACTIVE_RESERVATION_STATUSES.has(String(r.status ?? '').toLowerCase()) && r.vehicle_id) {
+        s.add(String(r.vehicle_id));
+      }
+    }
+    return s;
+  }, [reservationsQ.data, ACTIVE_RESERVATION_STATUSES]);
 
   useEffect(() => {
     fetchVehicles();
@@ -235,21 +252,8 @@ const VehiclesList: React.FC = () => {
       apiClient<{ data: VehicleBrandOption[] }>('/v1/vehicle-brands')
         .then(res => setBrands(res.data))
         .catch(() => setBrands([]));
-
-      // Reservations feed the "Réservé" state.
-      apiClient<{ data: any[] }>('/v1/reservations?per_page=200')
-        .then((res) => {
-          const ids = new Set<string>();
-          for (const r of res.data ?? []) {
-            if (ACTIVE_RESERVATION_STATUSES.has(String(r.status ?? '').toLowerCase()) && r.vehicle_id) {
-              ids.add(String(r.vehicle_id));
-            }
-          }
-          setReservedVehicleIds(ids);
-        })
-        .catch(() => setReservedVehicleIds(new Set()));
     }
-  }, [ACTIVE_RESERVATION_STATUSES]);
+  }, []);
 
   useEffect(() => {
     let result = vehicles;

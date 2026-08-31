@@ -176,7 +176,14 @@ export const ReservationDetailPage: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteM = useMutation({
     mutationFn: () => opsApi.deleteReservation(rid!),
-    onSuccess: () => navigate('/contracts'),
+    onSuccess: () => {
+      // Invalidate the reservations list so the deleted row disappears
+      // and the reserved-vehicle set recomputes (its vehicle stops showing
+      // as Reserve on the fleet, GPS and picker views).
+      qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      qc.removeQueries({ queryKey: ['reservation', rid] });
+      navigate('/reservations');
+    },
     onError: (e) => alert(e instanceof Error ? e.message : 'Erreur de suppression'),
   });
   const paymentM = useMutation({
