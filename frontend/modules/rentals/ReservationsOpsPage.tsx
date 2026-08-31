@@ -206,10 +206,36 @@ export const ReservationsOpsPage: React.FC = () => {
     staleTime: 10_000,
   });
 
+  const [validateFeedback, setValidateFeedback] = useState<{ id?: string; kind: 'success' | 'error'; text: string } | null>(null);
   const validateRes = useMutation({
     mutationFn: async (id: string) => opsApi.validateReservation(id),
-    onSuccess: async () => {
+    onSuccess: async (_res, id) => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      setValidateFeedback({ id, kind: 'success', text: 'Réservation validée' });
+      window.setTimeout(() => setValidateFeedback(null), 2500);
+    },
+    onError: (e, id) => {
+      // Surface the real backend reason (typically 422 with a field bag or a
+      // message) so users understand why nothing happened.
+      let msg = 'Validation impossible';
+      if (e instanceof ApiError) {
+        const body = e.body as any;
+        if (body?.errors && typeof body.errors === 'object') {
+          const parts: string[] = [];
+          for (const v of Object.values<any>(body.errors)) {
+            if (Array.isArray(v)) parts.push(...v.map(String));
+          }
+          if (parts.length) msg = parts.join(' · ');
+          else if (body.message) msg = body.message;
+        } else if (body?.message) {
+          msg = body.message;
+        } else {
+          msg = e.message || msg;
+        }
+      } else if (e instanceof Error) {
+        msg = e.message;
+      }
+      setValidateFeedback({ id, kind: 'error', text: msg });
     },
   });
 
@@ -581,13 +607,27 @@ export const ReservationsOpsPage: React.FC = () => {
                   />
                 )}
                 {r.status === 'draft' && (
-                  <button
-                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                    disabled={validateRes.isPending}
-                    onClick={(e) => { e.stopPropagation(); validateRes.mutate(r.id); }}
-                  >
-                    ✓ Valider
-                  </button>
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                      disabled={validateRes.isPending && validateFeedback?.id === r.id}
+                      onClick={(e) => { e.stopPropagation(); validateRes.mutate(r.id); }}
+                    >
+                      {validateRes.isPending && validateFeedback?.id !== r.id ? '…' : '✓ Valider'}
+                    </button>
+                    {validateFeedback?.id === r.id && (
+                      <span
+                        className={`max-w-[240px] truncate rounded-lg px-2 py-1 text-[10px] font-bold ${
+                          validateFeedback.kind === 'success'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-rose-100 text-rose-700'
+                        }`}
+                        title={validateFeedback.text}
+                      >
+                        {validateFeedback.text}
+                      </span>
+                    )}
+                  </div>
                 )}
                 <button
                   className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
