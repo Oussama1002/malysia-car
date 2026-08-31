@@ -478,7 +478,7 @@ export const FleetVehicleDetailPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-3 text-[10px] font-semibold text-slate-500">
-                    <span className="uppercase tracking-wider">{alert.source === 'maintenance' ? '🔧 Maintenance' : '📋 Conformité'}</span>
+                    <span className="uppercase tracking-wider">{alert.source === 'maintenance' ? 'Maintenance' : 'Conformité'}</span>
                     {when && <span>Déclenchée le {when}</span>}
                   </div>
                 </li>
