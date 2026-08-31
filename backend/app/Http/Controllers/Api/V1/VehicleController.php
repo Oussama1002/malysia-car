@@ -201,11 +201,28 @@ class VehicleController extends Controller
                 ->first();
         }
         if (! $currentContract) {
-            $currentContract = \App\Models\Contract::query()
-                ->where('vehicle_id', $vehicle->id)
-                ->whereNotIn('status', ['cancelled','terminated','rejected','expired','draft'])
-                ->orderByDesc('start_date')
-                ->first();
+            // Prefer the contract linked to the current reservation (when the
+            // wizard tracked reservation_id) so we surface exactly the paperwork
+            // that goes with the client we are already showing.
+            if ($currentReservation && \Illuminate\Support\Facades\Schema::hasColumn('contracts', 'reservation_id')) {
+                $currentContract = \App\Models\Contract::query()
+                    ->where('vehicle_id', $vehicle->id)
+                    ->where('reservation_id', $currentReservation->id)
+                    ->whereNotIn('status', ['cancelled','terminated','rejected','expired'])
+                    ->orderByDesc('updated_at')
+                    ->first();
+            }
+
+            if (! $currentContract) {
+                // Any live contract on this vehicle, ranked by status weight so
+                // active > signed/approved > pending_approval > draft.
+                $currentContract = \App\Models\Contract::query()
+                    ->where('vehicle_id', $vehicle->id)
+                    ->whereNotIn('status', ['cancelled','terminated','rejected','expired'])
+                    ->orderByRaw("FIELD(status, 'active','signed','approved','pending_approval','draft')")
+                    ->orderByDesc('updated_at')
+                    ->first();
+            }
         }
         if (! $currentCustomer) {
             $custId = $currentContract?->customer_id ?? $currentReservation?->customer_id;
