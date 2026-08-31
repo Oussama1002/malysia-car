@@ -390,12 +390,17 @@ export const ReservationsOpsPage: React.FC = () => {
   // Vehicle IDs that already carry an active reservation — used to annotate
   // the picker so users see "Réservé" instead of "Disponible" for them.
   const reservedVehicleIds = useMemo(() => {
+    const now = Date.now();
     const ACTIVE = new Set(['draft', 'reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested']);
+    const LIVE = new Set(['handed_over', 'active', 'extension_requested']);
     const s = new Set<string>();
     for (const r of ((reservationsQ.data ?? []) as ReservationDto[])) {
-      if (ACTIVE.has(String(r.status ?? '').toLowerCase()) && r.vehicle_id) {
-        s.add(String(r.vehicle_id));
-      }
+      const st = String(r.status ?? '').toLowerCase();
+      if (!r.vehicle_id) continue;
+      if (LIVE.has(st)) { s.add(String(r.vehicle_id)); continue; }
+      if (!ACTIVE.has(st)) continue;
+      const endMs = r.desired_end_at ? new Date(r.desired_end_at).getTime() : 0;
+      if (endMs >= now) s.add(String(r.vehicle_id));
     }
     return s;
   }, [reservationsQ.data]);

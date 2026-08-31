@@ -149,11 +149,16 @@ export const GpsDashboardPage: React.FC = () => {
   });
 
   const reservedVehicleIds = useMemo(() => {
+    const now = Date.now();
+    const LIVE = new Set(['handed_over', 'active', 'extension_requested']);
     const s = new Set<string>();
     for (const r of ((reservationsQ.data ?? []) as any[])) {
-      if (ACTIVE_RESERVATION_STATUSES.has(String(r.status ?? '').toLowerCase()) && r.vehicle_id) {
-        s.add(String(r.vehicle_id));
-      }
+      const st = String(r.status ?? '').toLowerCase();
+      if (!r.vehicle_id) continue;
+      if (LIVE.has(st)) { s.add(String(r.vehicle_id)); continue; }
+      if (!ACTIVE_RESERVATION_STATUSES.has(st)) continue;
+      const endMs = r.desired_end_at ? new Date(r.desired_end_at).getTime() : 0;
+      if (endMs >= now) s.add(String(r.vehicle_id));
     }
     return s;
   }, [reservationsQ.data]);

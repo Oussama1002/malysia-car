@@ -315,7 +315,10 @@ export const FleetVehicleDetailPage: React.FC = () => {
 
   const hasActiveReservation = (reservationsForVehicleQ.data ?? []).some((r: any) => {
     const s = String(r.status ?? '').toLowerCase();
-    return ['draft','reserved','confirmed','pickup_scheduled','handed_over','active','extension_requested'].includes(s);
+    if (['handed_over','active','extension_requested'].includes(s)) return true; // physical hold, dates irrelevant
+    if (!['draft','reserved','confirmed','pickup_scheduled'].includes(s)) return false;
+    const endMs = r.desired_end_at ? new Date(r.desired_end_at).getTime() : 0;
+    return endMs >= Date.now();
   });
   const hasActiveContract = (contractsForVehicleQ.data ?? []).some((c: any) => {
     const s = String(c.status ?? '').toLowerCase();
