@@ -20,6 +20,7 @@ class DocumentService
 {
     public const ENTITY_TYPES = [
         'vehicle', 'customer', 'contract', 'accident', 'mission', 'kyc_case', 'invoice', 'credit_application',
+        'sub_rental_contract',
     ];
 
     public function generateChecksum(string $absolutePath): string

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supplierAgencyApi, subRentalApi, type PaymentMethod } from '@/services/subRentalApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { documentCenterApi } from '@/services/documentCenterApi';
 
 const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWY'.split('');
 const PLATE_REGIONS = Array.from({ length: 99 }, (_, i) => i + 1);
@@ -60,12 +61,33 @@ const INITIAL: FormState = {
   notes: '',
 };
 
+/** Predefined document categories the user can attach when creating an SL contract. */
+const DOC_CATEGORIES = [
+  { key: 'insurance',                label: 'Assurance',                icon: '🛡️' },
+  { key: 'registration_card',        label: 'Carte grise',              icon: '🚗' },
+  { key: 'circulation_authorization',label: 'Autorisation de circulation', icon: '📄' },
+  { key: 'payment_attestation',      label: 'Attestation de paiement',  icon: '✅' },
+  { key: 'technical_inspection',     label: 'Visite technique',         icon: '🔧' },
+  { key: 'vignette',                 label: 'Vignette',                 icon: '🎫' },
+] as const;
+type DocCategoryKey = typeof DOC_CATEGORIES[number]['key'];
+
 export const SubRentalCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const apiReady = !!getApiBase();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
   const [brands, setBrands] = useState<VehicleBrandOption[]>([]);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [docs, setDocs] = useState<Record<DocCategoryKey, File | null>>({
+    insurance: null,
+    registration_card: null,
+    circulation_authorization: null,
+    payment_attestation: null,
+    technical_inspection: null,
+    vignette: null,
+  });
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!apiReady) return;
@@ -95,10 +117,53 @@ export const SubRentalCreatePage: React.FC = () => {
       : 0;
   const computedTotal = computedDays * (parseFloat(form.daily_cost) || 0);
 
+  const uploadAttachments = async (subRentalId: string): Promise<void> => {
+    const uploads: Array<{ label: string; run: () => Promise<unknown> }> = [];
+
+    for (const [key, file] of Object.entries(docs) as Array<[DocCategoryKey, File | null]>) {
+      if (!file) continue;
+      const cat = DOC_CATEGORIES.find((c) => c.key === key);
+      uploads.push({
+        label: cat?.label ?? key,
+        run: () => {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('category', key);
+          fd.append('label', cat?.label ?? key);
+          return documentCenterApi.uploadToEntity('sub_rental_contract', subRentalId, fd);
+        },
+      });
+    }
+    photos.forEach((file, idx) => {
+      uploads.push({
+        label: `Photo ${idx + 1}`,
+        run: () => {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('category', 'photo');
+          fd.append('label', `Photo véhicule ${idx + 1}`);
+          return documentCenterApi.uploadToEntity('sub_rental_contract', subRentalId, fd);
+        },
+      });
+    });
+
+    if (uploads.length === 0) return;
+    let done = 0;
+    for (const u of uploads) {
+      setUploadStatus(`Envoi ${u.label} (${done + 1}/${uploads.length})…`);
+      try { await u.run(); } catch { /* non-blocking */ }
+      done++;
+    }
+    setUploadStatus(null);
+  };
+
   const createMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => subRentalApi.create(body),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       const id = (res as any)?.data?.id;
+      if (id) {
+        try { await uploadAttachments(id); } catch { /* ignore */ }
+      }
       navigate(id ? `/fleet/sub-rentals/${id}` : '/fleet/sub-rentals');
     },
     onError: (e: unknown) => {
@@ -303,6 +368,120 @@ export const SubRentalCreatePage: React.FC = () => {
             <textarea className={`${inputCls} resize-none`} rows={3} value={form.notes} onChange={set('notes')} placeholder="Observations, conditions particulières…" />
           ))}
         </div>
+
+        {/* Photos */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-800">Photos du véhicule</h2>
+            <span className="text-[11px] font-semibold text-slate-400">{photos.length} sélectionnée{photos.length > 1 ? 's' : ''}</span>
+          </div>
+          <p className="text-xs text-slate-500">Face, arrière, profils, intérieur, tableau de bord — utile en cas de restitution.</p>
+
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {photos.map((f, i) => (
+              <div key={i} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 aspect-square">
+                <img src={URL.createObjectURL(f)} alt={f.name} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPhotos((s) => s.filter((_, j) => j !== i))}
+                  className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-black text-white opacity-0 transition group-hover:opacity-100"
+                  aria-label="Retirer"
+                >✕</button>
+              </div>
+            ))}
+            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v12m6-6H6" /></svg>
+              <span className="text-[11px] font-bold">Ajouter</span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  setPhotos((s) => [...s, ...files]);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Documents */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-800">Documents véhicule</h2>
+            <span className="text-[11px] font-semibold text-slate-400">
+              {Object.values(docs).filter(Boolean).length} / {DOC_CATEGORIES.length}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">PDF ou photo — assurance, carte grise, autorisation de circulation, attestation de paiement, visite technique et vignette.</p>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {DOC_CATEGORIES.map((cat) => {
+              const file = docs[cat.key];
+              const inputId = `doc-${cat.key}`;
+              return (
+                <div
+                  key={cat.key}
+                  className={`rounded-xl border p-3 transition ${
+                    file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div className="mb-2 flex items-start gap-2">
+                    <span className="text-lg leading-none">{cat.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-black text-slate-800">{cat.label}</div>
+                      {file && (
+                        <div className="mt-0.5 truncate text-[10px] font-semibold text-emerald-700">
+                          ✓ {file.name}
+                        </div>
+                      )}
+                    </div>
+                    {file && (
+                      <button
+                        type="button"
+                        onClick={() => setDocs((s) => ({ ...s, [cat.key]: null }))}
+                        className="text-[10px] font-black text-rose-500 hover:text-rose-700"
+                        aria-label="Retirer"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <label
+                    htmlFor={inputId}
+                    className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
+                      file
+                        ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    }`}
+                  >
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                    {file ? 'Remplacer' : 'Téléverser'}
+                  </label>
+                  <input
+                    id={inputId}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setDocs((s) => ({ ...s, [cat.key]: f }));
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {uploadStatus && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700">
+            {uploadStatus}
+          </div>
+        )}
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
