@@ -103,6 +103,7 @@ interface WizardState {
   sourceReservationId: string | null;
   type: ContractType;
   durationMonths: number;
+  durationExtraDays: number;
   monthlyRentMad: number;
   kmInclMonth: number;
   securityDepositMad: number;
@@ -123,6 +124,7 @@ const INITIAL: WizardState = {
   sourceReservationId: null,
   type: 'LLD',
   durationMonths: 0,
+  durationExtraDays: 0,
   monthlyRentMad: 0,
   kmInclMonth: 0,
   securityDepositMad: 0,
@@ -147,10 +149,28 @@ function friendlyError(e: unknown, fallback: string): string {
 
 /** Calculate the number of full months between two ISO date strings. */
 function monthsBetween(start: string, end: string): number {
+  return durationBetween(start, end).months;
+}
+
+/**
+ * Full breakdown of a date range: how many completed months plus the
+ * leftover days (0–30). "2 mois et 5 jours" is more accurate than the
+ * blanket "2 mois" the old helper produced for anything under 90 days.
+ */
+function durationBetween(start: string, end: string): { months: number; days: number } {
   const s = new Date(start);
   const e = new Date(end);
-  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
-  return Math.max(1, months);
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return { months: 0, days: 0 };
+  let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  // Anchor the "months" count on the same day-of-month
+  const anchor = new Date(s);
+  anchor.setMonth(anchor.getMonth() + months);
+  if (anchor > e) {
+    months -= 1;
+    anchor.setMonth(anchor.getMonth() - 1);
+  }
+  const days = Math.max(0, Math.round((e.getTime() - anchor.getTime()) / 86_400_000));
+  return { months: Math.max(0, months), days };
 }
 
 export const ContractWizardPage: React.FC = () => {
@@ -196,8 +216,9 @@ export const ContractWizardPage: React.FC = () => {
         const endDate: string | null = r.desired_end_at
           ? String(r.desired_end_at).slice(0, 10)
           : null;
-        const durationMonths =
-          startDate && endDate ? monthsBetween(startDate, endDate) : 0;
+        const dur = startDate && endDate ? durationBetween(startDate, endDate) : { months: 0, days: 0 };
+        const durationMonths = dur.months;
+        const durationExtraDays = dur.days;
         // Normalise payment method to wizard options
         const methodMap: Record<string, string> = {
           virement: 'virement',
@@ -234,6 +255,7 @@ export const ContractWizardPage: React.FC = () => {
           startDate,
           endDate,
           durationMonths,
+          durationExtraDays,
           monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths)) : prev.monthlyRentMad,
           securityDepositMad: r.deposit_amount ? Number(r.deposit_amount) : prev.securityDepositMad,
           payments: [{ id: String(Date.now()), method: paymentMethod, amount: '', reference: '', chequeNumber: '' }],
@@ -837,13 +859,42 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Durée (mois)">
-                    <input
-                      type="number"
-                      className="df-input"
-                      value={state.durationMonths}
-                      onChange={(e) => patch('durationMonths', Number(e.target.value))}
-                    />
+                  <Field label="Durée">
+                    <div className="flex items-stretch gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            className="df-input"
+                            value={state.durationMonths}
+                            onChange={(e) => patch('durationMonths', Math.max(0, Number(e.target.value)))}
+                          />
+                          <span className="text-xs font-bold text-slate-500">mois</span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={30}
+                            className="df-input"
+                            value={state.durationExtraDays}
+                            onChange={(e) => patch('durationExtraDays', Math.max(0, Math.min(30, Number(e.target.value))))}
+                          />
+                          <span className="text-xs font-bold text-slate-500">jours</span>
+                        </div>
+                      </div>
+                    </div>
+                    {(state.durationMonths > 0 || state.durationExtraDays > 0) && (
+                      <div className="mt-1 text-[11px] font-semibold text-slate-500">
+                        Total :{' '}
+                        {state.durationMonths > 0 && <>{state.durationMonths} mois</>}
+                        {state.durationMonths > 0 && state.durationExtraDays > 0 && <> et </>}
+                        {state.durationExtraDays > 0 && <>{state.durationExtraDays} jour{state.durationExtraDays > 1 ? 's' : ''}</>}
+                      </div>
+                    )}
                   </Field>
                   <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : 'Loyer mensuel'} (MAD)`}>
                     <input
@@ -1054,7 +1105,14 @@ export const ContractWizardPage: React.FC = () => {
               <SummaryRow label="Client" value={selectedClient?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
-              <SummaryRow label="Durée" value={`${state.durationMonths} mois`} />
+              <SummaryRow
+                label="Durée"
+                value={
+                  state.durationExtraDays > 0
+                    ? `${state.durationMonths} mois et ${state.durationExtraDays} jour${state.durationExtraDays > 1 ? 's' : ''}`
+                    : `${state.durationMonths} mois`
+                }
+              />
               <SummaryRow label="Mensualité" value={formatCurrencyMad(state.monthlyRentMad)} highlight />
               <SummaryRow label="Km inclus / mois" value={state.kmInclMonth.toLocaleString('fr-MA')} />
               <SummaryRow label="Caution" value={formatCurrencyMad(state.securityDepositMad)} />
@@ -1200,7 +1258,7 @@ const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: stri
         <p className="mt-2"><strong>{client}</strong>, ci-après dénommé <em>« le Preneur »</em>,</p>
         <hr className="my-4 border-[color:var(--df-border)]" />
         <p><strong>Article 1 — Objet</strong></p>
-        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} mois</span>.</p>
+        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} mois{state.durationExtraDays > 0 ? ` et ${state.durationExtraDays} jour${state.durationExtraDays > 1 ? 's' : ''}` : ''}</span>.</p>
         <p className="mt-3"><strong>Article 2 — Loyer et conditions financières</strong></p>
         <p className="mt-1">Le loyer mensuel est fixé à <span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>, payable le 5 de chaque mois. Le kilométrage inclus est de <span className="df-num font-semibold">{state.kmInclMonth.toLocaleString('fr-MA')} km/mois</span> ; tout dépassement sera facturé conformément à l'annexe tarifaire.</p>
         <p className="mt-3"><strong>Article 3 — Géolocalisation</strong></p>
