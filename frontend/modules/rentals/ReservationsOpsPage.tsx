@@ -207,6 +207,30 @@ export const ReservationsOpsPage: React.FC = () => {
   });
 
   const [validateFeedback, setValidateFeedback] = useState<{ id?: string; kind: 'success' | 'error'; text: string } | null>(null);
+
+  const RESERVATION_ERROR_FR: Record<string, string> = {
+    'Another reservation overlaps this period.': 'Une autre réservation se chevauche sur cette période.',
+    'An active finance or lease contract overlaps this period.': 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
+    'A mission is scheduled for this vehicle during this period.': 'Une mission est planifiée pour ce véhicule sur ce créneau.',
+    'Vehicle has an open repair order.': 'Un ordre de réparation est en cours sur ce véhicule.',
+    'Vehicle is in scheduled maintenance.': 'Maintenance planifiée en cours.',
+    'Vehicle is on accident hold.': 'Dossier sinistre ouvert sur ce véhicule.',
+    'Vehicle not found.': 'Véhicule introuvable.',
+    'Invalid date range.': 'Plage de dates invalide.',
+    'Vehicle status is not rentable.': 'Statut flotte : véhicule non louable.',
+    'Vehicle marked as unavailable.': 'Véhicule marqué indisponible à la location.',
+    overlapping_reservation: 'Une autre réservation se chevauche sur cette période.',
+    active_contract_overlap: 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
+    overlapping_mission: 'Une mission est planifiée pour ce véhicule sur ce créneau.',
+    vehicle_in_maintenance: 'Un ordre de réparation est en cours sur ce véhicule.',
+    vehicle_in_scheduled_maintenance: 'Maintenance planifiée en cours.',
+    vehicle_accident_hold: 'Dossier sinistre ouvert sur ce véhicule.',
+    vehicle_not_found: 'Véhicule introuvable.',
+    invalid_range: 'Plage de dates invalide.',
+    vehicle_status_unavailable: 'Statut flotte : véhicule non louable.',
+    vehicle_availability_flag: 'Véhicule marqué indisponible à la location.',
+  };
+  const translateResErr = (m: string): string => RESERVATION_ERROR_FR[m] ?? m;
   const validateRes = useMutation({
     mutationFn: async (id: string) => opsApi.validateReservation(id),
     onSuccess: async (_res, id) => {
@@ -216,24 +240,25 @@ export const ReservationsOpsPage: React.FC = () => {
     },
     onError: (e, id) => {
       // Surface the real backend reason (typically 422 with a field bag or a
-      // message) so users understand why nothing happened.
+      // message) so users understand why nothing happened. Every message is
+      // translated to French so the UI never leaks the raw English enum.
       let msg = 'Validation impossible';
       if (e instanceof ApiError) {
         const body = e.body as any;
         if (body?.errors && typeof body.errors === 'object') {
           const parts: string[] = [];
           for (const v of Object.values<any>(body.errors)) {
-            if (Array.isArray(v)) parts.push(...v.map(String));
+            if (Array.isArray(v)) parts.push(...v.map((m) => translateResErr(String(m))));
           }
-          if (parts.length) msg = parts.join(' · ');
-          else if (body.message) msg = body.message;
+          if (parts.length) msg = Array.from(new Set(parts)).join(' · ');
+          else if (body.message) msg = translateResErr(body.message).replace(/\s*\(and \d+ more errors?\)\.?$/i, '');
         } else if (body?.message) {
-          msg = body.message;
+          msg = translateResErr(body.message).replace(/\s*\(and \d+ more errors?\)\.?$/i, '');
         } else {
-          msg = e.message || msg;
+          msg = translateResErr(e.message) || msg;
         }
       } else if (e instanceof Error) {
-        msg = e.message;
+        msg = translateResErr(e.message);
       }
       setValidateFeedback({ id, kind: 'error', text: msg });
     },
@@ -577,8 +602,8 @@ export const ReservationsOpsPage: React.FC = () => {
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
           {rows.map((r) => (
+            <div key={r.id}>
             <div
-              key={r.id}
               className="p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer hover:bg-slate-50 transition-colors"
               onClick={() => nav(`/reservations/${r.id}`)}
             >
@@ -607,27 +632,13 @@ export const ReservationsOpsPage: React.FC = () => {
                   />
                 )}
                 {r.status === 'draft' && (
-                  <div className="flex flex-col items-end gap-1">
-                    <button
-                      className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                      disabled={validateRes.isPending && validateFeedback?.id === r.id}
-                      onClick={(e) => { e.stopPropagation(); validateRes.mutate(r.id); }}
-                    >
-                      {validateRes.isPending && validateFeedback?.id !== r.id ? '…' : '✓ Valider'}
-                    </button>
-                    {validateFeedback?.id === r.id && (
-                      <span
-                        className={`max-w-[240px] truncate rounded-lg px-2 py-1 text-[10px] font-bold ${
-                          validateFeedback.kind === 'success'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-rose-100 text-rose-700'
-                        }`}
-                        title={validateFeedback.text}
-                      >
-                        {validateFeedback.text}
-                      </span>
-                    )}
-                  </div>
+                  <button
+                    className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    disabled={validateRes.isPending}
+                    onClick={(e) => { e.stopPropagation(); validateRes.mutate(r.id); }}
+                  >
+                    {validateRes.isPending && validateFeedback?.id === r.id ? 'Validation…' : '✓ Valider'}
+                  </button>
                 )}
                 <button
                   className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
@@ -692,6 +703,36 @@ export const ReservationsOpsPage: React.FC = () => {
                   );
                 })()}
               </div>
+            </div>
+            {validateFeedback?.id === r.id && (
+              <div
+                className={`mx-5 mb-4 flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold ${
+                  validateFeedback.kind === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-800'
+                }`}
+              >
+                <svg className="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {validateFeedback.kind === 'success'
+                    ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" />}
+                </svg>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-0.5 text-[10px] font-black uppercase tracking-wider opacity-70">
+                    {validateFeedback.kind === 'success' ? 'Validation réussie' : 'Validation impossible'}
+                  </div>
+                  <div className="leading-snug">{validateFeedback.text}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setValidateFeedback(null)}
+                  className="shrink-0 rounded p-0.5 opacity-60 hover:opacity-100"
+                  aria-label="Fermer"
+                >
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            )}
             </div>
           ))}
           {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
