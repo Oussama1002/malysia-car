@@ -236,6 +236,24 @@ const VehiclesList: React.FC = () => {
     enabled: !!getApiBase(),
     staleTime: 30_000,
   });
+  // Contracts feed the "En location" state — a vehicle bound to a live
+  // contract shouldn't read as Disponible.
+  const contractsForFleetQ = useQuery({
+    queryKey: ['contracts', 'all', 'for-fleet'],
+    queryFn: async () => (await apiClient<{ data: any[] }>('/v1/contracts?per_page=200')).data ?? [],
+    enabled: !!getApiBase(),
+    staleTime: 30_000,
+  });
+  const rentedVehicleIds = useMemo(() => {
+    const DEAD = new Set(['cancelled', 'terminated', 'rejected', 'expired', 'draft']);
+    const s = new Set<string>();
+    for (const c of (contractsForFleetQ.data ?? [])) {
+      const st = String(c.status ?? '').toLowerCase();
+      const vid = c.vehicleId ?? c.vehicle_id;
+      if (vid && !DEAD.has(st)) s.add(String(vid));
+    }
+    return s;
+  }, [contractsForFleetQ.data]);
   const reservedVehicleIds = useMemo(() => {
     const now = Date.now();
     const LIVE = new Set(['handed_over', 'active', 'extension_requested']); // physical hold regardless of dates
@@ -653,11 +671,14 @@ const VehiclesList: React.FC = () => {
     if (isSubRental) {
       return { code: 'SUB_RENTAL', label: 'Sous-location', tone: 'bg-violet-100 text-violet-700 border-violet-200' };
     }
+    if (raw === 'AVAILABLE' && v?.id && rentedVehicleIds.has(String(v.id))) {
+      return { code: 'RENTED', label: 'En location', tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+    }
     if (raw === 'AVAILABLE' && v?.id && reservedVehicleIds.has(String(v.id))) {
       return { code: 'RESERVED', label: 'Réservé', tone: 'bg-amber-100 text-amber-700 border-amber-200' };
     }
     if (raw === 'AVAILABLE')   return { code: 'AVAILABLE',   label: 'Disponible',  tone: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
-    if (raw === 'RENTED')      return { code: 'RENTED',      label: 'Louée',       tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+    if (raw === 'RENTED')      return { code: 'RENTED',      label: 'En location', tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
     if (raw === 'MAINTENANCE') return { code: 'MAINTENANCE', label: 'Maintenance', tone: 'bg-orange-100 text-orange-700 border-orange-200' };
     if (raw === 'IN_REPAIR')   return { code: 'IN_REPAIR',   label: 'Réparation',  tone: 'bg-rose-100 text-rose-700 border-rose-200' };
     if (raw === 'BLOCKED' || raw === 'UNAVAILABLE') return { code: raw, label: 'Indisponible', tone: 'bg-slate-100 text-slate-700 border-slate-200' };
@@ -674,20 +695,27 @@ const VehiclesList: React.FC = () => {
     const status = String(v.status ?? '').toUpperCase();
     const availability = String(v.availability_status ?? '').toLowerCase();
     const isAvail = status === 'AVAILABLE' || availability === 'available';
-    return isAvail && !reservedVehicleIds.has(String(v.id));
+    return isAvail
+      && !reservedVehicleIds.has(String(v.id))
+      && !rentedVehicleIds.has(String(v.id));
   }).length;
   const reservedVehicles = vehicles.filter((v: any) => {
     if (isSL(v)) return false;
     const status = String(v.status ?? '').toUpperCase();
-    return status === 'AVAILABLE' && reservedVehicleIds.has(String(v.id));
+    return status === 'AVAILABLE'
+      && reservedVehicleIds.has(String(v.id))
+      && !rentedVehicleIds.has(String(v.id));
   }).length;
   const subRentalVehicles = vehicles.filter((v: any) => {
     const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
     return !!v._sub_rental || ownership === 'sub_rented' || ownership === 'sub_rental';
   }).length;
   const rentedVehicles = vehicles.filter((v: any) => {
+    if (isSL(v)) return false;
     const status = String(v.status ?? '').toUpperCase();
-    return status === 'RENTED' || status === 'UNDER_LOA' || status === 'UNDER_CREDIT';
+    if (status === 'RENTED' || status === 'UNDER_LOA' || status === 'UNDER_CREDIT') return true;
+    // Derived — an AVAILABLE vehicle bound to a live contract counts as rented.
+    return status === 'AVAILABLE' && rentedVehicleIds.has(String(v.id));
   }).length;
   const maintenanceVehicles = vehicles.filter((v: any) => {
     const status = String(v.status ?? '').toUpperCase();
