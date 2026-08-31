@@ -192,8 +192,29 @@ export const ReservationDetailPage: React.FC = () => {
       setPaymentDrawerOpen(false);
       setPaymentError(null);
       qc.invalidateQueries({ queryKey: ['reservation', rid] });
+      qc.invalidateQueries({ queryKey: ['payments'] });
     },
-    onError: (e) => setPaymentError(e instanceof Error ? e.message : 'Erreur de création du paiement'),
+    onError: (e) => {
+      // Unpack Laravel's { message, errors: { field: [...] } } so the drawer
+      // shows the real reason (e.g. "Ce chèque a déjà été enregistré...")
+      // instead of a generic Erreur de création du paiement.
+      let msg = 'Erreur de création du paiement';
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string; errors?: Record<string, string[]> } | null;
+        const parts: string[] = [];
+        if (body?.errors) {
+          for (const list of Object.values(body.errors)) {
+            if (Array.isArray(list)) parts.push(...list.map(String));
+          }
+        }
+        if (parts.length) msg = Array.from(new Set(parts)).join(' · ');
+        else if (body?.message) msg = body.message;
+        else if (e.message) msg = e.message;
+      } else if (e instanceof Error) {
+        msg = e.message;
+      }
+      setPaymentError(msg);
+    },
   });
 
   const swapInstantM = useMutation({
