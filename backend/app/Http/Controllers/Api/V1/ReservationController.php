@@ -334,12 +334,38 @@ class ReservationController extends Controller
             'payments' => $payments,
             'invoices' => $invoices,
             'history' => $history,
-            'totals' => [
-                'estimated_price' => (float) ($reservation->estimated_price ?? 0),
-                'extensions_total' => (float) $extensions->where('status', 'applied')->sum('additional_amount'),
-                'damages_total' => (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0),
-                'paid' => (float) $payments->sum('amount'),
-            ],
+            'totals' => (function () use ($reservation, $extensions, $damages, $payments) {
+                $rentAmount = (float) ($reservation->estimated_price ?? 0);
+                // Fall back to the linked contract's base_amount when the user
+                // entered the amount on the contract instead of the reservation.
+                // We match on reservation_id (added in a recent migration) and
+                // fall back to customer+vehicle for older contracts.
+                if ($rentAmount <= 0) {
+                    $contract = \App\Models\Contract::query()
+                        ->where('vehicle_id', $reservation->vehicle_id)
+                        ->where('customer_id', $reservation->customer_id)
+                        ->whereNotIn('status', ['cancelled', 'terminated', 'rejected', 'expired', 'draft'])
+                        ->orderByDesc('updated_at')
+                        ->first();
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('contracts', 'reservation_id')) {
+                        $direct = \App\Models\Contract::query()
+                            ->where('reservation_id', $reservation->id)
+                            ->orderByDesc('updated_at')
+                            ->first();
+                        if ($direct) $contract = $direct;
+                    }
+                    if ($contract && (float) $contract->base_amount > 0) {
+                        $rentAmount = (float) $contract->base_amount;
+                    }
+                }
+
+                return [
+                    'estimated_price' => $rentAmount,
+                    'extensions_total' => (float) $extensions->where('status', 'applied')->sum('additional_amount'),
+                    'damages_total' => (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0),
+                    'paid' => (float) $payments->sum('amount'),
+                ];
+            })(),
         ]);
     }
 
