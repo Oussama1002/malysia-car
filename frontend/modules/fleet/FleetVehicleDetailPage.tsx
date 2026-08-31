@@ -526,11 +526,51 @@ export const FleetVehicleDetailPage: React.FC = () => {
             </div>
           </SectionCard>
           <SectionCard title="Contexte location">
-            <div className="space-y-2 text-sm">
-              <Field label="Client (lié)" value={(vehicleQ.data?.current as any)?.customer?.legal_name ?? (vehicleQ.data?.current as any)?.customer?.name ?? null} />
-              <Field label="Contrat courant" value={(vehicleQ.data?.current as any)?.contract?.contract_number ?? null} />
-              <Field label="Réservation courante" value={(vehicleQ.data?.current as any)?.reservation?.reservation_number ?? null} />
-            </div>
+            {(() => {
+              const cur = (vehicleQ.data?.current ?? {}) as any;
+              const cust = cur.customer ?? {};
+              const clientName =
+                cust.display_name
+                ?? cust.legal_name
+                ?? [cust?.individual_profile?.first_name, cust?.individual_profile?.last_name].filter(Boolean).join(' ').trim()
+                ?? cust?.company_profile?.trade_name
+                ?? cust?.company_profile?.legal_name
+                ?? cust.name
+                ?? cust.customer_code
+                ?? null;
+              const contractRef = cur.contract?.contract_number ?? cur.contract?.reference ?? null;
+              const contractId = cur.contract?.id ?? null;
+              const rsvRef = cur.reservation?.reservation_number ?? null;
+              const rsvId = cur.reservation?.id ?? null;
+              const rsvStatusFR: Record<string, string> = {
+                draft: 'Brouillon', reserved: 'Réservée', confirmed: 'Confirmée',
+                pickup_scheduled: 'Remise planifiée', handed_over: 'Remise', active: 'En cours',
+                extension_requested: 'Prolongation demandée', returned: 'Retournée', cancelled: 'Annulée',
+                closed: 'Clôturée', completed: 'Terminée',
+              };
+              return (
+                <div className="space-y-2 text-sm">
+                  <Field label="Client (lié)" value={clientName ? (
+                    <span>{clientName}{cust.customer_code ? <span className="ms-2 font-mono text-xs text-slate-500">{cust.customer_code}</span> : null}</span>
+                  ) : null} />
+                  <Field label="Contrat courant" value={contractRef ? (
+                    contractId ? <Link to={`/contracts/${contractId}`} className="font-mono font-bold text-indigo-600 hover:underline">{contractRef}</Link> : <span className="font-mono">{contractRef}</span>
+                  ) : null} />
+                  <Field label="Réservation courante" value={rsvRef ? (
+                    <span className="flex items-center gap-2">
+                      {rsvId
+                        ? <Link to={`/reservations/${rsvId}`} className="font-mono font-bold text-indigo-600 hover:underline">{rsvRef}</Link>
+                        : <span className="font-mono">{rsvRef}</span>}
+                      {cur.reservation?.status && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-800">
+                          {rsvStatusFR[String(cur.reservation.status).toLowerCase()] ?? cur.reservation.status}
+                        </span>
+                      )}
+                    </span>
+                  ) : null} />
+                </div>
+              );
+            })()}
           </SectionCard>
         </div>
       )}

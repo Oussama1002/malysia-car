@@ -184,6 +184,31 @@ class VehicleController extends Controller
         $currentContract = $vehicle->current_contract_id
             ? \App\Models\Contract::query()->find($vehicle->current_contract_id)
             : null;
+        $currentReservation = $vehicle->currentReservation;
+
+        // Fallback lookup — the current_* columns aren't kept in sync when a
+        // reservation or contract is created, so derive live data by scanning
+        // active rows for this vehicle. Never overrides an explicit value.
+        if (! $currentReservation) {
+            $currentReservation = \App\Models\Reservation::query()
+                ->where('vehicle_id', $vehicle->id)
+                ->whereIn('status', ['draft','reserved','confirmed','pickup_scheduled','handed_over','active','extension_requested'])
+                ->orderByDesc('desired_start_at')
+                ->first();
+        }
+        if (! $currentContract) {
+            $currentContract = \App\Models\Contract::query()
+                ->where('vehicle_id', $vehicle->id)
+                ->whereNotIn('status', ['cancelled','terminated','rejected','expired','draft'])
+                ->orderByDesc('start_date')
+                ->first();
+        }
+        if (! $currentCustomer) {
+            $custId = $currentContract?->customer_id ?? $currentReservation?->customer_id;
+            if ($custId) {
+                $currentCustomer = \App\Models\Customer::query()->find($custId);
+            }
+        }
 
         return ApiResponse::success([
             'vehicle' => (new VehicleResource($vehicle))->resolve($request),
@@ -192,7 +217,7 @@ class VehicleController extends Controller
                 'mileageKm' => $currentMileage ? (int) $currentMileage : null,
                 'customer' => $currentCustomer,
                 'contract' => $currentContract,
-                'reservation' => $vehicle->currentReservation,
+                'reservation' => $currentReservation,
             ],
             'documents' => $vehicle->documents,
             'statusHistory' => $vehicle->statusHistory,
