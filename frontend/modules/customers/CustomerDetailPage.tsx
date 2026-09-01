@@ -616,7 +616,21 @@ const KycTab: React.FC<{
 // Contracts / Payments stubs (joined later)
 // ---------------------------------------------------------------------------
 
-const CONTRACT_TYPE_FR: Record<string, string> = { LLD: 'LLD', LOA: 'LOA', credit: 'Crédit', VO: 'Vente occasion', rental: 'Location' };
+const CONTRACT_TYPE_FR: Record<string, string> = {
+  LLD:              'LLD',
+  LOA:              'LOA',
+  CREDIT_AUTO:      'Crédit auto',
+  credit_auto:      'Crédit auto',
+  credit:           'Crédit',
+  VENTE_VO:         'Vente occasion',
+  VO:               'Vente occasion',
+  vente_vo:         'Vente occasion',
+  LOCATION_COURTE:  'LCD',
+  location_courte:  'LCD',
+  SHORT_RENTAL:     'LCD',
+  short_rental:     'LCD',
+  rental:           'Location',
+};
 const CONTRACT_STATUS_FR: Record<string, string> = {
   draft: 'Brouillon',
   pending_approval: 'En attente d\'approbation',
