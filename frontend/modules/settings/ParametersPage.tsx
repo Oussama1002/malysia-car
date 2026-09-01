@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { companySettingsApi, type CompanySettingsPayload } from '@/services/companySettingsApi';
 
@@ -15,12 +15,30 @@ const SECTION_META: Record<Section, { title: string; icon: string; hint: string 
   gps:           { title: 'GPS',            icon: '📡', hint: 'Fournisseur GPS, endpoint API, clés, intervalle de rafraîchissement, alertes.' },
 };
 
+const isSection = (v: string | null): v is Section =>
+  v === 'reservations' || v === 'contracts' || v === 'invoicing'
+  || v === 'payments' || v === 'notifications' || v === 'branding' || v === 'gps';
+
 export const ParametersPage: React.FC = () => {
   const q = useQuery({
     queryKey: ['company-settings'],
     queryFn: async () => (await companySettingsApi.get()).data,
   });
-  const [tab, setTab] = useState<Section>('reservations');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+  const initialTab: Section = isSection(urlTab) ? urlTab : 'reservations';
+  const [tab, setTabState] = useState<Section>(initialTab);
+  const setTab = (s: Section) => {
+    setTabState(s);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', s);
+    setSearchParams(next, { replace: true });
+  };
+  // Keep local tab in sync when the URL changes (e.g. direct link from a card)
+  useEffect(() => {
+    if (isSection(urlTab) && urlTab !== tab) setTabState(urlTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlTab]);
   const [draft, setDraft] = useState<CompanySettingsPayload | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
