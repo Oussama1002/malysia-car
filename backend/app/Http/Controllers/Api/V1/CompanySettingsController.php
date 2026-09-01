@@ -25,6 +25,11 @@ class CompanySettingsController extends Controller
                 'allow_same_day_pickup'   => true,
                 'default_type'            => 'SHORT_RENTAL',
                 'require_deposit'         => true,
+                // Any reservation whose duration meets or exceeds this many
+                // full months is auto-classified as LLD (Longue Durée). Below,
+                // it stays LCD (Courte Durée). Wizards pre-select the type
+                // from this rule; the user can still override manually.
+                'lld_threshold_months'    => 3,
             ],
             'contracts' => [
                 'default_km_per_month'    => 2500,

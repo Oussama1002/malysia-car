@@ -92,17 +92,47 @@ export const ParametersPage: React.FC = () => {
       {/* Panel */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         {tab === 'reservations' && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <NumberField label="Auto-annulation brouillon (heures)" value={draft.reservations.auto_cancel_hours} onChange={(v) => setField('reservations', 'auto_cancel_hours', v)} hint="Une réservation en brouillon non validée est auto-annulée après ce délai." />
-            <NumberField label="Rappel confirmation (heures avant début)" value={draft.reservations.confirmation_lead_hours} onChange={(v) => setField('reservations', 'confirmation_lead_hours', v)} />
-            <SelectField label="Type par défaut" value={draft.reservations.default_type} onChange={(v) => setField('reservations', 'default_type', v)} options={[
-              { value: 'SHORT_RENTAL', label: 'LCD (Location Courte Durée)' },
-              { value: 'LONG_RENTAL',  label: 'Location longue durée' },
-              { value: 'LLD',          label: 'LLD' },
-              { value: 'LOA',          label: 'LOA' },
-            ]} />
-            <BoolField label="Autoriser prise en charge le jour même" value={draft.reservations.allow_same_day_pickup} onChange={(v) => setField('reservations', 'allow_same_day_pickup', v)} />
-            <BoolField label="Caution obligatoire" value={draft.reservations.require_deposit} onChange={(v) => setField('reservations', 'require_deposit', v)} />
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <NumberField label="Auto-annulation brouillon (heures)" value={draft.reservations.auto_cancel_hours} onChange={(v) => setField('reservations', 'auto_cancel_hours', v)} hint="Une réservation en brouillon non validée est auto-annulée après ce délai." />
+              <NumberField label="Rappel confirmation (heures avant début)" value={draft.reservations.confirmation_lead_hours} onChange={(v) => setField('reservations', 'confirmation_lead_hours', v)} />
+              <SelectField label="Type par défaut" value={draft.reservations.default_type} onChange={(v) => setField('reservations', 'default_type', v)} options={[
+                { value: 'SHORT_RENTAL', label: 'LCD (Location Courte Durée)' },
+                { value: 'LONG_RENTAL',  label: 'Location longue durée' },
+                { value: 'LLD',          label: 'LLD' },
+                { value: 'LOA',          label: 'LOA' },
+              ]} />
+              <BoolField label="Autoriser prise en charge le jour même" value={draft.reservations.allow_same_day_pickup} onChange={(v) => setField('reservations', 'allow_same_day_pickup', v)} />
+              <BoolField label="Caution obligatoire" value={draft.reservations.require_deposit} onChange={(v) => setField('reservations', 'require_deposit', v)} />
+            </div>
+
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
+              <div>
+                <div className="text-xs font-black uppercase tracking-wider text-indigo-800">Classification LCD ↔ LLD</div>
+                <p className="mt-0.5 text-[11px] text-indigo-700">
+                  Règle appliquée par les wizards de réservation et de contrat : les durées sous le seuil sont classées <strong>LCD</strong> (Courte Durée), au-dessus <strong>LLD</strong> (Longue Durée). L'agent peut toujours écraser manuellement.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <NumberField
+                  label="Seuil LLD (mois)"
+                  value={draft.reservations.lld_threshold_months}
+                  min={1}
+                  max={36}
+                  onChange={(v) => setField('reservations', 'lld_threshold_months', v)}
+                  hint={`Une durée ≥ ${draft.reservations.lld_threshold_months} mois est considérée comme LLD.`}
+                />
+                <div className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700">
+                  <div>Exemples de classification :</div>
+                  <ul className="mt-1 space-y-0.5 text-slate-600">
+                    <li>• 1 semaine → <span className="font-black text-amber-700">LCD</span></li>
+                    <li>• {Math.max(1, draft.reservations.lld_threshold_months - 1)} mois → <span className="font-black text-amber-700">LCD</span></li>
+                    <li>• {draft.reservations.lld_threshold_months} mois → <span className="font-black text-emerald-700">LLD</span></li>
+                    <li>• 12 mois → <span className="font-black text-emerald-700">LLD</span></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

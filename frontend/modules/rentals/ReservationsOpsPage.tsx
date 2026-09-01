@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, endpoints, getApiBase, apiClient } from '@/services/apiClient';
@@ -16,6 +16,7 @@ import { createCustomer, type CustomerCreatePayload } from '@/services/customers
 import { listBranches, listUsers } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { contractsApi } from '@/services/contractsApi';
+import { companySettingsApi } from '@/services/companySettingsApi';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -159,6 +160,29 @@ export const ReservationsOpsPage: React.FC = () => {
     estimated_price: '',
     is_draft: false,
   });
+
+  // Company-wide LCD ↔ LLD threshold (in months). Defaults to 3 while the
+  // settings load so the classifier is stable even before the query resolves.
+  const companySettingsQ = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => (await companySettingsApi.get()).data,
+    staleTime: 5 * 60_000,
+  });
+  const lldThresholdMonths = companySettingsQ.data?.reservations?.lld_threshold_months ?? 3;
+
+  // Auto-classify the reservation as LCD or LLD based on the requested window
+  // and the company threshold; the picker stays disabled so this is the
+  // authoritative value at submission.
+  useEffect(() => {
+    if (!form.desired_start_at || !form.desired_end_at) return;
+    const s = new Date(form.desired_start_at);
+    const e = new Date(form.desired_end_at);
+    if (isNaN(s.getTime()) || isNaN(e.getTime()) || e <= s) return;
+    const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + (e.getDate() >= s.getDate() ? 0 : -1);
+    const isLLD = months >= lldThresholdMonths;
+    const next = isLLD ? 'LONG_RENTAL' : 'SHORT_RENTAL';
+    setForm((f) => (f.reservation_type === next ? f : { ...f, reservation_type: next }));
+  }, [form.desired_start_at, form.desired_end_at, lldThresholdMonths]);
 
   const reservationDetailQ = useQuery({
     queryKey: ['reservation', selectedReservationId],
@@ -791,10 +815,13 @@ export const ReservationsOpsPage: React.FC = () => {
               <label className="mb-1 block text-xs font-bold text-slate-500">Type</label>
               <select disabled className="w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 cursor-not-allowed" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
                 <option value="SHORT_RENTAL">LCD (Location Courte Durée)</option>
-                <option value="LONG_RENTAL">Location longue durée</option>
+                <option value="LONG_RENTAL">LLD (Longue Durée)</option>
                 <option value="LLD">LLD</option>
                 <option value="LOA">LOA</option>
               </select>
+              <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                Classé automatiquement à partir de la durée · seuil LLD : {lldThresholdMonths} mois
+              </p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>

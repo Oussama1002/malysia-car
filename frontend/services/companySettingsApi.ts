@@ -7,6 +7,7 @@ export interface CompanySettingsPayload {
     allow_same_day_pickup: boolean;
     default_type: string;
     require_deposit: boolean;
+    lld_threshold_months: number;
   };
   contracts: {
     default_km_per_month: number;
