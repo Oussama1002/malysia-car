@@ -24,21 +24,9 @@ export const ParametersPage: React.FC = () => {
     queryKey: ['company-settings'],
     queryFn: async () => (await companySettingsApi.get()).data,
   });
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const urlTab = searchParams.get('tab');
-  const initialTab: Section = isSection(urlTab) ? urlTab : 'reservations';
-  const [tab, setTabState] = useState<Section>(initialTab);
-  const setTab = (s: Section) => {
-    setTabState(s);
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', s);
-    setSearchParams(next, { replace: true });
-  };
-  // Keep local tab in sync when the URL changes (e.g. direct link from a card)
-  useEffect(() => {
-    if (isSection(urlTab) && urlTab !== tab) setTabState(urlTab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlTab]);
+  const tab: Section = isSection(urlTab) ? urlTab : 'reservations';
   const [draft, setDraft] = useState<CompanySettingsPayload | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
@@ -84,8 +72,8 @@ export const ParametersPage: React.FC = () => {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link to="/settings" className="text-[11px] font-bold text-indigo-600">← Paramètres</Link>
-          <h1 className="mt-1 text-2xl font-black text-slate-900">Configuration</h1>
-          <p className="text-sm text-slate-500">Valeurs par défaut & règles métier utilisées partout dans le CRM.</p>
+          <h1 className="mt-1 text-2xl font-black text-slate-900">{SECTION_META[tab].title}</h1>
+          <p className="text-sm text-slate-500">{SECTION_META[tab].hint}</p>
         </div>
         <div className="flex items-center gap-2">
           {saveOk && <span className="rounded-lg bg-emerald-100 px-3 py-1.5 text-xs font-black text-emerald-700">✓ Enregistré</span>}
@@ -101,36 +89,8 @@ export const ParametersPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {(Object.keys(SECTION_META) as Section[]).map((s) => {
-          const active = tab === s;
-          const meta = SECTION_META[s];
-          return (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setTab(s)}
-              className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-xs font-black uppercase tracking-wider transition ${
-                active
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span>{meta.icon}</span>
-              {meta.title}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Panel */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4">
-          <div className="text-sm font-black text-slate-900">{SECTION_META[tab].title}</div>
-          <p className="text-xs text-slate-500 mt-0.5">{SECTION_META[tab].hint}</p>
-        </div>
-
         {tab === 'reservations' && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <NumberField label="Auto-annulation brouillon (heures)" value={draft.reservations.auto_cancel_hours} onChange={(v) => setField('reservations', 'auto_cancel_hours', v)} hint="Une réservation en brouillon non validée est auto-annulée après ce délai." />
