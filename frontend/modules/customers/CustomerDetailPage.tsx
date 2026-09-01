@@ -617,7 +617,43 @@ const KycTab: React.FC<{
 // ---------------------------------------------------------------------------
 
 const CONTRACT_TYPE_FR: Record<string, string> = { LLD: 'LLD', LOA: 'LOA', credit: 'Crédit', VO: 'Vente occasion', rental: 'Location' };
-const CONTRACT_STATUS_FR: Record<string, string> = { draft: 'Brouillon', pending_approval: 'En attente', approved: 'Approuvé', active: 'Actif', terminated: 'Résilié', closed: 'Clôturé' };
+const CONTRACT_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon',
+  pending_approval: 'En attente d\'approbation',
+  'pending approval': 'En attente d\'approbation',
+  pending: 'En attente',
+  approved: 'Approuvé',
+  awaiting_signature: 'En attente de signature',
+  'awaiting signature': 'En attente de signature',
+  signed: 'Signé',
+  active: 'Actif',
+  suspended: 'Suspendu',
+  terminated: 'Résilié',
+  cancelled: 'Annulé',
+  rejected: 'Rejeté',
+  expired: 'Expiré',
+  completed: 'Terminé',
+  closed: 'Clôturé',
+};
+
+const CONTRACT_STATUS_TONE: Record<string, string> = {
+  active: 'bg-emerald-100 text-emerald-700',
+  signed: 'bg-emerald-100 text-emerald-700',
+  approved: 'bg-emerald-100 text-emerald-700',
+  completed: 'bg-emerald-100 text-emerald-700',
+  draft: 'bg-slate-100 text-slate-600',
+  pending_approval: 'bg-amber-100 text-amber-700',
+  'pending approval': 'bg-amber-100 text-amber-700',
+  awaiting_signature: 'bg-amber-100 text-amber-700',
+  'awaiting signature': 'bg-amber-100 text-amber-700',
+  pending: 'bg-amber-100 text-amber-700',
+  suspended: 'bg-amber-100 text-amber-700',
+  closed: 'bg-indigo-100 text-indigo-700',
+  expired: 'bg-indigo-100 text-indigo-700',
+  terminated: 'bg-rose-100 text-rose-700',
+  cancelled: 'bg-rose-100 text-rose-700',
+  rejected: 'bg-rose-100 text-rose-700',
+};
 const fmtMadC = (v: unknown) => { const n = Number(v); return isFinite(n) ? `${n.toLocaleString('fr-MA')} MAD` : '—'; };
 
 const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
@@ -648,8 +684,8 @@ const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
                     <td className="px-4 py-3 font-black text-indigo-700">{r.contract_number ?? '—'}</td>
                     <td className="px-4 py-3">{CONTRACT_TYPE_FR[r.contract_type] ?? r.contract_type ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${st === 'active' ? 'bg-emerald-100 text-emerald-700' : st === 'draft' ? 'bg-slate-100 text-slate-600' : st === 'terminated' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {CONTRACT_STATUS_FR[st] ?? st}
+                      <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-bold ${CONTRACT_STATUS_TONE[st.toLowerCase()] ?? 'bg-slate-100 text-slate-600'}`}>
+                        {CONTRACT_STATUS_FR[st.toLowerCase()] ?? st}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-bold">{fmtMadC(r.base_amount)}</td>
@@ -667,8 +703,14 @@ const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
   </div>
 );
 
-const PAY_METHOD_FR: Record<string, string> = { cash: 'Espèces', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte', mobile: 'Mobile' };
-const PAY_STATUS_FR: Record<string, string> = { received: 'Reçu', allocated: 'Alloué', pending: 'En attente', refunded: 'Remboursé' };
+const PAY_METHOD_FR: Record<string, string> = {
+  cash: 'Espèces', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte',
+  mobile: 'Mobile', compensation: 'Compensation', wallet: 'Portefeuille', other: 'Autre',
+};
+const PAY_STATUS_FR: Record<string, string> = {
+  received: 'Reçu', allocated: 'Alloué', partial: 'Partiel', pending: 'En attente',
+  refunded: 'Remboursé', reversed: 'Annulé',
+};
 
 const PaymentsTab: React.FC<{ payments: unknown[] }> = ({ payments }) => (
   <div className="df-card">
