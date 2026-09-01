@@ -71,6 +71,20 @@ class CompanySettingsController extends Controller
                 'default_language'     => 'fr',
                 'timezone'             => 'Africa/Casablanca',
             ],
+            'gps' => [
+                'provider'                => '',       // e.g. teltonika, wialon, traccar, gurtam, custom
+                'api_base_url'            => '',       // https://api.provider.tld
+                'api_key'                 => '',       // stored plain — swap for encrypted:cast later if needed
+                'api_secret'              => '',
+                'account_id'              => '',
+                'refresh_interval_seconds'=> 60,
+                'live_tracking_enabled'   => true,
+                'trip_recording_enabled'  => true,
+                'geofences_enabled'       => true,
+                'idle_alert_minutes'      => 15,
+                'speed_alert_kmh'         => 130,
+                'position_retention_days' => 90,
+            ],
         ];
     }
 
@@ -99,6 +113,7 @@ class CompanySettingsController extends Controller
             'payments'      => ['sometimes', 'array'],
             'notifications' => ['sometimes', 'array'],
             'branding'      => ['sometimes', 'array'],
+            'gps'           => ['sometimes', 'array'],
         ]);
 
         $row = CompanySetting::query()->where('company_id', $companyId)->first();

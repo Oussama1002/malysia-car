@@ -12,6 +12,7 @@ const SECTION_META: Record<Section, { title: string; icon: string; hint: string 
   payments:      { title: 'Paiements',     icon: '💰', hint: 'Devise, paiements partiels, délai de grâce chèque.' },
   notifications: { title: 'Notifications', icon: '🔔', hint: 'Fenêtres d\'alerte pour assurance, visite technique, vignette, maintenance et fin de contrat.' },
   branding:      { title: 'Entreprise',    icon: '🏢', hint: 'Identité légale, ICE, RC, IF, CNSS, langue, fuseau horaire.' },
+  gps:           { title: 'GPS',            icon: '📡', hint: 'Fournisseur GPS, endpoint API, clés, intervalle de rafraîchissement, alertes.' },
 };
 
 export const ParametersPage: React.FC = () => {
@@ -193,6 +194,62 @@ export const ParametersPage: React.FC = () => {
               { value: 'en', label: 'Anglais' },
             ]} />
             <TextField label="Fuseau horaire" value={draft.branding.timezone} onChange={(v) => setField('branding', 'timezone', v)} />
+          </div>
+        )}
+
+        {tab === 'gps' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <SelectField
+                label="Fournisseur GPS"
+                value={draft.gps.provider}
+                onChange={(v) => setField('gps', 'provider', v)}
+                options={[
+                  { value: '',           label: '— Sélectionner —' },
+                  { value: 'traccar',    label: 'Traccar' },
+                  { value: 'wialon',     label: 'Wialon' },
+                  { value: 'gurtam',     label: 'Gurtam' },
+                  { value: 'teltonika',  label: 'Teltonika (FMBxxx)' },
+                  { value: 'ruptela',    label: 'Ruptela' },
+                  { value: 'gpspro',     label: 'GPSPro' },
+                  { value: 'custom',     label: 'Custom REST' },
+                ]}
+              />
+              <TextField label="URL de base de l'API" value={draft.gps.api_base_url} onChange={(v) => setField('gps', 'api_base_url', v)} hint="Ex : https://api.traccar.example.com" />
+              <TextField label="Clé API" value={draft.gps.api_key} onChange={(v) => setField('gps', 'api_key', v)} hint="Token / API key du fournisseur." />
+              <TextField label="Secret API (optionnel)" value={draft.gps.api_secret} onChange={(v) => setField('gps', 'api_secret', v)} />
+              <TextField label="Identifiant compte / tenant (optionnel)" value={draft.gps.account_id} onChange={(v) => setField('gps', 'account_id', v)} />
+              <NumberField
+                label="Intervalle de rafraîchissement (secondes)"
+                value={draft.gps.refresh_interval_seconds}
+                min={10}
+                max={3600}
+                onChange={(v) => setField('gps', 'refresh_interval_seconds', v)}
+                hint="Fréquence à laquelle le front interroge le serveur pour les positions."
+              />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 text-xs font-black uppercase tracking-wider text-slate-500">Fonctionnalités</div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <BoolField label="Suivi en temps réel" value={draft.gps.live_tracking_enabled} onChange={(v) => setField('gps', 'live_tracking_enabled', v)} />
+                <BoolField label="Enregistrement des trajets" value={draft.gps.trip_recording_enabled} onChange={(v) => setField('gps', 'trip_recording_enabled', v)} />
+                <BoolField label="Zones géofences" value={draft.gps.geofences_enabled} onChange={(v) => setField('gps', 'geofences_enabled', v)} />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 text-xs font-black uppercase tracking-wider text-slate-500">Alertes & rétention</div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <NumberField label="Immobilisation moteur — alerte (minutes)" value={draft.gps.idle_alert_minutes} min={1} max={720} onChange={(v) => setField('gps', 'idle_alert_minutes', v)} />
+                <NumberField label="Excès de vitesse — seuil (km/h)" value={draft.gps.speed_alert_kmh} min={30} max={250} onChange={(v) => setField('gps', 'speed_alert_kmh', v)} />
+                <NumberField label="Rétention des positions (jours)" value={draft.gps.position_retention_days} min={7} max={730} onChange={(v) => setField('gps', 'position_retention_days', v)} hint="Positions plus anciennes purgées automatiquement." />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+              ⚠️ La clé API est stockée en base — n'ouvrez cette page qu'aux rôles ADMIN / DIRECTEUR.
+            </div>
           </div>
         )}
       </div>

@@ -53,6 +53,20 @@ export interface CompanySettingsPayload {
     default_language: string;
     timezone: string;
   };
+  gps: {
+    provider: string;
+    api_base_url: string;
+    api_key: string;
+    api_secret: string;
+    account_id: string;
+    refresh_interval_seconds: number;
+    live_tracking_enabled: boolean;
+    trip_recording_enabled: boolean;
+    geofences_enabled: boolean;
+    idle_alert_minutes: number;
+    speed_alert_kmh: number;
+    position_retention_days: number;
+  };
 }
 
 export const companySettingsApi = {
