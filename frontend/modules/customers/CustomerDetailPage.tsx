@@ -747,17 +747,34 @@ const PaymentsTab: React.FC<{ payments: unknown[] }> = ({ payments }) => (
             <tbody className="divide-y divide-slate-100">
               {payments.map((p, i) => {
                 const r = p as Record<string, any>;
-                const st = String(r.status ?? '');
+                const raw = String(r.status ?? '').toLowerCase();
+                const alloc = Number(r.amount_allocated ?? 0);
+                const total = Number(r.amount ?? 0);
+                // Derive a status when the backend value is empty or unknown.
+                const derived: 'allocated' | 'partial' | 'received' | 'refunded' | 'reversed' =
+                  raw === 'refunded' ? 'refunded'
+                  : raw === 'reversed' ? 'reversed'
+                  : total > 0 && alloc >= total ? 'allocated'
+                  : alloc > 0 ? 'partial'
+                  : (raw === 'allocated' || raw === 'partial' || raw === 'received') ? (raw as any)
+                  : 'received';
+                const toneMap: Record<string, string> = {
+                  allocated: 'bg-emerald-100 text-emerald-700',
+                  received:  'bg-indigo-100 text-indigo-700',
+                  partial:   'bg-amber-100 text-amber-700',
+                  refunded:  'bg-amber-100 text-amber-700',
+                  reversed:  'bg-rose-100 text-rose-700',
+                };
                 return (
                   <tr key={r.id ?? i} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{r.payment_number ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600">{r.payment_date ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-black text-slate-800">{fmtMadC(r.amount)}</td>
-                    <td className="px-4 py-3">{PAY_METHOD_FR[r.payment_method] ?? r.payment_method ?? '—'}</td>
+                    <td className="px-4 py-3">{PAY_METHOD_FR[String(r.payment_method ?? '').toLowerCase()] ?? r.payment_method ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">{r.check_number ? `Chèque ${r.check_number}` : r.external_reference || '—'}{r.check_bank ? ` · ${r.check_bank}` : ''}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${st === 'received' ? 'bg-emerald-100 text-emerald-700' : st === 'allocated' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {PAY_STATUS_FR[st] ?? st}
+                      <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-bold ${toneMap[derived]}`}>
+                        {PAY_STATUS_FR[derived] ?? derived}
                       </span>
                     </td>
                   </tr>
