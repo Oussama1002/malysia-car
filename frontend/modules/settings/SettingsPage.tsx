@@ -66,18 +66,6 @@ export const SettingsPage: React.FC = () => (
             </svg>
           }
         />
-        <AdminCard
-          title="Templates de contrats"
-          subtitle="Modèles LLD, LOA, crédit auto — variables & DOCX"
-          href="/contracts/templates"
-          tone="indigo"
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14 2v6h6M8 13h8M8 17h5" />
-            </svg>
-          }
-        />
       </div>
     </section>
 
@@ -89,50 +77,36 @@ export const SettingsPage: React.FC = () => (
           title="Réservations"
           subtitle="Auto-annulation, rappels, type par défaut, caution"
           href="/settings/parameters?tab=reservations"
-          tone="amber"
-          emoji="📅"
         />
         <AdminCard
           title="Contrats"
           subtitle="Km inclus, caution, jour de prélèvement, seuil approbation"
           href="/settings/parameters?tab=contracts"
-          tone="violet"
-          emoji="📄"
         />
         <AdminCard
           title="Facturation"
           subtitle="Préfixes, TVA, jours nets, source d'échéance, mentions"
           href="/settings/parameters?tab=invoicing"
-          tone="emerald"
-          emoji="🧾"
         />
         <AdminCard
           title="Paiements"
           subtitle="Devise, grâce chèque, paiements partiels"
           href="/settings/parameters?tab=payments"
-          tone="green"
-          emoji="💰"
         />
         <AdminCard
           title="Notifications"
           subtitle="Fenêtres d'alerte assurance, visite, vignette, contrat"
           href="/settings/parameters?tab=notifications"
-          tone="rose"
-          emoji="🔔"
         />
         <AdminCard
           title="Entreprise"
           subtitle="Identité légale, ICE, RC, IF, CNSS, langue, fuseau"
           href="/settings/parameters?tab=branding"
-          tone="sky"
-          emoji="🏢"
         />
         <AdminCard
           title="GPS"
           subtitle="Fournisseur, endpoint API, clé, intervalle, alertes"
           href="/settings/parameters?tab=gps"
-          tone="cyan"
-          emoji="📡"
         />
       </div>
     </section>
@@ -164,9 +138,11 @@ const AdminCard: React.FC<{
       to={href}
       className="group flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-300 hover:shadow-md"
     >
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${t.bg} ${t.text} ${t.hover}`}>
-        {emoji ? <span className="text-xl leading-none">{emoji}</span> : icon}
-      </div>
+      {(icon || emoji) && (
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${t.bg} ${t.text} ${t.hover}`}>
+          {emoji ? <span className="text-xl leading-none">{emoji}</span> : icon}
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-[15px] font-black text-slate-900 group-hover:text-indigo-700 transition-colors">{title}</div>
         <div className="text-sm text-slate-500 mt-0.5">{subtitle}</div>
