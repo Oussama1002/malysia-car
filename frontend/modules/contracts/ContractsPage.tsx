@@ -69,6 +69,39 @@ function formatDate(iso?: string | null): string {
   return d.toLocaleDateString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/**
+ * Number of completed months + leftover days between two ISO date strings,
+ * anchored on the same day-of-month. "2 mois et 5 jours" is more truthful
+ * than the flat "3 mois" the DB durationMonths often carries.
+ */
+function durationBetween(start?: string | null, end?: string | null): { months: number; days: number } | null {
+  if (!start || !end) return null;
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return null;
+  let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  const anchor = new Date(s);
+  anchor.setMonth(anchor.getMonth() + months);
+  if (anchor > e) {
+    months -= 1;
+    anchor.setMonth(anchor.getMonth() - 1);
+  }
+  const days = Math.max(0, Math.round((e.getTime() - anchor.getTime()) / 86_400_000));
+  return { months: Math.max(0, months), days };
+}
+
+function formatDuration(start?: string | null, end?: string | null, fallbackMonths?: number | null): string {
+  const dur = durationBetween(start, end);
+  if (dur && (dur.months > 0 || dur.days > 0)) {
+    const parts: string[] = [];
+    if (dur.months > 0) parts.push(`${dur.months} mois`);
+    if (dur.days > 0) parts.push(`${dur.days} jour${dur.days > 1 ? 's' : ''}`);
+    return parts.join(' et ');
+  }
+  if (fallbackMonths && fallbackMonths > 0) return `${fallbackMonths} mois`;
+  return '';
+}
+
 export const ContractsPage: React.FC = () => {
   const [filters, setFilters] = React.useState<{ q: string; type: string; status: string }>({ q: '', type: '', status: '' });
 
@@ -235,15 +268,15 @@ export const ContractsPage: React.FC = () => {
             render: (r: any) => {
               const start = r.startDate ?? r.start_date;
               const end = r.endDate ?? r.end_date;
-              const months = r.durationMonths ?? r.duration_months;
+              const duration = formatDuration(start, end, r.durationMonths ?? r.duration_months);
               return (
                 <div>
                   <div className="text-xs font-semibold text-slate-700">
                     {formatDate(start)} → {formatDate(end)}
                   </div>
-                  {months ? (
-                    <div className="text-[10px] font-semibold text-slate-400">{months} mois</div>
-                  ) : null}
+                  {duration && (
+                    <div className="text-[10px] font-semibold text-slate-400">{duration}</div>
+                  )}
                 </div>
               );
             },
