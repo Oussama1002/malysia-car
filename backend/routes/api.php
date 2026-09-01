@@ -178,6 +178,11 @@ Route::prefix('v1')->group(function () {
         Route::get('entities/{entityType}/{entityId}/audit', [AuditLogController::class, 'forEntity'])
             ->middleware('permission:audit.view');
 
+        // Company-wide configuration (defaults for reservations, contracts, invoicing, payments, notifications, branding)
+        Route::get('company-settings', [\App\Http\Controllers\Api\V1\CompanySettingsController::class, 'show']);
+        Route::put('company-settings', [\App\Http\Controllers\Api\V1\CompanySettingsController::class, 'update'])
+            ->middleware('role:ADMIN,DIRECTEUR');
+
         // ==================================================================
         // Document center (uploads + entity attachments + generated PDFs)
         // ==================================================================
