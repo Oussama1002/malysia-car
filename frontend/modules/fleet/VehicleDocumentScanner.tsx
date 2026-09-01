@@ -199,14 +199,15 @@ const ScanSlot: React.FC<{
   }, [mapFields, onPrefill]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-3 gap-2">
       <div className="text-xs font-bold text-slate-700">{title}</div>
-      <div className="text-[10px] text-slate-400">{description}</div>
+      {/* Fixed-height description block so drop zones align across cards */}
+      <div className="min-h-[42px] text-[10px] leading-snug text-slate-400">{description}</div>
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) void handle(f); }}
-        className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-4 text-center text-[11px] transition ${
+        className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-4 text-center text-[11px] transition ${
           dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 bg-slate-50'
         } ${loading ? 'pointer-events-none opacity-70' : ''}`}
       >
