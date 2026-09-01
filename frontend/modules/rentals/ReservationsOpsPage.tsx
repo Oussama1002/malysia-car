@@ -790,7 +790,7 @@ export const ReservationsOpsPage: React.FC = () => {
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Type</label>
               <select disabled className="w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 cursor-not-allowed" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
-                <option value="SHORT_RENTAL">Location courte durée</option>
+                <option value="SHORT_RENTAL">LCD (Location Courte Durée)</option>
                 <option value="LONG_RENTAL">Location longue durée</option>
                 <option value="LLD">LLD</option>
                 <option value="LOA">LOA</option>

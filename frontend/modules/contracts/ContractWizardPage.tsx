@@ -92,8 +92,8 @@ const CONTRACT_TYPES: {
   },
   {
     value: 'LOCATION_COURTE',
-    label: 'Location Courte Durée',
-    sub: 'Location journalière / hebdomadaire',
+    label: 'LCD',
+    sub: 'Location Courte Durée — journalière / hebdomadaire',
     icon: 'play',
     legal: 'DOC · Caution obligatoire',
   },

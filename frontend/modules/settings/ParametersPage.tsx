@@ -136,7 +136,7 @@ export const ParametersPage: React.FC = () => {
             <NumberField label="Auto-annulation brouillon (heures)" value={draft.reservations.auto_cancel_hours} onChange={(v) => setField('reservations', 'auto_cancel_hours', v)} hint="Une réservation en brouillon non validée est auto-annulée après ce délai." />
             <NumberField label="Rappel confirmation (heures avant début)" value={draft.reservations.confirmation_lead_hours} onChange={(v) => setField('reservations', 'confirmation_lead_hours', v)} />
             <SelectField label="Type par défaut" value={draft.reservations.default_type} onChange={(v) => setField('reservations', 'default_type', v)} options={[
-              { value: 'SHORT_RENTAL', label: 'Location courte' },
+              { value: 'SHORT_RENTAL', label: 'LCD (Location Courte Durée)' },
               { value: 'LONG_RENTAL',  label: 'Location longue durée' },
               { value: 'LLD',          label: 'LLD' },
               { value: 'LOA',          label: 'LOA' },

@@ -53,7 +53,7 @@ const TYPE_FR: Record<string, string> = {
   LOA:              'LOA',
   CREDIT_AUTO:      'Crédit auto',
   VENTE_VO:         'Vente occasion',
-  LOCATION_COURTE:  'Location courte',
+  LOCATION_COURTE:  'LCD',
 };
 
 function formatAmount(value: unknown): string {
