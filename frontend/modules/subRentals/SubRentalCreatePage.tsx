@@ -4,6 +4,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supplierAgencyApi, subRentalApi, type PaymentMethod } from '@/services/subRentalApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { documentCenterApi } from '@/services/documentCenterApi';
+import { documentReaderApi } from '@/services/documentReaderApi';
+import { VehicleDocumentScanner, type VehicleDocSlotKey } from '@/modules/fleet/VehicleDocumentScanner';
 
 const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWY'.split('');
 const PLATE_REGIONS = Array.from({ length: 99 }, (_, i) => i + 1);
@@ -92,14 +94,10 @@ export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [brands, setBrands] = useState<VehicleBrandOption[]>([]);
   const [photos, setPhotos] = useState<File[]>([]);
-  const [docs, setDocs] = useState<Record<DocCategoryKey, File | null>>({
-    insurance: null,
-    registration_card: null,
-    circulation_authorization: null,
-    payment_attestation: null,
-    technical_inspection: null,
-    vignette: null,
-  });
+  // Reader-document ids per slot, captured as soon as the OCR scanner ingests
+  // a file. After the SL is created we link each id to the new SL contract via
+  // documentReaderApi.link so the docs show up on the SL's document panel.
+  const [scannedDocIds, setScannedDocIds] = useState<Partial<Record<VehicleDocSlotKey, string>>>({});
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -133,20 +131,17 @@ export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
   const uploadAttachments = async (subRentalId: string): Promise<void> => {
     const uploads: Array<{ label: string; run: () => Promise<unknown> }> = [];
 
-    for (const [key, file] of Object.entries(docs) as Array<[DocCategoryKey, File | null]>) {
-      if (!file) continue;
-      const cat = DOC_CATEGORIES.find((c) => c.key === key);
+    // Reader-scanned documents already live in the document_reader storage —
+    // we just link them to the newly created SL contract.
+    for (const [slot, readerId] of Object.entries(scannedDocIds) as Array<[VehicleDocSlotKey, string]>) {
+      if (!readerId) continue;
+      const cat = DOC_CATEGORIES.find((c) => c.key === slot);
       uploads.push({
-        label: cat?.label ?? key,
-        run: () => {
-          const fd = new FormData();
-          fd.append('file', file);
-          fd.append('category', key);
-          fd.append('label', cat?.label ?? key);
-          return documentCenterApi.uploadToEntity('sub_rental_contract', subRentalId, fd);
-        },
+        label: cat?.label ?? slot,
+        run: () => documentReaderApi.link(readerId, 'sub_rental_contract', subRentalId),
       });
     }
+
     photos.forEach((file, idx) => {
       uploads.push({
         label: `Photo ${idx + 1}`,
@@ -168,6 +163,39 @@ export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
       done++;
     }
     setUploadStatus(null);
+  };
+
+  /**
+   * OCR pre-fill hook: when the scanner extracts fields (registration, brand,
+   * model, colour, year, mileage), we merge them into the SL form.
+   */
+  const applyOcrPrefill = (data: Record<string, unknown>) => {
+    setForm((f) => {
+      const next = { ...f };
+      const reg = (data.registration ?? data.cgMarque ?? '') as string;
+      const brandName = (data.cgMarque ?? data.marque ?? '') as string;
+      const modelName = (data.cgModele ?? data.modele ?? '') as string;
+      const year = data.miseEnCirculation ? new Date(String(data.miseEnCirculation)).getFullYear() : null;
+      // Registration → plate picker
+      if (typeof reg === 'string' && /^(\d+)-([A-Z])-(\d+)$/.test(reg)) {
+        const p = parsePlate(reg);
+        next.plat_num = p.platNum;
+        next.plat_letter = p.platLetter;
+        next.plat_region = p.platRegion;
+      }
+      if (brandName) {
+        const b = brands.find((br) => br.name.toLowerCase() === String(brandName).toLowerCase());
+        if (b) {
+          next.ext_brand_id = b.id;
+          if (modelName) {
+            const m = b.models.find((mo) => mo.name.toLowerCase() === String(modelName).toLowerCase());
+            if (m) next.ext_model_id = m.id;
+          }
+        }
+      }
+      if (year && !isNaN(year)) next.ext_year = String(year);
+      return next;
+    });
   };
 
   const createMutation = useMutation({
@@ -426,74 +454,19 @@ export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
           </div>
         </div>
 
-        {/* Documents */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+        {/* Documents — OCR-based scanner (same UX as the Nouvelle flotte form) */}
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wide text-slate-800">Documents véhicule</h2>
             <span className="text-[11px] font-semibold text-slate-400">
-              {Object.values(docs).filter(Boolean).length} / {DOC_CATEGORIES.length}
+              {Object.values(scannedDocIds).filter(Boolean).length} scanné{Object.values(scannedDocIds).filter(Boolean).length > 1 ? 's' : ''}
             </span>
           </div>
-          <p className="text-xs text-slate-500">PDF ou photo — assurance, carte grise, autorisation de circulation, attestation de paiement, visite technique et vignette.</p>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {DOC_CATEGORIES.map((cat) => {
-              const file = docs[cat.key];
-              const inputId = `doc-${cat.key}`;
-              return (
-                <div
-                  key={cat.key}
-                  className={`rounded-xl border p-3 transition ${
-                    file ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'
-                  }`}
-                >
-                  <div className="mb-2 flex items-start gap-2">
-                    <span className="text-lg leading-none">{cat.icon}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-black text-slate-800">{cat.label}</div>
-                      {file && (
-                        <div className="mt-0.5 truncate text-[10px] font-semibold text-emerald-700">
-                          ✓ {file.name}
-                        </div>
-                      )}
-                    </div>
-                    {file && (
-                      <button
-                        type="button"
-                        onClick={() => setDocs((s) => ({ ...s, [cat.key]: null }))}
-                        className="text-[10px] font-black text-rose-500 hover:text-rose-700"
-                        aria-label="Retirer"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <label
-                    htmlFor={inputId}
-                    className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
-                      file
-                        ? 'border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    }`}
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                    {file ? 'Remplacer' : 'Téléverser'}
-                  </label>
-                  <input
-                    id={inputId}
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] ?? null;
-                      setDocs((s) => ({ ...s, [cat.key]: f }));
-                      e.target.value = '';
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <VehicleDocumentScanner
+            carteGriseRecue
+            onPrefill={applyOcrPrefill}
+            onDocumentUploaded={(slot, id) => setScannedDocIds((s) => ({ ...s, [slot]: id }))}
+          />
         </div>
 
         {uploadStatus && (

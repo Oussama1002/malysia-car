@@ -37,11 +37,22 @@ export interface ScannedVehicleData {
   cgExpiry?: string;
 }
 
+export type VehicleDocSlotKey =
+  | 'insurance'
+  | 'circulation_authorization'
+  | 'payment_attestation'
+  | 'technical_inspection'
+  | 'vignette'
+  | 'registration_card';
+
 export const VehicleDocumentScanner: React.FC<{
   onPrefill: (data: ScannedVehicleData) => void;
+  /** Fires as soon as a slot's document has been ingested by the reader,
+   *  so consumers can later link it to their own entity (SL contract, …). */
+  onDocumentUploaded?: (slot: VehicleDocSlotKey, readerDocumentId: string) => void;
   carteGriseRecue?: boolean;
   carteGriseRef?: React.RefObject<HTMLDivElement | null>;
-}> = ({ onPrefill, carteGriseRecue, carteGriseRef }) => (
+}> = ({ onPrefill, onDocumentUploaded, carteGriseRecue, carteGriseRef }) => (
   <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
     <div className="text-xs font-black uppercase tracking-wider text-indigo-700">
       Scanner les documents véhicule (OCR)
@@ -55,30 +66,35 @@ export const VehicleDocumentScanner: React.FC<{
         description="N° police, période de garantie, immatriculation"
         onPrefill={onPrefill}
         mapFields={mapAssurance}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('insurance', id)}
       />
       <ScanSlot
         title="Autorisation de circulation"
         description="Immat., N° WW, marque, carburant, mise en circulation, validité"
         onPrefill={onPrefill}
         mapFields={mapAutorisation}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('circulation_authorization', id)}
       />
       <ScanSlot
         title="Attestation de paiement"
         description="Immat., carburant, mise en circulation, puissance fiscale"
         onPrefill={onPrefill}
         mapFields={mapPaymentAttestation}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('payment_attestation', id)}
       />
       <ScanSlot
         title="Visite technique"
         description="Date expiration, N° visite, centre contrôle"
         onPrefill={onPrefill}
         mapFields={mapVisiteTech}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('technical_inspection', id)}
       />
       <ScanSlot
         title="Vignette"
         description="Année / date expiration"
         onPrefill={onPrefill}
         mapFields={mapVignette}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('vignette', id)}
       />
       {carteGriseRecue && (
         <div ref={carteGriseRef}>
@@ -87,6 +103,7 @@ export const VehicleDocumentScanner: React.FC<{
             description="Marque, modèle, châssis, carburant, puissance, fin validité"
             onPrefill={onPrefill}
             mapFields={mapCarteGrise}
+            onDocumentUploaded={(id) => onDocumentUploaded?.('registration_card', id)}
           />
         </div>
       )}
@@ -123,7 +140,8 @@ const ScanSlot: React.FC<{
   description: string;
   onPrefill: (data: ScannedVehicleData) => void;
   mapFields: Mapper;
-}> = ({ title, description, onPrefill, mapFields }) => {
+  onDocumentUploaded?: (readerDocumentId: string) => void;
+}> = ({ title, description, onPrefill, mapFields, onDocumentUploaded }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -145,6 +163,7 @@ const ScanSlot: React.FC<{
         : mapFields === mapAutorisation ? 'autorisation_circulation'
         : 'other';
       const uploaded = await documentReaderApi.upload(file, docType);
+      onDocumentUploaded?.(uploaded.data.id);
       await documentReaderApi.extract(uploaded.data.id, docType);
       const done = await documentReaderApi.pollUntilDone(uploaded.data.id);
 
