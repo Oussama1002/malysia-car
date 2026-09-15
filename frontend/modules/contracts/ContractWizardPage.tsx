@@ -198,6 +198,10 @@ export const ContractWizardPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { session } = useAuthSession();
   const [stepIdx, setStepIdx] = useState(0);
+  // Highest step the wizard has ever reached — lets the user click back and
+  // forward between already-visited steps from the stepper header without
+  // having to hit "Suivant" repeatedly.
+  const [maxStepIdx, setMaxStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
   const [scanningPayment, setScanningPayment] = useState<string | null>(null);
   const [scanError, setScanError] = useState<Record<string, string>>({});
@@ -680,13 +684,14 @@ export const ContractWizardPage: React.FC = () => {
           {STEPS.map((s, i) => {
             const done = i < stepIdx;
             const active = i === stepIdx;
+            const reachable = i <= maxStepIdx;
             return (
               <React.Fragment key={s.key}>
                 <button
                   type="button"
-                  onClick={() => i <= stepIdx && setStepIdx(i)}
+                  onClick={() => reachable && setStepIdx(i)}
                   className={`df-step ${done ? 'df-step--done' : ''} ${active ? 'df-step--active' : ''}`}
-                  style={{ cursor: i <= stepIdx ? 'pointer' : 'default', background: 'transparent', border: 0 }}
+                  style={{ cursor: reachable ? 'pointer' : 'default', background: 'transparent', border: 0 }}
                 >
                   <span className="df-step__bullet">
                     {done ? <Icon name="check" size={12} /> : i + 1}
@@ -1181,7 +1186,13 @@ export const ContractWizardPage: React.FC = () => {
                 <button
                   className="df-btn df-btn--primary df-btn--sm"
                   disabled={!canNext}
-                  onClick={() => setStepIdx((s) => Math.min(STEPS.length - 1, s + 1))}
+                  onClick={() =>
+                    setStepIdx((s) => {
+                      const next = Math.min(STEPS.length - 1, s + 1);
+                      setMaxStepIdx((m) => Math.max(m, next));
+                      return next;
+                    })
+                  }
                 >
                   Suivant <Icon name="chevron-right" size={14} />
                 </button>
