@@ -1045,7 +1045,6 @@ export const ContractWizardPage: React.FC = () => {
                             </Field>
                             <div className="md:col-span-2">
                               <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2.5">
-                                <span className="text-lg leading-none">📷</span>
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-black text-indigo-900">Scanner le chèque</div>
                                   <div className="text-[11px] text-indigo-700/80">Extraction automatique du n°, banque, date et montant.</div>
