@@ -96,6 +96,11 @@ export const endpoints = {
     retry: (id: string) => `/v1/notifications/${id}/retry`,
     destroy: (id: string) => `/v1/notifications/${id}`,
   },
+  payments: {
+    list: '/v1/payments',
+    one: (id: number | string) => `/v1/payments/${id}`,
+    receipt: (id: number | string) => `/v1/payments/${id}/receipt`,
+  },
   reservations: {
     list: '/v1/reservations',
     one: (id: number | string) => `/v1/reservations/${id}`,

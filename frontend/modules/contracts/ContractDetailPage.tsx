@@ -486,31 +486,59 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
 };
 
 // ── Paiements tab ──────────────────────────────────────────────────────────────
+const PAYMENT_STATUS_FR: Record<string, string> = {
+  received: 'Reçu',
+  allocated: 'Alloué',
+  partial: 'Partiel',
+  unallocated: 'Non alloué',
+  pending: 'En attente',
+  cancelled: 'Annulé',
+  refunded: 'Remboursé',
+};
+
 const PaymentsTab: React.FC<{ contractId: string }> = ({ contractId }) => {
-  const q = useQuery({
+  const installmentsQ = useQuery({
     queryKey: ['contract-installments-payments', contractId],
     queryFn: async () => contractsApi.installments(contractId),
   });
 
-  const all = (q.data ?? []) as any[];
-  const paid    = all.filter((i: any) => (i.status ?? '') === 'paid' || Number(i.amount_paid ?? i.amountPaid ?? 0) > 0);
-  const pending = all.filter((i: any) => (i.status ?? '') !== 'paid' && Number(i.amount_paid ?? i.amountPaid ?? 0) === 0);
+  const paymentsQ = useQuery({
+    queryKey: ['contract-payments', contractId],
+    queryFn: async () => {
+      const res = await apiClient<{ data: any[] }>(
+        `${endpoints.payments.list}?contract_id=${contractId}&per_page=100`,
+      );
+      return res.data ?? [];
+    },
+  });
+
+  const installments = (installmentsQ.data ?? []) as any[];
+  // Backend uses installment_status + total_paid_amount — not status/amount_paid.
+  const isPaid = (i: any) =>
+    ['PAID', 'paid'].includes(String(i.installment_status ?? i.status ?? '')) ||
+    Number(i.total_paid_amount ?? i.amount_paid ?? 0) > 0;
+  const paidInstallments    = installments.filter(isPaid);
+  const pendingInstallments = installments.filter((i: any) => !isPaid(i));
+
+  const payments = (paymentsQ.data ?? []) as any[];
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <div className="mb-4 text-sm font-black text-slate-900">Paiements reçus</div>
-        {q.isLoading ? (
+        {paymentsQ.isLoading ? (
           <p className="text-sm text-slate-500">Chargement…</p>
-        ) : paid.length === 0 ? (
+        ) : payments.length === 0 ? (
           <p className="text-sm text-slate-500">Aucun paiement enregistré pour ce contrat.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {paid.map((inst: any, idx: number) => {
-              const amount = Number(inst.amount_paid ?? inst.amountPaid ?? inst.amount_due ?? 0);
-              const date   = inst.paid_at ?? inst.paidAt ?? inst.due_date ?? inst.dueDate;
+            {payments.map((p: any) => {
+              const amount = Number(p.amount ?? 0);
+              const date   = p.payment_date ?? p.paymentDate ?? p.created_at;
+              const method = PAYMENT_METHOD_FR[p.payment_method ?? ''] ?? p.payment_method ?? '—';
+              const statusLabel = PAYMENT_STATUS_FR[p.status ?? ''] ?? p.status ?? '';
               return (
-                <li key={inst.id ?? idx} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <li key={p.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
@@ -518,8 +546,13 @@ const PaymentsTab: React.FC<{ contractId: string }> = ({ contractId }) => {
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-800">Échéance {idx + 1}</div>
-                      <div className="text-xs text-slate-500">{date ? formatDate(date) : '—'}</div>
+                      <div className="font-semibold text-slate-800">
+                        {p.payment_number ?? 'Paiement'} · {method}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {date ? formatDate(date) : '—'}
+                        {statusLabel && <> · {statusLabel}</>}
+                      </div>
                     </div>
                   </div>
                   <div className="font-black text-emerald-700">{formatCurrencyMad(amount)}</div>
@@ -530,28 +563,52 @@ const PaymentsTab: React.FC<{ contractId: string }> = ({ contractId }) => {
         )}
       </div>
 
-      {pending.length > 0 && (
+      {paidInstallments.length > 0 && (
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-3 text-sm font-black text-slate-900">
+            Échéances soldées ({paidInstallments.length})
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {paidInstallments.map((inst: any) => {
+              const amount = Number(inst.total_paid_amount ?? inst.amount_paid ?? inst.total_due_amount ?? 0);
+              const date   = inst.paid_at ?? inst.paidAt ?? inst.due_date ?? inst.dueDate;
+              const num    = inst.installment_number ?? '—';
+              return (
+                <li key={inst.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div>
+                    <div className="font-semibold text-slate-800">Échéance {num}</div>
+                    <div className="text-xs text-slate-500">{date ? formatDate(date) : '—'}</div>
+                  </div>
+                  <div className="font-black text-emerald-700">{formatCurrencyMad(amount)}</div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {pendingInstallments.length > 0 && (
         <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-6">
           <div className="mb-3 text-sm font-black text-amber-800">
-            {pending.length} échéance{pending.length > 1 ? 's' : ''} en attente
+            {pendingInstallments.length} échéance{pendingInstallments.length > 1 ? 's' : ''} en attente
           </div>
           <ul className="space-y-2">
-            {pending.slice(0, 5).map((inst: any, idx: number) => {
-              const due  = Number(inst.amount_due ?? inst.amountDue ?? 0);
+            {pendingInstallments.slice(0, 5).map((inst: any, idx: number) => {
+              const due  = Number(inst.total_due_amount ?? inst.amount_due ?? inst.amountDue ?? 0);
               const date = inst.due_date ?? inst.dueDate;
               const overdue = date && new Date(date) < new Date();
               return (
                 <li key={inst.id ?? idx} className="flex items-center justify-between text-sm">
                   <span className={`font-semibold ${overdue ? 'text-rose-700' : 'text-amber-800'}`}>
-                    {date ? formatDate(date) : `Échéance ${idx + 1}`}
+                    {date ? formatDate(date) : `Échéance ${inst.installment_number ?? idx + 1}`}
                     {overdue && ' · En retard'}
                   </span>
                   <span className="font-bold text-slate-800">{formatCurrencyMad(due)}</span>
                 </li>
               );
             })}
-            {pending.length > 5 && (
-              <li className="text-xs text-slate-500">+ {pending.length - 5} autres…</li>
+            {pendingInstallments.length > 5 && (
+              <li className="text-xs text-slate-500">+ {pendingInstallments.length - 5} autres…</li>
             )}
           </ul>
         </div>
