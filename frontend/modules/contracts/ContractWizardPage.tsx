@@ -421,7 +421,9 @@ export const ContractWizardPage: React.FC = () => {
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
 
-  const totalAmount = state.monthlyRentMad * state.durationMonths;
+  const totalAmount = Math.round(
+    state.monthlyRentMad * (state.durationMonths + state.durationExtraDays / 30),
+  );
 
   const canNext = useMemo(() => {
     if (step.key === 'client') return !!state.clientId;
