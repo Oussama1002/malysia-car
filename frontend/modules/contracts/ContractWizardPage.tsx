@@ -437,6 +437,7 @@ export const ContractWizardPage: React.FC = () => {
   const canNext = useMemo(() => {
     if (step.key === 'client') return !!state.clientId;
     if (step.key === 'vehicle') return !!state.vehicleId;
+    if (step.key === 'terms') return state.kmInclMonth > 0;
     return true;
   }, [step, state]);
 
@@ -974,13 +975,20 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('monthlyRentMad', Number(e.target.value))}
                     />
                   </Field>
-                  <Field label="Kilométrage mensuel inclus">
+                  <Field label="Kilométrage mensuel inclus *">
                     <input
                       type="number"
+                      min={1}
+                      required
                       className="df-input"
-                      value={state.kmInclMonth}
-                      onChange={(e) => patch('kmInclMonth', Number(e.target.value))}
+                      value={state.kmInclMonth || ''}
+                      onChange={(e) => patch('kmInclMonth', Math.max(0, Number(e.target.value)))}
                     />
+                    {!state.kmInclMonth && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
+                      </div>
+                    )}
                   </Field>
                   <Field label="Caution / garantie (MAD)">
                     <input
@@ -1195,7 +1203,7 @@ export const ContractWizardPage: React.FC = () => {
               {stepIdx === STEPS.length - 1 ? (
                 <button
                   className="df-btn df-btn--primary"
-                  disabled={saving || !state.clientId || !state.vehicleId}
+                  disabled={saving || !state.clientId || !state.vehicleId || state.kmInclMonth <= 0}
                   onClick={() => void submit()}
                 >
                   <Icon name="download" size={14} /> {saving ? 'Création…' : 'Sauvegarder & télécharger PDF'}
