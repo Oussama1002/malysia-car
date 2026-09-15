@@ -65,8 +65,28 @@ class VehicleController extends Controller
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
         $page = $q->orderByDesc('updated_at')->paginate($per);
 
+        // Pre-compute live rental usage for every vehicle on the page so the UI
+        // (e.g. the swap dropdown) never shows a rented/reserved vehicle as
+        // "Disponible" when the fleet columns are stale. Active-ish statuses
+        // mirror VehicleController::show's fallback lookup.
+        $vehicleIds = collect($page->items())->pluck('id')->all();
+        $reservedIds = \App\Models\Reservation::query()
+            ->whereIn('vehicle_id', $vehicleIds)
+            ->whereIn('status', ['reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested'])
+            ->pluck('vehicle_id')
+            ->unique()
+            ->all();
+        $rentedIds = \App\Models\Contract::query()
+            ->whereIn('vehicle_id', $vehicleIds)
+            ->whereIn('status', ['active', 'signed', 'approved', 'pending_approval'])
+            ->pluck('vehicle_id')
+            ->unique()
+            ->all();
+        $reservedSet = array_fill_keys($reservedIds, true);
+        $rentedSet = array_fill_keys($rentedIds, true);
+
         $rows = collect(VehicleResource::collection($page->items())->resolve($request))
-            ->map(function (array $item): array {
+            ->map(function (array $item) use ($reservedSet, $rentedSet): array {
                 $openAlerts = ComplianceAlert::query()
                     ->where('vehicle_id', $item['id'])
                     ->where('status', 'open')
@@ -77,6 +97,9 @@ class VehicleController extends Controller
                     ? 'ok'
                     : (collect($openAlerts)->contains(fn ($type) => str_contains((string) $type, 'expired') || str_contains((string) $type, 'missing')) ? 'critical' : 'warning');
                 $item['complianceAlerts'] = array_values($openAlerts);
+
+                $item['hasActiveContract'] = isset($rentedSet[$item['id']]);
+                $item['hasActiveReservation'] = isset($reservedSet[$item['id']]);
 
                 return $item;
             })

@@ -585,18 +585,35 @@ export const ReservationDetailPage: React.FC = () => {
                       const reg = v.registration_number ?? v.registration ?? '';
                       const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
                       const isSL = ownership === 'sub_rented' || ownership === 'sub_rental';
-                      const rawStatus = String(v.status ?? v.availability_status ?? '').toLowerCase();
+                      // Take the derived availability first (server already
+                      // considers live reservations/contracts); fall back to the
+                      // raw fleet status only when it's missing.
+                      const availability = String(v.availability_status ?? v.availabilityStatus ?? '').toLowerCase();
+                      const fleetStatus  = String(v.status ?? '').toLowerCase();
+                      // Prefer the freshly computed flags from the list endpoint
+                      // (hasActiveReservation / hasActiveContract) because the
+                      // vehicles.current_* columns are only updated manually and
+                      // frequently go stale in production.
+                      const hasCurrentReservation = !!(v.hasActiveReservation ?? v.current_reservation_id ?? v.currentReservationId);
+                      const hasCurrentContract    = !!(v.hasActiveContract    ?? v.current_contract_id    ?? v.currentContractId);
+                      const effective = hasCurrentContract
+                        ? 'rented'
+                        : hasCurrentReservation
+                        ? 'reserved'
+                        : (availability || fleetStatus);
                       const statusFr =
-                        rawStatus === 'available' ? 'Disponible'
-                        : rawStatus === 'rented'   ? 'Loué'
-                        : rawStatus === 'maintenance' ? 'Maintenance'
-                        : rawStatus === 'in_repair'   ? 'Réparation'
-                        : rawStatus === 'blocked' || rawStatus === 'unavailable' ? 'Indisponible'
-                        : rawStatus || 'Inconnu';
+                        effective === 'available'          ? 'Disponible'
+                        : effective === 'rented'           ? 'Loué'
+                        : effective === 'reserved'         ? 'Réservé'
+                        : effective === 'maintenance'      ? 'Maintenance'
+                        : effective === 'in_repair'        ? 'Réparation'
+                        : effective === 'blocked' || effective === 'unavailable' ? 'Indisponible'
+                        : effective || 'Inconnu';
+                      const isAvailable = effective === 'available';
                       const nameLabel = [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule';
                       const prefix = isSL ? '🟣 SL · ' : '';
                       return (
-                        <option key={v.id} value={v.id}>
+                        <option key={v.id} value={v.id} disabled={!isAvailable}>
                           {prefix}{nameLabel} · {reg} ({statusFr})
                         </option>
                       );
