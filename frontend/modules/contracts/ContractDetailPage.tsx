@@ -145,10 +145,13 @@ export const ContractDetailPage: React.FC = () => {
   const vehicleName: string = (() => {
     const d = vehicleQ.data;
     if (!d) return shortId(vehicleId, 'VHL');
+    // The fleet show endpoint wraps the vehicle inside { vehicle, current, … };
+    // the list/create endpoints return the vehicle at the top level. Support both.
+    const v = d.vehicle ?? d;
     const parts = [
-      d.brand?.name ?? d.brand ?? d.brand_name,
-      d.model?.name ?? d.model?.model_name ?? d.model ?? d.model_name,
-      d.plate ?? d.registration ?? d.registration_number,
+      v.brand?.name ?? v.brand ?? v.brand_name,
+      v.model?.name ?? v.model?.model_name ?? v.model ?? v.model_name,
+      v.plate ?? v.registration ?? v.registration_number,
     ].filter(Boolean);
     const joined = parts.join(' ').trim();
     return joined || shortId(vehicleId, 'VHL');
