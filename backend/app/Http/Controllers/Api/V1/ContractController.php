@@ -109,7 +109,10 @@ class ContractController extends Controller
             $c->reservation_id = $data['reservation_id'] ?? null;
             $c->template_id = $data['template_id'] ?? null;
             $c->credit_application_id = $data['credit_application_id'] ?? null;
-            $c->status = $data['status'] ?? 'draft';
+            // New contracts always start as brouillon — approval must go through
+            // the dedicated approve() action (audited + notified). Any status
+            // sent by the client is intentionally ignored on create.
+            $c->status = 'draft';
             $c->legal_status = $data['legal_status'] ?? 'pending';
             $c->signature_status = $data['signature_status'] ?? 'pending';
             $c->start_date = $data['start_date'] ?? null;
