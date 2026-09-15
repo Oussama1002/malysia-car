@@ -38,7 +38,14 @@ class PaymentController extends Controller
             $q->where('customer_id', $customer);
         }
         if ($contract = $request->query('contract_id')) {
-            $q->where('contract_id', $contract);
+            // A payment is tied to a contract either directly (contract_id column)
+            // or through an allocation to one of the contract's installments.
+            $q->where(function ($w) use ($contract) {
+                $w->where('contract_id', $contract)
+                    ->orWhereHas('allocations.installment', function ($a) use ($contract) {
+                        $a->where('contract_id', $contract);
+                    });
+            });
         }
         if ($branch = $request->query('branch_id')) {
             $q->where('branch_id', $branch);
