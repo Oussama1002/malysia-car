@@ -20,7 +20,7 @@ class SubRentalController extends Controller
     public function index(Request $request): JsonResponse
     {
         $q = SubRentalContract::query()
-            ->with(['supplierAgency', 'vehicle'])
+            ->with(['supplierAgency', 'vehicle.brand', 'vehicle.model'])
             ->orderByDesc('created_at');
 
         if ($status = $request->query('status')) {

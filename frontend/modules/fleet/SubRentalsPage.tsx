@@ -10,7 +10,41 @@ type SubRow = {
   end_date: string | null;
   total_cost: string | null;
   supplier_agency?: { name: string };
+  vehicle?: {
+    brand?: { name?: string } | string | null;
+    model?: { name?: string; model_name?: string } | string | null;
+    brand_name?: string | null;
+    model_name?: string | null;
+    registration_number?: string | null;
+  } | null;
+  external_vehicle_identity?: {
+    brand?: string | null;
+    model?: string | null;
+    registration_number?: string | null;
+  } | null;
 };
+
+function vehicleLabel(r: SubRow): string {
+  const v = r.vehicle;
+  if (v) {
+    const brand =
+      (typeof v.brand === 'object' && v.brand?.name) ||
+      (typeof v.brand === 'string' ? v.brand : '') ||
+      v.brand_name || '';
+    const model =
+      (typeof v.model === 'object' && (v.model?.model_name ?? v.model?.name)) ||
+      (typeof v.model === 'string' ? v.model : '') ||
+      v.model_name || '';
+    const joined = [brand, model].filter(Boolean).join(' ').trim();
+    if (joined) return joined;
+  }
+  const ext = r.external_vehicle_identity;
+  if (ext) {
+    const joined = [ext.brand, ext.model].filter(Boolean).join(' ').trim();
+    if (joined) return joined;
+  }
+  return '—';
+}
 
 export const SubRentalsPage: React.FC = () => {
   const qc = useQueryClient();
@@ -76,6 +110,8 @@ export const SubRentalsPage: React.FC = () => {
             <thead>
               <tr>
                 <th>Fournisseur</th>
+                <th>Véhicule</th>
+                <th>Immatriculation</th>
                 <th>Début</th>
                 <th>Fin</th>
                 <th>Coût total</th>
@@ -86,6 +122,8 @@ export const SubRentalsPage: React.FC = () => {
               {(subsQ.data ?? []).map((r) => (
                 <tr key={r.id}>
                   <td>{r.supplier_agency?.name ?? '—'}</td>
+                  <td>{vehicleLabel(r)}</td>
+                  <td>{r.vehicle?.registration_number ?? r.external_vehicle_identity?.registration_number ?? '—'}</td>
                   <td>{r.start_date}</td>
                   <td>{r.end_date ?? '—'}</td>
                   <td>{r.total_cost != null ? formatCurrencyMad(Number(r.total_cost)) : '—'}</td>
