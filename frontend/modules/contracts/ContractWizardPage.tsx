@@ -17,7 +17,7 @@ import { useAuthSession } from '@/modules/auth/AuthContext';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
 import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
-import { listBranches } from '@/services/adminApi';
+import { listBranches, listUsers } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
@@ -329,6 +329,11 @@ export const ContractWizardPage: React.FC = () => {
 
   const qc = useQueryClient();
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
+  const usersQ = useQuery({
+    queryKey: ['admin', 'users', 'agents'],
+    queryFn: () => listUsers({ per_page: 200 }),
+    enabled: !!getApiBase(),
+  });
   const createCustomerMut = useMutation({
     mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
       const res = await createCustomer(vars.payload);
@@ -1113,12 +1118,25 @@ export const ContractWizardPage: React.FC = () => {
                     />
                   </Field>
                   <Field label="Agent assigné">
-                    <input
+                    <select
                       className="df-input"
-                      placeholder="Nom de l'agent en charge"
                       value={state.assignedAgent}
                       onChange={(e) => patch('assignedAgent', e.target.value)}
-                    />
+                    >
+                      <option value="">— Non assigné —</option>
+                      {(usersQ.data?.data ?? [])
+                        .filter((u) => u.status === 'active')
+                        .map((u) => {
+                          const label = u.name?.trim()
+                            || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
+                            || u.email;
+                          return (
+                            <option key={u.id} value={label}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                    </select>
                   </Field>
                 </div>
                 <AIHint
