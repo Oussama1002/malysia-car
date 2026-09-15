@@ -172,14 +172,18 @@ export const ReservationsOpsPage: React.FC = () => {
 
   // Auto-classify the reservation as LCD or LLD based on the requested window
   // and the company threshold; the picker stays disabled so this is the
-  // authoritative value at submission.
+  // authoritative value at submission. We compare elapsed days to the
+  // threshold expressed in days (≈30 j/mois) so a 100-jour rental with a
+  // 3-mois threshold correctly bumps to LLD — the earlier "full months"
+  // rounding could miss the boundary when days-of-month straddled it.
   useEffect(() => {
     if (!form.desired_start_at || !form.desired_end_at) return;
     const s = new Date(form.desired_start_at);
     const e = new Date(form.desired_end_at);
     if (isNaN(s.getTime()) || isNaN(e.getTime()) || e <= s) return;
-    const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + (e.getDate() >= s.getDate() ? 0 : -1);
-    const isLLD = months >= lldThresholdMonths;
+    const days = Math.ceil((e.getTime() - s.getTime()) / 86_400_000);
+    const thresholdDays = Math.max(1, Math.round(lldThresholdMonths * 30));
+    const isLLD = days >= thresholdDays;
     const next = isLLD ? 'LONG_RENTAL' : 'SHORT_RENTAL';
     setForm((f) => (f.reservation_type === next ? f : { ...f, reservation_type: next }));
   }, [form.desired_start_at, form.desired_end_at, lldThresholdMonths]);

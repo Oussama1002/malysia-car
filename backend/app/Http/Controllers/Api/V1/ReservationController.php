@@ -106,6 +106,22 @@ class ReservationController extends Controller
                 $this->availability->assertVehicleAvailableWithLock($data['vehicle_id'], $startAt, $endAt);
             }
 
+            // Enforce the company-wide LCD ↔ LLD threshold server-side so the
+            // classification is authoritative — anything ≥ threshold_months × 30 j
+            // is LLD, anything below is LCD. Non-rental types (VENTE_VO, LOA…)
+            // are passed through untouched.
+            $reservationType = (string) $data['reservation_type'];
+            if (in_array($reservationType, ['SHORT_RENTAL', 'LONG_RENTAL'], true)) {
+                $companyId = $data['company_id'] ?? $request->user()?->company_id;
+                $settings = \App\Models\CompanySetting::query()
+                    ->where('company_id', $companyId)
+                    ->value('payload');
+                $thresholdMonths = (int) data_get($settings, 'reservations.lld_threshold_months', 3);
+                $thresholdDays = max(1, (int) round($thresholdMonths * 30));
+                $days = (int) ceil($startAt->diffInSeconds($endAt) / 86400);
+                $reservationType = $days >= $thresholdDays ? 'LONG_RENTAL' : 'SHORT_RENTAL';
+            }
+
             return Reservation::query()->create([
                 'id' => (string) Str::uuid(),
                 'company_id' => $data['company_id'] ?? $request->user()?->company_id,
@@ -113,7 +129,7 @@ class ReservationController extends Controller
                 'reservation_number' => $this->generateReservationNumber(),
                 'customer_id' => $data['customer_id'],
                 'vehicle_id' => $data['vehicle_id'],
-                'reservation_type' => $data['reservation_type'],
+                'reservation_type' => $reservationType,
                 'status' => $isDraft ? 'draft' : 'reserved',
                 'desired_start_at' => $data['desired_start_at'],
                 'desired_end_at' => $data['desired_end_at'],
