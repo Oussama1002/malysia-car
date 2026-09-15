@@ -1080,10 +1080,6 @@ const VehiclesList: React.FC = () => {
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">{v.brand} {v.model}</h3>
                   <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">{v.year} · {(v as any).fuel ?? ''}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-black text-indigo-600 leading-none">{v.pricePerDay} DH</p>
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">/ jour</p>
-                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {[
