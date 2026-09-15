@@ -557,12 +557,15 @@ export const ContractWizardPage: React.FC = () => {
     setSaveError(null);
     let createdId: string | null = null;
     try {
-      const created = await contractsApi.create(buildCreatePayload('draft'));
-      createdId = String(created.id);
+      // Reuse the draft created by the step-6 auto-save (or "Sauver brouillon")
+      // when it exists — otherwise the "Sauvegarder & télécharger PDF" click
+      // would insert a duplicate contract row alongside the draft.
+      const contractId = await ensureDraftContract();
+      createdId = contractId;
 
       // Generate payment schedule
       try {
-        await contractsApi.generateSchedule(created.id, {
+        await contractsApi.generateSchedule(contractId, {
           start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
           months: state.durationMonths,
           monthly_amount: state.monthlyRentMad,
@@ -574,8 +577,8 @@ export const ContractWizardPage: React.FC = () => {
 
       // Generate and download PDF
       try {
-        const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
-        await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${created.contract_number ?? createdId.slice(0, 8)}.pdf`);
+        const generatedDoc = await documentsApi.generateContractPdf(contractId);
+        await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${contractId.slice(0, 8)}.pdf`);
       } catch (pdfErr) {
         console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
       }
