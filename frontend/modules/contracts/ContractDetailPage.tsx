@@ -77,6 +77,7 @@ const PAYMENT_METHOD_FR: Record<string, string> = {
   virement:      'Virement bancaire',
   bank_transfer: 'Virement bancaire',
   cheque:        'Chèque',
+  check:         'Chèque',
   espece:        'Espèce',
   cash:          'Espèce',
   carte:         'Carte bancaire',
@@ -194,7 +195,7 @@ export const ContractDetailPage: React.FC = () => {
             <span className="font-semibold">{statusLabel}</span>
           </p>
         </div>
-        <div className="flex flex-wrap items-start gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-right">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant</div>
             <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad((raw?.baseAmount ?? raw?.amountMad ?? raw?.base_amount ?? 0) as number)}</div>
