@@ -142,10 +142,17 @@ export const ContractDetailPage: React.FC = () => {
     ? (customerQ.data.display_name ?? customerQ.data.name ?? shortId(customerId, 'CLT'))
     : shortId(customerId, 'CLT');
 
-  const vehicleName: string = vehicleQ.data
-    ? [vehicleQ.data.brand?.name ?? vehicleQ.data.brand, vehicleQ.data.model?.name ?? vehicleQ.data.model, vehicleQ.data.plate ?? vehicleQ.data.registration]
-        .filter(Boolean).join(' ')
-    : shortId(vehicleId, 'VHL');
+  const vehicleName: string = (() => {
+    const d = vehicleQ.data;
+    if (!d) return shortId(vehicleId, 'VHL');
+    const parts = [
+      d.brand?.name ?? d.brand ?? d.brand_name,
+      d.model?.name ?? d.model?.model_name ?? d.model ?? d.model_name,
+      d.plate ?? d.registration ?? d.registration_number,
+    ].filter(Boolean);
+    const joined = parts.join(' ').trim();
+    return joined || shortId(vehicleId, 'VHL');
+  })();
 
   // Compute end date if missing: startDate + duration_months
   const durationMonths: number | null = raw?.durationMonths ?? raw?.duration_months ?? null;
