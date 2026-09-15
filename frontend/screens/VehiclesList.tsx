@@ -666,11 +666,9 @@ const VehiclesList: React.FC = () => {
 
   const displayStatusFor = (v: any): { code: string; label: string; tone: string } => {
     const raw = String(v?.status ?? '').toUpperCase();
-    const ownership = String(v?.ownership_status ?? v?.ownershipStatus ?? '').toLowerCase();
-    const isSubRental = !!v?._sub_rental || ownership === 'sub_rented' || ownership === 'sub_rental';
-    if (isSubRental) {
-      return { code: 'SUB_RENTAL', label: 'Sous-location', tone: 'bg-violet-100 text-violet-700 border-violet-200' };
-    }
+    // Sub-rented (SL) vehicles carry their own violet "SL" chip on the card;
+    // the top-right badge should surface the actual operational state
+    // (Disponible / Réservé / En location / …), same as owned vehicles.
     if (raw === 'AVAILABLE' && v?.id && rentedVehicleIds.has(String(v.id))) {
       return { code: 'RENTED', label: 'En location', tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
     }
