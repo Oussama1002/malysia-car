@@ -536,8 +536,15 @@ export const ReservationDetailPage: React.FC = () => {
 
       {/* ── Vehicle swap modal ── */}
       {swapOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setSwapOpen(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:items-center"
+          onClick={() => setSwapOpen(false)}
+        >
+          <div
+            className="my-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex-1 overflow-y-auto p-6">
             <h3 className="mb-1 text-sm font-black text-slate-900">Changer de véhicule</h3>
             <p className="mb-4 text-xs text-slate-500">
               Véhicule actuel : <span className="font-bold text-slate-700">{d?.vehicle_name ?? '—'}</span> ({d?.vehicle_registration ?? '—'})
@@ -718,6 +725,7 @@ export const ReservationDetailPage: React.FC = () => {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
