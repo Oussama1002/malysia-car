@@ -195,22 +195,24 @@ export const ContractDetailPage: React.FC = () => {
             <span className="font-semibold">{statusLabel}</span>
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col items-stretch gap-3 md:items-end">
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-right">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant</div>
             <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad((raw?.baseAmount ?? raw?.amountMad ?? raw?.base_amount ?? 0) as number)}</div>
           </div>
-          <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} />
-          {/* Early return button — only for active contracts with a future end date */}
-          {(c.status === 'active' || c.status === 'approved') && computedEndDate && (
-            <button
-              type="button"
-              onClick={() => setShowEarlyReturn(true)}
-              className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
-            >
-              ↩ Retour anticipé
-            </button>
-          )}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} />
+            {/* Early return button — only for active contracts with a future end date */}
+            {(c.status === 'active' || c.status === 'approved') && computedEndDate && (
+              <button
+                type="button"
+                onClick={() => setShowEarlyReturn(true)}
+                className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+              >
+                ↩ Retour anticipé
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
