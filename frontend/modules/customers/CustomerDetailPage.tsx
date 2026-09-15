@@ -115,25 +115,6 @@ export const CustomerDetailPage: React.FC = () => {
         <Link to="/customers" className="text-sm font-semibold text-indigo-600">
           ← Clients
         </Link>
-        <div className="flex gap-2">
-          {!customer.is_blacklisted ? (
-            <button
-              type="button"
-              className="df-btn df-btn--danger"
-              onClick={() => setConfirmBlacklist('add')}
-            >
-              Ajouter à la blacklist
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="df-btn df-btn--primary"
-              onClick={() => setConfirmBlacklist('remove')}
-            >
-              Retirer de la blacklist
-            </button>
-          )}
-        </div>
       </div>
 
       <header className="df-card df-card--elevated">
@@ -207,7 +188,15 @@ export const CustomerDetailPage: React.FC = () => {
           <EntityAuditTimeline entityType="customer" entityId={customer.id} />
         </div>
       )}
-      {tab === 'risk' && <RiskTab dossier={dossier} blacklist={blacklist} />}
+      {tab === 'risk' && (
+        <RiskTab
+          dossier={dossier}
+          blacklist={blacklist}
+          isBlacklisted={customer.is_blacklisted}
+          onAddBlacklist={() => setConfirmBlacklist('add')}
+          onRemoveBlacklist={() => setConfirmBlacklist('remove')}
+        />
+      )}
 
       <ConfirmModal
         open={confirmBlacklist === 'remove'}
@@ -908,7 +897,13 @@ const NotesTab: React.FC<{
 // Risk tab — score + blacklist history
 // ---------------------------------------------------------------------------
 
-const RiskTab: React.FC<{ dossier: Dossier; blacklist: Dossier['blacklist'] }> = ({ dossier, blacklist }) => {
+const RiskTab: React.FC<{
+  dossier: Dossier;
+  blacklist: Dossier['blacklist'];
+  isBlacklisted: boolean;
+  onAddBlacklist: () => void;
+  onRemoveBlacklist: () => void;
+}> = ({ dossier, blacklist, isBlacklisted, onAddBlacklist, onRemoveBlacklist }) => {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="df-card">
@@ -928,7 +923,18 @@ const RiskTab: React.FC<{ dossier: Dossier; blacklist: Dossier['blacklist'] }> =
 
       <div className="df-card">
         <div className="df-card__body space-y-3">
-          <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">Blacklist</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">Blacklist</h3>
+            {!isBlacklisted ? (
+              <button type="button" className="df-btn df-btn--danger" onClick={onAddBlacklist}>
+                Ajouter à la blacklist
+              </button>
+            ) : (
+              <button type="button" className="df-btn df-btn--primary" onClick={onRemoveBlacklist}>
+                Retirer de la blacklist
+              </button>
+            )}
+          </div>
           {blacklist.active.length === 0 && blacklist.history.length === 0 ? (
             <p className="text-sm text-slate-500">Aucun incident enregistré.</p>
           ) : (
