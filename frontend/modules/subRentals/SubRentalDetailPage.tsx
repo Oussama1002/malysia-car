@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { subRentalApi, type SubRentalPayment, type PaymentMethod } from '@/services/subRentalApi';
-import { getApiBase } from '@/services/apiClient';
+import { apiClient, getApiBase } from '@/services/apiClient';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
 
@@ -71,42 +72,172 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
   );
 }
 
-function AddPaymentModal({ contractId, onClose }: { contractId: string; onClose: () => void }) {
+async function scanCheque(file: File): Promise<{ check_number?: string; bank?: string; check_date?: string; amount?: number }> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await apiClient<{ data?: { check_number?: string; bank?: string; check_date?: string; amount?: number } }>('/v1/cheque-ocr', {
+    method: 'POST',
+    body: fd,
+  });
+  return res.data ?? {};
+}
+
+function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ amount: '', payment_method: 'cash' as PaymentMethod, payment_date: new Date().toISOString().split('T')[0], reference: '', notes: '' });
+  const [form, setForm] = useState({
+    amount: '',
+    payment_method: 'cash' as PaymentMethod,
+    payment_date: new Date().toISOString().split('T')[0],
+    reference: '',
+    check_number: '',
+    check_bank: '',
+    check_date: '',
+    notes: '',
+  });
   const [err, setErr] = useState<string | null>(null);
+  const [chequeScanning, setChequeScanning] = useState(false);
+  const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: (data: Parameters<typeof subRentalApi.addPayment>[1]) => subRentalApi.addPayment(contractId, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sub-rental', contractId, 'payments'] }); qc.invalidateQueries({ queryKey: ['sub-rental', contractId] }); onClose(); },
-    onError: (e: unknown) => setErr((e as any)?.data?.message ?? 'Erreur'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sub-rental', contractId, 'payments'] });
+      qc.invalidateQueries({ queryKey: ['sub-rental', contractId] });
+      onClose();
+    },
+    onError: (e: unknown) => {
+      const msg = (e as any)?.body?.errors
+        ? Object.values((e as any).body.errors).flat().join(' · ')
+        : (e as any)?.body?.message ?? (e as any)?.message ?? 'Erreur';
+      setErr(String(msg));
+    },
   });
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
-  const inp = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
+
+  const applyChequeScan = async (file: File) => {
+    setChequeScanning(true);
+    setChequeOcrError(null);
+    try {
+      const data = await scanCheque(file);
+      setForm((f) => ({
+        ...f,
+        check_number: data.check_number ?? f.check_number,
+        check_bank:   data.bank ?? f.check_bank,
+        check_date:   data.check_date ?? f.check_date,
+        amount:       data.amount != null ? String(data.amount) : f.amount,
+      }));
+    } catch (e) {
+      setChequeOcrError(e instanceof Error ? e.message : 'Échec du scan OCR');
+    } finally {
+      setChequeScanning(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    const payload: Parameters<typeof subRentalApi.addPayment>[1] = {
+      amount: parseFloat(form.amount),
+      payment_method: form.payment_method,
+      payment_date: form.payment_date,
+      reference: form.reference || undefined,
+      notes: form.notes || undefined,
+    };
+    if (form.payment_method === 'cheque') {
+      payload.check_number = form.check_number || undefined;
+      payload.check_bank = form.check_bank || undefined;
+      payload.check_date = form.check_date || undefined;
+    }
+    mutation.mutate(payload);
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="font-bold text-slate-900">Enregistrer un paiement fournisseur</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
+    <DrawerPanel open={open} title="Nouveau paiement fournisseur" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Montant (MAD) *</span>
+            <input className="df-input w-full" type="number" step="0.01" min="0.01" value={form.amount} onChange={set('amount')} required />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Date & heure paiement *</span>
+            <input className="df-input w-full" type="date" value={form.payment_date} onChange={set('payment_date')} required />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Mode paiement *</span>
+            <select className="df-input w-full" value={form.payment_method} onChange={set('payment_method')}>
+              <option value="cash">Espèces</option>
+              <option value="bank_transfer">Virement</option>
+              <option value="cheque">Chèque</option>
+              <option value="card">Carte</option>
+              <option value="other">Autre</option>
+            </select>
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Référence</span>
+            <input className="df-input w-full" placeholder="Référence externe, n° reçu…" value={form.reference} onChange={set('reference')} />
+          </label>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ amount: parseFloat(form.amount), payment_method: form.payment_method, payment_date: form.payment_date, reference: form.reference || undefined, notes: form.notes || undefined }); }} className="p-5 space-y-3">
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Montant (MAD) <span className="text-red-500">*</span></label><input className={inp} type="number" step="0.01" min="0.01" value={form.amount} onChange={set('amount')} required /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Mode de paiement</label><select className={inp} value={form.payment_method} onChange={set('payment_method')}><option value="cash">Espèces</option><option value="bank_transfer">Virement</option><option value="cheque">Chèque</option><option value="card">Carte</option><option value="other">Autre</option></select></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date</label><input className={inp} type="date" value={form.payment_date} onChange={set('payment_date')} required /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Référence</label><input className={inp} value={form.reference} onChange={set('reference')} /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Notes</label><textarea className={`${inp} resize-none`} rows={2} value={form.notes} onChange={set('notes')} /></div>
-          {err && <p className="text-xs text-red-600">{err}</p>}
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Annuler</button>
-            <button type="submit" disabled={mutation.isPending} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{mutation.isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
+
+        {form.payment_method === 'cheque' && (
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-indigo-800">Scanner un chèque</span>
+              <span className="text-[10px] text-indigo-600">Photo ou upload — remplissage auto par OCR</span>
+            </div>
+            <div className="flex gap-2">
+              <label className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50">
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => {
+                  const f = e.target.files?.[0]; if (f) await applyChequeScan(f); e.target.value = '';
+                }} />
+                {chequeScanning ? 'Analyse en cours…' : 'Importer un fichier'}
+              </label>
+              <label className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50">
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                  const f = e.target.files?.[0]; if (f) await applyChequeScan(f); e.target.value = '';
+                }} />
+                {chequeScanning ? 'Analyse…' : 'Prendre une photo'}
+              </label>
+            </div>
+            {chequeOcrError && (
+              <div className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
+            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">N° chèque</span>
+                <input className="df-input w-full" value={form.check_number} onChange={set('check_number')} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Banque</span>
+                <input className="df-input w-full" value={form.check_bank} onChange={set('check_bank')} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Date du chèque</span>
+                <input type="date" className="df-input w-full" value={form.check_date} onChange={set('check_date')} />
+              </label>
+            </div>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Notes</span>
+          <textarea className="df-input w-full resize-none" rows={3} value={form.notes} onChange={set('notes')} />
+        </label>
+
+        {err && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{err}</div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="df-btn df-btn--ghost">Annuler</button>
+          <button type="submit" disabled={mutation.isPending} className="df-btn df-btn--primary">
+            {mutation.isPending ? 'Enregistrement…' : 'Enregistrer le paiement'}
+          </button>
+        </div>
+      </form>
+    </DrawerPanel>
   );
 }
 
@@ -471,7 +602,7 @@ export const SubRentalDetailPage: React.FC = () => {
       </div>
 
       {showReturn && id && <ReturnModal contractId={id} onClose={() => setShowReturn(false)} />}
-      {showPayment && id && <AddPaymentModal contractId={id} onClose={() => setShowPayment(false)} />}
+      {id && <AddPaymentDrawer contractId={id} open={showPayment} onClose={() => setShowPayment(false)} />}
     </div>
   );
 };

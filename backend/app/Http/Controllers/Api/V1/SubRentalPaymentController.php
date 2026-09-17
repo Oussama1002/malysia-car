@@ -39,6 +39,9 @@ class SubRentalPaymentController extends Controller
             'payment_method' => ['required', 'in:cash,bank_transfer,cheque,card,other'],
             'payment_date'   => ['required', 'date'],
             'reference'      => ['nullable', 'string', 'max:100'],
+            'check_number'   => ['nullable', 'string', 'max:60'],
+            'check_bank'     => ['nullable', 'string', 'max:160'],
+            'check_date'     => ['nullable', 'date'],
             'notes'          => ['nullable', 'string'],
         ]);
 
