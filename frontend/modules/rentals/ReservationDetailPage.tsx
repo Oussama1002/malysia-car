@@ -164,9 +164,24 @@ export const ReservationDetailPage: React.FC = () => {
     mutationFn: () => opsApi.confirmReservation(rid!),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
   });
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; reason: string; error: string | null }>({
+    open: false,
+    reason: '',
+    error: null,
+  });
   const cancelM = useMutation({
-    mutationFn: () => opsApi.cancelReservation(rid!),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
+    mutationFn: (reason?: string) => opsApi.cancelReservation(rid!, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reservation', rid] });
+      qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      setCancelDialog({ open: false, reason: '', error: null });
+    },
+    onError: (e: unknown) => {
+      const body = (e as any)?.body;
+      const msg = body?.errors ? Object.values<any>(body.errors).flat().join(' · ')
+        : body?.message ?? (e as any)?.message ?? 'Annulation impossible';
+      setCancelDialog((s) => ({ ...s, error: String(msg) }));
+    },
   });
   const [statusChangeTarget, setStatusChangeTarget] = useState('');
   const changeStatusM = useMutation({
@@ -431,7 +446,7 @@ export const ReservationDetailPage: React.FC = () => {
                 Facture
               </button>
               <button
-                onClick={() => cancelM.mutate()}
+                onClick={() => setCancelDialog({ open: true, reason: '', error: null })}
                 disabled={cancelM.isPending}
                 className="rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 ml-auto shrink-0"
               >
@@ -533,6 +548,88 @@ export const ReservationDetailPage: React.FC = () => {
           reservationInvoiceId={d?.invoices?.[0]?.id}
         />
       </DrawerPanel>
+
+      {/* ── Cancel reservation confirmation ── */}
+      {cancelDialog.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+          onClick={() => !cancelM.isPending && setCancelDialog({ open: false, reason: '', error: null })}
+        >
+          <div
+            className="my-4 w-full max-w-md rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-black text-slate-900">Annuler cette réservation ?</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    La réservation {r?.reservation_number ?? ''} passera au statut <strong>Annulé</strong>. Les missions
+                    planifiées seront elles aussi annulées. Cette action est irréversible.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-3">
+              <label className="block">
+                <span className="mb-1 flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <span>Motif d'annulation</span>
+                  <span className="font-semibold text-slate-400">Optionnel</span>
+                </span>
+                <textarea
+                  className="df-input w-full resize-none"
+                  rows={3}
+                  placeholder="Ex : Demande du client, indisponibilité véhicule, retard de règlement…"
+                  value={cancelDialog.reason}
+                  onChange={(e) => setCancelDialog((s) => ({ ...s, reason: e.target.value, error: null }))}
+                />
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {['Demande client', 'Indisponibilité véhicule', 'Retard de règlement', 'Erreur de saisie'].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setCancelDialog((s) => ({ ...s, reason: m, error: null }))}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {cancelDialog.error && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                  {cancelDialog.error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setCancelDialog({ open: false, reason: '', error: null })}
+                disabled={cancelM.isPending}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Revenir
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelM.mutate(cancelDialog.reason.trim() || undefined)}
+                disabled={cancelM.isPending}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {cancelM.isPending ? 'Annulation…' : "Oui, annuler la réservation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Vehicle swap modal ── */}
       {swapOpen && (

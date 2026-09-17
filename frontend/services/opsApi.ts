@@ -123,8 +123,11 @@ export const opsApi = {
     return res.data;
   },
 
-  async cancelReservation(id: string): Promise<ReservationDto> {
-    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.cancel(id), { method: 'POST', body: JSON.stringify({}) });
+  async cancelReservation(id: string, reason?: string): Promise<ReservationDto> {
+    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.cancel(id), {
+      method: 'POST',
+      body: JSON.stringify(reason ? { reason } : {}),
+    });
     return res.data;
   },
 

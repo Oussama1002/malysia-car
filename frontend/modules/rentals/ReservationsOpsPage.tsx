@@ -352,11 +352,19 @@ export const ReservationsOpsPage: React.FC = () => {
       if (selectedReservationId) await qc.invalidateQueries({ queryKey: ['reservation', selectedReservationId] });
     },
   });
+  const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string; error: string | null } | null>(null);
   const cancelRes = useMutation({
-    mutationFn: async (id: string) => opsApi.cancelReservation(id),
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => opsApi.cancelReservation(id, reason),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
       if (selectedReservationId) await qc.invalidateQueries({ queryKey: ['reservation', selectedReservationId] });
+      setCancelDialog(null);
+    },
+    onError: (e: unknown) => {
+      const body = (e as any)?.body;
+      const msg = body?.errors ? Object.values<any>(body.errors).flat().join(' · ')
+        : body?.message ?? (e as any)?.message ?? 'Annulation impossible';
+      setCancelDialog((s) => (s ? { ...s, error: String(msg) } : s));
     },
   });
   const pickupM = useMutation({
@@ -1063,7 +1071,8 @@ export const ReservationsOpsPage: React.FC = () => {
                   ✓ Confirmer
                 </button>
                 <button className="rounded-xl bg-slate-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-slate-800 transition-colors"
-                  onClick={() => cancelRes.mutate(selectedReservationId)} disabled={cancelRes.isPending}>
+                  onClick={() => selectedReservationId && setCancelDialog({ id: selectedReservationId, reason: '', error: null })}
+                  disabled={cancelRes.isPending}>
                   ✕ Annuler
                 </button>
                 <button className="rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-emerald-700 transition-colors"
@@ -1202,6 +1211,84 @@ export const ReservationsOpsPage: React.FC = () => {
           }}
         />
       </DrawerPanel>
+
+      {/* ── Cancel reservation confirmation ── */}
+      {cancelDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+          onClick={() => !cancelRes.isPending && setCancelDialog(null)}
+        >
+          <div className="my-4 w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-100 px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-black text-slate-900">Annuler cette réservation ?</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    La réservation passera au statut <strong>Annulé</strong>. Les missions planifiées seront elles aussi annulées. Cette action est irréversible.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-3">
+              <label className="block">
+                <span className="mb-1 flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <span>Motif d'annulation</span>
+                  <span className="font-semibold text-slate-400">Optionnel</span>
+                </span>
+                <textarea
+                  className="df-input w-full resize-none"
+                  rows={3}
+                  placeholder="Ex : Demande du client, indisponibilité véhicule, retard de règlement…"
+                  value={cancelDialog.reason}
+                  onChange={(e) => setCancelDialog((s) => (s ? { ...s, reason: e.target.value, error: null } : s))}
+                />
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {['Demande client', 'Indisponibilité véhicule', 'Retard de règlement', 'Erreur de saisie'].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setCancelDialog((s) => (s ? { ...s, reason: m, error: null } : s))}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {cancelDialog.error && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                  {cancelDialog.error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setCancelDialog(null)}
+                disabled={cancelRes.isPending}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Revenir
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelRes.mutate({ id: cancelDialog.id, reason: cancelDialog.reason.trim() || undefined })}
+                disabled={cancelRes.isPending}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {cancelRes.isPending ? 'Annulation…' : "Oui, annuler la réservation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -555,6 +555,18 @@ class ReservationController extends Controller
 
     public function cancel(Request $request, Reservation $reservation): JsonResponse
     {
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+        $reason = trim($data['reason'] ?? '');
+        if ($reason !== '') {
+            // Prepend the cancellation reason to notes so it's preserved in
+            // the reservation record and visible on the detail page.
+            $stamp = now()->toDateTimeString();
+            $line = "[Annulée {$stamp}] Motif : {$reason}";
+            $reservation->notes = trim(($reservation->notes ? $reservation->notes . "\n" : '') . $line);
+            $reservation->saveQuietly();
+        }
         $this->transitionReservation($reservation, 'cancelled', $request);
 
         return ApiResponse::success($reservation->fresh());
