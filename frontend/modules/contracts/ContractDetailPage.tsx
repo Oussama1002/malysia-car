@@ -201,13 +201,17 @@ export const ContractDetailPage: React.FC = () => {
             <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad((raw?.baseAmount ?? raw?.amountMad ?? raw?.base_amount ?? 0) as number)}</div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} />
+            <GeneratePdfButton
+              kind="contract"
+              entityId={String(c.id ?? id)}
+              className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors hover:bg-slate-800"
+            />
             {/* Early return button — only for active contracts with a future end date */}
             {(c.status === 'active' || c.status === 'approved') && computedEndDate && (
               <button
                 type="button"
                 onClick={() => setShowEarlyReturn(true)}
-                className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
               >
                 ↩ Retour anticipé
               </button>
