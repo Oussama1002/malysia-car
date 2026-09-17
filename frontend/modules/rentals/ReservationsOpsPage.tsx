@@ -464,8 +464,22 @@ export const ReservationsOpsPage: React.FC = () => {
           display_name?: string;
           customer_code?: string;
           customer_type?: string;
+          individual_profile?: { first_name?: string; last_name?: string } | null;
+          company_profile?: { trade_name?: string; legal_name?: string } | null;
         };
-        const name = c.display_name || c.customer_code || String(c.id);
+        // Synthesise a readable label so we never render a raw UUID even
+        // when display_name is empty on the record.
+        const individual = [c.individual_profile?.first_name, c.individual_profile?.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        const company = c.company_profile?.trade_name || c.company_profile?.legal_name || '';
+        const shortId = `CLT-${String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+        const name = c.display_name?.trim()
+          || individual
+          || company
+          || c.customer_code
+          || shortId;
         const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
         return { id: String(c.id), label: `${name} (${kind})` };
       }),
