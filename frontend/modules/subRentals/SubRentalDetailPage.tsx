@@ -135,11 +135,20 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setErr(null);
+    const amount = parseFloat(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setErr('Merci de renseigner un montant supérieur à 0.');
+      return;
+    }
+    if (!form.payment_date) {
+      setErr('Merci de renseigner la date de paiement.');
+      return;
+    }
     const payload: Parameters<typeof subRentalApi.addPayment>[1] = {
-      amount: parseFloat(form.amount),
+      amount,
       payment_method: form.payment_method,
       payment_date: form.payment_date,
       reference: form.reference || undefined,
@@ -226,13 +235,26 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
           <textarea className="df-input w-full resize-none" rows={3} value={form.notes} onChange={set('notes')} />
         </label>
 
-        {err && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{err}</div>
+        {(err || mutation.error) && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+            {err ?? (mutation.error as Error | undefined)?.message ?? 'Erreur inconnue lors de l\'enregistrement.'}
+          </div>
         )}
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="df-btn df-btn--ghost">Annuler</button>
-          <button type="submit" disabled={mutation.isPending} className="df-btn df-btn--primary">
+          <button
+            type="submit"
+            disabled={mutation.isPending}
+            onClick={(e) => {
+              // Fallback in case the surrounding <form>'s submit event is
+              // intercepted; ensures a click always reaches handleSubmit.
+              if (e.currentTarget.form) return; // <form> will handle it
+              e.preventDefault();
+              handleSubmit();
+            }}
+            className="df-btn df-btn--primary"
+          >
             {mutation.isPending ? 'Enregistrement…' : 'Enregistrer le paiement'}
           </button>
         </div>
