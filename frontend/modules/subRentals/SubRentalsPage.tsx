@@ -174,9 +174,21 @@ export const SubRentalsPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-slate-700">{c.supplier_agency?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600">
-                      {(c.vehicle as any)?.registration_number ??
-                        c.external_vehicle_identity?.registration_number ??
-                        '—'}
+                      {(() => {
+                        const v = c.vehicle as any;
+                        const ext = c.external_vehicle_identity ?? {};
+                        const brand = v?.brand?.name ?? v?.brand_name ?? v?.brand ?? ext.brand_name ?? '';
+                        const model = v?.model?.model_name ?? v?.model?.name ?? v?.model_name ?? v?.model ?? ext.model_name ?? '';
+                        const plate = v?.registration_number ?? ext.registration_number ?? '';
+                        const name = [brand, model].filter(Boolean).join(' ').trim();
+                        if (!name && !plate) return '—';
+                        return (
+                          <div className="leading-tight">
+                            {name && <div className="font-semibold text-slate-800">{name}</div>}
+                            {plate && <div className="font-mono text-[11px] text-slate-500">{plate}</div>}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
