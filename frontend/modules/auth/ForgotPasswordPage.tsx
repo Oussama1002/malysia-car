@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { requestPasswordReset } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 
 export const ForgotPasswordPage: React.FC = () => {
-  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,53 +32,56 @@ export const ForgotPasswordPage: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="df-card df-card--elevated w-full max-w-md">
-        <div className="df-card__body">
-          <h1 className="text-xl font-black text-slate-900">{t('auth.forgot')}</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Entrez votre email, un lien de réinitialisation vous sera envoyé.
-          </p>
-          {sent ? (
-            <div className="mt-6 space-y-4">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-                {t('auth.resetSent')}
-              </div>
-              {debugToken && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-                  <div className="font-black uppercase tracking-wider">Dev token</div>
-                  <div className="mt-1 break-all font-mono">{debugToken}</div>
-                  <Link
-                    className="mt-2 inline-block font-semibold text-indigo-700 underline"
-                    to={`/reset-password?token=${encodeURIComponent(debugToken)}&email=${encodeURIComponent(email)}`}
-                  >
-                    Ouvrir la page de réinitialisation
-                  </Link>
-                </div>
-              )}
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl ring-1 ring-slate-100">
+        <h1 className="text-2xl font-black text-slate-900">Réinitialiser</h1>
+        <p className="mt-1 text-sm text-slate-500">Nous vous enverrons un lien par email.</p>
+
+        {sent ? (
+          <div className="mt-6 space-y-4">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+              Si un compte existe pour cette adresse, un email vient de partir avec un lien de réinitialisation.
             </div>
-          ) : (
-            <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
-              {error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
-                  {error}
-                </div>
-              )}
+            {debugToken && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                <div className="font-black uppercase tracking-wider">Lien de secours (dev)</div>
+                <Link
+                  className="mt-2 inline-block font-semibold text-indigo-700 underline"
+                  to={`/reset-password?token=${encodeURIComponent(debugToken)}&email=${encodeURIComponent(email)}`}
+                >
+                  Ouvrir la page de réinitialisation
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : (
+          <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
+            {error && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
+                {error}
+              </div>
+            )}
+            <div>
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Email</label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@domaine.ma"
-                className="df-input"
+                placeholder="vous@exemple.com"
+                className="df-input w-full"
+                autoFocus
               />
-              <button type="submit" disabled={loading} className="df-btn df-btn--primary w-full disabled:opacity-60">
-                {loading ? t('common.loading') : 'Envoyer'}
-              </button>
-            </form>
-          )}
-          <Link to="/login" className="mt-6 inline-block text-sm font-semibold text-indigo-600">
-            ← {t('auth.login')}
+            </div>
+            <button type="submit" disabled={loading} className="df-btn df-btn--primary w-full disabled:opacity-60">
+              {loading ? 'Envoi…' : 'Envoyer le lien'}
+            </button>
+          </form>
+        )}
+
+        <div className="mt-8 text-center">
+          <Link to="/login" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+            Retour à la connexion.
           </Link>
         </div>
       </div>
