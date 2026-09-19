@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
 use App\Http\Responses\ApiResponse;
+use App\Mail\PasswordResetLinkMail;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -21,6 +24,7 @@ class PasswordResetController extends Controller
 
         // Always return 200 to avoid email enumeration.
         $user = User::query()->where('email', $email)->first();
+        $debugToken = null;
         if ($user) {
             $token = Str::random(64);
             DB::table('password_reset_tokens')->updateOrInsert(
@@ -31,19 +35,46 @@ class PasswordResetController extends Controller
                     'created_at' => now(),
                 ]
             );
-            // In production, dispatch a Mail job. For dev we return the raw token.
-            if (app()->environment(['local', 'development', 'testing'])) {
-                return ApiResponse::success([
-                    'message' => 'Un lien de réinitialisation a été envoyé.',
-                    'debug_token' => $token,
-                    'debug_email' => $email,
+
+            $resetUrl = $this->buildResetUrl($email, $token);
+
+            try {
+                Mail::to($email)->send(new PasswordResetLinkMail($email, $resetUrl));
+            } catch (\Throwable $e) {
+                // Do not leak the failure to the caller (avoids enumeration and
+                // hides transient SMTP glitches from end-users), but log it so
+                // ops can react and the token stays usable via the direct URL.
+                Log::warning('password-reset mail failed', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
                 ]);
+            }
+
+            if (app()->environment(['local', 'development', 'testing'])) {
+                $debugToken = $token;
             }
         }
 
-        return ApiResponse::success([
+        $payload = [
             'message' => 'Si un compte existe pour cette adresse, un email a été envoyé.',
+        ];
+        if ($debugToken !== null) {
+            $payload['debug_token'] = $debugToken;
+            $payload['debug_email'] = $email;
+        }
+
+        return ApiResponse::success($payload);
+    }
+
+    private function buildResetUrl(string $email, string $token): string
+    {
+        $base = rtrim((string) config('app.frontend_url', config('app.url', '')), '/');
+        $query = http_build_query([
+            'token' => $token,
+            'email' => $email,
         ]);
+
+        return $base.'/reset-password?'.$query;
     }
 
     public function reset(ResetPasswordRequest $request): JsonResponse
