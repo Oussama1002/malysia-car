@@ -683,8 +683,9 @@ class DocumentParser
             'BANK AL MAGHRIB', 'ARAB BANK', 'CITIBANK',
             'UMNIA BANK', 'AL AKHDAR BANK', 'BTI BANK',
         ];
+        // Whole-word match: a bare substring lets "CAMSCANNER" hit "CAM".
         foreach ($moroccanBanks as $bk) {
-            if (str_contains($upper, $bk)) {
+            if (preg_match('/\b'.preg_quote($bk, '/').'\b/u', $upper)) {
                 $bank = $bk;
                 break;
             }
@@ -695,8 +696,13 @@ class DocumentParser
 
         // Amount — look for numeric amount with decimals (Moroccan cheques show amount in digits)
         $amount = null;
+        // The digits box: "DH ‡5500,00‡" — tolerate the handwritten guards and
+        // a "/" read in place of the decimal comma.
+        if (preg_match('/\b(?:DH|DHS|MAD)\b[^\d\n\r]{0,6}(\d+(?:[ .]\d{3})*(?:[,.\/]\d{2})?)(?!\d)/iu', $text, $am)) {
+            $amount = $this->parseAmount(str_replace('/', ',', $am[1]));
+        }
         // Try labelled amount first
-        $amountStr = $this->labelValue($text, [
+        $amountStr = $amount ? null : $this->labelValue($text, [
             'Montant',
             'Amount',
             'Somme\s+de',
@@ -707,7 +713,7 @@ class DocumentParser
             $amount = $this->parseAmount($amountStr);
         }
         // Fallback: find a large number with decimals (likely the amount)
-        if (! $amount && preg_match_all('/(\d{1,3}(?:[\s\.,]\d{3})*(?:[,\.]\d{2}))\b/u', $text, $am)) {
+        if (! $amount && preg_match_all('/(?<!\d)(\d{1,3}(?:[\s\.,]\d{3})+[,\.]\d{2}|\d+[,\.]\d{2})(?!\d)/u', $text, $am)) {
             foreach ($am[1] as $candidate) {
                 $parsed = $this->parseAmount($candidate);
                 if ($parsed && $parsed > 100) { // Cheques are usually > 100 MAD
@@ -1391,7 +1397,9 @@ class DocumentParser
         // YMD year restricted to 19xx-21xx so OCR noise like "7706" (Tesseract
         // glued the spurious "77" onto a real date) can't satisfy the YMD slot
         // and starve the real DMY date that follows.
-        $datePattern = '(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|(?:19|20|21)\d{2}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
+        // `(?<!\d)` stops the greedy label gap from eating the day's first digit
+        // ("le 22/09/2026" read as 2/09/2026).
+        $datePattern = '(?<!\d)(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|(?:19|20|21)\d{2}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
         // Use `#` as the delimiter (not `/`) so a label containing a literal
         // slash — e.g. "Date et / Lieu de naissance" on the Moroccan permis —
         // can't terminate the regex early and trigger
