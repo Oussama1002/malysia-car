@@ -255,6 +255,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:vehicles.update');
         Route::patch('vehicles/{vehicle}', [VehicleController::class, 'update'])
             ->middleware('permission:vehicles.update');
+        Route::delete('vehicles/{vehicle}', [VehicleController::class, 'destroy'])
+            ->middleware('permission:vehicles.delete');
         Route::post('vehicles/{vehicle}/photo', [VehiclePhotoController::class, 'store'])
             ->middleware('permission:vehicles.upload_photo');
         Route::delete('vehicles/{vehicle}/photo', [VehiclePhotoController::class, 'destroy'])

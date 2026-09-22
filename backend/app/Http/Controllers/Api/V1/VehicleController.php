@@ -404,5 +404,27 @@ class VehicleController extends Controller
 
         return ApiResponse::success((new VehicleResource($v))->resolve($request));
     }
+
+    public function destroy(Request $request, Vehicle $vehicle): JsonResponse
+    {
+        $inUse = \App\Models\Reservation::query()
+            ->where('vehicle_id', $vehicle->id)
+            ->whereIn('status', ['reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested'])
+            ->exists()
+            || \App\Models\Contract::query()
+                ->where('vehicle_id', $vehicle->id)
+                ->whereIn('status', ['active', 'signed', 'approved', 'pending_approval'])
+                ->exists()
+            || $vehicle->subRentalContracts()->whereIn('status', ['active', 'draft'])->exists();
+
+        if ($inUse) {
+            return ApiResponse::error('Impossible de supprimer ce véhicule : il est lié à une réservation, un contrat ou une sous-location en cours.', 422);
+        }
+
+        AuditLogger::deleted($vehicle, $request->user(), request: $request);
+        $vehicle->delete();
+
+        return ApiResponse::message('Véhicule supprimé');
+    }
 }
 
