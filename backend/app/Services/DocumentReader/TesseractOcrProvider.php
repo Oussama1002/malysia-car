@@ -101,6 +101,16 @@ class TesseractOcrProvider implements OcrProviderInterface
                 if ($isCheque && ! $this->looksLikeCheque($pageText)) {
                     $pageText = $this->retryRotations($image, $lang, $pageText);
                 }
+                // The amount is handwritten, on a line of its own, in a
+                // guilloche background: --psm 6 wants a uniform block and often
+                // drops it. Sparse mode picks up scattered writing, so give the
+                // parser a second chance when nothing amount-like came back.
+                if ($isCheque && ! $this->hasAmountSignal($pageText)) {
+                    $sparse = $this->runTesseractSparse($image, $lang);
+                    if ($sparse !== '') {
+                        $pageText .= "\n--- sparse pass ---\n".$sparse."\n";
+                    }
+                }
                 $text .= $pageText."\n\n";
 
                 // Digit-focused second pass. For the permis this targets the
@@ -235,6 +245,40 @@ class TesseractOcrProvider implements OcrProviderInterface
             return true;
         } catch (Throwable) {
             return false; // ImageMagick missing — leave the page untouched.
+        }
+    }
+
+    /** Digits next to DH/MAD, or an amount spelled out in French. */
+    private function hasAmountSignal(string $text): bool
+    {
+        return (bool) preg_match('/\b(?:DH|DHS|MAD|DIRHAMS?)\b[^\da-z\n\r]{0,6}\d/iu', $text)
+            || (bool) preg_match('/\b(?:mille|cents?|vingt|trente|quarante|cinquante|soixante|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\b/iu', $text);
+    }
+
+    /**
+     * Sparse-text pass (--psm 11): finds text scattered anywhere on the page,
+     * which is how the handwritten amount sits on a cheque.
+     */
+    private function runTesseractSparse(string $image, string $lang): string
+    {
+        try {
+            $process = new Process([
+                $this->tesseractBin,
+                $image,
+                'stdout',
+                '-l', $lang,
+                '--oem', '1',
+                '--psm', '11',
+                '-c', 'preserve_interword_spaces=1',
+                '-c', 'user_defined_dpi=300',
+                '-c', 'tessedit_do_invert=0',
+            ]);
+            $process->setTimeout($this->timeoutSeconds);
+            $process->mustRun();
+
+            return $process->getOutput();
+        } catch (Throwable) {
+            return '';
         }
     }
 
