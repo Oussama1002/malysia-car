@@ -519,6 +519,7 @@ export const ReservationsOpsPage: React.FC = () => {
           id: String(v.id),
           label: `${prefix}${v.brand} ${v.model} · ${v.registration}`,
           status: statusFr,
+          free: statusFr === 'Disponible',
         };
       }),
     [vehiclesQ.data, reservedVehicleIds]
@@ -844,7 +845,12 @@ export const ReservationsOpsPage: React.FC = () => {
             <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
               <option value="">Véhicule…</option>
               {vehicleOptions.map((v) => (
-                <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
+                // Réservé, loué, en maintenance ou en réparation : visible avec
+                // son statut, mais pas réservable. Le véhicule déjà choisi reste
+                // sélectionnable pour ne pas vider le formulaire.
+                <option key={v.id} value={v.id} disabled={!v.free && form.vehicle_id !== v.id}>
+                  {v.label}{v.status ? ` (${v.status})` : ''}
+                </option>
               ))}
             </select>
             <div>
