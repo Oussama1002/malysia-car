@@ -6,6 +6,7 @@ import { apiClient, getApiBase } from '@/services/apiClient';
 import { documentCenterApi } from '@/services/documentCenterApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { VehicleDocumentScanner, type VehicleDocSlotKey } from '@/modules/fleet/VehicleDocumentScanner';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWY'.split('');
 const PLATE_REGIONS = Array.from({ length: 99 }, (_, i) => i + 1);
@@ -217,6 +218,7 @@ export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
     },
   });
 
+  const setField = (k: keyof FormState) => (value: string) => setForm((f) => ({ ...f, [k]: value }));
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -394,8 +396,8 @@ export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
         <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Contrat</h2>
           <div className="grid grid-cols-2 gap-3">
-            {field('Date de début', <input className={inputCls} type="date" value={form.start_date} onChange={set('start_date')} required />, true)}
-            {field('Date de fin', <input className={inputCls} type="date" value={form.end_date} onChange={set('end_date')} required />, true)}
+            {field('Date de début', <DateField className={inputCls} value={form.start_date} onChange={setField('start_date')} required />, true)}
+            {field('Date de fin', <DateField className={inputCls} value={form.end_date} onChange={setField('end_date')} required />, true)}
             {field('Coût journalier (MAD)', <input className={inputCls} type="number" step="0.01" min="0" value={form.daily_cost} onChange={set('daily_cost')} placeholder="0.00" required />, true)}
             {field('Coût total estimé', (
               <input className={`${inputCls} bg-slate-50`} readOnly value={computedTotal > 0 ? `${computedTotal.toLocaleString('fr-MA')} MAD (${computedDays} jours)` : '—'} />

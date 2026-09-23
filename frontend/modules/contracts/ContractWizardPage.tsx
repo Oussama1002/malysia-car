@@ -38,6 +38,7 @@ import { listBranches, listUsers } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
+import { DateField } from '@/modules/shared/components/DateField';
 
 type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
 
@@ -959,10 +960,11 @@ export const ContractWizardPage: React.FC = () => {
                 {/* Date & heure de création (auto, non modifiable) */}
                 <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Field label="Date & heure de création">
-                    <input
-                      type="datetime-local"
+                    <DateField
+                      withTime
                       className="df-input bg-slate-50 text-slate-500"
                       value={new Date().toISOString().slice(0, 16)}
+                      onChange={() => {}}
                       disabled
                     />
                   </Field>
@@ -1098,7 +1100,7 @@ export const ContractWizardPage: React.FC = () => {
                               <input className="df-input" placeholder="Ex : Attijariwafa" value={p.chequeBank ?? ''} onChange={(e) => updatePayment(p.id, 'chequeBank', e.target.value)} />
                             </Field>
                             <Field label="Date chèque">
-                              <input type="date" className="df-input" value={p.chequeDate ?? ''} onChange={(e) => updatePayment(p.id, 'chequeDate', e.target.value)} />
+                              <DateField className="df-input" value={p.chequeDate ?? ''} onChange={(dfValue) => updatePayment(p.id, 'chequeDate', dfValue)} />
                             </Field>
                             <div className="md:col-span-2">
                               <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2.5">

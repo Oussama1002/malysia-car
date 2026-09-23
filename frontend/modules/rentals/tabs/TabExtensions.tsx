@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { DateField } from '@/modules/shared/components/DateField';
 
 interface Extension {
   id: string;
@@ -98,11 +99,10 @@ const TabExtensions: React.FC<Props> = ({ reservationId, extensions, onRefresh }
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Nouvelle date de retour</label>
-            <input
-              type="datetime-local"
+            <DateField withTime
               className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
               value={form.new_end_at}
-              onChange={(e) => setForm((s) => ({ ...s, new_end_at: e.target.value }))}
+              onChange={(dfValue) => setForm((s) => ({ ...s, new_end_at: dfValue }))}
             />
           </div>
           <div>

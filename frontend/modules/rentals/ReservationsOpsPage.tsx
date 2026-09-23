@@ -17,6 +17,7 @@ import { listBranches, listUsers } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { contractsApi } from '@/services/contractsApi';
 import { companySettingsApi } from '@/services/companySettingsApi';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -860,11 +861,11 @@ export const ReservationsOpsPage: React.FC = () => {
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
-              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_start_at} onChange={(e) => setForm((s) => ({ ...s, desired_start_at: e.target.value }))} />
+              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.desired_start_at} onChange={(dfValue) => setForm((s) => ({ ...s, desired_start_at: dfValue }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
-              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_end_at} onChange={(e) => setForm((s) => ({ ...s, desired_end_at: e.target.value }))} />
+              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.desired_end_at} onChange={(dfValue) => setForm((s) => ({ ...s, desired_end_at: dfValue }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Prix estimé (MAD)</label>
@@ -949,11 +950,11 @@ export const ReservationsOpsPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
-              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availForm.start_at} onChange={(e) => setAvailForm((s) => ({ ...s, start_at: e.target.value }))} />
+              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={availForm.start_at} onChange={(dfValue) => setAvailForm((s) => ({ ...s, start_at: dfValue }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
-              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availForm.end_at} onChange={(e) => setAvailForm((s) => ({ ...s, end_at: e.target.value }))} />
+              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={availForm.end_at} onChange={(dfValue) => setAvailForm((s) => ({ ...s, end_at: dfValue }))} />
             </div>
           </div>
           {availCheckQ.isFetching && (
@@ -1140,7 +1141,7 @@ export const ReservationsOpsPage: React.FC = () => {
             <div>
               <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Prolongation</div>
               <div className="grid grid-cols-2 gap-2">
-                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="datetime-local" value={extensionForm.new_end_at} onChange={(e) => setExtensionForm((s) => ({ ...s, new_end_at: e.target.value }))} />
+                <DateField withTime className="rounded-xl border border-slate-200 px-3 py-2 text-xs" value={extensionForm.new_end_at} onChange={(dfValue) => setExtensionForm((s) => ({ ...s, new_end_at: dfValue }))} />
                 <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Montant additionnel" value={extensionForm.additional_amount} onChange={(e) => setExtensionForm((s) => ({ ...s, additional_amount: e.target.value }))} />
                 <button className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50 hover:bg-amber-700 transition-colors"
                   onClick={() => extensionM.mutate(selectedReservationId)} disabled={extensionM.isPending || !extensionForm.new_end_at}>
@@ -1176,8 +1177,8 @@ export const ReservationsOpsPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date émission" value={billingForm.issue_date} onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, issue_date: e.target.value })); }} />
-                  <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date échéance" value={billingForm.due_date} onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, due_date: e.target.value })); }} />
+                  <DateField className="rounded-xl border border-slate-200 px-3 py-2 text-xs" value={billingForm.issue_date} onChange={(dfValue) => { setBillingError(null); setBillingForm((s) => ({ ...s, issue_date: dfValue })); }} />
+                  <DateField className="rounded-xl border border-slate-200 px-3 py-2 text-xs" value={billingForm.due_date} onChange={(dfValue) => { setBillingError(null); setBillingForm((s) => ({ ...s, due_date: dfValue })); }} />
                   {billingError && (
                     <div className="col-span-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                       {billingError}
@@ -1403,7 +1404,7 @@ const CreateMissionModalContent: React.FC<{
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure prévue</label>
-          <input type="datetime-local" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.scheduled_start_at} onChange={(e) => setForm((s) => ({ ...s, scheduled_start_at: e.target.value }))} />
+          <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.scheduled_start_at} onChange={(dfValue) => setForm((s) => ({ ...s, scheduled_start_at: dfValue }))} />
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-600 mb-1">Notes</label>
@@ -1436,7 +1437,7 @@ const CreateMissionModalContent: React.FC<{
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure retour</label>
-            <input type="datetime-local" className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.return_scheduled_at} onChange={(e) => setForm((s) => ({ ...s, return_scheduled_at: e.target.value }))} />
+            <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.return_scheduled_at} onChange={(dfValue) => setForm((s) => ({ ...s, return_scheduled_at: dfValue }))} />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-1">Notes retour</label>

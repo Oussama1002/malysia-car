@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../services/mockApi';
 import { Client } from '../types';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const inputCls = 'w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold';
 const labelCls = 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1';
@@ -278,7 +279,7 @@ const ClientsList: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest ml-1">Expiration Permis</label>
-                      <input type="date" required className="w-full px-5 py-4 bg-rose-50 border border-rose-100 rounded-2xl outline-none font-bold text-rose-700" value={formData.licenseExpiry} onChange={e => setFormData(f => ({ ...f, licenseExpiry: e.target.value }))} />
+                      <DateField required className="w-full px-5 py-4 bg-rose-50 border border-rose-100 rounded-2xl outline-none font-bold text-rose-700" value={formData.licenseExpiry} onChange={(dfValue) => setFormData(f => ({ ...f, licenseExpiry: dfValue }))} />
                     </div>
                   </div>
 

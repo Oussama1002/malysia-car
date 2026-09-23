@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { subRentalApi, type SubRentalPayment, type PaymentMethod } from '@/services/subRentalApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { DateField } from '@/modules/shared/components/DateField';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
 
@@ -40,6 +41,7 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
     onError: (e: unknown) => setErr((e as any)?.data?.message ?? (e as any)?.data?.errors?.vehicle_id?.[0] ?? 'Erreur'),
   });
 
+  const setField = (k: string) => (value: string) => setForm((f) => ({ ...f, [k]: value }));
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   const inp = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
@@ -53,7 +55,7 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
         </div>
         <form onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ ...form, odometer_km: form.odometer_km ? parseFloat(form.odometer_km) : undefined, extra_charges: form.extra_charges ? parseFloat(form.extra_charges) : undefined }); }} className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><input className={inp} type="date" value={form.returned_at} onChange={set('returned_at')} required /></div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={inp} value={form.returned_at} onChange={setField('returned_at')} required /></div>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">Kilométrage</label><input className={inp} type="number" min="0" value={form.odometer_km} onChange={set('odometer_km')} /></div>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">Niveau carburant</label><select className={inp} value={form.fuel_level} onChange={set('fuel_level')}><option value="">—</option><option value="empty">Vide</option><option value="quarter">1/4</option><option value="half">1/2</option><option value="three_quarters">3/4</option><option value="full">Plein</option></select></div>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">Frais supplémentaires</label><input className={inp} type="number" min="0" step="0.01" value={form.extra_charges} onChange={set('extra_charges')} /></div>
@@ -114,6 +116,7 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
     },
   });
 
+  const setField = (k: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [k]: value }));
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -187,7 +190,7 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Date & heure paiement *</span>
-            <input className="df-input w-full" type="date" value={form.payment_date} onChange={set('payment_date')} required />
+            <DateField className="df-input w-full" value={form.payment_date} onChange={setField('payment_date')} required />
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Mode paiement *</span>
@@ -242,7 +245,7 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
               </label>
               <label className="block">
                 <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Date du chèque</span>
-                <input type="date" className="df-input w-full" value={form.check_date} onChange={set('check_date')} />
+                <DateField className="df-input w-full" value={form.check_date} onChange={setField('check_date')} />
               </label>
             </div>
           </div>

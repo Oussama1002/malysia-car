@@ -15,6 +15,7 @@ import { listBranches } from '@/services/adminApi';
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const InvoicesPage: React.FC = () => {
   const [filters, setFilters] = useState<InvoiceListParams>({ page: 1, per_page: 25 });
@@ -70,17 +71,15 @@ export const InvoicesPage: React.FC = () => {
             <option value="service">Service</option>
             <option value="credit_note">Avoir</option>
           </select>
-          <input
-            type="date"
+          <DateField
             className="df-input"
             value={filters.from ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value || undefined, page: 1 }))}
+            onChange={(dfValue) => setFilters((f) => ({ ...f, from: dfValue || undefined, page: 1 }))}
           />
-          <input
-            type="date"
+          <DateField
             className="df-input"
             value={filters.to ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value || undefined, page: 1 }))}
+            onChange={(dfValue) => setFilters((f) => ({ ...f, to: dfValue || undefined, page: 1 }))}
           />
           <select
             className="df-input"

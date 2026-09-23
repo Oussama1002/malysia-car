@@ -13,6 +13,7 @@ import {
   type ScannedIdentity,
 } from '@/modules/customers/CustomerIdentityScanner';
 import { COUNTRIES_FR } from '@/modules/customers/countries';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
@@ -168,11 +169,10 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Date de naissance">
-              <input
-                type="date"
+              <DateField
                 className="df-input"
                 value={individual.date_of_birth ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, date_of_birth: e.target.value }))}
+                onChange={(dfValue) => setIndividual((p) => ({ ...p, date_of_birth: dfValue }))}
               />
             </Field>
             <Field label="Nationalité">
@@ -200,11 +200,10 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Expiration permis">
-              <input
-                type="date"
+              <DateField
                 className="df-input"
                 value={individual.driving_license_expiry ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, driving_license_expiry: e.target.value }))}
+                onChange={(dfValue) => setIndividual((p) => ({ ...p, driving_license_expiry: dfValue }))}
               />
             </Field>
             <Field label="Profession">
@@ -264,11 +263,10 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Date d'immatriculation">
-              <input
-                type="date"
+              <DateField
                 className="df-input"
                 value={company.incorporation_date ?? ''}
-                onChange={(e) => setCompany((p) => ({ ...p, incorporation_date: e.target.value }))}
+                onChange={(dfValue) => setCompany((p) => ({ ...p, incorporation_date: dfValue }))}
               />
             </Field>
             <Field label="Activité">

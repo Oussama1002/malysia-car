@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getTaxReport } from '@/services/accountingApi';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const TaxReportPage: React.FC = () => {
   const [from, setFrom] = useState('');
@@ -26,11 +27,11 @@ export const TaxReportPage: React.FC = () => {
         <div className="df-card__body flex flex-wrap gap-3 items-end">
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">Du</label>
-            <input type="date" className="df-input mt-1" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <DateField className="df-input mt-1" value={from} onChange={(dfValue) => setFrom(dfValue)} />
           </div>
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">Au</label>
-            <input type="date" className="df-input mt-1" value={to} onChange={(e) => setTo(e.target.value)} />
+            <DateField className="df-input mt-1" value={to} onChange={(dfValue) => setTo(dfValue)} />
           </div>
         </div>
       </div>

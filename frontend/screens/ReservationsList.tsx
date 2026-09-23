@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { api } from '../services/mockApi';
 import { Reservation, ReservationStatus, Client, Vehicle, VehicleStatus } from '../types';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const ReservationsList: React.FC = () => {
   const [reservations, setReservations] = useState<any[]>([]);
@@ -352,11 +353,11 @@ const ReservationsList: React.FC = () => {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date Début</label>
-                  <input type="date" required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} />
+                  <DateField required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={formData.startDate} onChange={(dfValue) => setFormData({...formData, startDate: dfValue})} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date Fin</label>
-                  <input type="date" required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} />
+                  <DateField required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" value={formData.endDate} onChange={(dfValue) => setFormData({...formData, endDate: dfValue})} />
                 </div>
               </div>
 

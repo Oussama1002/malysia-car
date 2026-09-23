@@ -25,6 +25,7 @@ import { TabsSection } from '@/modules/shared/components/TabsSection';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 type Tab = 'overview' | 'valuations' | 'sale' | 'transfers';
 
@@ -492,11 +493,10 @@ const ReserveForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Réservé jusqu'au</label>
-        <input
-          type="date"
+        <DateField
           className="df-input mt-1"
           value={until}
-          onChange={(e) => setUntil(e.target.value)}
+          onChange={(dfValue) => setUntil(dfValue)}
         />
         <p className="mt-1 text-xs text-slate-500">Par défaut : +7 jours.</p>
       </div>
@@ -581,11 +581,10 @@ const SellForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date de vente</label>
-        <input
-          type="date"
+        <DateField
           className="df-input mt-1"
           value={form.sale_date ?? ''}
-          onChange={(e) => setForm({ ...form, sale_date: e.target.value || undefined })}
+          onChange={(dfValue) => setForm({ ...form, sale_date: dfValue || undefined })}
         />
       </div>
       <div>

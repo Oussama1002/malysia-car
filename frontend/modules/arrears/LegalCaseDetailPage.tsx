@@ -14,6 +14,7 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const STATUS_LABEL: Record<LegalCase['status'], string> = {
   open: 'Ouvert',
@@ -283,7 +284,7 @@ const RepossessionForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date d'ordre *</label>
-        <input type="date" className="df-input mt-1" value={form.ordered_at} onChange={(e) => setForm({ ...form, ordered_at: e.target.value })} required />
+        <DateField className="df-input mt-1" value={form.ordered_at} onChange={(v) => setForm({ ...form, ordered_at: v })} required />
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Agent de recouvrement</label>

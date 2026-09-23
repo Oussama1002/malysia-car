@@ -4,6 +4,7 @@ import { documentCenterApi, type DocumentCenterItem } from '@/services/documentC
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { formatDate } from '@/modules/shared/formatters';
 import { Link } from 'react-router-dom';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const ENTITY_OPTIONS = ['', 'vehicle', 'customer', 'contract', 'accident', 'mission', 'kyc_case', 'invoice'];
 const EXPIRY_OPTIONS = ['', 'expired', 'expiring_30', 'missing_expiry', 'ok'];
@@ -161,6 +162,6 @@ const TextFilter: React.FC<{ label: string; value: string; onChange: (v: string)
 const DateFilter: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({ label, value, onChange }) => (
   <label className="text-xs font-bold text-slate-600">
     <span className="mb-1 block">{label}</span>
-    <input type="date" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={value} onChange={(e) => onChange(e.target.value)} />
+    <DateField className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={value} onChange={(dfValue) => onChange(dfValue)} />
   </label>
 );

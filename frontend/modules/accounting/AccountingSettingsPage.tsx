@@ -18,6 +18,7 @@ import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const TAX_TYPE_LABEL: Record<Tax['tax_type'], string> = {
   vat: 'TVA',
@@ -349,11 +350,11 @@ const FiscalYearForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date de début *</label>
-        <input type="date" className="df-input mt-1" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} required />
+        <DateField className="df-input mt-1" value={form.start_date} onChange={(v) => setForm({ ...form, start_date: v })} required />
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date de fin *</label>
-        <input type="date" className="df-input mt-1" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} required />
+        <DateField className="df-input mt-1" value={form.end_date} onChange={(v) => setForm({ ...form, end_date: v })} required />
       </div>
       <p className="text-xs text-slate-500">Les périodes mensuelles seront créées automatiquement.</p>
       <div className="flex justify-end gap-2">

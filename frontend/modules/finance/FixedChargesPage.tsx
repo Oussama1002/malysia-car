@@ -4,6 +4,7 @@ import { apiClient, getApiBase } from '@/services/apiClient';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
+import { DateField } from '@/modules/shared/components/DateField';
 
 // ── Types ──────────────────────────────────────────────────────────
 type Expense = {
@@ -486,7 +487,7 @@ const CreateExpenseModal: React.FC<{
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Date *</label>
-            <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.expense_date} onChange={(e) => set('expense_date', e.target.value)} />
+            <DateField className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.expense_date} onChange={(dfValue) => set('expense_date', dfValue)} />
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Catégorie *</label>
@@ -530,7 +531,7 @@ const CreateExpenseModal: React.FC<{
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Échéance</label>
-            <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} />
+            <DateField className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.due_date} onChange={(dfValue) => set('due_date', dfValue)} />
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Référence / N° facture</label>

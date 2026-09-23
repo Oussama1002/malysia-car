@@ -7,6 +7,7 @@ import {
   type MissionProofBundle,
 } from '@/services/mobileOpsApi';
 import { formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 // ── Label maps ───────────────────────────────────────────────────────
 
@@ -598,7 +599,7 @@ const CreateMissionDrawer: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
           <div>
             <label className="mb-1 block text-xs font-bold text-slate-700">Date planifiée</label>
-            <input type="datetime-local" value={form.planned_at} onChange={(e) => set('planned_at', e.target.value)} className="df-input w-full text-xs" />
+            <DateField withTime value={form.planned_at} onChange={(dfValue) => set('planned_at', dfValue)} className="df-input w-full text-xs" />
           </div>
 
           <div>

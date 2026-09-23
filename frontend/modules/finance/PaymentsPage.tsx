@@ -70,6 +70,7 @@ import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 /* ── Types used by data loading ─────────────────────────────────────── */
 
@@ -962,11 +963,11 @@ export const PaymentForm: React.FC<{
         </div>
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement *</label>
-          <input
-            type="datetime-local"
+          <DateField
+            withTime
             className="df-input mt-1 w-full"
             value={form.payment_date}
-            onChange={(e) => set('payment_date', e.target.value)}
+            onChange={(v) => set('payment_date', v)}
             required
           />
         </div>
@@ -1081,11 +1082,10 @@ export const PaymentForm: React.FC<{
             </div>
             <div>
               <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
-              <input
-                type="date"
+              <DateField
                 className="df-input mt-1 w-full"
                 value={form.check_date ?? ''}
-                onChange={(e) => set('check_date', e.target.value)}
+                onChange={(dfValue) => set('check_date', dfValue)}
               />
             </div>
           </div>

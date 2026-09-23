@@ -9,6 +9,7 @@ import { Icon } from '@/modules/shared/components/Icon';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
+import { DateField } from '@/modules/shared/components/DateField';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1160,11 +1161,11 @@ function InsurancePolicyForm({
       </div>
       <div>
         <label className="df-label">Debut *</label>
-        <input className="df-input" type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} />
+        <DateField className="df-input" value={form.start_date} onChange={(dfValue) => setForm((f) => ({ ...f, start_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Fin *</label>
-        <input className="df-input" type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} />
+        <DateField className="df-input" value={form.end_date} onChange={(dfValue) => setForm((f) => ({ ...f, end_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Prime (MAD)</label>
@@ -1270,11 +1271,11 @@ function TechnicalInspectionForm({
     <div className="grid grid-cols-2 gap-3">
       <div>
         <label className="df-label">Date controle *</label>
-        <input className="df-input" type="date" value={form.inspection_date} onChange={(e) => setForm((f) => ({ ...f, inspection_date: e.target.value }))} />
+        <DateField className="df-input" value={form.inspection_date} onChange={(dfValue) => setForm((f) => ({ ...f, inspection_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Date expiration *</label>
-        <input className="df-input" type="date" value={form.expiry_date} onChange={(e) => setForm((f) => ({ ...f, expiry_date: e.target.value }))} />
+        <DateField className="df-input" value={form.expiry_date} onChange={(dfValue) => setForm((f) => ({ ...f, expiry_date: dfValue }))} />
       </div>
       <div className="col-span-2">
         <label className="df-label">Centre</label>
@@ -1290,7 +1291,7 @@ function TechnicalInspectionForm({
       </div>
       <div>
         <label className="df-label">Prochaine echeance</label>
-        <input className="df-input" type="date" value={form.next_due_date} onChange={(e) => setForm((f) => ({ ...f, next_due_date: e.target.value }))} />
+        <DateField className="df-input" value={form.next_due_date} onChange={(dfValue) => setForm((f) => ({ ...f, next_due_date: dfValue }))} />
       </div>
       <div className="col-span-2">
         <label className="df-label">Defauts (une ligne par defaut)</label>
@@ -1355,7 +1356,7 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
         </div>
         <div>
           <label className="df-label">Dernier fait le</label>
-          <input className="df-input" type="date" value={form.last_done_at} onChange={e => setForm(f => ({ ...f, last_done_at: e.target.value }))} />
+          <DateField className="df-input" value={form.last_done_at} onChange={(dfValue) => setForm(f => ({ ...f, last_done_at: dfValue }))} />
         </div>
         <div>
           <label className="df-label">Notes</label>
@@ -1409,7 +1410,7 @@ function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: str
       </div>
       <div>
         <label className="df-label">Date d'exécution</label>
-        <input className="df-input" type="date" value={form.performed_at} onChange={e => setForm(f => ({ ...f, performed_at: e.target.value }))} />
+        <DateField className="df-input" value={form.performed_at} onChange={(dfValue) => setForm(f => ({ ...f, performed_at: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Kilométrage</label>
@@ -1486,7 +1487,7 @@ function RepairForm({ vehicleId, onSaved, onCancel }: { vehicleId: string; onSav
       </div>
       <div>
         <label className="df-label">Date de début</label>
-        <input className="df-input" type="date" value={form.started_at} onChange={e => setForm(f => ({ ...f, started_at: e.target.value }))} />
+        <DateField className="df-input" value={form.started_at} onChange={(dfValue) => setForm(f => ({ ...f, started_at: dfValue }))} />
       </div>
       {err && <p className="col-span-2 text-xs text-red-600">{err}</p>}
       <div className="col-span-2 flex gap-2">
@@ -1573,7 +1574,7 @@ function AccidentForm({ vehicleId, onSaved, onCancel }: { vehicleId: string; onS
     <div className="grid grid-cols-2 gap-3">
       <div>
         <label className="df-label">Date de l'accident *</label>
-        <input className="df-input" type="date" value={form.accident_date} onChange={e => setForm(f => ({ ...f, accident_date: e.target.value }))} />
+        <DateField className="df-input" value={form.accident_date} onChange={(dfValue) => setForm(f => ({ ...f, accident_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Gravité</label>

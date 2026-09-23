@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getTrialBalance, ACCOUNT_TYPE_LABEL, type AccountType } from '@/services/accountingApi';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const TrialBalancePage: React.FC = () => {
   const [from, setFrom] = useState('');
@@ -27,11 +28,11 @@ export const TrialBalancePage: React.FC = () => {
         <div className="df-card__body flex flex-wrap gap-3 items-end">
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">Du</label>
-            <input type="date" className="df-input mt-1" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <DateField className="df-input mt-1" value={from} onChange={(dfValue) => setFrom(dfValue)} />
           </div>
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">Au</label>
-            <input type="date" className="df-input mt-1" value={to} onChange={(e) => setTo(e.target.value)} />
+            <DateField className="df-input mt-1" value={to} onChange={(dfValue) => setTo(dfValue)} />
           </div>
         </div>
       </div>

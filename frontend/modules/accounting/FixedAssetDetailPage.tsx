@@ -5,6 +5,7 @@ import { getFixedAsset, runDepreciation } from '@/services/accountingApi';
 import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const STATUS_TONE: Record<string, 'success' | 'danger' | 'warning'> = {
   active: 'success',
@@ -109,7 +110,7 @@ export const FixedAssetDetailPage: React.FC = () => {
             <div className="flex gap-3 items-end">
               <div className="flex-1">
                 <label className="text-xs font-bold uppercase text-slate-500">Période (date)</label>
-                <input type="date" className="df-input mt-1" value={depPeriod} onChange={(e) => setDepPeriod(e.target.value)} />
+                <DateField className="df-input mt-1" value={depPeriod} onChange={(dfValue) => setDepPeriod(dfValue)} />
               </div>
               <button
                 className="df-btn df-btn--primary"

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const EntityDocuments: React.FC<{
   entityType: string;
@@ -91,11 +92,11 @@ export const EntityDocuments: React.FC<{
           </div>
           <div>
             <label className="mb-1 block text-xs font-bold text-slate-600">Date d'émission</label>
-            <input type="date" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+            <DateField className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={issueDate} onChange={(dfValue) => setIssueDate(dfValue)} />
           </div>
           <div>
             <label className="mb-1 block text-xs font-bold text-slate-600">Date d'expiration</label>
-            <input type="date" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+            <DateField className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" value={expiryDate} onChange={(dfValue) => setExpiryDate(dfValue)} />
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>

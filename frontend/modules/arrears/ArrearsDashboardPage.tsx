@@ -15,6 +15,7 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { KpiCard } from '@/modules/shared/components/KpiCard';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const STAGES: ArrearsStage[] = ['new', 'reminder_1', 'reminder_2', 'formal_notice', 'promise', 'legal', 'repossession', 'closed'];
 
@@ -192,7 +193,7 @@ const ArrearsCaseForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Prochaine action</label>
-        <input type="date" className="df-input mt-1" value={form.next_action_date ?? ''} onChange={(e) => setForm({ ...form, next_action_date: e.target.value || undefined })} />
+        <DateField className="df-input mt-1" value={form.next_action_date ?? ''} onChange={(dfValue) => setForm({ ...form, next_action_date: dfValue || undefined })} />
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Notes</label>

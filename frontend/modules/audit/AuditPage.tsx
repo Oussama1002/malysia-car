@@ -4,6 +4,7 @@ import { auditApi, type AuditFilters, type AuditLogDto } from '@/services/auditA
 import { getApiBase } from '@/services/apiClient';
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const MODULE_OPTIONS = [
   '',
@@ -231,17 +232,15 @@ export const AuditPage: React.FC = () => {
           value={filters.user_id ?? ''}
           onChange={(e) => setField('user_id', e.target.value)}
         />
-        <input
+        <DateField
           className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
-          type="date"
           value={filters.from ?? ''}
-          onChange={(e) => setField('from', e.target.value)}
+          onChange={(dfValue) => setField('from', dfValue)}
         />
-        <input
+        <DateField
           className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
-          type="date"
           value={filters.to ?? ''}
-          onChange={(e) => setField('to', e.target.value)}
+          onChange={(dfValue) => setField('to', dfValue)}
         />
         <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold">
           <input

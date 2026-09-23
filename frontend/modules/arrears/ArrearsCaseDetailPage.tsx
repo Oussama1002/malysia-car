@@ -15,6 +15,7 @@ import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const ACTION_TYPES: ActionType[] = [
   'note', 'reminder_call', 'reminder_sms', 'reminder_email',
@@ -261,7 +262,7 @@ const ActionForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date *</label>
-        <input type="date" className="df-input mt-1" value={form.action_date} onChange={(e) => setForm({ ...form, action_date: e.target.value })} required />
+        <DateField className="df-input mt-1" value={form.action_date} onChange={(v) => setForm({ ...form, action_date: v })} required />
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Description *</label>
@@ -276,7 +277,7 @@ const ActionForm: React.FC<{
       {needsPromise && (
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Date de promesse</label>
-          <input type="date" className="df-input mt-1" value={form.promise_date ?? ''} onChange={(e) => setForm({ ...form, promise_date: e.target.value || undefined })} />
+          <DateField className="df-input mt-1" value={form.promise_date ?? ''} onChange={(dfValue) => setForm({ ...form, promise_date: dfValue || undefined })} />
         </div>
       )}
       <div className="flex justify-end gap-2">

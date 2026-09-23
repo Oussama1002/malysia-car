@@ -8,6 +8,7 @@ import { queryKeys } from '@/services/queryKeys';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Vehicle, VehicleStatus } from '../types';
 import { VehicleDocumentScanner } from '@/modules/fleet/VehicleDocumentScanner';
+import { DateField } from '@/modules/shared/components/DateField';
 
 interface VehicleModelOption { id: string; name: string; }
 interface VehicleBrandOption { id: string; name: string; models: VehicleModelOption[]; }
@@ -1357,8 +1358,8 @@ const VehiclesList: React.FC = () => {
                   {/* Mise en circulation */}
                   <div className="space-y-2">
                     <label className={labelCls}>Mise en circulation</label>
-                    <input type="date" className={inputCls} value={formData.miseEnCirculation}
-                      onChange={e => setFormData(fd => ({ ...fd, miseEnCirculation: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.miseEnCirculation}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, miseEnCirculation: dfValue }))} />
                   </div>
 
                   {/* Row 5 — Admin dates + amount ────────────────────────── */}
@@ -1366,15 +1367,15 @@ const VehiclesList: React.FC = () => {
                   {/* Date immatriculation */}
                   <div className="space-y-2">
                     <label className={labelCls}>Date immatriculation</label>
-                    <input type="date" className={inputCls} value={formData.dateImmatriculation}
-                      onChange={e => setFormData(fd => ({ ...fd, dateImmatriculation: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.dateImmatriculation}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, dateImmatriculation: dfValue }))} />
                   </div>
 
                   {/* Date d'acquisition */}
                   <div className="space-y-2">
                     <label className={labelCls}>Date d'acquisition</label>
-                    <input type="date" className={inputCls} value={formData.acquisitionDate}
-                      onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.acquisitionDate}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, acquisitionDate: dfValue }))} />
                   </div>
 
                   {/* Montant removed per user request */}
@@ -1420,8 +1421,8 @@ const VehiclesList: React.FC = () => {
 
                   <div className="space-y-2">
                     <label className={labelCls}>Validité immat. provisoire</label>
-                    <input type="date" className={inputCls} value={formData.immatProvisoireExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, immatProvisoireExpiry: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.immatProvisoireExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, immatProvisoireExpiry: dfValue }))} />
                   </div>
 
                 </div>
@@ -1449,25 +1450,25 @@ const VehiclesList: React.FC = () => {
                   {/* Assurance — période de garantie */}
                   <div className="space-y-2">
                     <label className={labelCls}>Assurance du</label>
-                    <input type="date" className={inputCls} value={formData.insuranceStart}
-                      onChange={e => setFormData(fd => ({ ...fd, insuranceStart: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.insuranceStart}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, insuranceStart: dfValue }))} />
                   </div>
                   <div className="space-y-2">
                     <label className={labelCls}>Assurance au</label>
-                    <input type="date" required className={inputCls} value={formData.insuranceExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, insuranceExpiry: e.target.value }))} />
+                    <DateField required className={inputCls} value={formData.insuranceExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, insuranceExpiry: dfValue }))} />
                   </div>
                   {/* Visite Tech */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Visite Tech.</label>
-                    <input type="date" className={inputCls} value={formData.techControlExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, techControlExpiry: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.techControlExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, techControlExpiry: dfValue }))} />
                   </div>
                   {/* Vignette */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Vignette</label>
-                    <input type="date" className={inputCls} value={formData.vignetteExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, vignetteExpiry: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.vignetteExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, vignetteExpiry: dfValue }))} />
                   </div>
                 </div>
               </div>
