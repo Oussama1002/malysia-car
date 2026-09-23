@@ -145,6 +145,37 @@ export const opsApi = {
     return res.data;
   },
 
+  /* ── Franchise d'assurance — garantie, jamais un encaissement ── */
+
+  async deposits(reservationId: string): Promise<any[]> {
+    const res = await apiClient<{ data: any[] }>(`/v1/reservations/${reservationId}/deposits`);
+    return res.data ?? [];
+  },
+
+  async createDeposit(reservationId: string, payload: Record<string, unknown>): Promise<any> {
+    const res = await apiClient<{ data: any }>(`/v1/reservations/${reservationId}/deposits`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res.data;
+  },
+
+  async releaseDeposit(depositId: string, notes?: string): Promise<any> {
+    const res = await apiClient<{ data: any }>(`/v1/deposits/${depositId}/release`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    return res.data;
+  },
+
+  async retainDeposit(depositId: string, notes: string): Promise<any> {
+    const res = await apiClient<{ data: any }>(`/v1/deposits/${depositId}/retain`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    return res.data;
+  },
+
   async requestExtension(id: string, payload: Record<string, unknown>): Promise<any> {
     const res = await apiClient<{ data: any }>(endpoints.reservations.requestExtension(id), { method: 'POST', body: JSON.stringify(payload) });
     return res.data;

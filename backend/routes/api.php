@@ -496,6 +496,15 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:reservations.create_mission');
         Route::post('reservations/{reservation}/handover-pickup', [ReservationController::class, 'handoverPickup'])
             ->middleware('permission:rentals.handover_pickup');
+        // Franchise d'assurance — a guarantee, never an encaissement.
+        Route::get('reservations/{reservation}/deposits', [\App\Http\Controllers\Api\V1\ContractDepositController::class, 'index'])
+            ->middleware('permission:rentals.handover_pickup');
+        Route::post('reservations/{reservation}/deposits', [\App\Http\Controllers\Api\V1\ContractDepositController::class, 'store'])
+            ->middleware('permission:rentals.handover_pickup');
+        Route::post('deposits/{deposit}/release', [\App\Http\Controllers\Api\V1\ContractDepositController::class, 'release'])
+            ->middleware('permission:rentals.handover_return');
+        Route::post('deposits/{deposit}/retain', [\App\Http\Controllers\Api\V1\ContractDepositController::class, 'retain'])
+            ->middleware('permission:rentals.handover_return');
         Route::post('reservations/{reservation}/request-extension', [ReservationController::class, 'requestExtension'])
             ->middleware('permission:rentals.extension');
         Route::post('reservations/{reservation}/handover-return', [ReservationController::class, 'handoverReturn'])

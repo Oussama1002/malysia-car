@@ -34,6 +34,8 @@ class CustomerBalanceController extends Controller
 
         $unallocatedPayments = (float) Payment::where('customer_id', $customer->id)
             ->where('status', '!=', 'refunded')
+            // La franchise d'assurance ne fait pas partie du solde client.
+            ->where(fn ($q) => $q->whereNull('payment_type')->orWhere('payment_type', '!=', 'caution'))
             ->sum('amount_unallocated');
 
         return ApiResponse::success([
@@ -66,6 +68,7 @@ class CustomerBalanceController extends Controller
 
         $payments = Payment::where('customer_id', $customer->id)
             ->where('status', '!=', 'refunded')
+            ->where(fn ($q) => $q->whereNull('payment_type')->orWhere('payment_type', '!=', 'caution'))
             ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('payment_date', '<=', $to))
             ->get();

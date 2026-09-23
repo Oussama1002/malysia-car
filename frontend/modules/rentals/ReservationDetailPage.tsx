@@ -514,8 +514,8 @@ export const ReservationDetailPage: React.FC = () => {
             {activeTab === 'missions'   && <TabMissions missions={d?.missions ?? []} reservation={r} />}
             {activeTab === 'drivers'    && <TabDrivers reservationId={rid!} drivers={d?.drivers ?? []} onRefresh={invalidate} />}
             {activeTab === 'contract'   && <TabContract reservation={r} />}
-            {activeTab === 'checkout'   && <TabCheckOut reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
-            {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
+            {activeTab === 'checkout'   && <TabCheckOut reservationId={rid!} reports={d?.handover_reports ?? []} franchiseDue={Number(d?.contract?.deposit_amount ?? 0)} onRefresh={invalidate} />}
+            {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} damagesCount={(d?.damage_reports ?? []).length} onRefresh={invalidate} />}
             {activeTab === 'extensions' && <TabExtensions reservationId={rid!} extensions={d?.extensions ?? []} onRefresh={invalidate} />}
             {activeTab === 'damages'    && <TabDamages reservationId={rid!} damages={d?.damage_reports ?? []} onRefresh={invalidate} />}
             {activeTab === 'payments'   && <TabPayments data={d} onAddPayment={openPaymentDrawer} />}

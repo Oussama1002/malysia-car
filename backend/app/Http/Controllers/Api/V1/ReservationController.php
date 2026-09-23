@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\Contract;
+use App\Models\ContractDeposit;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\Mission;
@@ -287,6 +288,8 @@ class ReservationController extends Controller
         // Payments linked to this reservation
         $payments = Payment::query()
             ->where('reservation_id', $reservation->id)
+            // La franchise d'assurance est une garantie, pas un encaissement.
+            ->where(fn ($q) => $q->whereNull('payment_type')->orWhere('payment_type', '!=', 'caution'))
             ->orderByDesc('payment_date')
             ->get();
 
@@ -340,6 +343,16 @@ class ReservationController extends Controller
 
         return ApiResponse::success([
             'reservation' => $reservation,
+            // The contract carries the franchise the check-out asks for.
+            'contract' => Contract::query()
+                ->where('reservation_id', $reservation->id)
+                ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
+                ->orderByDesc('created_at')
+                ->first(['id', 'contract_number', 'status', 'deposit_amount']),
+            'deposits' => \App\Models\ContractDeposit::query()
+                ->where('reservation_id', $reservation->id)
+                ->orderByDesc('collected_at')
+                ->get(),
             'customer_name' => $customerName,
             'vehicle_name' => $vehicleName,
             'vehicle_registration' => $vehicle?->registration_number ?? null,
@@ -682,6 +695,26 @@ class ReservationController extends Controller
             'signature' => ['nullable', 'string'],
             'contract_id' => ['nullable', 'uuid'],
         ]);
+
+        // The franchise is the agency's guarantee: no vehicle leaves without it.
+        $contract = Contract::query()
+            ->where('reservation_id', $reservation->id)
+            ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
+            ->orderByDesc('created_at')
+            ->first();
+        $franchiseDue = (float) ($contract->deposit_amount ?? 0);
+        if ($franchiseDue > 0) {
+            $held = ContractDeposit::query()
+                ->where('reservation_id', $reservation->id)
+                ->where('status', ContractDeposit::STATUS_HELD)
+                ->sum('amount');
+            if ((float) $held <= 0) {
+                return ApiResponse::error(
+                    'Franchise d\'assurance non encaissée ('.number_format($franchiseDue, 2, ',', ' ').' MAD). Enregistrez-la avant de remettre le véhicule.',
+                    422,
+                );
+            }
+        }
 
         $report = DB::transaction(function () use ($reservation, $data, $request) {
             $this->transitionReservation($reservation, 'handed_over', $request);

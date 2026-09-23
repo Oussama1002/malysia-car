@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { FranchisePanel, useDeposits } from './FranchisePanel';
 
 interface Report {
   id: string;
@@ -18,12 +19,14 @@ interface Report {
 interface Props {
   reservationId: string;
   reports: Report[];
+  /** Franchise prévue au contrat — la remise est bloquée tant qu'elle n'est pas encaissée. */
+  franchiseDue?: number;
   onRefresh: () => void;
 }
 
 const PHOTO_ZONES = ['Avant', 'Arrière', 'Gauche', 'Droite', 'Intérieur', 'Tableau de bord'];
 
-const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => {
+const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0, onRefresh }) => {
   const pickups = reports.filter((r) => r.handover_type === 'pickup');
   const [form, setForm] = useState({
     odometer: '',
@@ -31,6 +34,11 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
     condition_notes: '',
     signature: '',
   });
+
+  const depositsQ = useDeposits(reservationId);
+  const franchiseHeld = (depositsQ.data ?? []).some((d) => d.status === 'held');
+  const franchiseBlocks = franchiseDue > 0 && !franchiseHeld;
+  const [pickupError, setPickupError] = useState<string | null>(null);
 
   const pickupM = useMutation({
     mutationFn: () =>
@@ -43,13 +51,17 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
         photos: [],
       }),
     onSuccess: () => {
+      setPickupError(null);
       onRefresh();
       setForm({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
     },
+    onError: (e: unknown) => setPickupError(e instanceof Error ? e.message : 'Erreur lors du check-out.'),
   });
 
   return (
     <div className="space-y-6">
+      <FranchisePanel reservationId={reservationId} dueAmount={franchiseDue} mode="collect" />
+
       {/* Existing pickup records */}
       {pickups.length > 0 && (
         <div>
@@ -139,10 +151,19 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
           </div>
         </div>
 
+        {pickupError && (
+          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{pickupError}</div>
+        )}
+        {franchiseBlocks && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+            Encaissez la franchise d'assurance ci-dessus avant de remettre le véhicule.
+          </div>
+        )}
+
         <div className="mt-4 flex justify-end">
           <button
             onClick={() => pickupM.mutate()}
-            disabled={pickupM.isPending}
+            disabled={pickupM.isPending || franchiseBlocks}
             className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             {pickupM.isPending ? 'Enregistrement…' : '🚗 Valider le Check-Out'}
