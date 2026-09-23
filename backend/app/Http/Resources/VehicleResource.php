@@ -57,6 +57,7 @@ class VehicleResource extends JsonResource
             'currentValueMad' => $v->book_value !== null ? (float) $v->book_value : null,
             'branchId' => $v->branch_id,
             'pricePerDay' => $v->daily_rental_price !== null ? (float) $v->daily_rental_price : null,
+            'insuranceDeductible' => $v->insurance_deductible !== null ? (float) $v->insurance_deductible : null,
             'photoUrl' => $this->resolvePhotoUrl($v),
             'vehicleType' => $v->vehicle_type,
             'numeroPolice' => $v->numero_police,

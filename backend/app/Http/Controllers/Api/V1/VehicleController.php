@@ -147,6 +147,7 @@ class VehicleController extends Controller
             $v->residual_value = $data['residual_value'] ?? null;
             $v->book_value = $data['book_value'] ?? null;
             $v->daily_rental_price = $data['daily_rental_price'] ?? null;
+            $v->insurance_deductible = $data['insurance_deductible'] ?? null;
             $v->monthly_rental_price = $data['monthly_rental_price'] ?? null;
             $v->gps_enabled = $data['gps_enabled'] ?? false;
             $v->notes = $data['notes'] ?? null;
@@ -339,6 +340,7 @@ class VehicleController extends Controller
                 'residual_value',
                 'book_value',
                 'daily_rental_price',
+                'insurance_deductible',
                 'monthly_rental_price',
                 'gps_enabled',
                 'notes',

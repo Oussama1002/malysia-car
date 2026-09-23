@@ -116,6 +116,7 @@ const emptyForm = () => ({
   vignetteExpiry: '',
   status: VehicleStatus.AVAILABLE,
   pricePerDay: 0,
+  insuranceDeductible: '' as string | number,
   cv: '' as string | number,
   mileageKm: '' as string | number,
   fuel: 'Diesel',
@@ -320,6 +321,7 @@ const VehiclesList: React.FC = () => {
           vignetteExpiry: v.vignetteExpiry ?? '',
           status: (v.status ?? 'AVAILABLE') as VehicleStatus,
           pricePerDay: v.pricePerDay ?? 0,
+          insuranceDeductible: (v as any).insuranceDeductible ?? '',
           photoUrl: v.photoUrl ?? null,
           ...(v as any),
         }));
@@ -445,6 +447,7 @@ const VehiclesList: React.FC = () => {
         tech_control_expiry: formData.techControlExpiry || undefined,
         vignette_expiry: formData.vignetteExpiry || undefined,
         daily_rental_price: formData.pricePerDay || undefined,
+        insurance_deductible: formData.insuranceDeductible !== '' ? Number(formData.insuranceDeductible) : undefined,
         status: formData.status,
         vehicle_type: formData.vehicleType || undefined,
         numero_police: formData.numeroPolice || undefined,
@@ -1457,6 +1460,19 @@ const VehiclesList: React.FC = () => {
                     <label className={labelCls}>Assurance au</label>
                     <DateField required className={inputCls} value={formData.insuranceExpiry}
                       onChange={(dfValue) => setFormData(fd => ({ ...fd, insuranceExpiry: dfValue }))} />
+                  </div>
+                  {/* Franchise — reprise par défaut sur les contrats de ce véhicule */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Franchise d'assurance (MAD)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className={inputCls}
+                      placeholder="Ex : 5000"
+                      value={formData.insuranceDeductible}
+                      onChange={(e) => setFormData(fd => ({ ...fd, insuranceDeductible: e.target.value }))}
+                    />
                   </div>
                   {/* Visite Tech */}
                   <div className="space-y-2">

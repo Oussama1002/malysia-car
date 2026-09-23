@@ -43,6 +43,7 @@ class StoreVehicleRequest extends ApiFormRequest
             'residual_value' => ['nullable', 'numeric', 'min:0'],
             'book_value' => ['nullable', 'numeric', 'min:0'],
             'daily_rental_price' => ['nullable', 'numeric', 'min:0'],
+            'insurance_deductible' => ['nullable', 'numeric', 'min:0'],
             'monthly_rental_price' => ['nullable', 'numeric', 'min:0'],
             'gps_enabled' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],

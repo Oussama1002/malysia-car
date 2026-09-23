@@ -47,6 +47,7 @@ class UpdateVehicleRequest extends ApiFormRequest
             'residual_value' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'book_value' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'daily_rental_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'insurance_deductible' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'monthly_rental_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'gps_enabled' => ['sometimes', 'nullable', 'boolean'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],

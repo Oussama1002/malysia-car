@@ -68,6 +68,8 @@ export interface FleetVehicleDto {
   vignetteExpiry?: string;
   registrationCard?: string;
   pricePerDay?: number;
+  /** Franchise d'assurance propre au véhicule, reprise par défaut sur ses contrats. */
+  insuranceDeductible?: number;
   image?: string;
   /** "owned" | "sub_rented" | … — flags vehicles we rent from a third party. */
   ownershipStatus?: string;

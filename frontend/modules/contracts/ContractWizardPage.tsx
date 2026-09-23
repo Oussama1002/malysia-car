@@ -11,6 +11,7 @@ import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 type WizardVehicle = FleetVehicleDto & {
   hasActiveReservation?: boolean;
   hasActiveContract?: boolean;
+  insuranceDeductible?: number;
 };
 
 /** French availability of a vehicle, reservations and contracts included. */
@@ -444,6 +445,7 @@ export const ContractWizardPage: React.FC = () => {
         techControlExpiry: v.tech_control_expiry,
         vignetteExpiry: v.vignette_expiry,
         ownershipStatus: v.ownership_status,
+        insuranceDeductible: v.insuranceDeductible ?? v.insurance_deductible ?? undefined,
         // The list endpoint resolves live usage: a vehicle can sit at status
         // AVAILABLE in the fleet table while a reservation or contract holds it.
         hasActiveReservation: !!v.hasActiveReservation,
@@ -464,6 +466,21 @@ export const ContractWizardPage: React.FC = () => {
       securityDepositMad: prev.securityDepositMad || Number(s.contracts?.default_deposit_mad ?? 0),
     }));
   }, [settingsQ.data]);
+
+  // La franchise du véhicule choisi prime sur la valeur par défaut de la
+  // société : un 4x4 et une citadine n'ont pas la même franchise.
+  const vehicleFranchiseFor = useRef<string | null>(null);
+  useEffect(() => {
+    const id = state.vehicleId ? String(state.vehicleId) : null;
+    if (!id || vehicleFranchiseFor.current === id) return;
+    const picked = (vehicles.data ?? []).find((v) => String(v.id) === id);
+    if (!picked) return;
+    vehicleFranchiseFor.current = id;
+    const franchise = Number(picked.insuranceDeductible ?? 0);
+    if (franchise > 0) {
+      setState((prev) => ({ ...prev, securityDepositMad: franchise }));
+    }
+  }, [state.vehicleId, vehicles.data]);
 
   const customerDocs = useQuery({
     queryKey: ['customer-docs', state.clientId],
