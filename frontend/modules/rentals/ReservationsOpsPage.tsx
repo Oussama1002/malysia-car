@@ -64,6 +64,7 @@ export const ReservationsOpsPage: React.FC = () => {
   const nav = useNavigate();
   const qc = useQueryClient();
   const [q, setQ] = useState('');
+  const [showArchive, setShowArchive] = useState(false);
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
   const [pickupForm, setPickupForm] = useState({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
   const [returnForm, setReturnForm] = useState({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
@@ -528,8 +529,13 @@ export const ReservationsOpsPage: React.FC = () => {
   // Search the client and vehicle the user actually sees — matching the raw
   // customer_id/vehicle_id UUIDs meant one letter hit almost every row and two
   // hit none. Declared after the option lists it reads.
+  // Une réservation annulée n'est plus une opération en cours : elle sort de la
+  // liste et n'est visible que dans l'archive.
+  const allRows = (reservationsQ.data ?? []) as ReservationDto[];
+  const cancelledCount = useMemo(() => allRows.filter((r) => r.status === 'cancelled').length, [allRows]);
+
   const rows = useMemo(() => {
-    const data = (reservationsQ.data ?? []) as ReservationDto[];
+    const data = allRows.filter((r) => (showArchive ? r.status === 'cancelled' : r.status !== 'cancelled'));
     if (!q.trim()) return data;
     const qq = q.toLowerCase();
     return data.filter((r) => {
@@ -538,7 +544,7 @@ export const ReservationsOpsPage: React.FC = () => {
       const statusFr = STATUS_FR[r.status] ?? r.status;
       return `${r.reservation_number} ${r.status} ${statusFr} ${clientName} ${vehicleName}`.toLowerCase().includes(qq);
     });
-  }, [reservationsQ.data, q, customerOptions, vehicleOptions]);
+  }, [allRows, showArchive, q, customerOptions, vehicleOptions]);
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
   const timelineStatus = String(detail?.status ?? selected?.status ?? '');
@@ -646,6 +652,17 @@ export const ReservationsOpsPage: React.FC = () => {
       <SearchFilterBar placeholder="Filtrer réservations…" value={q} onChange={setQ}>
         <button
           type="button"
+          className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-black shadow-sm transition-colors ${
+            showArchive
+              ? 'border-slate-300 bg-slate-800 text-white hover:bg-slate-900'
+              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
+          onClick={() => setShowArchive((v) => !v)}
+        >
+          🗄️ {showArchive ? 'Retour aux réservations' : `Archive${cancelledCount > 0 ? ` (${cancelledCount})` : ''}`}
+        </button>
+        <button
+          type="button"
           className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
           onClick={() => setAvailCheckOpen(true)}
         >
@@ -659,6 +676,12 @@ export const ReservationsOpsPage: React.FC = () => {
           + Nouvelle réservation
         </button>
       </SearchFilterBar>
+
+      {showArchive && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-600">
+          Archive — réservations annulées. Elles ne bloquent aucun véhicule.
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
@@ -796,7 +819,11 @@ export const ReservationsOpsPage: React.FC = () => {
             )}
             </div>
           ))}
-          {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
+          {rows.length === 0 && (
+            <div className="p-10 text-center text-sm text-slate-500">
+              {showArchive ? 'Aucune réservation annulée.' : 'Aucune réservation.'}
+            </div>
+          )}
         </div>
       </div>
 
