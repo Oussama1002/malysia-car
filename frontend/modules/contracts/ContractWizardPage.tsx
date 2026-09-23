@@ -356,7 +356,10 @@ export const ContractWizardPage: React.FC = () => {
   });
 
   const clients = useQuery({
-    queryKey: queryKeys.customers.all,
+    // Own key: the reservations and payments pages cache the raw API rows
+    // under queryKeys.customers.all, and reading c.name off those left every
+    // option as a bare "(Particulier)" until a refresh reordered the fetches.
+    queryKey: [...queryKeys.customers.all, 'wizard'],
     queryFn: async (): Promise<CustomerDto[]> => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard clients.');
@@ -365,7 +368,14 @@ export const ContractWizardPage: React.FC = () => {
       return res.data.map((c): CustomerDto => ({
         id: c.id,
         kind: c.customer_type === 'ENTREPRISE' ? 'ENTREPRISE' : 'PARTICULIER',
-        name: c.display_name ?? c.customer_code ?? c.id,
+        // display_name comes back empty on records whose profile carries the
+        // name, so fall back through the profiles before showing a code.
+        name: c.display_name?.trim()
+          || [c.individual_profile?.first_name, c.individual_profile?.last_name].filter(Boolean).join(' ').trim()
+          || c.company_profile?.trade_name
+          || c.company_profile?.legal_name
+          || c.customer_code
+          || c.id,
         email: c.individual_profile?.email ?? '',
         phone: c.individual_profile?.phone ?? '',
         complianceStatus:
