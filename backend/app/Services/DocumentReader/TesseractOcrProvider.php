@@ -111,6 +111,15 @@ class TesseractOcrProvider implements OcrProviderInterface
                         $pageText .= "\n--- sparse pass ---\n".$sparse."\n";
                     }
                 }
+                // Still nothing: the amount is pen over the guilloche security
+                // pattern, and the gentle preprocessing above keeps both. Drop
+                // everything but the dark ink and read that.
+                if ($isCheque && ! $this->hasAmountSignal($pageText)) {
+                    $ink = $this->readInkOnly($image, $lang);
+                    if ($ink !== '') {
+                        $pageText .= "\n--- ink pass ---\n".$ink."\n";
+                    }
+                }
                 $text .= $pageText."\n\n";
 
                 // Digit-focused second pass. For the permis this targets the
@@ -279,6 +288,36 @@ class TesseractOcrProvider implements OcrProviderInterface
             return $process->getOutput();
         } catch (Throwable) {
             return '';
+        }
+    }
+
+    /**
+     * Keep only the dark strokes — pen ink — and drop the pale printed
+     * guilloche the amount is written over, then read that copy.
+     */
+    private function readInkOnly(string $image, string $lang): string
+    {
+        $tmp = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_ink_'.bin2hex(random_bytes(6)).'.png';
+
+        try {
+            $process = new Process([
+                $this->convertBin,
+                $image,
+                '-colorspace', 'Gray',
+                '-level', '35%,65%',   // pale pattern → white, ink stays dark
+                '-despeckle',
+                $tmp,
+            ]);
+            $process->setTimeout(60);
+            $process->mustRun();
+
+            return $this->runTesseractSparse($tmp, $lang);
+        } catch (Throwable) {
+            return '';
+        } finally {
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
         }
     }
 
