@@ -52,13 +52,20 @@ class TesseractOcrProvider implements OcrProviderInterface
 
         $needsCleanup = false;
         $convertedSource = null;
-        // A cheque is a single page and its print is large, so render one page
-        // at image resolution — the recto/verso A4 render is what pushed the
-        // synchronous cheque scan past the web server's timeout.
+        // A cheque is a single page, so render one page only — the recto/verso
+        // A4 render is what pushed the synchronous scan past the web server's
+        // timeout. Resolution stays full: a scanner puts the cheque in a band
+        // of an A4 page, so scaling the whole page down leaves the cheque at
+        // half the detail a photo of the same cheque gives Tesseract.
         $isCheque = $docType === 'cheque';
 
         if ($ext === 'pdf') {
-            $imagePaths = $this->renderPdfPages($absolutePath, $isCheque ? 1 : 2, $isCheque ? 2400 : 3508);
+            $imagePaths = $this->renderPdfPages($absolutePath, $isCheque ? 1 : 2);
+            // Crop the surrounding white so the cheque fills the frame, the way
+            // it does in a photo.
+            foreach ($imagePaths as $page) {
+                $this->trimMargins($page);
+            }
             $needsCleanup = true;
         } else {
             // Tesseract only reads jpg/jpeg/png natively. Convert anything else
@@ -172,6 +179,44 @@ class TesseractOcrProvider implements OcrProviderInterface
             $this->rotateImage($image, (int) $m[1]);
         } catch (Throwable) {
             // Orientation detection is optional — carry on with the page as-is.
+        }
+    }
+
+    /**
+     * Crop the uniform border around a scanned page. Best-effort: without
+     * ImageMagick the page is read as it is.
+     */
+    private function trimMargins(string $image): void
+    {
+        $tmp = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_trim_'.bin2hex(random_bytes(6)).'.png';
+
+        try {
+            $process = new Process([
+                $this->convertBin,
+                $image,
+                '-bordercolor', 'white',
+                '-border', '10',
+                '-fuzz', '12%',
+                '-trim',
+                '+repage',
+                $tmp,
+            ]);
+            $process->setTimeout(60);
+            $process->mustRun();
+
+            // A trim that ate the page (blank or very noisy scan) is worse than
+            // no trim, so keep the render unless a real page is left.
+            $before = @getimagesize($image);
+            $after = @getimagesize($tmp);
+            if ($before && $after && $after[0] > $before[0] * 0.2 && $after[1] > $before[1] * 0.2) {
+                @rename($tmp, $image);
+            }
+        } catch (Throwable) {
+            // Leave the rendered page untouched.
+        } finally {
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
         }
     }
 
