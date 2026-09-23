@@ -683,6 +683,7 @@ class DocumentParser
             ?? $this->firstMatch('/ch[èe]que[\s\S]{0,40}?N[°o]?\s*[:.]*\s*(?<!\d)(\d{6,8})(?!\d)/iu', $withoutAccount)
             ?? $this->firstMatch('/s[ée]rie[\s\S]{0,20}?N[°o]?\s*[:.]*\s*(?<!\d)(\d{5,8})(?!\d)/iu', $withoutAccount)
             ?? $this->firstMatch('/\bN[°o]\s*[:.]*\s*(?<!\d)(\d{6,8})(?!\d)/u', $withoutAccount)
+            ?? $this->repeatedNumber($withoutAccount, $text)
             ?? $this->firstMatch('/(?<!\d)(\d{6,7})(?!\d)/u', $withoutAccount);
 
         // Bank name — check the known Moroccan banks FIRST (a bare "Bank" label
@@ -792,6 +793,26 @@ class DocumentParser
             'amount' => $amount,
             'check_date' => $checkDate,
         ];
+    }
+
+    /**
+     * A cheque prints its number twice — in the corner and again in the MICR
+     * line at the bottom — while OCR noise appears once. Prefer a candidate the
+     * page repeats.
+     */
+    private function repeatedNumber(string $haystack, string $fullText): ?string
+    {
+        if (! preg_match_all('/(?<!\d)(\d{6,8})(?!\d)/u', $haystack, $m)) {
+            return null;
+        }
+
+        foreach (array_unique($m[1]) as $candidate) {
+            if (substr_count($fullText, $candidate) > 1) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -390,6 +390,7 @@ interface ChequeOcrResult {
   bank?: string;
   check_date?: string;
   amount?: number;
+  raw_text?: string | null;
   existing_payment?: {
     payment_id: string;
     payment_number: string;
@@ -619,6 +620,7 @@ export const PaymentForm: React.FC<{
   const [chequeScanning, setChequeScanning] = useState(false);
   const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
   const [chequeDuplicate, setChequeDuplicate] = useState<NonNullable<ChequeOcrResult['existing_payment']> | null>(null);
+  const [chequeRawText, setChequeRawText] = useState<string | null>(null);
 
   const applyChequeScan = async (file: File) => {
     setChequeScanning(true);
@@ -626,6 +628,7 @@ export const PaymentForm: React.FC<{
     setChequeDuplicate(null);
     try {
       const data = await scanCheque(file);
+      setChequeRawText(data.raw_text ?? null);
       // Refuse to prefill and warn the user when the scanned cheque already
       // backs a live payment. The user can still enter another cheque number
       // manually — the guard fires again on server-side submit.
@@ -1035,6 +1038,12 @@ export const PaymentForm: React.FC<{
 
           {chequeOcrError && (
             <div className="rounded bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
+          )}
+          {chequeRawText && (
+            <details className="rounded bg-white/70 px-3 py-1.5 text-[11px] text-slate-600">
+              <summary className="cursor-pointer font-bold text-slate-500">Texte lu par l'OCR</summary>
+              <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-snug">{chequeRawText}</pre>
+            </details>
           )}
           {chequeScanning && (
             <div className="flex items-center gap-2 text-xs text-blue-600">
