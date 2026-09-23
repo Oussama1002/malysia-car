@@ -664,7 +664,13 @@ class DocumentParser
         // "série … N° <digits>" shape, then a standalone 6-8 digit run.
         // The account number sits right next to the cheque number and has the
         // same shape, so blank out the "COMPTE …" run before looking.
-        $withoutAccount = preg_replace('/\b(?:COMPTE|N°\s*COMPTE|ACCOUNT|RIB)\b[\s:.]*[\d\s]{6,40}/iu', ' ', $text) ?? $text;
+        // OCR glues the label to what follows ("Compten 1532 N 300400015"), so
+        // match the stem, not the whole word.
+        $withoutAccount = preg_replace('/\b(?:COMPTE|ACCOUNT|RIB)\w*[\s:.N°]*[\d\s]{6,40}/iu', ' ', $text) ?? $text;
+        // The account and the MICR line survive as long grouped digit runs
+        // ("3295076 2110 326 00"): drop those too, label or no label.
+        $withoutAccount = preg_replace('/(?<!\d)\d{4,}(?:[ .]\d{2,})+(?!\d)/u', ' ', $withoutAccount) ?? $withoutAccount;
+        $withoutAccount = preg_replace('/(?<!\d)\d{9,}(?!\d)/u', ' ', $withoutAccount) ?? $withoutAccount;
 
         $checkNumber = $this->labelValue($withoutAccount, [
             'N°\s*(?:du\s*)?ch[èe]que',
@@ -734,7 +740,13 @@ class DocumentParser
         $amount = null;
         // The digits box: "DH ‡5500,00‡" — tolerate the handwritten guards and
         // a "/" read in place of the decimal comma.
-        if (preg_match('/\b(?:DH|DHS|MAD)\b[^\d\n\r]{0,6}(\d+(?:[ .]\d{3})*(?:[,.\/]\d{2})?)(?!\d)/iu', $text, $am)) {
+        $money = '(?:DH|DHS|MAD|DIRHAMS?)';
+        $digits = '(\d+(?:[ .]\d{3})*(?:[,.\/]\d{2})?)(?!\d)';
+        // Digits before the currency first ("5 500,00 dirhams"), then after it
+        // ("DH ‡5500,00‡"). The gap may not contain letters, or "dirhams le
+        // 22/09/2026" reads as 22,09.
+        if (preg_match('/(?<!\d)'.$digits.'\s*'.$money.'\b/iu', $text, $am)
+            || preg_match('/\b'.$money.'\b[^\da-zA-Z\n\r]{0,6}'.$digits.'/iu', $text, $am)) {
             $amount = $this->parseAmount(str_replace('/', ',', $am[1]));
         }
         // Try labelled amount first
@@ -748,17 +760,11 @@ class DocumentParser
         if ($amountStr) {
             $amount = $this->parseAmount($amountStr);
         }
-        // Fallback: a number with decimals, but only away from the account
-        // number — its "3295076 2110 326 00" tail reads as "326.00" otherwise.
-        if (! $amount && preg_match_all('/(?<!\d)(\d{1,3}(?:[\s\.,]\d{3})+[,\.]\d{2}|\d+[,\.]\d{2})(?!\d)/u', $withoutAccount, $am)) {
-            foreach ($am[1] as $candidate) {
-                $parsed = $this->parseAmount($candidate);
-                if ($parsed && $parsed > 100) { // Cheques are usually > 100 MAD
-                    $amount = $parsed;
-                    break;
-                }
-            }
-        }
+        // No loose "any number with decimals" fallback here: on a cheque the
+        // only other numbers are the account and the MICR line, and those gave
+        // us 326 MAD out of "…2110 326 00". The amount must be anchored by
+        // DH/MAD, a Montant label, or the words below — otherwise leave it to
+        // the user, who is typing it anyway when it is handwritten.
         // Fallback: parse the amount written in words ("Sept Mille Dirhams" →
         // 7000). Cheques always spell the amount out, and on noisy scans the
         // digits ("#7000,00#") garble worse than the words.
