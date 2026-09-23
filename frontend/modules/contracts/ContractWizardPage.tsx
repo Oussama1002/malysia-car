@@ -990,7 +990,7 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
-                  <Field label="Caution / garantie (MAD)">
+                  <Field label="Franchise d'assurance (MAD)">
                     <input
                       type="number"
                       className="df-input"
@@ -1254,7 +1254,7 @@ export const ContractWizardPage: React.FC = () => {
               />
               <SummaryRow label="Mensualité" value={formatCurrencyMad(state.monthlyRentMad)} highlight />
               <SummaryRow label="Km inclus / mois" value={state.kmInclMonth.toLocaleString('fr-MA')} />
-              <SummaryRow label="Caution" value={formatCurrencyMad(state.securityDepositMad)} />
+              <SummaryRow label="Franchise d'assurance" value={formatCurrencyMad(state.securityDepositMad)} />
               {state.type === 'LOA' && <SummaryRow label="Valeur résiduelle" value={`${state.residualValuePct}%`} />}
               <div className="px-4 py-3">
                 <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">Total engagement</div>

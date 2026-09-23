@@ -143,7 +143,7 @@ const ReservationsList: React.FC = () => {
             <div className="text-right">
               <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Référence Contrat</p>
               <p className="text-2xl font-mono font-bold">#DF-{selectedRes.id}-{new Date(selectedRes.createdAt).getFullYear()}</p>
-              <p className="text-slate-400 mt-2">Émis le {new Date(selectedRes.createdAt).toLocaleDateString()}</p>
+              <p className="text-slate-400 mt-2">Émis le {new Date(selectedRes.createdAt).toLocaleDateString('fr-MA')}</p>
             </div>
           </div>
 
@@ -453,8 +453,8 @@ const ReservationsList: React.FC = () => {
                 <div className="space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Calendrier</p>
                   <p className="text-lg font-black text-slate-900 leading-tight">
-                    Du {new Date(selectedRes.startDate).toLocaleDateString()} <br/>
-                    Au {new Date(selectedRes.endDate).toLocaleDateString()}
+                    Du {new Date(selectedRes.startDate).toLocaleDateString('fr-MA')} <br/>
+                    Au {new Date(selectedRes.endDate).toLocaleDateString('fr-MA')}
                   </p>
                 </div>
                 <div className="text-right">

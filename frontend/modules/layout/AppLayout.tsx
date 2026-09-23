@@ -43,6 +43,8 @@ export const AppLayout: React.FC = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const crumb = useBreadcrumb();
+  const { pathname } = useLocation();
+  const navPaths = useMemo(() => GROUPS.flatMap((g) => g.items.map((i) => i.to)), []);
 
   // Collapsible sidebar department groups (persisted). A group key present in
   // the set is collapsed; absent = expanded (default all expanded).
@@ -176,6 +178,10 @@ export const AppLayout: React.FC = () => {
   const renderNavLink = (it: NavItem, indent = true) => (
     <NavLink
       to={it.to}
+      // NavLink matches by prefix, so /fleet/sub-rentals lit up Flotte too.
+      // End the match here when a more specific item owns the current path —
+      // /fleet/<id> still highlights Flotte, which has no item of its own.
+      end={navPaths.some((p) => p !== it.to && p.startsWith(it.to + '/') && (pathname === p || pathname.startsWith(p + '/')))}
       className={({ isActive }) => `df-nav-link ${isActive ? 'df-nav-link--active' : ''}`}
       style={indent ? undefined : { paddingInlineStart: 16 }}
       onClick={() => setMobileOpen(false)}
