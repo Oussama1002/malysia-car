@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
 import { companySettingsApi } from '@/services/companySettingsApi';
+import { ContractPaperPreview } from '@/modules/contracts/ContractPaperPreview';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 
 /** Fleet row plus the live usage flags the vehicles endpoint resolves. */
@@ -1246,7 +1247,27 @@ export const ContractWizardPage: React.FC = () => {
             )}
 
             {step.key === 'review' && (
-              <LegalPreview state={state} client={selectedClient?.name ?? '—'} vehicle={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
+              <ContractPaperPreview
+                clientName={selectedClient?.name}
+                clientId={selectedClient?.idNumber}
+                clientLicense={selectedClient?.licenseNumber}
+                clientAddress={selectedClient?.address}
+                clientPhone={selectedClient?.phone}
+                secondDriver={state.secondDriverName}
+                brandModel={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}`.trim() : null}
+                registration={selectedVehicle?.registration}
+                fuel={selectedVehicle?.fuel}
+                insuranceExpiry={selectedVehicle?.insuranceExpiry}
+                vignetteExpiry={selectedVehicle?.vignetteExpiry}
+                techControlExpiry={selectedVehicle?.techControlExpiry}
+                startDate={state.startDate}
+                endDate={state.endDate}
+                days={state.durationMonths * 30 + state.durationExtraDays}
+                kmPerMonth={state.kmInclMonth}
+                totalAmount={totalAmount}
+                deposit={state.securityDepositMad}
+                paymentTerms={state.paymentTerms}
+              />
             )}
           </div>
 
@@ -1437,51 +1458,4 @@ const ExistingDocRow: React.FC<{ doc: DocumentCenterItem; label: string }> = ({ 
   </div>
 );
 
-const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: string }> = ({ state, client, vehicle }) => {
-  const t = CONTRACT_TYPES.find((x) => x.value === state.type);
-  const today = formatDate(new Date());
-  return (
-    <div className="rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-5">
-      <div className="flex items-center justify-between">
-        <div className="df-card__hint">Aperçu juridique</div>
-        <div className="flex gap-2">
-          <StatusChip label="Droit marocain" tone="brand" />
-          <StatusChip label="DOC · Loi 31-08" tone="info" />
-        </div>
-      </div>
-      <article className="mt-3 rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-6 text-[13px] leading-relaxed">
-        <h3 className="text-center text-[15px] font-black tracking-wide uppercase">Contrat {t?.label}</h3>
-        <p className="mt-2 text-center text-[11px] text-[color:var(--df-text-muted)]">Référence brouillon · {today}</p>
-        <hr className="my-4 border-[color:var(--df-border)]" />
-        <p><strong>Entre les soussignés :</strong></p>
-        <p className="mt-2">DriveFlow SA, société de droit marocain au capital de <span className="df-num font-semibold">10 000 000 MAD</span>, siège social à Casablanca, ci-après dénommée <em>« le Bailleur »</em>,</p>
-        <p className="mt-2">Et</p>
-        <p className="mt-2"><strong>{client}</strong>, ci-après dénommé <em>« le Preneur »</em>,</p>
-        <hr className="my-4 border-[color:var(--df-border)]" />
-        <p><strong>Article 1 — Objet</strong></p>
-        <p className="mt-1">Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat <em>{t?.label}</em>, le véhicule <strong>{vehicle}</strong>, pour une durée de <span className="df-num font-semibold">{state.durationMonths} mois{state.durationExtraDays > 0 ? ` et ${state.durationExtraDays} jour${state.durationExtraDays > 1 ? 's' : ''}` : ''}</span>.</p>
-        <p className="mt-3"><strong>Article 2 — Loyer et conditions financières</strong></p>
-        <p className="mt-1">Le loyer mensuel est fixé à <span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>, payable le 5 de chaque mois. Le kilométrage inclus est de <span className="df-num font-semibold">{state.kmInclMonth.toLocaleString('fr-MA')} km/mois</span> ; tout dépassement sera facturé conformément à l'annexe tarifaire.</p>
-        <p className="mt-3"><strong>Article 3 — Géolocalisation</strong></p>
-        <p className="mt-1">Conformément à la loi 09-08, le Preneur est informé que le véhicule est équipé d’un dispositif GPS. Les données sont conservées de manière chiffrée et utilisées exclusivement pour le suivi contractuel et la sécurité de l'actif.</p>
-        <p className="mt-3 text-[11px] text-[color:var(--df-text-faint)]">… clauses supplémentaires générées automatiquement selon le type de contrat.</p>
-      </article>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4">
-          <div className="df-card__hint">Signature Bailleur</div>
-          <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-[color:var(--df-border-strong)] text-[12px] text-[color:var(--df-text-muted)]">
-            <Icon name="sign" size={16} className="me-1" /> Signature électronique qualifiée
-          </div>
-        </div>
-        <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4">
-          <div className="df-card__hint">Signature Preneur</div>
-          <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-[color:var(--df-border-strong)] text-[12px] text-[color:var(--df-text-muted)]">
-            En attente — envoi par email
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
