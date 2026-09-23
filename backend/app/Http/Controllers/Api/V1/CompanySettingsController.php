@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 class CompanySettingsController extends Controller
 {
     /** Default payload used when the row doesn't exist yet. */
-    private function defaults(): array
+    public static function defaults(): array
     {
         return [
             'reservations' => [
@@ -101,7 +101,7 @@ class CompanySettingsController extends Controller
         $row = CompanySetting::query()->where('company_id', $companyId)->first();
         $payload = $row?->payload ?? [];
         // Merge saved values on top of defaults so newly added keys always exist.
-        $merged = $this->deepMerge($this->defaults(), $payload);
+        $merged = $this->deepMerge(self::defaults(), $payload);
 
         return ApiResponse::success($merged);
     }
@@ -136,7 +136,7 @@ class CompanySettingsController extends Controller
             ]);
         }
 
-        return ApiResponse::success($this->deepMerge($this->defaults(), $merged));
+        return ApiResponse::success($this->deepMerge(self::defaults(), $merged));
     }
 
     private function deepMerge(array $base, array $overrides): array

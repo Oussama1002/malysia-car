@@ -15,16 +15,26 @@ class CompanyDefaults
 
     public static function get(?string $companyId, string $path, mixed $default = null): mixed
     {
-        if (! $companyId) {
-            return $default;
+        $key = $companyId ?: '__none__';
+
+        if (! array_key_exists($key, self::$cache)) {
+            $payload = $companyId
+                ? CompanySetting::query()->where('company_id', $companyId)->value('payload')
+                // Invoices and contracts do not always carry a company_id. With
+                // a single company — the usual case — its settings still apply.
+                : (CompanySetting::query()->count() === 1 ? CompanySetting::query()->value('payload') : null);
+
+            $saved = is_array($payload) ? $payload : (array) json_decode((string) $payload, true);
+
+            // The settings screen shows defaults merged over what is saved, so
+            // a rate displayed as 20% must apply even when nobody pressed Save.
+            self::$cache[$key] = array_replace_recursive(
+                \App\Http\Controllers\Api\V1\CompanySettingsController::defaults(),
+                $saved,
+            );
         }
 
-        if (! array_key_exists($companyId, self::$cache)) {
-            $payload = CompanySetting::query()->where('company_id', $companyId)->value('payload');
-            self::$cache[$companyId] = is_array($payload) ? $payload : (array) json_decode((string) $payload, true);
-        }
-
-        $value = data_get(self::$cache[$companyId], $path);
+        $value = data_get(self::$cache[$key], $path);
 
         return $value === null || $value === '' ? $default : $value;
     }

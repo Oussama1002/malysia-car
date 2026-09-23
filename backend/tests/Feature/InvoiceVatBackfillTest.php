@@ -94,6 +94,20 @@ class InvoiceVatBackfillTest extends TestCase
         $this->assertSame(36208.33, (float) $invoice->subtotal_amount);
     }
 
+    /** Personne n'a enregistré les Paramètres : le taux affiché s'applique quand même. */
+    public function test_the_default_rate_applies_without_a_saved_settings_row(): void
+    {
+        DB::table('company_settings')->delete();
+        \App\Support\CompanyDefaults::flush();
+
+        $invoice = $this->makeInvoice(1200);
+        $this->artisan('invoices:backfill-vat')->assertSuccessful();
+
+        $invoice->refresh();
+        $this->assertSame(1200.0, (float) $invoice->total_amount);
+        $this->assertSame(200.0, (float) $invoice->tax_amount);
+    }
+
     public function test_the_dry_run_writes_nothing(): void
     {
         $invoice = $this->makeInvoice(1200);
