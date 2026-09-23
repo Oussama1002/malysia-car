@@ -662,15 +662,22 @@ class DocumentParser
         // Check number — Moroccan cheques print "Chèque : série AXA N° 283359"
         // (6 digits), and again in the MICR line. Try the label, then the
         // "série … N° <digits>" shape, then a standalone 6-8 digit run.
-        $checkNumber = $this->labelValue($text, [
+        // The account number sits right next to the cheque number and has the
+        // same shape, so blank out the "COMPTE …" run before looking.
+        $withoutAccount = preg_replace('/\b(?:COMPTE|N°\s*COMPTE|ACCOUNT|RIB)\b[\s:.]*[\d\s]{6,40}/iu', ' ', $text) ?? $text;
+
+        $checkNumber = $this->labelValue($withoutAccount, [
             'N°\s*(?:du\s*)?ch[èe]que',
             'Ch[èe]que\s*N°',
             'Check\s*No',
             'Cheque\s*No',
         ], '(?<!\d)\d{5,10}')
-            ?? $this->firstMatch('/s[ée]rie\s+[A-Z0-9]{2,5}\s+N[°o]?\s*[:.]*\s*(\d{5,8})/iu', $text)
-            ?? $this->firstMatch('/\bN[°o]\s*[:.]*\s*(\d{6,8})\b/u', $text)
-            ?? $this->firstMatch('/\b(\d{6,7})\b/u', $text);
+            // "Chèque Série 0AC N° 9316305" — the série token varies, and OCR
+            // drops or garbles it, so allow a short gap rather than one token.
+            ?? $this->firstMatch('/ch[èe]que[\s\S]{0,40}?N[°o]?\s*[:.]*\s*(?<!\d)(\d{6,8})(?!\d)/iu', $withoutAccount)
+            ?? $this->firstMatch('/s[ée]rie[\s\S]{0,20}?N[°o]?\s*[:.]*\s*(?<!\d)(\d{5,8})(?!\d)/iu', $withoutAccount)
+            ?? $this->firstMatch('/\bN[°o]\s*[:.]*\s*(?<!\d)(\d{6,8})(?!\d)/u', $withoutAccount)
+            ?? $this->firstMatch('/(?<!\d)(\d{6,7})(?!\d)/u', $withoutAccount);
 
         // Bank name — check the known Moroccan banks FIRST (a bare "Bank" label
         // otherwise matches the "…wafa bank" suffix and captures noise).
@@ -741,8 +748,9 @@ class DocumentParser
         if ($amountStr) {
             $amount = $this->parseAmount($amountStr);
         }
-        // Fallback: find a large number with decimals (likely the amount)
-        if (! $amount && preg_match_all('/(?<!\d)(\d{1,3}(?:[\s\.,]\d{3})+[,\.]\d{2}|\d+[,\.]\d{2})(?!\d)/u', $text, $am)) {
+        // Fallback: a number with decimals, but only away from the account
+        // number — its "3295076 2110 326 00" tail reads as "326.00" otherwise.
+        if (! $amount && preg_match_all('/(?<!\d)(\d{1,3}(?:[\s\.,]\d{3})+[,\.]\d{2}|\d+[,\.]\d{2})(?!\d)/u', $withoutAccount, $am)) {
             foreach ($am[1] as $candidate) {
                 $parsed = $this->parseAmount($candidate);
                 if ($parsed && $parsed > 100) { // Cheques are usually > 100 MAD
@@ -774,10 +782,50 @@ class DocumentParser
 
         return [
             'check_number' => $checkNumber,
-            'bank' => $bank ? mb_convert_case(mb_strtolower($bank), MB_CASE_TITLE, 'UTF-8') : null,
+            'bank' => $this->bankDisplayName($bank),
             'amount' => $amount,
             'check_date' => $checkDate,
         ];
+    }
+
+    /**
+     * Banks trade under their acronym, so title-casing turns "CIH" into "Cih".
+     * Map the ones we detect to how they actually write their name.
+     */
+    private function bankDisplayName(?string $bank): ?string
+    {
+        if (! $bank) {
+            return null;
+        }
+
+        $names = [
+            'AL BARID BANK' => 'Al Barid Bank',
+            'ATTIJARIWAFA' => 'Attijariwafa Bank',
+            'AWB' => 'Attijariwafa Bank',
+            'BANQUE POPULAIRE' => 'Banque Populaire',
+            'BMCE' => 'Bank of Africa',
+            'BANK OF AFRICA' => 'Bank of Africa',
+            'BOA' => 'Bank of Africa',
+            'BMCI' => 'BMCI',
+            'SOCIETE GENERALE' => 'Société Générale',
+            'SGMB' => 'Société Générale',
+            'CIH BANK' => 'CIH Bank',
+            'CIH' => 'CIH Bank',
+            'CREDIT DU MAROC' => 'Crédit du Maroc',
+            'CDM' => 'Crédit du Maroc',
+            'CREDIT AGRICOLE' => 'Crédit Agricole',
+            'CAM' => 'Crédit Agricole',
+            'CFG BANK' => 'CFG Bank',
+            'BANK AL MAGHRIB' => 'Bank Al-Maghrib',
+            'ARAB BANK' => 'Arab Bank',
+            'CITIBANK' => 'Citibank',
+            'UMNIA BANK' => 'Umnia Bank',
+            'AL AKHDAR BANK' => 'Al Akhdar Bank',
+            'BTI BANK' => 'BTI Bank',
+        ];
+
+        return $names[mb_strtoupper(trim($bank))]
+            ?? mb_convert_case(mb_strtolower($bank), MB_CASE_TITLE, 'UTF-8');
     }
 
     /**
