@@ -52,8 +52,13 @@ class TesseractOcrProvider implements OcrProviderInterface
 
         $needsCleanup = false;
         $convertedSource = null;
+        // A cheque is a single page and its print is large, so render one page
+        // at image resolution — the recto/verso A4 render is what pushed the
+        // synchronous cheque scan past the web server's timeout.
+        $isCheque = $docType === 'cheque';
+
         if ($ext === 'pdf') {
-            $imagePaths = $this->renderPdfPages($absolutePath);
+            $imagePaths = $this->renderPdfPages($absolutePath, $isCheque ? 1 : 2, $isCheque ? 2400 : 3508);
             $needsCleanup = true;
         } else {
             // Tesseract only reads jpg/jpeg/png natively. Convert anything else
@@ -328,21 +333,21 @@ class TesseractOcrProvider implements OcrProviderInterface
      *
      * @return list<string>
      */
-    private function renderPdfPages(string $pdfPath): array
+    private function renderPdfPages(string $pdfPath, int $lastPage = 2, int $scaleTo = 3508): array
     {
         $prefix = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_ocr_'.bin2hex(random_bytes(6));
 
         $process = new Process([
             $this->pdftoppmBin,
             '-f', '1',          // first page
-            '-l', '2',          // up to page 2 — ID docs are recto/verso. The
+            '-l', (string) $lastPage, // up to page 2 — ID docs are recto/verso. The
                                 // Moroccan permis prints "Fin de validité"
                                 // (expiry) and the MRZ on the verso, so page 1
                                 // alone can never yield the expiry date. Each
                                 // page is still capped by -scale-to, so two
                                 // pages stay bounded.
             '-r', '300',        // base DPI (overridden by -scale-to for large pages)
-            '-scale-to', '3508', // cap longest dimension at 3 508 px (~A4 @ 300 DPI);
+            '-scale-to', (string) $scaleTo, // cap longest dimension at 3 508 px (~A4 @ 300 DPI);
                                  // small fields like the VIN and fiscal-power digit
                                  // need the extra resolution to be read correctly.
             '-png',

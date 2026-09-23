@@ -121,6 +121,10 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
     setChequeOcrError(null);
     try {
       const data = await scanCheque(file);
+      if (!data.check_number && !data.bank && !data.check_date && data.amount == null) {
+        setChequeOcrError('Aucune donnée lisible sur ce chèque. Saisissez les champs manuellement.');
+        return;
+      }
       setForm((f) => ({
         ...f,
         check_number: data.check_number ?? f.check_number,
