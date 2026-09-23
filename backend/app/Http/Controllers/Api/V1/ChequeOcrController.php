@@ -51,26 +51,26 @@ class ChequeOcrController extends Controller
             // Warn the caller when this cheque already backs a live payment,
             // so the payment form can refuse the scan before the user even
             // fills the rest of the fields.
+            // Même registre que l'enregistrement : le scan prévient de la même
+            // façon que le serveur refusera, franchises et fournisseurs compris.
             $existing = null;
             $chequeNumber = trim((string) ($fields['check_number'] ?? ''));
-            $chequeBank   = trim((string) ($fields['bank'] ?? ''));
+            $chequeBank = trim((string) ($fields['bank'] ?? ''));
             if ($chequeNumber !== '') {
-                $q = Payment::query()
-                    ->where('payment_method', 'check')
-                    ->whereRaw('TRIM(check_number) = ?', [$chequeNumber])
-                    ->whereNotIn('status', ['reversed', 'refunded']);
-                if ($chequeBank !== '') {
-                    $q->whereRaw('LOWER(TRIM(COALESCE(check_bank, ""))) = ?', [strtolower($chequeBank)]);
-                }
-                $row = $q->first(['id', 'payment_number', 'amount', 'payment_date', 'check_bank', 'status']);
-                if ($row) {
+                $dup = \App\Support\ChequeRegistry::findDuplicate($chequeNumber, $chequeBank ?: null);
+                if ($dup) {
+                    $row = Payment::query()
+                        ->whereRaw('TRIM(check_number) = ?', [$chequeNumber])
+                        ->whereNotIn('status', ['reversed', 'refunded'])
+                        ->first(['id', 'payment_number', 'amount', 'payment_date', 'check_bank', 'status']);
                     $existing = [
-                        'payment_id'     => $row->id,
-                        'payment_number' => $row->payment_number,
-                        'amount'         => (float) $row->amount,
-                        'payment_date'   => optional($row->payment_date)?->toDateString(),
-                        'bank'           => $row->check_bank,
-                        'status'         => $row->status,
+                        'payment_id' => $row->id ?? null,
+                        'payment_number' => $row->payment_number ?? $dup['reference'],
+                        'amount' => (float) ($row->amount ?? 0),
+                        'payment_date' => optional($row?->payment_date)?->toDateString(),
+                        'bank' => $row->check_bank ?? null,
+                        'status' => $row->status ?? null,
+                        'source' => $dup['label'],
                     ];
                 }
             }

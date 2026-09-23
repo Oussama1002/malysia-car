@@ -35,6 +35,16 @@ class ContractDepositController extends Controller
             'cheque_document_id' => ['nullable', 'uuid'],
         ]);
 
+        if ($data['method'] === 'cheque' && ! empty($data['check_number'])) {
+            $message = \App\Support\ChequeRegistry::duplicateMessage(
+                (string) $data['check_number'],
+                $data['check_bank'] ?? null,
+            );
+            if ($message) {
+                return ApiResponse::error($message, 422, ['check_number' => [$message]]);
+            }
+        }
+
         $contract = Contract::query()
             ->where('reservation_id', $reservation->id)
             ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])

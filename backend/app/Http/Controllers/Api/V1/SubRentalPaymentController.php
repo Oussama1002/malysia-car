@@ -48,6 +48,16 @@ class SubRentalPaymentController extends Controller
         $chequeDocumentId = $data['cheque_document_id'] ?? null;
         unset($data['cheque_document_id']);
 
+        if ($data['payment_method'] === 'cheque' && ! empty($data['check_number'])) {
+            $message = \App\Support\ChequeRegistry::duplicateMessage(
+                (string) $data['check_number'],
+                $data['check_bank'] ?? null,
+            );
+            if ($message) {
+                return ApiResponse::error($message, 422, ['check_number' => [$message]]);
+            }
+        }
+
         $payment = SubRentalPayment::create(array_merge($data, [
             'id'                     => (string) Str::uuid(),
             'sub_rental_contract_id' => $contract->id,

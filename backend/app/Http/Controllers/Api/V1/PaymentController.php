@@ -107,28 +107,17 @@ class PaymentController extends Controller
             'allocations.*.notes' => ['nullable', 'string'],
         ]);
 
-        // Guard: same cheque cannot be entered twice. We match on trimmed
-        // check_number and check_bank (both non-empty), ignore soft-deleted
-        // rows (a rejected cheque was soft-deleted so its number is free to
-        // re-use for a new physical cheque), and only refuse when there is
-        // still a live payment on that combination.
-        if (($data['payment_method'] ?? '') === 'check' && !empty($data['check_number'])) {
-            $chequeNumber = trim((string) $data['check_number']);
-            $chequeBank   = isset($data['check_bank']) ? trim((string) $data['check_bank']) : null;
-
-            $dup = Payment::query()
-                ->where('payment_method', 'check')
-                ->whereRaw('TRIM(check_number) = ?', [$chequeNumber])
-                ->when($chequeBank, fn ($q) => $q->whereRaw('LOWER(TRIM(COALESCE(check_bank, ""))) = ?', [strtolower($chequeBank)]))
-                ->whereNotIn('status', ['reversed', 'refunded'])
-                ->first();
-
-            if ($dup) {
-                return ApiResponse::error(
-                    'Ce chèque a déjà été enregistré (paiement '.$dup->payment_number.'). Un même chèque ne peut pas être payé deux fois.',
-                    422,
-                    ['check_number' => ['Ce chèque a déjà été enregistré (paiement '.$dup->payment_number.').']]
-                );
+        // Un même chèque ne peut être encaissé qu'une fois, quel que soit
+        // l'endroit où il est saisi : paiement client, paiement fournisseur ou
+        // franchise. L'ancien contrôle ne regardait que les paiements clients,
+        // et ratait le doublon dès que la banque différait d'un côté.
+        if (in_array($data['payment_method'] ?? '', ['check', 'cheque'], true) && ! empty($data['check_number'])) {
+            $message = \App\Support\ChequeRegistry::duplicateMessage(
+                (string) $data['check_number'],
+                $data['check_bank'] ?? null,
+            );
+            if ($message) {
+                return ApiResponse::error($message, 422, ['check_number' => [$message]]);
             }
         }
 
