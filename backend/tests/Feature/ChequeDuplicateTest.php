@@ -124,6 +124,37 @@ class ChequeDuplicateTest extends TestCase
             ->assertStatus(201);
     }
 
+    /** Le même chèque sur une autre réservation reste le même chèque. */
+    public function test_the_same_cheque_on_another_reservation_is_refused(): void
+    {
+        $user = $this->makeUser();
+        $first = $this->makeCustomer();
+        $second = $this->makeCustomer();
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/payments', $this->payload($first))->assertStatus(201);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/payments', $this->payload($second))
+            ->assertStatus(422);
+    }
+
+    /** Zéros de tête, espaces, casse : c'est le même numéro imprimé. */
+    public function test_the_number_is_compared_as_a_human_reads_it(): void
+    {
+        $user = $this->makeUser();
+        $customer = $this->makeCustomer();
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/payments', $this->payload($customer, ['check_number' => '283359']))
+            ->assertStatus(201);
+
+        foreach (['0283359', '283 359', ' 283359 ', '00283359'] as $variant) {
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/v1/payments', $this->payload($customer, ['check_number' => $variant]))
+                ->assertStatus(422, 'variante acceptée à tort : '.$variant);
+        }
+    }
+
     public function test_the_registry_spans_the_franchise_and_the_supplier_payment(): void
     {
         $user = $this->makeUser();
