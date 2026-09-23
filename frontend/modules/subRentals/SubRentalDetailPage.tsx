@@ -167,14 +167,11 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
       setErr('Merci de renseigner un montant supérieur à 0.');
       return;
     }
-    if (!form.payment_date) {
-      setErr('Merci de renseigner la date de paiement.');
-      return;
-    }
     const payload: Parameters<typeof subRentalApi.addPayment>[1] = {
       amount,
       payment_method: form.payment_method,
-      payment_date: form.payment_date,
+      // Horodaté à l'enregistrement : le drawer peut rester ouvert longtemps.
+      payment_date: new Date().toISOString().split('T')[0],
       reference: form.reference || undefined,
       notes: form.notes || undefined,
     };
@@ -196,8 +193,9 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
             <input className="df-input w-full" type="number" step="0.01" min="0.01" value={form.amount} onChange={set('amount')} required />
           </label>
           <label className="block">
-            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Date & heure paiement *</span>
-            <DateField className="df-input w-full" value={form.payment_date} onChange={setField('payment_date')} required />
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Date & heure paiement</span>
+            {/* Horodatage de l'encaissement : relevé par le système, pas saisi. */}
+            <DateField className="df-input w-full bg-slate-50 text-slate-500" value={form.payment_date} onChange={() => {}} disabled />
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Mode paiement *</span>

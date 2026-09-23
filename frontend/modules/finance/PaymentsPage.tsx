@@ -781,6 +781,8 @@ export const PaymentForm: React.FC<{
         e.preventDefault();
         onSubmit({
           ...form,
+          // Horodaté à l'enregistrement : le formulaire peut rester ouvert.
+          payment_date: new Date().toISOString().slice(0, 16),
           payment_direction: 'incoming',
         });
       }}
@@ -965,13 +967,14 @@ export const PaymentForm: React.FC<{
           />
         </div>
         <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement *</label>
+          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement</label>
+          {/* Horodatage de l'encaissement : relevé par le système, pas saisi. */}
           <DateField
             withTime
-            className="df-input mt-1 w-full"
+            className="df-input mt-1 w-full bg-slate-50 text-slate-500"
             value={form.payment_date}
-            onChange={(v) => set('payment_date', v)}
-            required
+            onChange={() => {}}
+            disabled
           />
         </div>
       </div>
