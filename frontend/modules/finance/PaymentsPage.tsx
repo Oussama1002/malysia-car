@@ -387,6 +387,7 @@ export const PaymentsPage: React.FC = () => {
 /* ════════════════════════════════════════════════════════════════════════ */
 
 interface ChequeOcrResult {
+  document_id?: string | null;
   check_number?: string;
   bank?: string;
   check_date?: string;
@@ -646,6 +647,8 @@ export const PaymentForm: React.FC<{
         check_bank: data.bank ?? f.check_bank,
         check_date: data.check_date ?? f.check_date,
         amount: data.amount ?? f.amount,
+        // Garde le scan stocké : il sera attaché au paiement comme preuve.
+        cheque_document_id: data.document_id ?? f.cheque_document_id,
       }));
       // A handwritten amount is often unreadable — name what is left to fill
       // so nobody submits a cheque with a field silently empty.

@@ -43,13 +43,24 @@ class SubRentalPaymentController extends Controller
             'check_bank'     => ['nullable', 'string', 'max:160'],
             'check_date'     => ['nullable', 'date'],
             'notes'          => ['nullable', 'string'],
+            'cheque_document_id' => ['nullable', 'uuid'],
         ]);
+        $chequeDocumentId = $data['cheque_document_id'] ?? null;
+        unset($data['cheque_document_id']);
 
         $payment = SubRentalPayment::create(array_merge($data, [
             'id'                     => (string) Str::uuid(),
             'sub_rental_contract_id' => $contract->id,
             'created_by'             => $request->user()->id,
         ]));
+
+        app(\App\Services\ScanEvidenceService::class)->attach(
+            $chequeDocumentId,
+            'sub_rental_payment',
+            $payment->id,
+            $request->user(),
+            title: 'Chèque '.($payment->check_number ?? ''),
+        );
 
         AuditLogger::created($payment, $request->user(), ['contract_id' => $contract->id, 'amount' => (float) $payment->amount]);
 

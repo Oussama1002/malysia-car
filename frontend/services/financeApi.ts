@@ -176,6 +176,8 @@ export interface PaymentCreatePayload {
   check_number?: string;
   check_date?: string;
   check_bank?: string;
+  /** Scan du chèque stocké par /v1/cheque-ocr, rattaché au paiement comme preuve. */
+  cheque_document_id?: string | null;
   notes?: string;
   allocations?: Array<{
     invoice_id?: string;

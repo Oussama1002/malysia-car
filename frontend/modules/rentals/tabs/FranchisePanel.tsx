@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { DateField } from '@/modules/shared/components/DateField';
+import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
 
 export interface Deposit {
   id: string;
@@ -126,6 +127,7 @@ export const FranchisePanel: React.FC<{
                       </div>
                       <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${badge.cls}`}>{badge.label}</span>
                     </div>
+                    <div className="mt-1"><ScanProofLink entityType="contract_deposit" entityId={d.id} /></div>
                     {d.settlement_notes && (
                       <div className="mt-1 text-xs text-slate-500">{d.settlement_notes}</div>
                     )}

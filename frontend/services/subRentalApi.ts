@@ -133,7 +133,7 @@ export const subRentalApi = {
     apiClient<{ payments: SubRentalPayment[]; total_paid: number; remaining_balance: number; payment_status: PaymentStatus }>(
       `/v1/sub-rentals/${id}/payments`
     ),
-  addPayment: (id: string, body: { amount: number; payment_method: PaymentMethod; payment_date: string; reference?: string; check_number?: string; check_bank?: string; check_date?: string; notes?: string }) =>
+  addPayment: (id: string, body: { amount: number; payment_method: PaymentMethod; payment_date: string; reference?: string; check_number?: string; check_bank?: string; check_date?: string; notes?: string; cheque_document_id?: string }) =>
     apiClient<{ payment: SubRentalPayment; total_paid: number; remaining_balance: number; payment_status: PaymentStatus }>(
       `/v1/sub-rentals/${id}/payments`,
       { method: 'POST', body: JSON.stringify(body) }

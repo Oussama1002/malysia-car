@@ -76,6 +76,10 @@ class ChequeOcrController extends Controller
             }
 
             return ApiResponse::success([
+                // Ids of the stored scan: the payment form sends one back so the
+                // image stays attached to the payment as its preuve.
+                'document_id' => $doc->id,
+                'file_id' => $doc->file_id,
                 'check_number' => $fields['check_number'] ?? null,
                 'bank' => $fields['bank'] ?? null,
                 'amount' => $fields['amount'] ?? null,

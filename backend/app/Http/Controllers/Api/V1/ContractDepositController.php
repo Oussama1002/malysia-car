@@ -32,6 +32,7 @@ class ContractDepositController extends Controller
             'check_bank' => ['nullable', 'string', 'max:160'],
             'check_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
+            'cheque_document_id' => ['nullable', 'uuid'],
         ]);
 
         $contract = Contract::query()
@@ -56,6 +57,14 @@ class ContractDepositController extends Controller
             'collected_by' => $request->user()?->id,
             'collected_at' => now(),
         ]);
+
+        app(\App\Services\ScanEvidenceService::class)->attach(
+            $data['cheque_document_id'] ?? null,
+            'contract_deposit',
+            $deposit->id,
+            $request->user(),
+            title: 'Chèque franchise '.($deposit->check_number ?? ''),
+        );
 
         AuditLogger::created($deposit, $request->user(), [
             'reservation_id' => $reservation->id,

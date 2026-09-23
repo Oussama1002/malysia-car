@@ -96,6 +96,9 @@ class PaymentController extends Controller
             'check_number' => ['nullable', 'string', 'max:60'],
             'check_date' => ['nullable', 'date'],
             'check_bank' => ['nullable', 'string', 'max:160'],
+            // Scan du chèque déjà stocké par /v1/cheque-ocr : on le rattache au
+            // paiement comme preuve.
+            'cheque_document_id' => ['nullable', 'uuid'],
             'notes' => ['nullable', 'string'],
             'allocations' => ['nullable', 'array'],
             'allocations.*.invoice_id' => ['nullable', 'uuid'],
@@ -157,6 +160,14 @@ class PaymentController extends Controller
                 'notes' => $data['notes'] ?? null,
                 'received_by_user_id' => optional($request->user())->id,
             ]);
+
+            app(\App\Services\ScanEvidenceService::class)->attach(
+                $data['cheque_document_id'] ?? null,
+                'payment',
+                $payment->id,
+                $request->user(),
+                title: 'Chèque '.($data['check_number'] ?? $payment->payment_number ?? ''),
+            );
 
             if (! empty($data['allocations'])) {
                 $this->allocatePayment($payment, $data['allocations'], optional($request->user())->id);

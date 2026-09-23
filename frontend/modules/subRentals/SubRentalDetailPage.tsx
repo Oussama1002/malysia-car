@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { subRentalApi, type SubRentalPayment, type PaymentMethod } from '@/services/subRentalApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
 import { DateField } from '@/modules/shared/components/DateField';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
@@ -74,10 +75,12 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
   );
 }
 
-async function scanCheque(file: File): Promise<{ check_number?: string; bank?: string; check_date?: string; amount?: number }> {
+type ChequeScan = { document_id?: string | null; check_number?: string; bank?: string; check_date?: string; amount?: number };
+
+async function scanCheque(file: File): Promise<ChequeScan> {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await apiClient<{ data?: { check_number?: string; bank?: string; check_date?: string; amount?: number } }>('/v1/cheque-ocr', {
+  const res = await apiClient<{ data?: ChequeScan }>('/v1/cheque-ocr', {
     method: 'POST',
     body: fd,
   });
@@ -95,6 +98,7 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
     check_bank: '',
     check_date: '',
     notes: '',
+    cheque_document_id: '',
   });
   const [err, setErr] = useState<string | null>(null);
   const [chequeScanning, setChequeScanning] = useState(false);
@@ -136,6 +140,8 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
         check_bank:   data.bank ?? f.check_bank,
         check_date:   data.check_date ?? f.check_date,
         amount:       data.amount != null ? String(data.amount) : f.amount,
+        // Le scan stocké reste attaché au paiement comme preuve.
+        cheque_document_id: data.document_id ?? f.cheque_document_id,
       }));
       const missing = [
         data.amount == null ? 'le montant' : null,
@@ -176,6 +182,7 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
       payload.check_number = form.check_number || undefined;
       payload.check_bank = form.check_bank || undefined;
       payload.check_date = form.check_date || undefined;
+      payload.cheque_document_id = form.cheque_document_id || undefined;
     }
     mutation.mutate(payload);
   };
@@ -566,7 +573,10 @@ export const SubRentalDetailPage: React.FC = () => {
                           <td className="px-3 py-2 text-slate-600">{new Date(p.payment_date).toLocaleDateString('fr-MA')}</td>
                           <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">{Number(p.amount).toLocaleString('fr-MA')} MAD</td>
                           <td className="px-3 py-2 text-slate-600">{p.payment_method}</td>
-                          <td className="px-3 py-2 text-slate-500 text-xs">{p.reference ?? '—'}</td>
+                          <td className="px-3 py-2 text-slate-500 text-xs">
+                            {p.reference ?? '—'}
+                            <div className="mt-0.5"><ScanProofLink entityType="sub_rental_payment" entityId={p.id} /></div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
