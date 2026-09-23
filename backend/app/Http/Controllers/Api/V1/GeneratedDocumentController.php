@@ -77,7 +77,31 @@ class GeneratedDocumentController extends Controller
 
     public function generateContract(Request $request, string $contractId): JsonResponse
     {
-        $contract = Contract::with(['customer', 'vehicle'])->findOrFail($contractId);
+        $contract = Contract::with([
+            'customer.individualProfile',
+            'customer.companyProfile',
+            'customer.addresses',
+            'vehicle.brand',
+            'vehicle.model',
+        ])->findOrFail($contractId);
+
+        // The paper form has a second-driver block and a departure/return
+        // check-list: both come from the reservation this contract was made for.
+        $reservation = $contract->reservation_id
+            ? \App\Models\Reservation::query()->find($contract->reservation_id)
+            : null;
+        $secondDriver = $reservation
+            ? \App\Models\ReservationDriver::query()
+                ->where('reservation_id', $reservation->id)
+                ->where('driver_type', 'secondary')
+                ->first()
+            : null;
+        $handovers = $reservation
+            ? \App\Models\RentalHandoverReport::query()
+                ->where('reservation_id', $reservation->id)
+                ->orderBy('performed_at')
+                ->get()
+            : collect();
 
         $doc = $this->pdf->render(
             view: 'pdf.contract',
@@ -85,6 +109,15 @@ class GeneratedDocumentController extends Controller
                 'contract' => $contract,
                 'customer' => $contract->customer,
                 'vehicle' => $contract->vehicle,
+                'reservation' => $reservation,
+                'secondDriver' => $secondDriver,
+                'pickupReport' => $handovers->firstWhere('handover_type', 'pickup'),
+                'returnReport' => $handovers->firstWhere('handover_type', 'return'),
+                'settings' => data_get(
+                    \App\Models\CompanySetting::query()->where('company_id', $contract->company_id)->value('payload'),
+                    'company',
+                    [],
+                ),
                 'company' => null,
                 'title' => 'Contrat '.($contract->contract_number ?? $contract->id),
                 'documentRef' => 'CT-'.($contract->contract_number ?? substr($contract->id, 0, 8)),
