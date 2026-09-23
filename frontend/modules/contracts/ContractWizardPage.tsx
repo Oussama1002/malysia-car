@@ -4,6 +4,23 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
+
+/** Fleet row plus the live usage flags the vehicles endpoint resolves. */
+type WizardVehicle = FleetVehicleDto & {
+  hasActiveReservation?: boolean;
+  hasActiveContract?: boolean;
+};
+
+/** French availability of a vehicle, reservations and contracts included. */
+function vehicleAvailability(v: WizardVehicle): { label: string; free: boolean } {
+  const status = String(v.status).toUpperCase();
+  if (status === 'MAINTENANCE') return { label: 'En maintenance', free: false };
+  if (status === 'IN_REPAIR') return { label: 'En réparation', free: false };
+  if (status === 'RENTED' || v.hasActiveContract) return { label: 'Loué', free: false };
+  if (v.hasActiveReservation) return { label: 'Réservé', free: false };
+  if (status === 'AVAILABLE') return { label: 'Disponible', free: true };
+  return { label: status || '—', free: false };
+}
 import { Icon, type IconName } from '@/modules/shared/components/Icon';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
 import { UploadZone } from '@/modules/shared/components/UploadZone';
@@ -394,13 +411,15 @@ export const ContractWizardPage: React.FC = () => {
   });
 
   const vehicles = useQuery({
-    queryKey: queryKeys.fleet.all,
-    queryFn: async (): Promise<FleetVehicleDto[]> => {
+    // Own key, like the clients query above: the fleet key holds a different
+    // shape on the reservations and GPS pages.
+    queryKey: [...queryKeys.fleet.all, 'wizard'],
+    queryFn: async (): Promise<WizardVehicle[]> => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard vehicles.');
       }
       const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200');
-      return res.data.map((v): FleetVehicleDto => ({
+      return res.data.map((v): WizardVehicle => ({
         id: v.id,
         registration: v.registration_number ?? v.registration ?? '',
         brand: v.brand ?? v.brand_name ?? '',
@@ -415,6 +434,10 @@ export const ContractWizardPage: React.FC = () => {
         techControlExpiry: v.tech_control_expiry,
         vignetteExpiry: v.vignette_expiry,
         ownershipStatus: v.ownership_status,
+        // The list endpoint resolves live usage: a vehicle can sit at status
+        // AVAILABLE in the fleet table while a reservation or contract holds it.
+        hasActiveReservation: !!v.hasActiveReservation,
+        hasActiveContract: !!v.hasActiveContract,
       }));
     },
   });
@@ -825,21 +848,27 @@ export const ContractWizardPage: React.FC = () => {
                     onChange={(e) => patch('vehicleId', e.target.value || null)}
                   >
                     <option value="">— Sélectionner —</option>
-                    {(vehicles.data ?? [])
-                      .filter((v) => String(v.status).toUpperCase() === 'AVAILABLE')
-                      .map((v) => {
-                        // Build the human label. Fall back to "Véhicule" when
-                        // both brand and model are empty so the option never
-                        // collapses to just the registration.
-                        const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
-                        const label = brandModel || 'Véhicule';
-                        const isSL = v.ownershipStatus === 'sub_rented';
-                        return (
-                          <option key={v.id} value={v.id}>
-                            {isSL ? '[SL] ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''}
-                          </option>
-                        );
-                      })}
+                    {(vehicles.data ?? []).map((v) => {
+                      // Build the human label. Fall back to "Véhicule" when
+                      // both brand and model are empty so the option never
+                      // collapses to just the registration.
+                      const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
+                      const label = brandModel || 'Véhicule';
+                      const isSL = v.ownershipStatus === 'sub_rented';
+                      const { label: statusFr, free } = vehicleAvailability(v);
+                      return (
+                        <option
+                          key={v.id}
+                          value={v.id}
+                          // A contract created from a reservation arrives with
+                          // that reservation's vehicle, which is reserved by
+                          // definition — never lock the current choice out.
+                          disabled={!free && state.vehicleId !== v.id}
+                        >
+                          {isSL ? '[SL] ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''} — {statusFr}
+                        </option>
+                      );
+                    })}
                   </select>
                   {selectedVehicle?.ownershipStatus === 'sub_rented' && (
                     <p className="mt-1 text-[11px] font-semibold text-amber-700">
