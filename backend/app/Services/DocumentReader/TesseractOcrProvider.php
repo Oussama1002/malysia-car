@@ -85,7 +85,16 @@ class TesseractOcrProvider implements OcrProviderInterface
                 // Everything else: gentle grayscale + mild contrast that keeps
                 // thin digit strokes intact.
                 $this->preprocessImage($image, $isPinkDoc);
-                $text .= $this->runTesseract($image, $lang)."\n\n";
+                // --psm 6 reads a block of upright text, so a page scanned
+                // sideways comes back as column-wise gibberish. Straighten it
+                // first, and for a cheque fall back to trying the quarter turns
+                // when the host has no `osd` traineddata.
+                $this->autoRotate($image);
+                $pageText = $this->runTesseract($image, $lang);
+                if ($isCheque && ! $this->looksLikeCheque($pageText)) {
+                    $pageText = $this->retryRotations($image, $lang, $pageText);
+                }
+                $text .= $pageText."\n\n";
 
                 // Digit-focused second pass. For the permis this targets the
                 // verso (page 2). For the carte grise the whole document is a
@@ -143,6 +152,71 @@ class TesseractOcrProvider implements OcrProviderInterface
         } catch (Throwable) {
             return null; // ImageMagick missing / unsupported format — use original.
         }
+    }
+
+    /**
+     * Straighten a sideways page using Tesseract's orientation detection
+     * (`--psm 0`, needs the `osd` traineddata). Best-effort: a host without
+     * `osd` or ImageMagick keeps the page as it is.
+     */
+    private function autoRotate(string $image): void
+    {
+        try {
+            $probe = new Process([$this->tesseractBin, $image, 'stdout', '--psm', '0', '-l', 'osd']);
+            $probe->setTimeout(60);
+            $probe->run();
+            $report = $probe->getOutput().$probe->getErrorOutput();
+            if (! preg_match('/Rotate:\s*(\d{1,3})/i', $report, $m)) {
+                return;
+            }
+            $this->rotateImage($image, (int) $m[1]);
+        } catch (Throwable) {
+            // Orientation detection is optional — carry on with the page as-is.
+        }
+    }
+
+    private function rotateImage(string $image, int $degrees): bool
+    {
+        $degrees %= 360;
+        if ($degrees === 0) {
+            return false;
+        }
+
+        try {
+            $process = new Process([$this->convertBin, $image, '-rotate', (string) $degrees, $image]);
+            $process->setTimeout(60);
+            $process->mustRun();
+
+            return true;
+        } catch (Throwable) {
+            return false; // ImageMagick missing — leave the page untouched.
+        }
+    }
+
+    /** Does this OCR text carry anything a cheque parser can use? */
+    private function looksLikeCheque(string $text): bool
+    {
+        return (bool) preg_match('/\b(BANK|BANQUE|CH[EÈ]QUE|BARID|DH|MAD|S[ÉE]RIE)\b/iu', $text)
+            || (bool) preg_match('/\b\d{6,8}\b/', $text);
+    }
+
+    /**
+     * Last resort when orientation detection is unavailable: OCR the page at
+     * each quarter turn and keep the first read that looks like a cheque.
+     */
+    private function retryRotations(string $image, string $lang, string $fallback): string
+    {
+        foreach ([90, 180, 90] as $step) { // 90 → 180 → 270 (cumulative)
+            if (! $this->rotateImage($image, $step)) {
+                return $fallback;
+            }
+            $text = $this->runTesseract($image, $lang);
+            if ($this->looksLikeCheque($text)) {
+                return $text;
+            }
+        }
+
+        return $fallback;
     }
 
     private function runTesseract(string $image, string $lang): string
