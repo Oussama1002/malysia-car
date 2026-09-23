@@ -33,6 +33,9 @@ class ReservationInvoiceService
             ->orderByDesc('issue_date')
             ->first();
 
+        $contract = $this->resolveContract($reservation);
+        [$base, $extensions, $damages, $total] = $this->amounts($reservation, $contract);
+
         if ($existing) {
             $changed = false;
             if ($existing->status === 'draft') {
@@ -43,6 +46,31 @@ class ReservationInvoiceService
                 $existing->due_date = $dueDate;
                 $changed = true;
             }
+            if ($contract && ! $existing->contract_id) {
+                $existing->contract_id = $contract->id;
+                $existing->invoice_type = 'contract';
+                $changed = true;
+            }
+            // Repair an invoice billed at 0 — it was created before the
+            // reservation carried a price. Never touch one already (part) paid.
+            if ((float) $existing->total_amount <= 0 && $total > 0 && (float) $existing->amount_paid <= 0) {
+                $line = $existing->lines()->orderBy('position')->first();
+                if ($line) {
+                    $line->unit_price = $total;
+                    $line->line_total = $total;
+                    $line->metadata = array_merge((array) $line->metadata, [
+                        'base_amount' => $base,
+                        'extensions' => $extensions,
+                        'damages' => $damages,
+                    ]);
+                    $line->save();
+                } else {
+                    $this->createLine($existing, $reservation, $base, $extensions, $damages, $total);
+                }
+                $existing->refresh();
+                $existing->recalculateTotals();
+                $changed = true;
+            }
             if ($changed) {
                 $existing->save();
             }
@@ -50,28 +78,7 @@ class ReservationInvoiceService
             return $existing;
         }
 
-        return DB::transaction(function () use ($reservation, $userId, $dueDate) {
-            // A reservation created from a contract carries no estimated_price of
-            // its own, so the invoice came out at 0 MAD and unlinked.
-            $contract = Contract::query()
-                ->where('reservation_id', $reservation->id)
-                ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
-                ->orderByDesc('created_at')
-                ->first();
-
-            $base = (float) ($reservation->estimated_price ?? 0);
-            if ($base <= 0 && $contract) {
-                $base = (float) ($contract->base_amount ?? 0);
-            }
-            $extensions = (float) RentalExtension::query()
-                ->where('reservation_id', $reservation->id)
-                ->where('status', 'applied')
-                ->sum('additional_amount');
-            $damages = (float) RentalDamageReport::query()
-                ->where('reservation_id', $reservation->id)
-                ->sum(DB::raw('COALESCE(final_cost, estimated_cost)'));
-            $total = max(0, $base + $extensions + $damages);
-
+        return DB::transaction(function () use ($reservation, $userId, $dueDate, $contract, $base, $extensions, $damages, $total) {
             $invoice = Invoice::query()->create([
                 'id' => (string) Str::uuid(),
                 'company_id' => $reservation->company_id,
@@ -87,31 +94,69 @@ class ReservationInvoiceService
                 'created_by' => $userId,
             ]);
 
-            InvoiceLine::query()->create([
-                'id' => (string) Str::uuid(),
-                'invoice_id' => $invoice->id,
-                'position' => 1,
-                'line_type' => 'service',
-                'description' => 'Location '.$reservation->reservation_number,
-                'quantity' => 1,
-                'unit_price' => $total,
-                'discount_amount' => 0,
-                'tax_rate' => 0,
-                'tax_amount' => 0,
-                'line_total' => $total,
-                'metadata' => [
-                    'reservation_id' => $reservation->id,
-                    'base_amount' => $base,
-                    'extensions' => $extensions,
-                    'damages' => $damages,
-                ],
-            ]);
+            $this->createLine($invoice, $reservation, $base, $extensions, $damages, $total);
             $invoice->refresh();
             $invoice->recalculateTotals();
             $invoice->save();
 
             return $invoice;
         });
+    }
+
+    /** The contract this reservation was created from, if it is still live. */
+    private function resolveContract(Reservation $reservation): ?Contract
+    {
+        return Contract::query()
+            ->where('reservation_id', $reservation->id)
+            ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
+            ->orderByDesc('created_at')
+            ->first();
+    }
+
+    /**
+     * Base + applied extensions + damages. A reservation created from a
+     * contract carries no estimated_price, so fall back to the contract.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float}
+     */
+    private function amounts(Reservation $reservation, ?Contract $contract): array
+    {
+        $base = (float) ($reservation->estimated_price ?? 0);
+        if ($base <= 0 && $contract) {
+            $base = (float) ($contract->base_amount ?? 0);
+        }
+        $extensions = (float) RentalExtension::query()
+            ->where('reservation_id', $reservation->id)
+            ->where('status', 'applied')
+            ->sum('additional_amount');
+        $damages = (float) RentalDamageReport::query()
+            ->where('reservation_id', $reservation->id)
+            ->sum(DB::raw('COALESCE(final_cost, estimated_cost)'));
+
+        return [$base, $extensions, $damages, max(0, $base + $extensions + $damages)];
+    }
+
+    private function createLine(Invoice $invoice, Reservation $reservation, float $base, float $extensions, float $damages, float $total): void
+    {
+        InvoiceLine::query()->create([
+            'id' => (string) Str::uuid(),
+            'invoice_id' => $invoice->id,
+            'position' => 1,
+            'line_type' => 'service',
+            'description' => 'Location '.$reservation->reservation_number,
+            'quantity' => 1,
+            'unit_price' => $total,
+            'discount_amount' => 0,
+            'tax_rate' => 0,
+            'tax_amount' => 0,
+            'line_total' => $total,
+            'metadata' => [
+                'reservation_id' => $reservation->id,
+                'base_amount' => $base,
+                'extensions' => $extensions,
+                'damages' => $damages,
+            ],
+        ]);
     }
 
     private function generateNumber(): string
