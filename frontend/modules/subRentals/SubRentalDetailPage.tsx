@@ -97,6 +97,7 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
   const [err, setErr] = useState<string | null>(null);
   const [chequeScanning, setChequeScanning] = useState(false);
   const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
+  const [chequeNotice, setChequeNotice] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: (data: Parameters<typeof subRentalApi.addPayment>[1]) => subRentalApi.addPayment(contractId, data),
@@ -119,10 +120,11 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
   const applyChequeScan = async (file: File) => {
     setChequeScanning(true);
     setChequeOcrError(null);
+    setChequeNotice(null);
     try {
       const data = await scanCheque(file);
       if (!data.check_number && !data.bank && !data.check_date && data.amount == null) {
-        setChequeOcrError('Aucune donnée lisible sur ce chèque. Saisissez les champs manuellement.');
+        setChequeOcrError('Rien n\'a pu être lu sur ce chèque. Saisissez les champs manuellement.');
         return;
       }
       setForm((f) => ({
@@ -132,6 +134,15 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
         check_date:   data.check_date ?? f.check_date,
         amount:       data.amount != null ? String(data.amount) : f.amount,
       }));
+      const missing = [
+        data.amount == null ? 'le montant' : null,
+        !data.check_number ? 'le n° de chèque' : null,
+        !data.bank ? 'la banque' : null,
+        !data.check_date ? 'la date du chèque' : null,
+      ].filter(Boolean);
+      if (missing.length > 0) {
+        setChequeNotice(`Saisissez manuellement ${missing.join(', ')} : l'OCR n'a pas pu le lire.`);
+      }
     } catch (e) {
       setChequeOcrError(e instanceof Error ? e.message : 'Échec du scan OCR');
     } finally {
@@ -216,6 +227,9 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
             </div>
             {chequeOcrError && (
               <div className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
+            )}
+            {chequeNotice && (
+              <div className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">{chequeNotice}</div>
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="block">
