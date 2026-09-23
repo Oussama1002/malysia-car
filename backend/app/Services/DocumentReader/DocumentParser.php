@@ -667,7 +667,7 @@ class DocumentParser
             'Ch[èe]que\s*N°',
             'Check\s*No',
             'Cheque\s*No',
-        ], '\d{5,10}')
+        ], '(?<!\d)\d{5,10}')
             ?? $this->firstMatch('/s[ée]rie\s+[A-Z0-9]{2,5}\s+N[°o]?\s*[:.]*\s*(\d{5,8})/iu', $text)
             ?? $this->firstMatch('/\bN[°o]\s*[:.]*\s*(\d{6,8})\b/u', $text)
             ?? $this->firstMatch('/\b(\d{6,7})\b/u', $text);
@@ -689,6 +689,35 @@ class DocumentParser
                 $bank = $bk;
                 break;
             }
+        }
+        // A cheque prints the bank as a logo, so OCR rarely returns the full
+        // name in one piece ("AL BARID BANK" → "ALBARID", "AL BARIO"). Match on
+        // the one distinctive word of each name instead.
+        $keywords = [
+            'BARID' => 'AL BARID BANK',
+            'ATTIJARI' => 'ATTIJARIWAFA',
+            'WAFA' => 'ATTIJARIWAFA',
+            'POPULAIRE' => 'BANQUE POPULAIRE',
+            'CHAABI' => 'BANQUE POPULAIRE',
+            'AFRICA' => 'BANK OF AFRICA',
+            'GENERALE' => 'SOCIETE GENERALE',
+            'AKHDAR' => 'AL AKHDAR BANK',
+            'UMNIA' => 'UMNIA BANK',
+            'MAGHRIB' => 'BANK AL MAGHRIB',
+        ];
+        if (! $bank) {
+            foreach ($keywords as $needle => $name) {
+                // Substring, not whole word: OCR glues the logo into "ALBARID".
+                if (str_contains($upper, $needle)) {
+                    $bank = $name;
+                    break;
+                }
+            }
+        }
+        // Still nothing: let the fuzzy matcher absorb garbled characters.
+        if (! $bank) {
+            $match = $this->fuzzyBestMatch($upper, array_keys($keywords));
+            $bank = $match ? $keywords[$match] : null;
         }
         if (! $bank) {
             $bank = $this->labelValue($text, ['Banque', 'Établissement'], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\']+');
