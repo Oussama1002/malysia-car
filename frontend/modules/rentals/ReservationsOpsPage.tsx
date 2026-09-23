@@ -443,15 +443,6 @@ export const ReservationsOpsPage: React.FC = () => {
     },
   });
 
-  const rows = useMemo(() => {
-    const data = (reservationsQ.data ?? []) as ReservationDto[];
-    if (!q.trim()) return data;
-    const qq = q.toLowerCase();
-    return data.filter((r) => `${r.reservation_number} ${r.status} ${r.customer_id} ${r.vehicle_id}`.toLowerCase().includes(qq));
-  }, [reservationsQ.data, q]);
-
-  const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
-  const timelineStatus = String(detail?.status ?? selected?.status ?? '');
   // NOTE: endpoints.customers.list returns the raw API shape (display_name /
   // customer_type / customer_code), NOT the mapped CustomerDto (name / kind).
   // Reading c.name / c.kind here produced "undefined (undefined)" in the
@@ -531,6 +522,24 @@ export const ReservationsOpsPage: React.FC = () => {
       }),
     [vehiclesQ.data, reservedVehicleIds]
   );
+
+  // Search the client and vehicle the user actually sees — matching the raw
+  // customer_id/vehicle_id UUIDs meant one letter hit almost every row and two
+  // hit none. Declared after the option lists it reads.
+  const rows = useMemo(() => {
+    const data = (reservationsQ.data ?? []) as ReservationDto[];
+    if (!q.trim()) return data;
+    const qq = q.toLowerCase();
+    return data.filter((r) => {
+      const clientName = customerOptions.find((c) => c.id === String(r.customer_id))?.label ?? '';
+      const vehicleName = vehicleOptions.find((v) => v.id === String(r.vehicle_id))?.label ?? '';
+      const statusFr = STATUS_FR[r.status] ?? r.status;
+      return `${r.reservation_number} ${r.status} ${statusFr} ${clientName} ${vehicleName}`.toLowerCase().includes(qq);
+    });
+  }, [reservationsQ.data, q, customerOptions, vehicleOptions]);
+
+  const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
+  const timelineStatus = String(detail?.status ?? selected?.status ?? '');
 
   if (!hasBackend()) {
     return (
