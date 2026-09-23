@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
+import { companySettingsApi } from '@/services/companySettingsApi';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 
 /** Fleet row plus the live usage flags the vehicles endpoint resolves. */
@@ -373,6 +374,13 @@ export const ContractWizardPage: React.FC = () => {
     onError: (e) => setNewClientError(e instanceof ApiError ? e.message : 'Erreur de création du client'),
   });
 
+  // Valeurs par défaut de Paramètres : km inclus, franchise, TVA.
+  const settingsQ = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => (await companySettingsApi.get()).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const clients = useQuery({
     // Own key: the reservations and payments pages cache the raw API rows
     // under queryKeys.customers.all, and reading c.name off those left every
@@ -442,6 +450,19 @@ export const ContractWizardPage: React.FC = () => {
       }));
     },
   });
+
+  // Pré-remplit une seule fois, et seulement si l'utilisateur n'a rien saisi.
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    const s = settingsQ.data;
+    if (!s || defaultsApplied.current) return;
+    defaultsApplied.current = true;
+    setState((prev) => ({
+      ...prev,
+      kmInclMonth: prev.kmInclMonth || Number(s.contracts?.default_km_per_month ?? 0),
+      securityDepositMad: prev.securityDepositMad || Number(s.contracts?.default_deposit_mad ?? 0),
+    }));
+  }, [settingsQ.data]);
 
   const customerDocs = useQuery({
     queryKey: ['customer-docs', state.clientId],
@@ -613,7 +634,7 @@ export const ContractWizardPage: React.FC = () => {
           start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
           months: state.durationMonths,
           monthly_amount: state.monthlyRentMad,
-          tax_rate: 0.2,
+          tax_rate: Number(settingsQ.data?.invoicing?.default_tva_pct ?? 20) / 100,
         });
       } catch {
         // Non-blocking — schedule can be generated later

@@ -124,7 +124,17 @@ export const InvoicesPage: React.FC = () => {
           },
           { key: 'issue', header: 'Émise', render: (r) => (r.issue_date ? formatDate(r.issue_date) : '—') },
           { key: 'due', header: 'Échéance', render: (r) => (r.due_date ? formatDate(r.due_date) : '—') },
-          { key: 'total', header: 'Total', render: (r) => formatCurrencyMad(Number(r.total_amount)) },
+          {
+            key: 'tax',
+            header: 'TVA',
+            render: (r) =>
+              Number(r.tax_amount) > 0 ? (
+                <span title={`${Number(r.lines?.[0]?.tax_rate ?? 0)} %`}>{formatCurrencyMad(Number(r.tax_amount))}</span>
+              ) : (
+                <span className="text-slate-400">—</span>
+              ),
+          },
+          { key: 'total', header: 'Total TTC', render: (r) => formatCurrencyMad(Number(r.total_amount)) },
           {
             key: 'amount_due',
             header: 'Reste dû',

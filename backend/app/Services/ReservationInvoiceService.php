@@ -138,6 +138,11 @@ class ReservationInvoiceService
 
     private function createLine(Invoice $invoice, Reservation $reservation, float $base, float $extensions, float $damages, float $total): void
     {
+        // Le prix convenu est TTC : on fait apparaître la TVA par défaut à
+        // l'intérieur du montant, sans gonfler le total ni le solde client.
+        $rate = \App\Support\CompanyDefaults::vatRate($invoice->company_id);
+        $tax = $rate > 0 ? round($total * $rate / (100 + $rate), 2) : 0.0;
+
         InvoiceLine::query()->create([
             'id' => (string) Str::uuid(),
             'invoice_id' => $invoice->id,
@@ -147,8 +152,8 @@ class ReservationInvoiceService
             'quantity' => 1,
             'unit_price' => $total,
             'discount_amount' => 0,
-            'tax_rate' => 0,
-            'tax_amount' => 0,
+            'tax_rate' => $rate,
+            'tax_amount' => $tax,
             'line_total' => $total,
             'metadata' => [
                 'reservation_id' => $reservation->id,

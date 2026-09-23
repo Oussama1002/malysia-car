@@ -900,6 +900,10 @@ class ReservationController extends Controller
                 'created_by' => $request->user()?->id,
             ]);
 
+            // TVA par défaut, comprise dans le prix convenu (TTC).
+            $vatRate = \App\Support\CompanyDefaults::vatRate($invoice->company_id);
+            $vatAmount = $vatRate > 0 ? round($total * $vatRate / (100 + $vatRate), 2) : 0.0;
+
             InvoiceLine::query()->create([
                 'id' => (string) Str::uuid(),
                 'invoice_id' => $invoice->id,
@@ -909,8 +913,8 @@ class ReservationController extends Controller
                 'quantity' => 1,
                 'unit_price' => $total,
                 'discount_amount' => 0,
-                'tax_rate' => 0,
-                'tax_amount' => 0,
+                'tax_rate' => $vatRate,
+                'tax_amount' => $vatAmount,
                 'line_total' => $total,
                 'metadata' => [
                     'reservation_id' => $reservation->id,
