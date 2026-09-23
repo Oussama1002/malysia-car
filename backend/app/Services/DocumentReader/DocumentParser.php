@@ -750,14 +750,15 @@ class DocumentParser
             || preg_match('/\b'.$money.'\b[^\da-zA-Z\n\r]{0,6}'.$digits.'/iu', $text, $am)) {
             $amount = $this->parseAmount(str_replace('/', ',', $am[1]));
         }
-        // Try labelled amount first
+        // Labelled amount. No MAD/DH here: labelValue has no word boundary, so
+        // "MAD" matched inside "MADEMOISELLE" and took the branch phone number
+        // below it as the amount. Those two are handled above, anchored. The
+        // value must look like an amount, not any run of digits and spaces.
         $amountStr = $amount ? null : $this->labelValue($text, [
-            'Montant',
-            'Amount',
-            'Somme\s+de',
-            'MAD',
-            'DH',
-        ], '[\d\s\.,]+');
+            '\bMontant\b',
+            '\bAmount\b',
+            '\bSomme\s+de\b',
+        ], '(?<!\d)\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})?(?!\d)');
         if ($amountStr) {
             $amount = $this->parseAmount($amountStr);
         }
