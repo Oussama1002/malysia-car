@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\RentalDamageReport;
@@ -50,7 +51,18 @@ class ReservationInvoiceService
         }
 
         return DB::transaction(function () use ($reservation, $userId, $dueDate) {
+            // A reservation created from a contract carries no estimated_price of
+            // its own, so the invoice came out at 0 MAD and unlinked.
+            $contract = Contract::query()
+                ->where('reservation_id', $reservation->id)
+                ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
+                ->orderByDesc('created_at')
+                ->first();
+
             $base = (float) ($reservation->estimated_price ?? 0);
+            if ($base <= 0 && $contract) {
+                $base = (float) ($contract->base_amount ?? 0);
+            }
             $extensions = (float) RentalExtension::query()
                 ->where('reservation_id', $reservation->id)
                 ->where('status', 'applied')
@@ -65,9 +77,9 @@ class ReservationInvoiceService
                 'company_id' => $reservation->company_id,
                 'branch_id' => $reservation->branch_id,
                 'invoice_number' => $this->generateNumber(),
-                'invoice_type' => 'service',
+                'invoice_type' => $contract ? 'contract' : 'service',
                 'customer_id' => $reservation->customer_id,
-                'contract_id' => null,
+                'contract_id' => $contract?->id,
                 'issue_date' => now()->toDateString(),
                 'due_date' => $dueDate,
                 'currency_code' => 'MAD',

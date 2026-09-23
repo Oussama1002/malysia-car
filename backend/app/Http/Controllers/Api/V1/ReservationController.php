@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\Mission;
@@ -832,7 +833,16 @@ class ReservationController extends Controller
         $invoice = DB::transaction(function () use ($reservation, $data, $request) {
             $this->transitionReservation($reservation, 'billing_pending', $request);
 
+            $contract = Contract::query()
+                ->where('reservation_id', $reservation->id)
+                ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
+                ->orderByDesc('created_at')
+                ->first();
+
             $base = (float) ($reservation->estimated_price ?? 0);
+            if ($base <= 0 && $contract) {
+                $base = (float) ($contract->base_amount ?? 0);
+            }
             $extensions = (float) RentalExtension::query()
                 ->where('reservation_id', $reservation->id)
                 ->where('status', 'applied')
@@ -847,9 +857,9 @@ class ReservationController extends Controller
                 'company_id' => $reservation->company_id,
                 'branch_id' => $reservation->branch_id,
                 'invoice_number' => $this->generateRentalInvoiceNumber(),
-                'invoice_type' => 'service',
+                'invoice_type' => $contract ? 'contract' : 'service',
                 'customer_id' => $reservation->customer_id,
-                'contract_id' => null,
+                'contract_id' => $contract?->id,
                 'issue_date' => $data['issue_date'] ?? now()->toDateString(),
                 'due_date' => $data['due_date'] ?? now()->addDays(7)->toDateString(),
                 'currency_code' => $data['currency_code'] ?? 'MAD',

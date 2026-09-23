@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   INVOICE_STATUS_LABEL,
+  INVOICE_TYPE_LABEL,
   invoiceStatusTone,
   listInvoices,
   type Invoice,
@@ -108,7 +109,7 @@ export const InvoicesPage: React.FC = () => {
             render: (r) => (
               <div>
                 <div className="font-mono font-bold text-slate-900">{r.invoice_number}</div>
-                <div className="text-xs text-slate-500">{r.invoice_type}</div>
+                <div className="text-xs text-slate-500">{INVOICE_TYPE_LABEL[r.invoice_type] ?? r.invoice_type}</div>
               </div>
             ),
           },

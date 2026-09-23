@@ -480,6 +480,13 @@ export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
   cancelled: 'Annulée',
 };
 
+export const INVOICE_TYPE_LABEL: Record<InvoiceType, string> = {
+  contract: 'Contrat',
+  sale: 'Vente',
+  service: 'Service',
+  credit_note: 'Avoir',
+};
+
 export function invoiceStatusTone(status: InvoiceStatus): 'default' | 'success' | 'warning' | 'danger' | 'info' {
   switch (status) {
     case 'paid':
