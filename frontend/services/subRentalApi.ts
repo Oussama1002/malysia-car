@@ -129,13 +129,15 @@ export const subRentalApi = {
       body: JSON.stringify({ force_close: forceClose }),
     }),
   profitability: (id: string) => apiClient<{ data: SubRentalProfitability }>(`/v1/sub-rentals/${id}/profitability`),
-  payments: (id: string) =>
-    apiClient<{ payments: SubRentalPayment[]; total_paid: number; remaining_balance: number; payment_status: PaymentStatus }>(
+  // L'API enveloppe tout dans `data` : lire à la racine renvoyait undefined,
+  // d'où « Aucun paiement enregistré » et un solde à 0 malgré les paiements.
+  payments: async (id: string) =>
+    (await apiClient<{ data: { payments: SubRentalPayment[]; total_paid: number; remaining_balance: number; payment_status: PaymentStatus } }>(
       `/v1/sub-rentals/${id}/payments`
-    ),
+    )).data,
   addPayment: (id: string, body: { amount: number; payment_method: PaymentMethod; payment_date: string; reference?: string; check_number?: string; check_bank?: string; check_date?: string; notes?: string; cheque_document_id?: string }) =>
-    apiClient<{ payment: SubRentalPayment; total_paid: number; remaining_balance: number; payment_status: PaymentStatus }>(
+    apiClient<{ data: { payment: SubRentalPayment; total_paid: number; remaining_balance: number; payment_status: PaymentStatus } }>(
       `/v1/sub-rentals/${id}/payments`,
       { method: 'POST', body: JSON.stringify(body) }
-    ),
+    ).then((res) => res.data),
 };
