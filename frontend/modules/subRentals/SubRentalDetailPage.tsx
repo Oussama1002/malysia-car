@@ -7,6 +7,7 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
 import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
 import { DateField } from '@/modules/shared/components/DateField';
+import { ProofUploader } from '@/modules/shared/components/ProofUploader';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
 
@@ -220,8 +221,9 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
       payload.check_number = form.check_number || undefined;
       payload.check_bank = form.check_bank || undefined;
       payload.check_date = form.check_date || undefined;
-      payload.cheque_document_id = form.cheque_document_id || undefined;
     }
+    // Une preuve vaut pour tous les modes : virement, espèces, chèque.
+    payload.cheque_document_id = form.cheque_document_id || undefined;
     mutation.mutate(payload);
   };
 
@@ -301,6 +303,12 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
             </div>
           </div>
         )}
+
+        <ProofUploader
+          documentId={form.cheque_document_id || null}
+          onUploaded={(id) => setForm((f) => ({ ...f, cheque_document_id: id }))}
+          onCleared={() => setForm((f) => ({ ...f, cheque_document_id: '' }))}
+        />
 
         <label className="block">
           <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Notes</span>

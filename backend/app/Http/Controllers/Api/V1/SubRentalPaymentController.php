@@ -69,7 +69,7 @@ class SubRentalPaymentController extends Controller
             'sub_rental_payment',
             $payment->id,
             $request->user(),
-            title: 'Chèque '.($payment->check_number ?? ''),
+            title: trim('Chèque '.($payment->check_number ?? '')) ?: 'Preuve de paiement fournisseur',
         );
 
         AuditLogger::created($payment, $request->user(), ['contract_id' => $contract->id, 'amount' => (float) $payment->amount]);

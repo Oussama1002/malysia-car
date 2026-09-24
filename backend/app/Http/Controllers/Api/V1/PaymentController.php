@@ -155,7 +155,7 @@ class PaymentController extends Controller
                 'payment',
                 $payment->id,
                 $request->user(),
-                title: 'Chèque '.($data['check_number'] ?? $payment->payment_number ?? ''),
+                title: trim('Chèque '.($data['check_number'] ?? '')) ?: 'Preuve '.($payment->payment_number ?? ''),
             );
 
             if (! empty($data['allocations'])) {

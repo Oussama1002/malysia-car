@@ -72,6 +72,7 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { DateField } from '@/modules/shared/components/DateField';
 import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
+import { ProofUploader } from '@/modules/shared/components/ProofUploader';
 
 /* ── Types used by data loading ─────────────────────────────────────── */
 
@@ -1105,6 +1106,12 @@ export const PaymentForm: React.FC<{
           placeholder="Référence externe, n° reçu..."
         />
       </div>
+
+      <ProofUploader
+        documentId={form.cheque_document_id || null}
+        onUploaded={(id) => set('cheque_document_id', id)}
+        onCleared={() => set('cheque_document_id', undefined)}
+      />
 
       {/* ── Notes ────────────────────────────────────────────── */}
       <div>

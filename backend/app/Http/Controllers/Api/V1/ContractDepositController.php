@@ -73,7 +73,7 @@ class ContractDepositController extends Controller
             'contract_deposit',
             $deposit->id,
             $request->user(),
-            title: 'Chèque franchise '.($deposit->check_number ?? ''),
+            title: trim('Chèque franchise '.($deposit->check_number ?? '')) ?: 'Preuve de franchise',
         );
 
         AuditLogger::created($deposit, $request->user(), [

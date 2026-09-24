@@ -4,6 +4,7 @@ import { opsApi } from '@/services/opsApi';
 import { DateField } from '@/modules/shared/components/DateField';
 import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
 import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
+import { ProofUploader } from '@/modules/shared/components/ProofUploader';
 
 export interface Deposit {
   id: string;
@@ -66,6 +67,7 @@ export const FranchisePanel: React.FC<{
     check_bank: '',
     check_date: '',
     notes: '',
+    cheque_document_id: '',
   });
   const [error, setError] = useState<string | null>(null);
   const [vehicleOk, setVehicleOk] = useState(false);
@@ -90,6 +92,7 @@ export const FranchisePanel: React.FC<{
         check_bank: form.method === 'cheque' ? form.check_bank || undefined : undefined,
         check_date: form.method === 'cheque' ? form.check_date || undefined : undefined,
         notes: form.notes || undefined,
+        cheque_document_id: form.cheque_document_id || undefined,
       }),
     onSuccess: () => { setError(null); refresh(); },
     onError: (e: unknown) => setError(e instanceof Error ? e.message : 'Erreur'),
@@ -202,6 +205,13 @@ export const FranchisePanel: React.FC<{
                     </div>
                   </>
                 )}
+              </div>
+              <div className="mt-3">
+                <ProofUploader
+                  documentId={form.cheque_document_id || null}
+                  onUploaded={(id) => setForm((f) => ({ ...f, cheque_document_id: id }))}
+                  onCleared={() => setForm((f) => ({ ...f, cheque_document_id: '' }))}
+                />
               </div>
               {chequeAlreadyUsed && (
                 <div className="mt-3 rounded-xl border-2 border-rose-300 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-800">
