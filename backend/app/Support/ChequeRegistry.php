@@ -20,7 +20,23 @@ class ChequeRegistry
             ['table' => 'payments', 'ref' => 'payment_number', 'bank' => 'check_bank', 'label' => 'paiement client', 'method' => ['payment_method', ['check', 'cheque']]],
             ['table' => 'sub_rental_payments', 'ref' => 'reference', 'bank' => 'check_bank', 'label' => 'paiement fournisseur', 'method' => ['payment_method', ['check', 'cheque']]],
             ['table' => 'contract_deposits', 'ref' => 'id', 'bank' => 'check_bank', 'label' => "franchise d'assurance", 'method' => ['method', ['cheque', 'check']]],
+            // Les chèques saisis dans l'assistant contrat sont stockés sur le
+            // contrat lui-même, parfois plusieurs séparés par des virgules.
+            ['table' => 'contracts', 'ref' => 'contract_number', 'bank' => 'check_bank', 'label' => 'contrat', 'method' => ['payment_method', ['cheque', 'check']], 'column' => 'cheque_number'],
         ];
+    }
+
+    /**
+     * The normalised numbers held by one row — the contract wizard writes
+     * several cheques into a single field, separated by commas.
+     *
+     * @return array<int, string>
+     */
+    private static function normalizedParts(?string $raw): array
+    {
+        $parts = preg_split('/[,;\/]+/', (string) $raw) ?: [];
+
+        return array_values(array_filter(array_map([self::class, 'normalize'], $parts), fn ($p) => $p !== ''));
     }
 
     /**
@@ -53,7 +69,7 @@ class ChequeRegistry
 
         foreach (self::sources() as $source) {
             foreach (self::rows($source) as $row) {
-                if (self::normalize($row->check_number ?? null) !== $needle) {
+                if (! in_array($needle, self::normalizedParts($row->check_number ?? null), true)) {
                     continue;
                 }
                 if ($ignoreTable === $source['table'] && $ignoreId && (string) $row->id === $ignoreId) {
@@ -104,19 +120,17 @@ class ChequeRegistry
 
         foreach (self::sources() as $source) {
             foreach (self::rows($source) as $row) {
-                $key = self::normalize($row->check_number ?? null);
-                if ($key === '') {
-                    continue;
+                foreach (self::normalizedParts($row->check_number ?? null) as $key) {
+                    $groups[$key][] = [
+                        'label' => $source['label'],
+                        'reference' => (string) ($row->{$source['ref']} ?? $row->id ?? ''),
+                        'table' => $source['table'],
+                        'id' => (string) $row->id,
+                        'bank' => $row->check_bank ?? null,
+                        'amount' => isset($row->amount) ? (float) $row->amount : null,
+                        'date' => $row->payment_date ?? $row->collected_at ?? null,
+                    ];
                 }
-                $groups[$key][] = [
-                    'label' => $source['label'],
-                    'reference' => (string) ($row->{$source['ref']} ?? $row->id ?? ''),
-                    'table' => $source['table'],
-                    'id' => (string) $row->id,
-                    'bank' => $row->check_bank ?? null,
-                    'amount' => isset($row->amount) ? (float) $row->amount : null,
-                    'date' => $row->payment_date ?? $row->collected_at ?? null,
-                ];
             }
         }
 
@@ -129,11 +143,16 @@ class ChequeRegistry
      */
     private static function rows(array $source)
     {
-        if (! Schema::hasTable($source['table']) || ! Schema::hasColumn($source['table'], 'check_number')) {
+        if (! Schema::hasTable($source['table'])) {
             return collect();
         }
 
-        $columns = ['id', 'check_number'];
+        $numberColumn = $source['column'] ?? 'check_number';
+        if (! Schema::hasColumn($source['table'], $numberColumn)) {
+            return collect();
+        }
+
+        $columns = ['id', $numberColumn.' as check_number'];
         foreach ([$source['ref'], $source['bank'], 'amount', 'payment_date', 'collected_at'] as $extra) {
             if (Schema::hasColumn($source['table'], $extra) && ! in_array($extra, $columns, true)) {
                 $columns[] = $extra;
@@ -141,8 +160,8 @@ class ChequeRegistry
         }
 
         return DB::table($source['table'])
-            ->whereNotNull('check_number')
-            ->whereRaw("TRIM(check_number) <> ''")
+            ->whereNotNull($numberColumn)
+            ->whereRaw('TRIM('.$numberColumn.") <> ''")
             ->when(
                 Schema::hasColumn($source['table'], $source['method'][0]),
                 fn ($q) => $q->whereIn($source['method'][0], $source['method'][1]),
@@ -152,7 +171,7 @@ class ChequeRegistry
             ->when(Schema::hasColumn($source['table'], 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
             ->when(
                 Schema::hasColumn($source['table'], 'status'),
-                fn ($q) => $q->whereNotIn('status', ['reversed', 'refunded', 'cancelled']),
+                fn ($q) => $q->whereNotIn('status', ['reversed', 'refunded', 'cancelled', 'rejected', 'expired']),
             )
             ->get($columns);
     }

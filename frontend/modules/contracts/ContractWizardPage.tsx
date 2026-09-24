@@ -5,6 +5,7 @@ import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
 import { companySettingsApi } from '@/services/companySettingsApi';
 import { ContractPaperPreview } from '@/modules/contracts/ContractPaperPreview';
+import { ChequeDuplicateWarning } from '@/modules/shared/components/ChequeDuplicateWarning';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
 
 /** Fleet row plus the live usage flags the vehicles endpoint resolves. */
@@ -225,6 +226,9 @@ export const ContractWizardPage: React.FC = () => {
   const [maxStepIdx, setMaxStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
   const [scanningPayment, setScanningPayment] = useState<string | null>(null);
+  // Un chèque déjà encaissé ailleurs bloque l'enregistrement du contrat.
+  const [chequeDuplicates, setChequeDuplicates] = useState<Record<string, string | null>>({});
+  const hasUsedCheque = Object.values(chequeDuplicates).some(Boolean);
   const [scanError, setScanError] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -1142,6 +1146,17 @@ export const ContractWizardPage: React.FC = () => {
                               <DateField className="df-input" value={p.chequeDate ?? ''} onChange={(dfValue) => updatePayment(p.id, 'chequeDate', dfValue)} />
                             </Field>
                             <div className="md:col-span-2">
+                              <ChequeDuplicateWarning
+                                number={p.chequeNumber}
+                                bank={p.chequeBank}
+                                onResult={(message) =>
+                                  setChequeDuplicates((prev) =>
+                                    prev[p.id] === message ? prev : { ...prev, [p.id]: message },
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="md:col-span-2">
                               <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2.5">
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs font-black text-indigo-900">Scanner le chèque</div>
@@ -1297,13 +1312,13 @@ export const ContractWizardPage: React.FC = () => {
               <Icon name="chevron-left" size={14} /> Précédent
             </button>
             <div className="flex items-center gap-2">
-              <button className="df-btn df-btn--subtle df-btn--sm" disabled={draftBusy} onClick={() => void handleSaveDraft()}>
+              <button className="df-btn df-btn--subtle df-btn--sm" disabled={draftBusy || hasUsedCheque} onClick={() => void handleSaveDraft()}>
                 <Icon name="download" size={14} /> {draftBusy ? 'Traitement…' : 'Sauver brouillon'}
               </button>
               {stepIdx === STEPS.length - 1 ? (
                 <button
                   className="df-btn df-btn--primary"
-                  disabled={saving || !state.clientId || !state.vehicleId || state.kmInclMonth <= 0}
+                  disabled={saving || !state.clientId || !state.vehicleId || state.kmInclMonth <= 0 || hasUsedCheque}
                   onClick={() => void submit()}
                 >
                   <Icon name="download" size={14} /> {saving ? 'Création…' : 'Sauvegarder & télécharger PDF'}

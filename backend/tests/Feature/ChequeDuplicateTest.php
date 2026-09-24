@@ -59,6 +59,33 @@ class ChequeDuplicateTest extends TestCase
         return $id;
     }
 
+    private function makeVehicle(): string
+    {
+        $brandId = (string) Str::uuid();
+        \DB::table('vehicle_brands')->insert([
+            'id' => $brandId, 'name' => 'Dacia '.Str::random(4),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $modelId = (string) Str::uuid();
+        \DB::table('vehicle_models')->insert([
+            'id' => $modelId, 'brand_id' => $brandId, 'name' => 'Logan '.Str::random(4),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $id = (string) Str::uuid();
+        \DB::table('vehicles')->insert([
+            'id' => $id,
+            'company_id' => $this->companyId,
+            'brand_id' => $brandId,
+            'model_id' => $modelId,
+            'registration_number' => 'A-'.Str::random(6).'-B',
+            'status' => 'AVAILABLE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $id;
+    }
+
     private function payload(string $customerId, array $overrides = []): array
     {
         return array_merge([
@@ -153,6 +180,37 @@ class ChequeDuplicateTest extends TestCase
                 ->postJson('/api/v1/payments', $this->payload($customer, ['check_number' => $variant]))
                 ->assertStatus(422, 'variante acceptée à tort : '.$variant);
         }
+    }
+
+    /** Un chèque saisi dans l'assistant contrat est déjà pris. */
+    public function test_a_cheque_entered_on_a_contract_blocks_a_payment(): void
+    {
+        $user = $this->makeUser();
+        $customer = $this->makeCustomer();
+
+        \DB::table('contracts')->insert([
+            'id' => (string) Str::uuid(),
+            'company_id' => $this->companyId,
+            'contract_number' => 'CTR-0042',
+            'contract_type' => 'LOCATION_COURTE',
+            'customer_id' => $customer,
+            'vehicle_id' => $this->makeVehicle(),
+            'status' => 'active',
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->addDays(5)->toDateString(),
+            'payment_method' => 'cheque',
+            // L'assistant en écrit parfois plusieurs, séparés par des virgules.
+            'cheque_number' => '771100, 0283359',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/payments', $this->payload($customer))
+            ->assertStatus(422);
+
+        $this->assertNotNull(ChequeRegistry::duplicateMessage('771100', null));
+        $this->assertNull(ChequeRegistry::duplicateMessage('771101', null));
     }
 
     public function test_the_registry_spans_the_franchise_and_the_supplier_payment(): void
