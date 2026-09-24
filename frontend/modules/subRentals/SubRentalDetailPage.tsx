@@ -5,6 +5,7 @@ import { subRentalApi, type SubRentalPayment, type PaymentMethod } from '@/servi
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
+import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
 import { DateField } from '@/modules/shared/components/DateField';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
@@ -104,6 +105,10 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
   const [chequeScanning, setChequeScanning] = useState(false);
   const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
   const [chequeNotice, setChequeNotice] = useState<string | null>(null);
+  const chequeAlreadyUsed = useChequeDuplicate(
+    form.payment_method === 'cheque' ? form.check_number : null,
+    form.check_bank,
+  );
 
   const mutation = useMutation({
     mutationFn: (data: Parameters<typeof subRentalApi.addPayment>[1]) => subRentalApi.addPayment(contractId, data),
@@ -233,6 +238,11 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
                 {chequeScanning ? 'Analyse…' : 'Prendre une photo'}
               </label>
             </div>
+            {chequeAlreadyUsed && (
+              <div className="rounded-xl border-2 border-rose-300 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-800">
+                ⚠ {chequeAlreadyUsed}
+              </div>
+            )}
             {chequeOcrError && (
               <div className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
             )}
@@ -271,7 +281,7 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
           <button type="button" onClick={onClose} className="df-btn df-btn--ghost">Annuler</button>
           <button
             type="submit"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !!chequeAlreadyUsed}
             onClick={(e) => {
               // Fallback in case the surrounding <form>'s submit event is
               // intercepted; ensures a click always reaches handleSubmit.

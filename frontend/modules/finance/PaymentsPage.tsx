@@ -71,6 +71,7 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { DateField } from '@/modules/shared/components/DateField';
+import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
 
 /* ── Types used by data loading ─────────────────────────────────────── */
 
@@ -622,6 +623,8 @@ export const PaymentForm: React.FC<{
   const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
   const [chequeDuplicate, setChequeDuplicate] = useState<NonNullable<ChequeOcrResult['existing_payment']> | null>(null);
   const [chequeNotice, setChequeNotice] = useState<string | null>(null);
+  // Le numéro saisi a-t-il déjà servi ? Vérifié pendant la frappe.
+  const chequeAlreadyUsed = useChequeDuplicate(form.check_number, form.check_bank);
 
   const applyChequeScan = async (file: File) => {
     setChequeScanning(true);
@@ -1053,6 +1056,11 @@ export const PaymentForm: React.FC<{
             </div>
           )}
 
+          {chequeAlreadyUsed && (
+            <div className="rounded-xl border-2 border-rose-300 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-800">
+              ⚠ {chequeAlreadyUsed}
+            </div>
+          )}
           {chequeOcrError && (
             <div className="rounded bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
           )}
@@ -1115,7 +1123,7 @@ export const PaymentForm: React.FC<{
         <button type="button" className="df-btn df-btn--ghost" onClick={onCancel}>
           Annuler
         </button>
-        <button type="submit" className="df-btn df-btn--primary" disabled={submitting}>
+        <button type="submit" className="df-btn df-btn--primary" disabled={submitting || !!chequeAlreadyUsed}>
           {submitting ? 'Enregistrement...' : 'Enregistrer le paiement'}
         </button>
       </div>

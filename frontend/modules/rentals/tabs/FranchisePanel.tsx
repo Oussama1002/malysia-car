@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { DateField } from '@/modules/shared/components/DateField';
 import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
+import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
 
 export interface Deposit {
   id: string;
@@ -70,6 +71,10 @@ export const FranchisePanel: React.FC<{
   const [vehicleOk, setVehicleOk] = useState(false);
   const [retainOpen, setRetainOpen] = useState(false);
   const [retainReason, setRetainReason] = useState('');
+  const chequeAlreadyUsed = useChequeDuplicate(
+    form.method === 'cheque' ? form.check_number : null,
+    form.check_bank,
+  );
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['reservation', reservationId, 'deposits'] });
@@ -198,13 +203,18 @@ export const FranchisePanel: React.FC<{
                   </>
                 )}
               </div>
+              {chequeAlreadyUsed && (
+                <div className="mt-3 rounded-xl border-2 border-rose-300 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-800">
+                  ⚠ {chequeAlreadyUsed}
+                </div>
+              )}
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={() => {
                     if (!Number(form.amount)) { setError('Renseignez le montant de la franchise.'); return; }
                     createM.mutate();
                   }}
-                  disabled={createM.isPending}
+                  disabled={createM.isPending || !!chequeAlreadyUsed}
                   className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {createM.isPending ? 'Enregistrement…' : 'Enregistrer la franchise'}
