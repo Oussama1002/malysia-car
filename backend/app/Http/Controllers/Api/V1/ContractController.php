@@ -80,6 +80,18 @@ class ContractController extends Controller
     public function store(StoreContractRequest $request): JsonResponse
     {
         $data = $request->validated();
+
+        // Le chèque de franchise suit la même règle que les autres : une fois.
+        if (($data['deposit_method'] ?? null) === 'cheque' && ! empty($data['deposit_check_number'])) {
+            $message = \App\Support\ChequeRegistry::duplicateMessage(
+                (string) $data['deposit_check_number'],
+                $data['deposit_check_bank'] ?? null,
+            );
+            if ($message) {
+                return ApiResponse::error($message, 422, ['deposit_check_number' => [$message]]);
+            }
+        }
+
         $actorRole = method_exists($request->user(), 'primaryRoleCode') ? $request->user()->primaryRoleCode() : '';
         $isDirectorLevel = in_array($actorRole, ['ADMIN', 'DIRECTEUR'], true);
 
@@ -142,6 +154,30 @@ class ContractController extends Controller
             }
             $c->created_by = auth()->id();
             $c->save();
+
+            // La franchise encaissée à la signature est une garantie détenue,
+            // pas un encaissement : elle rejoint le registre des franchises et
+            // débloque la remise du véhicule.
+            $depositAmount = (float) ($data['deposit_amount'] ?? 0);
+            $depositMethod = $data['deposit_method'] ?? null;
+            if ($depositAmount > 0 && $depositMethod) {
+                \App\Models\ContractDeposit::query()->create([
+                    'company_id' => $c->company_id,
+                    'branch_id' => $c->branch_id,
+                    'contract_id' => $c->id,
+                    'reservation_id' => $c->reservation_id,
+                    'customer_id' => $c->customer_id,
+                    'amount' => $depositAmount,
+                    'method' => $depositMethod,
+                    'check_number' => $depositMethod === 'cheque' ? ($data['deposit_check_number'] ?? null) : null,
+                    'check_bank' => $depositMethod === 'cheque' ? ($data['deposit_check_bank'] ?? null) : null,
+                    'check_date' => $depositMethod === 'cheque' ? ($data['deposit_check_date'] ?? null) : null,
+                    'status' => \App\Models\ContractDeposit::STATUS_HELD,
+                    'notes' => 'Encaissée à la signature du contrat '.$c->contract_number,
+                    'collected_by' => auth()->id(),
+                    'collected_at' => now(),
+                ]);
+            }
 
             ContractHistory::query()->create([
                 'id' => (string) Str::uuid(),

@@ -131,6 +131,10 @@ interface WizardState {
   monthlyRentMad: number;
   kmInclMonth: number;
   securityDepositMad: number;
+  depositMethod: 'cash' | 'cheque' | 'bank_transfer' | 'card' | 'other' | '';
+  depositChequeNumber: string;
+  depositChequeBank: string;
+  depositChequeDate: string;
   residualValuePct: number;
   notes: string;
   payments: PaymentEntry[];
@@ -152,6 +156,10 @@ const INITIAL: WizardState = {
   monthlyRentMad: 0,
   kmInclMonth: 0,
   securityDepositMad: 0,
+  depositMethod: '',
+  depositChequeNumber: '',
+  depositChequeBank: '',
+  depositChequeDate: '',
   residualValuePct: 38,
   notes: '',
   payments: [{ id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
@@ -582,6 +590,10 @@ export const ContractWizardPage: React.FC = () => {
       monthlyPayment: state.monthlyRentMad,
       allowedKm: state.kmInclMonth * state.durationMonths,
       depositAmount: state.securityDepositMad,
+      depositMethod: state.depositMethod || undefined,
+      depositCheckNumber: state.depositMethod === 'cheque' ? state.depositChequeNumber || undefined : undefined,
+      depositCheckBank: state.depositMethod === 'cheque' ? state.depositChequeBank || undefined : undefined,
+      depositCheckDate: state.depositMethod === 'cheque' ? state.depositChequeDate || undefined : undefined,
       notes: state.notes,
       paymentMethod: primary?.method ?? 'virement',
       paymentTerms: state.paymentTerms || undefined,
@@ -1082,6 +1094,59 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('securityDepositMad', Number(e.target.value))}
                     />
                   </Field>
+                  {state.securityDepositMad > 0 && (
+                    <Field label="Franchise encaissée par">
+                      <select
+                        className="df-input"
+                        value={state.depositMethod}
+                        onChange={(e) => patch('depositMethod', e.target.value as WizardState['depositMethod'])}
+                      >
+                        <option value="">— Pas encore encaissée —</option>
+                        <option value="cash">Espèces</option>
+                        <option value="cheque">Chèque</option>
+                        <option value="bank_transfer">Virement</option>
+                        <option value="card">Carte</option>
+                        <option value="other">Autre</option>
+                      </select>
+                    </Field>
+                  )}
+                  {state.securityDepositMad > 0 && state.depositMethod === 'cheque' && (
+                    <>
+                      <Field label="N° chèque franchise">
+                        <input
+                          className="df-input"
+                          value={state.depositChequeNumber}
+                          onChange={(e) => patch('depositChequeNumber', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Banque">
+                        <input
+                          className="df-input"
+                          placeholder="Ex : CIH Bank"
+                          value={state.depositChequeBank}
+                          onChange={(e) => patch('depositChequeBank', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Date du chèque">
+                        <DateField
+                          className="df-input"
+                          value={state.depositChequeDate}
+                          onChange={(v) => patch('depositChequeDate', v)}
+                        />
+                      </Field>
+                      <div className="md:col-span-2">
+                        <ChequeDuplicateWarning
+                          number={state.depositChequeNumber}
+                          bank={state.depositChequeBank}
+                          onResult={(message) =>
+                            setChequeDuplicates((prev) =>
+                              prev.__franchise === message ? prev : { ...prev, __franchise: message },
+                            )
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
                   {state.type === 'LOA' && (
                     <Field label="Valeur résiduelle (%)">
                       <input

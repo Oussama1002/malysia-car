@@ -43,6 +43,11 @@ class StoreContractRequest extends ApiFormRequest
             'allowed_km' => ['nullable', 'numeric', 'min:0'],
             'excess_km_rate' => ['nullable', 'numeric', 'min:0'],
             'deposit_amount' => ['nullable', 'numeric', 'min:0'],
+            // Comment la franchise est encaissée, saisi avec le contrat.
+            'deposit_method' => ['nullable', 'in:cash,cheque,bank_transfer,card,other'],
+            'deposit_check_number' => ['nullable', 'string', 'max:60'],
+            'deposit_check_bank' => ['nullable', 'string', 'max:160'],
+            'deposit_check_date' => ['nullable', 'date'],
             'insurance_included' => ['nullable', 'boolean'],
             'maintenance_included' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
