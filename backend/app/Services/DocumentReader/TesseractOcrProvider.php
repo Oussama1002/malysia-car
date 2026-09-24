@@ -81,8 +81,15 @@ class TesseractOcrProvider implements OcrProviderInterface
             // Phone cameras produce 12+ MP images — resize to max 2400px
             // longest edge before OCR so Tesseract runs in ~5-10s not 60s.
             $resized = $this->downsizeImage($source);
-            $imagePaths = [$resized ?? $source];
-            $needsCleanup = $resized !== null;
+            $working = $resized ?? $source;
+            // Preprocessing writes in place. A small jpg/png needs neither
+            // conversion nor resizing, so without a copy here we would grayscale
+            // and rotate the uploaded file itself — the one kept as the proof.
+            if ($working === $absolutePath) {
+                $working = $this->copyToTemp($absolutePath) ?? $absolutePath;
+            }
+            $imagePaths = [$working];
+            $needsCleanup = $working !== $absolutePath;
         }
 
         try {
@@ -199,6 +206,15 @@ class TesseractOcrProvider implements OcrProviderInterface
         } catch (Throwable) {
             // Orientation detection is optional — carry on with the page as-is.
         }
+    }
+
+    /** Scratch copy of the upload, so OCR never edits the stored original. */
+    private function copyToTemp(string $path): ?string
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION)) ?: 'png';
+        $tmp = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_ocr_src_'.bin2hex(random_bytes(6)).'.'.$ext;
+
+        return @copy($path, $tmp) ? $tmp : null;
     }
 
     /**
