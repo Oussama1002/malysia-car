@@ -1,162 +1,121 @@
-import React from 'react';
-import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+import React, { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/services/apiClient';
+
+/** Emplacement d'un champ sur le formulaire, en millimètres. */
+interface FieldSpot {
+  x: number;
+  y: number;
+  size?: number;
+  bold?: boolean;
+}
+
+interface FormLayout {
+  fields: Record<string, FieldSpot>;
+  offset_x: number;
+  offset_y: number;
+}
+
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
 
 /**
- * Aperçu du contrat dans la mise en page du contrat papier de l'agence — mêmes
- * blocs, même ordre que le PDF généré, remplis avec ce que l'assistant a saisi.
+ * Aperçu du contrat : le formulaire vierge de l'agence, avec les valeurs posées
+ * exactement là où le PDF les imprimera. Les emplacements viennent du serveur
+ * (config/contract_form.php), donc l'écran ne peut pas diverger du papier.
  */
 export const ContractPaperPreview: React.FC<{
-  clientName?: string | null;
-  clientId?: string | null;
-  clientLicense?: string | null;
-  clientAddress?: string | null;
-  clientPhone?: string | null;
-  secondDriver?: string | null;
-  brandModel?: string | null;
-  registration?: string | null;
-  fuel?: string | null;
-  insuranceExpiry?: string | null;
-  vignetteExpiry?: string | null;
-  techControlExpiry?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  days: number;
-  kmPerMonth: number;
-  totalAmount: number;
-  deposit: number;
-  paymentTerms?: string | null;
-}> = (p) => {
-  const dash = (v?: string | number | null) => (v === null || v === undefined || v === '' ? '—' : String(v));
-  const date = (v?: string | null) => (v ? formatDate(v) : '—');
-  const valid = (v?: string | null) => !!v && new Date(v).getTime() >= Date.now();
+  values: Record<string, string | number | null | undefined>;
+  papers?: Record<string, boolean>;
+}> = ({ values, papers }) => {
+  const layoutQ = useQuery({
+    queryKey: ['contract-form-layout'],
+    queryFn: async () => (await apiClient<{ data: FormLayout }>('/v1/contract-form-layout')).data,
+    staleTime: 60 * 60 * 1000,
+  });
 
-  const papers: Array<[string, boolean]> = [
-    ["L'Assurance", valid(p.insuranceExpiry)],
-    ['La Carte Grise', !!p.registration],
-    ['Autorisation de circulation', !!p.registration],
-    ['Vignette', valid(p.vignetteExpiry)],
-    ['La visite technique', valid(p.techControlExpiry)],
-  ];
+  const layout = layoutQ.data;
+
+  // La taille du texte suit la largeur réelle de l'aperçu : 8,5 pt sur une page
+  // A4 doivent rester 8,5 pt une fois la page réduite à l'écran.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pageWidth, setPageWidth] = useState(0);
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setPageWidth(entry.contentRect.width));
+    observer.observe(el);
+    setPageWidth(el.clientWidth);
+
+    return () => observer.disconnect();
+  }, []);
+  const mmToPx = pageWidth / A4_WIDTH_MM;
+
+  const marks: Array<[string, FieldSpot, string]> = [];
+  if (layout) {
+    const dx = layout.offset_x ?? 0;
+    const dy = layout.offset_y ?? 0;
+
+    for (const [key, spot] of Object.entries(layout.fields)) {
+      let text: string | null = null;
+
+      if (key.startsWith('papers_')) {
+        const [, name, answer] = key.split('_');
+        const ok = papers?.[name];
+        if (ok !== undefined && ((ok && answer === 'yes') || (!ok && answer === 'no'))) {
+          text = 'X';
+        }
+      } else {
+        const raw = values[key];
+        text = raw === null || raw === undefined || raw === '' ? null : String(raw);
+      }
+
+      if (text !== null) {
+        marks.push([key, { ...spot, x: spot.x + dx, y: spot.y + dy }, text]);
+      }
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-5">
-      <div className="df-card__hint mb-3">Aperçu du contrat — mise en page du PDF généré</div>
-
-      <div className="space-y-3 rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[color:var(--df-border-strong)] pb-2">
-          <div className="rounded bg-slate-900 px-3 py-1.5 text-center text-white">
-            <div className="text-[13px] font-black tracking-wider">MALYSIA CAR PRO</div>
-            <div className="text-[8px] tracking-[0.2em] text-amber-400">LOCATION DE VOITURES</div>
-          </div>
-          <div className="text-end">
-            <div className="text-[15px] font-black tracking-wide">CONTRAT DE LOCATION</div>
-            <div className="text-[12px] font-bold text-[color:var(--df-text-muted)]">
-              N° attribué à l’enregistrement / {new Date(p.startDate ?? Date.now()).getFullYear()}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-3">
-            <Box title="Locataire">
-              <Line k="Nom :" v={dash(p.clientName)} />
-              <Line k="CIN :" v={dash(p.clientId)} />
-              <Line k="Permis de conduite N° :" v={dash(p.clientLicense)} />
-              <Line k="Adresse :" v={dash(p.clientAddress)} />
-              <Line k="Tél. :" v={dash(p.clientPhone)} />
-            </Box>
-
-            <Box title="Deuxième conducteur">
-              <Line k="Nom :" v={dash(p.secondDriver)} />
-            </Box>
-
-            <Box title="Check list — état du véhicule">
-              <p className="py-4 text-center text-[11px] text-[color:var(--df-text-muted)]">
-                Rempli à la remise puis au retour du véhicule (km, carburant, état).
-              </p>
-            </Box>
-          </div>
-
-          <div className="space-y-3">
-            <Box title="Information sur véhicule">
-              <Line k="Marque :" v={dash(p.brandModel)} />
-              <Line k="Immatriculation :" v={dash(p.registration)} />
-              <Line k="Date de départ :" v={date(p.startDate)} />
-              <Line k="Date de retour :" v={date(p.endDate)} />
-              <Line k="Carburant :" v={dash(p.fuel)} />
-              <Line k="Nombre de jours :" v={p.days > 0 ? p.days : '—'} />
-              <Line k="Km inclus / mois :" v={p.kmPerMonth ? p.kmPerMonth.toLocaleString('fr-MA') : '—'} />
-              <Line k="Prix unitaire :" v={p.days > 0 ? formatCurrencyMad(p.totalAmount / p.days) : '—'} />
-              <Line k="Montant T.T.C :" v={formatCurrencyMad(p.totalAmount)} />
-              <Line k="Franchise d'assurance :" v={formatCurrencyMad(p.deposit)} />
-              <Line k="Mode de règlement :" v={dash(p.paymentTerms)} />
-            </Box>
-
-            <Box title="Contrôle papiers véhicule">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="text-[10px] uppercase text-[color:var(--df-text-muted)]">
-                    <th />
-                    <th className="w-12 text-center">Oui</th>
-                    <th className="w-12 text-center">Non</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {papers.map(([label, ok]) => (
-                    <tr key={label} className="border-t border-[color:var(--df-border)]">
-                      <td className="py-1">{label}</td>
-                      <td className="text-center font-black text-emerald-600">{ok ? '×' : ''}</td>
-                      <td className="text-center font-black text-rose-600">{ok ? '' : '×'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="mt-2 border-t border-[color:var(--df-border)] pt-2 text-[11px] font-bold leading-5">
-                <div>Pneu Petite Voiture 600,00 Dhs</div>
-                <div>Pneu Moyenne Voiture 1500,00 Dhs</div>
-                <div>Pneu Voiture 4*4 3000,00 Dhs Ou Plus</div>
-              </div>
-            </Box>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-[color:var(--df-border-strong)] px-3 py-1.5 text-center text-[12px] font-bold">
-          Si le retour de la voiture dépasse 19h vous devez payer une pénalité de retard de 200 Dhs
-        </div>
-        <p className="text-center text-[11px] italic text-[color:var(--df-text-muted)]">
-          * Je reconnais avoir pris connaissance des conditions générales de location au verso du contrat
-          et j’accepte de m’y conformer.
-        </p>
-
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {['Deuxième Conducteur', 'Signature du Locataire', 'Signature Agent', 'Restitution'].map((l) => (
-            <div key={l} className="rounded-lg border border-[color:var(--df-border-strong)]">
-              <div className="border-b border-[color:var(--df-border-strong)] bg-[color:var(--df-surface-sunk)] px-2 py-1 text-center text-[10px] font-bold">
-                {l}
-              </div>
-              <div className="h-14" />
-            </div>
-          ))}
-        </div>
+      <div className="df-card__hint mb-3">
+        Aperçu du contrat — le formulaire de l'agence, rempli comme à l'impression
       </div>
+
+      <div
+        ref={pageRef}
+        className="relative mx-auto w-full overflow-hidden rounded-xl border border-[color:var(--df-border)] bg-white shadow-sm"
+        style={{ aspectRatio: `${A4_WIDTH_MM} / ${A4_HEIGHT_MM}`, maxWidth: 820 }}
+      >
+        <img src="/contract-form.jpg" alt="Contrat de location" className="absolute inset-0 h-full w-full object-fill" />
+
+        {marks.map(([key, spot, text]) => (
+          <span
+            key={key}
+            className="absolute whitespace-nowrap text-slate-900"
+            style={{
+              left: `${(spot.x / A4_WIDTH_MM) * 100}%`,
+              top: `${(spot.y / A4_HEIGHT_MM) * 100}%`,
+              fontSize: mmToPx > 0 ? `${(spot.size ?? 8.5) * 0.3528 * mmToPx}px` : undefined,
+              fontWeight: spot.bold ? 800 : 600,
+            }}
+          >
+            {text}
+          </span>
+        ))}
+
+        {layoutQ.isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-slate-500">
+            Chargement de l'aperçu…
+          </div>
+        )}
+      </div>
+
+      <p className="mt-2 text-center text-[11px] text-[color:var(--df-text-muted)]">
+        À l'impression sur le formulaire pré-imprimé, seules les valeurs sont envoyées à l'imprimante.
+      </p>
     </div>
   );
 };
-
-const Line: React.FC<{ k: string; v: React.ReactNode }> = ({ k, v }) => (
-  <div className="flex gap-1.5 border-b border-dotted border-[color:var(--df-border)] py-[3px] text-[12px]">
-    <span className="shrink-0 text-[color:var(--df-text-muted)]">{k}</span>
-    <span className="font-semibold">{v}</span>
-  </div>
-);
-
-const Box: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="rounded-lg border border-[color:var(--df-border-strong)]">
-    <div className="border-b border-[color:var(--df-border-strong)] bg-[color:var(--df-surface-sunk)] px-3 py-1.5 text-center text-[11px] font-black uppercase tracking-wider">
-      {title}
-    </div>
-    <div className="px-3 py-2">{children}</div>
-  </div>
-);
 
 export default ContractPaperPreview;

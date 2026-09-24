@@ -1360,25 +1360,36 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'review' && (
               <ContractPaperPreview
-                clientName={selectedClient?.name}
-                clientId={selectedClient?.idNumber}
-                clientLicense={selectedClient?.licenseNumber}
-                clientAddress={selectedClient?.address}
-                clientPhone={selectedClient?.phone}
-                secondDriver={state.secondDriverName}
-                brandModel={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}`.trim() : null}
-                registration={selectedVehicle?.registration}
-                fuel={selectedVehicle?.fuel}
-                insuranceExpiry={selectedVehicle?.insuranceExpiry}
-                vignetteExpiry={selectedVehicle?.vignetteExpiry}
-                techControlExpiry={selectedVehicle?.techControlExpiry}
-                startDate={state.startDate}
-                endDate={state.endDate}
-                days={state.durationMonths * 30 + state.durationExtraDays}
-                kmPerMonth={state.kmInclMonth}
-                totalAmount={totalAmount}
-                deposit={state.securityDepositMad}
-                paymentTerms={state.paymentTerms}
+                values={{
+                  contract_number: 'attribué à l’enregistrement',
+                  customer_last_name: selectedClient?.name,
+                  customer_cin: selectedClient?.idNumber,
+                  customer_license: selectedClient?.licenseNumber,
+                  customer_address: selectedClient?.address,
+                  customer_phone: selectedClient?.phone,
+                  driver_last_name: state.secondDriverName,
+                  vehicle_brand: selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}`.trim() : null,
+                  vehicle_plate: selectedVehicle?.registration,
+                  start_date: state.startDate ? formatDate(state.startDate) : null,
+                  end_date: state.endDate ? formatDate(state.endDate) : null,
+                  fuel: selectedVehicle?.fuel,
+                  days: state.durationMonths * 30 + state.durationExtraDays || null,
+                  unit_price:
+                    state.durationMonths * 30 + state.durationExtraDays > 0
+                      ? formatCurrencyMad(totalAmount / (state.durationMonths * 30 + state.durationExtraDays))
+                      : null,
+                  total_ttc: formatCurrencyMad(totalAmount),
+                  payment_method: state.depositMethod
+                    ? ({ cash: 'Espèces', cheque: 'Chèque', bank_transfer: 'Virement', card: 'Carte', other: 'Autre' } as Record<string, string>)[state.depositMethod]
+                    : state.paymentTerms,
+                }}
+                papers={{
+                  insurance: !!selectedVehicle?.insuranceExpiry && new Date(selectedVehicle.insuranceExpiry).getTime() >= Date.now(),
+                  registration: !!selectedVehicle?.registration,
+                  circulation: !!selectedVehicle?.registration,
+                  vignette: !!selectedVehicle?.vignetteExpiry && new Date(selectedVehicle.vignetteExpiry).getTime() >= Date.now(),
+                  inspection: !!selectedVehicle?.techControlExpiry && new Date(selectedVehicle.techControlExpiry).getTime() >= Date.now(),
+                }}
               />
             )}
           </div>

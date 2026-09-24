@@ -207,6 +207,15 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:documents.view');
         Route::get('generated-documents/{id}/download', [GeneratedDocumentController::class, 'download'])
             ->middleware('permission:documents.view');
+        // Emplacements des champs sur le contrat papier : l'aperçu de
+        // l'assistant s'en sert pour poser les valeurs comme le fait le PDF.
+        Route::get('contract-form-layout', function () {
+            return \App\Http\Responses\ApiResponse::success([
+                'fields' => config('contract_form.fields', []),
+                'offset_x' => config('contract_form.offset_x', 0),
+                'offset_y' => config('contract_form.offset_y', 0),
+            ]);
+        });
         Route::post('contracts/{contract}/generate-pdf', [GeneratedDocumentController::class, 'generateContract'])
             ->middleware('permission:documents.generate');
         Route::post('invoices/{invoice}/generate-pdf', [GeneratedDocumentController::class, 'generateInvoice'])

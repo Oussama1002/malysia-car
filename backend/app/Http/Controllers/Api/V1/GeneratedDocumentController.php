@@ -103,14 +103,13 @@ class GeneratedDocumentController extends Controller
                 ->get()
             : collect();
 
-        // Par défaut, le PDF est fait pour être imprimé sur le formulaire
-        // pré-imprimé de l'agence : seules les valeurs sont posées, aux
-        // emplacements des blancs. `?layout=full` produit la version complète,
-        // qui dessine le formulaire, pour une impression sur papier blanc.
+        // Par défaut : seules les valeurs, pour imprimer sur le formulaire
+        // pré-imprimé de l'agence. `?layout=full` ajoute le formulaire vierge
+        // scanné en fond, pour une impression sur papier blanc.
         $overlay = $request->query('layout') !== 'full';
 
         $doc = $this->pdf->render(
-            view: $overlay ? 'pdf.contract_overlay' : 'pdf.contract',
+            view: $overlay ? 'pdf.contract_overlay' : 'pdf.contract_facsimile',
             data: [
                 'f' => app(\App\Services\ContractFormFields::class)->forContract($contract),
                 'contract' => $contract,
