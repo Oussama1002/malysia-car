@@ -29,8 +29,16 @@ class EnsurePermission
         $userRole = $user->role
             ?? (method_exists($user, 'primaryRoleCode') ? $user->primaryRoleCode() : null);
 
+        // Tous les rôles portés : un compte peut en cumuler plusieurs, et c'est
+        // le plus permissif qui décide — sinon un ADMIN relié à un second rôle
+        // se voyait refuser ce que son rôle ADMIN autorise.
+        $userRoles = array_values(array_filter(array_unique(array_merge(
+            [$userRole],
+            method_exists($user, 'roleCodes') ? $user->roleCodes() : [],
+        ))));
+
         // ADMIN always passes (kept here so we don't depend on User model logic).
-        if ($userRole === 'ADMIN') {
+        if (in_array('ADMIN', $userRoles, true)) {
             return $next($request);
         }
 
@@ -43,7 +51,7 @@ class EnsurePermission
         // truth when a freshly-installed MySQL DB has no row in role_permissions.
         $map = config('erp.permission_roles', []);
         $allowed = $map[$permission] ?? null;
-        if (is_array($allowed) && $userRole !== null && in_array($userRole, $allowed, true)) {
+        if (is_array($allowed) && array_intersect($allowed, $userRoles) !== []) {
             return $next($request);
         }
 

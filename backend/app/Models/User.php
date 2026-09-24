@@ -121,9 +121,30 @@ class User extends Authenticatable
         return $this->hasMany(LoginHistory::class, 'user_id');
     }
 
+    /**
+     * Tous les codes de rôle portés par l'utilisateur.
+     *
+     * @return array<int, string>
+     */
+    public function roleCodes(): array
+    {
+        if (! Schema::hasTable('user_roles') || ! Schema::hasTable('roles')) {
+            return [];
+        }
+        $codes = $this->relationLoaded('roles')
+            ? $this->roles->pluck('code')
+            : $this->roles()->pluck('roles.code');
+
+        return array_values(array_filter(array_map('strval', $codes->all())));
+    }
+
     public function hasPermission(string $code): bool
     {
         if (($this->attributes['role'] ?? null) === 'ADMIN') {
+            return true;
+        }
+        // ADMIN passe tout, qu'il vienne de la colonne ou des rôles liés.
+        if (in_array('ADMIN', $this->roleCodes(), true)) {
             return true;
         }
         if (! Schema::hasTable('permissions')) {
@@ -163,13 +184,26 @@ class User extends Authenticatable
 
     public function primaryRoleCode(): string
     {
-        if (array_key_exists('role', $this->attributes) && $this->attributes['role'] !== null) {
+        // Une colonne vide n'est pas un rôle : sans ça on renvoyait '' et le
+        // contrôle de permission ne regardait jamais les rôles liés.
+        if (! empty($this->attributes['role'])) {
             return (string) $this->attributes['role'];
         }
         if (Schema::hasTable('user_roles') && Schema::hasTable('roles')) {
-            $c = $this->relationLoaded('roles') ? $this->roles->first()?->code : $this->roles()->first()?->code;
-            if ($c) {
-                return (string) $c;
+            // Un utilisateur peut porter plusieurs rôles : prendre le premier
+            // venu donnait un résultat au hasard, et un compte ADMIN pouvait se
+            // retrouver jugé comme agent commercial. On garde le plus fort.
+            $codes = $this->roleCodes();
+            if ($codes !== []) {
+                $hierarchy = (array) config('erp.app_roles', []);
+                usort($codes, function (string $a, string $b) use ($hierarchy) {
+                    $ra = array_search($a, $hierarchy, true);
+                    $rb = array_search($b, $hierarchy, true);
+
+                    return ($ra === false ? PHP_INT_MAX : $ra) <=> ($rb === false ? PHP_INT_MAX : $rb);
+                });
+
+                return (string) $codes[0];
             }
         }
 
