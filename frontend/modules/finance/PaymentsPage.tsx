@@ -955,44 +955,6 @@ export const PaymentForm: React.FC<{
         </select>
       </div>
 
-      {/* ── Montant + Date ───────────────────────────────────── */}
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Montant (MAD) *</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            className="df-input mt-1 w-full"
-            value={form.amount}
-            onChange={(e) => set('amount', Number(e.target.value))}
-            required
-          />
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement</label>
-          {/* Horodatage de l'encaissement : relevé par le système, pas saisi. */}
-          <DateField
-            withTime
-            className="df-input mt-1 w-full bg-slate-50 text-slate-500"
-            value={form.payment_date}
-            onChange={() => {}}
-            disabled
-          />
-        </div>
-      </div>
-
-      {/* ── Référence ────────────────────────────────────────── */}
-      <div>
-        <label className="text-xs font-bold uppercase text-slate-500">Référence</label>
-        <input
-          className="df-input mt-1 w-full"
-          value={form.external_reference ?? ''}
-          onChange={(e) => set('external_reference', e.target.value)}
-          placeholder="Référence externe, n° reçu..."
-        />
-      </div>
-
       {/* ── Chèque OCR scan + fields ────────────────────────── */}
       {form.payment_method === 'check' && (
         <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
@@ -1105,6 +1067,44 @@ export const PaymentForm: React.FC<{
           </div>
         </div>
       )}
+
+      {/* ── Montant + Date ───────────────────────────────────── */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Montant (MAD) *</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className="df-input mt-1 w-full"
+            value={form.amount}
+            onChange={(e) => set('amount', Number(e.target.value))}
+            required
+          />
+        </div>
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement</label>
+          {/* Horodatage de l'encaissement : relevé par le système, pas saisi. */}
+          <DateField
+            withTime
+            className="df-input mt-1 w-full bg-slate-50 text-slate-500"
+            value={form.payment_date}
+            onChange={() => {}}
+            disabled
+          />
+        </div>
+      </div>
+
+      {/* ── Référence ────────────────────────────────────────── */}
+      <div>
+        <label className="text-xs font-bold uppercase text-slate-500">Référence</label>
+        <input
+          className="df-input mt-1 w-full"
+          value={form.external_reference ?? ''}
+          onChange={(e) => set('external_reference', e.target.value)}
+          placeholder="Référence externe, n° reçu..."
+        />
+      </div>
 
       {/* ── Notes ────────────────────────────────────────────── */}
       <div>
