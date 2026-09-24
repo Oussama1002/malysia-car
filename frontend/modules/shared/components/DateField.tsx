@@ -26,6 +26,28 @@ export const DateField: React.FC<{
   const [text, setText] = useState(() => isoToFr(value, withTime));
   const [focused, setFocused] = useState(false);
   const nativeRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Une date choisie au calendrier est une date terminée : on ferme et on passe
+   * au champ suivant, sans quoi l'utilisateur reste bloqué sur le sélecteur.
+   */
+  const moveToNextField = () => {
+    const current = textRef.current;
+    if (!current) return;
+    // Rester dans le formulaire ou la boîte de dialogue courante.
+    const scope: HTMLElement =
+      (current.closest('form') as HTMLElement | null)
+      ?? (current.closest('[role="dialog"]') as HTMLElement | null)
+      ?? document.body;
+    const focusables = (Array.from(
+      scope.querySelectorAll('input, select, textarea, button, [tabindex]'),
+    ) as HTMLElement[]).filter(
+      (el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true' && el.tabIndex !== -1,
+    );
+    const next = focusables[focusables.indexOf(current) + 1];
+    next?.focus();
+  };
 
   // Follow the value while the user is not the one editing it.
   useEffect(() => {
@@ -66,6 +88,7 @@ export const DateField: React.FC<{
   return (
     <span className="relative inline-flex w-full items-center">
       <input
+        ref={textRef}
         id={id}
         type="text"
         inputMode="numeric"
@@ -109,6 +132,8 @@ export const DateField: React.FC<{
         onChange={(e) => {
           onChange(e.target.value);
           setText(isoToFr(e.target.value, withTime));
+          nativeRef.current?.blur();
+          moveToNextField();
         }}
       />
     </span>
