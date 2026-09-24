@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { BrandLogo } from '@/modules/shared/components/BrandLogo';
 
 interface BrandModel { id: string; name: string; }
 interface Brand { id: string; name: string; models: BrandModel[]; }
@@ -105,6 +106,7 @@ export const VehicleBrandsPage: React.FC = () => {
               onClick={() => setExpanded(expanded === brand.id ? null : brand.id)}
             >
               <div className="flex items-center gap-3">
+                <BrandLogo brand={brand.name} size={30} />
                 <span className="text-sm font-black text-slate-900">{brand.name}</span>
                 <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg">
                   {brand.models.length} modèle{brand.models.length !== 1 ? 's' : ''}
