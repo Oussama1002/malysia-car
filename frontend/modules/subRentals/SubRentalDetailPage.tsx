@@ -118,10 +118,19 @@ function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; o
       onClose();
     },
     onError: (e: unknown) => {
-      const msg = (e as any)?.body?.errors
-        ? Object.values((e as any).body.errors).flat().join(' · ')
-        : (e as any)?.body?.message ?? (e as any)?.message ?? 'Erreur';
-      setErr(String(msg));
+      // Ne jamais afficher un cadre rouge vide : on garde le statut HTTP et le
+      // détail du serveur, c'est tout ce qu'on a pour comprendre un refus.
+      const err = e as { body?: { errors?: Record<string, string[]>; message?: string }; message?: string; status?: number };
+      const parts: string[] = [];
+      if (err?.body?.errors) {
+        for (const list of Object.values(err.body.errors)) {
+          if (Array.isArray(list)) parts.push(...list.map(String));
+        }
+      }
+      if (err?.body?.message) parts.push(err.body.message);
+      if (parts.length === 0 && err?.message) parts.push(err.message);
+      if (err?.status) parts.push(`HTTP ${err.status}`);
+      setErr(Array.from(new Set(parts)).join(' · ') || "Erreur inconnue lors de l'enregistrement.");
     },
   });
 
