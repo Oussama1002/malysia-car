@@ -172,6 +172,28 @@ export const ReservationsOpsPage: React.FC = () => {
   });
   const lldThresholdMonths = companySettingsQ.data?.reservations?.lld_threshold_months ?? 3;
 
+  // Durée de la réservation : déduite des deux dates, et modifiable — saisir un
+  // nombre de jours repositionne la date de fin en gardant l'heure de départ.
+  const durationDays = useMemo(() => {
+    if (!form.desired_start_at || !form.desired_end_at) return '';
+    const start = new Date(form.desired_start_at).getTime();
+    const end = new Date(form.desired_end_at).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return '';
+    return String(Math.max(1, Math.round((end - start) / 86400000)));
+  }, [form.desired_start_at, form.desired_end_at]);
+
+  const setDurationDays = (raw: string) => {
+    const days = Number(raw);
+    if (!form.desired_start_at || !Number.isFinite(days) || days <= 0) return;
+    const end = new Date(form.desired_start_at);
+    if (Number.isNaN(end.getTime())) return;
+    end.setDate(end.getDate() + Math.round(days));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const iso = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`
+      + `T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+    setForm((st) => ({ ...st, desired_end_at: iso }));
+  };
+
   // Auto-classify the reservation as LCD or LLD based on the requested window
   // and the company threshold; the picker stays disabled so this is the
   // authoritative value at submission. We compare elapsed days to the
@@ -899,6 +921,21 @@ export const ReservationsOpsPage: React.FC = () => {
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
               <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.desired_end_at} onChange={(dfValue) => setForm((s) => ({ ...s, desired_end_at: dfValue }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Durée (jours)</label>
+              <input
+                type="number"
+                min="1"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+                placeholder={form.desired_start_at ? 'Ex : 3' : "Choisissez d'abord la date de début"}
+                disabled={!form.desired_start_at}
+                value={durationDays}
+                onChange={(e) => setDurationDays(e.target.value)}
+              />
+              <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                Calculée depuis les dates — la modifier décale la date de fin.
+              </p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Prix estimé (MAD)</label>
