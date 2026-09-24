@@ -9,6 +9,7 @@ import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Vehicle, VehicleStatus } from '../types';
 import { VehicleDocumentScanner } from '@/modules/fleet/VehicleDocumentScanner';
 import { DateField } from '@/modules/shared/components/DateField';
+import { BrandLogo } from '@/modules/shared/components/BrandLogo';
 
 interface VehicleModelOption { id: string; name: string; }
 interface VehicleBrandOption { id: string; name: string; models: VehicleModelOption[]; }
@@ -858,6 +859,7 @@ const VehiclesList: React.FC = () => {
                     : <div className="w-full h-full flex items-center justify-center text-slate-400"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 14v4h3m13-4v4h-3M4 14l1.8-5.2A2 2 0 0 1 7.7 7.4h8.6a2 2 0 0 1 1.9 1.4L20 14M4 14h16" /></svg></div>
                   }
                 </div>
+                <BrandLogo brand={v.brand} size={26} />
                 <div>
                   <p className="text-xs font-black text-slate-800">{v.brand} {v.model}</p>
                   <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{v.registration}</p>
@@ -907,7 +909,12 @@ const VehiclesList: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{(v as any).immatOnline || '—'}</td>
-                  <td className="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">{v.brand || '—'}</td>
+                  <td className="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-2">
+                      <BrandLogo brand={v.brand} size={22} />
+                      {v.brand || '—'}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.model || '—'}</td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">
                     {(v as any).miseEnCirculation ? new Date((v as any).miseEnCirculation).toLocaleDateString('fr-MA') : '—'}
@@ -1078,9 +1085,12 @@ const VehiclesList: React.FC = () => {
             </div>
             <div className="p-8 space-y-6 flex-1 flex flex-col">
               <div className="flex justify-between items-start">
-                <div>
+                <div className="flex items-center gap-3">
+                  <BrandLogo brand={v.brand} size={40} />
+                  <div>
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">{v.brand} {v.model}</h3>
                   <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">{v.year} · {(v as any).fuel ?? ''}</p>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

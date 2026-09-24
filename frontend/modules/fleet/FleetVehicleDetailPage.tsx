@@ -10,6 +10,7 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { DateField } from '@/modules/shared/components/DateField';
+import { BrandLogo } from '@/modules/shared/components/BrandLogo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -415,7 +416,8 @@ export const FleetVehicleDetailPage: React.FC = () => {
       <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <Link to="/fleet" className="text-xs font-semibold text-[color:var(--df-brand-600)]">← Flotte</Link>
-          <h1 className="mt-1 text-2xl font-black text-[color:var(--df-text)]">
+          <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-black text-[color:var(--df-text)]">
+            <BrandLogo brand={veh.brand} size={34} />
             {veh.brand} {veh.model} <span className="text-lg font-normal text-[color:var(--df-text-muted)]">{veh.year}</span>
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[color:var(--df-text-muted)]">
