@@ -554,6 +554,15 @@ export const SubRentalDetailPage: React.FC = () => {
                 </button>
               )}
             </div>
+            {paymentsQ.isError && (
+              // Sans ça, un refus du serveur s'affichait comme « aucun paiement »
+              // et un solde à zéro : on montre la vraie raison.
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                Impossible de charger les paiements : {(paymentsQ.error as Error | undefined)?.message ?? 'erreur inconnue'}
+                {(paymentsQ.error as { status?: number } | undefined)?.status === 403
+                  && " — votre profil n'a pas le droit « paiements sous-location »."}
+              </div>
+            )}
             {paymentsQ.isLoading ? (
               <p className="text-sm text-slate-500">Chargement…</p>
             ) : (
