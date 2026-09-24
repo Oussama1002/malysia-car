@@ -127,6 +127,7 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
                   <th className="px-4 py-2.5 text-left">Date</th>
                   <th className="px-4 py-2.5 text-right">Montant</th>
                   <th className="px-4 py-2.5 text-left">Mode</th>
+                  <th className="px-4 py-2.5 text-center">Chèque</th>
                   <th className="px-4 py-2.5 text-left">Référence</th>
                   <th className="px-4 py-2.5 text-center">Statut</th>
                   <th className="px-4 py-2.5 text-right"></th>
@@ -140,6 +141,27 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
                       <td className="px-4 py-3 text-slate-600">{fmtDate(p.payment_date)}</td>
                       <td className="px-4 py-3 text-right font-black text-slate-800">{fmtMad(Number(p.amount ?? 0))}</td>
                       <td className="px-4 py-3 text-slate-600">{frLabel(METHOD_FR, p.payment_method)}</td>
+                      <td className="px-4 py-3 text-center">
+                        {/* Encaissé ou non : la même information que sur Finance → Paiements. */}
+                        {String(p.payment_method ?? '').toLowerCase() === 'check'
+                          || String(p.payment_method ?? '').toLowerCase() === 'cheque' ? (
+                          (() => {
+                            const cs = String(p.cheque_status ?? 'pending');
+                            const badge = cs === 'cleared'
+                              ? { label: 'Encaissé', cls: 'bg-emerald-100 text-emerald-700' }
+                              : cs === 'bounced'
+                                ? { label: 'Rejeté', cls: 'bg-rose-100 text-rose-700' }
+                                : { label: 'En attente', cls: 'bg-amber-100 text-amber-700' };
+                            return (
+                              <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>
+                                {badge.label}
+                              </span>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">
                         {p.external_reference || p.check_number || p.payment_number || '—'}
                         {p.id && <div className="mt-0.5"><ScanProofLink entityType="payment" entityId={String(p.id)} /></div>}
