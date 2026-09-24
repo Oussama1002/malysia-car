@@ -659,14 +659,14 @@ export const ReservationsOpsPage: React.FC = () => {
           }`}
           onClick={() => setShowArchive((v) => !v)}
         >
-          🗄️ {showArchive ? 'Retour aux réservations' : `Archive${cancelledCount > 0 ? ` (${cancelledCount})` : ''}`}
+          {showArchive ? 'Retour aux réservations' : `Archive${cancelledCount > 0 ? ` (${cancelledCount})` : ''}`}
         </button>
         <button
           type="button"
           className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
           onClick={() => setAvailCheckOpen(true)}
         >
-          🔍 Vérifier disponibilité
+          Vérifier disponibilité
         </button>
         <button
           type="button"
