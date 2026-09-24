@@ -116,6 +116,19 @@ export const ContractDetailPage: React.FC = () => {
   const c = q.data?.contract ?? null;
   const history = q.data?.history ?? [];
 
+  // Un contrat rattaché à une réservation ne doit pas rester en brouillon.
+  const qc = useQueryClient();
+  const [activateError, setActivateError] = useState<string | null>(null);
+  const activateM = useMutation({
+    mutationFn: () => contractsApi.activate(cid),
+    onSuccess: () => {
+      setActivateError(null);
+      qc.invalidateQueries({ queryKey: queryKeys.contracts.one(cid) });
+      qc.invalidateQueries({ queryKey: queryKeys.contracts.all });
+    },
+    onError: (e: unknown) => setActivateError(e instanceof Error ? e.message : 'Activation refusée.'),
+  });
+
   // Resolve raw IDs → names by fetching customer + vehicle
   const raw = c as any;
   const customerId: string | null = raw?.customerId ?? raw?.customer_id ?? null;
@@ -200,13 +213,28 @@ export const ContractDetailPage: React.FC = () => {
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant</div>
             <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad((raw?.baseAmount ?? raw?.amountMad ?? raw?.base_amount ?? 0) as number)}</div>
           </div>
+          {activateError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700">
+              {activateError}
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-end gap-3">
             <GeneratePdfButton
               kind="contract"
               entityId={String(c.id ?? id)}
               className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors hover:bg-slate-800"
             />
-            {/* Early return button — only for active contracts with a future end date */}
+            {(c.status === 'draft' || c.status === 'approved') && (
+              <button
+                type="button"
+                onClick={() => activateM.mutate()}
+                disabled={activateM.isPending}
+                className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                {activateM.isPending ? 'Activation…' : 'Activer le contrat'}
+              </button>
+            )}
+                        {/* Early return button — only for active contracts with a future end date */}
             {(c.status === 'active' || c.status === 'approved') && computedEndDate && (
               <button
                 type="button"

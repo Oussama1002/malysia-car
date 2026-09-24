@@ -662,6 +662,21 @@ export const ContractWizardPage: React.FC = () => {
       const contractId = await ensureDraftContract();
       createdId = contractId;
 
+      // Un contrat finalisé n'est plus un brouillon : il est rattaché à une
+      // réservation et engage le véhicule. L'activation vérifie côté serveur le
+      // mode de règlement et la disponibilité du véhicule.
+      try {
+        await contractsApi.activate(contractId);
+      } catch (activationError) {
+        const reason = activationError instanceof Error ? activationError.message : '';
+        setSaveError(
+          'Le contrat est enregistré mais reste en brouillon : '
+            + (reason || 'activation refusée par le serveur.'),
+        );
+        navigate(`/contracts/${contractId}`);
+        return;
+      }
+
       // Generate payment schedule
       try {
         await contractsApi.generateSchedule(contractId, {
