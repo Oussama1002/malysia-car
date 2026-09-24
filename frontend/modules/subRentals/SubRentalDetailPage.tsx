@@ -10,6 +10,33 @@ import { DateField } from '@/modules/shared/components/DateField';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
 
+/* Les valeurs stockées sont des codes : rien de tout cela ne s'affiche tel quel. */
+const METHOD_FR: Record<string, string> = {
+  cash: 'Espèces', especes: 'Espèces',
+  cheque: 'Chèque', check: 'Chèque',
+  bank_transfer: 'Virement', virement: 'Virement',
+  card: 'Carte', carte: 'Carte',
+  other: 'Autre',
+};
+const CONTRACT_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon', active: 'Actif', returned: 'Retourné',
+  closed: 'Clôturé', cancelled: 'Annulé',
+};
+const OWNERSHIP_FR: Record<string, string> = {
+  owned: 'En propriété', sub_rented: 'Sous-location', sub_rental: 'Sous-location',
+  leased: 'Leasing', financed: 'Financé',
+};
+const AGENCY_STATUS_FR: Record<string, string> = {
+  active: 'Active', inactive: 'Inactive', blacklisted: 'Blacklistée',
+};
+const FUEL_FR: Record<string, string> = {
+  empty: 'Vide', quarter: '1/4', half: '1/2', three_quarters: '3/4', full: 'Plein',
+};
+const fr = (map: Record<string, string>, value: unknown): string => {
+  const key = String(value ?? '').toLowerCase();
+  return map[key] ?? (value ? String(value) : '—');
+};
+
 function TabBtn({ id, active, onClick, label }: { id: Tab; active: Tab; onClick: (t: Tab) => void; label: string }) {
   return (
     <button
@@ -444,7 +471,7 @@ export const SubRentalDetailPage: React.FC = () => {
               <div>
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Contrat</h3>
                 <InfoRow label="Numéro" value={c.contract_number} />
-                <InfoRow label="Statut" value={c.status} />
+                <InfoRow label="Statut" value={fr(CONTRACT_STATUS_FR, c.status)} />
                 <InfoRow label="Date de début" value={new Date(c.start_date).toLocaleDateString('fr-MA')} />
                 <InfoRow label="Date de fin" value={new Date(c.end_date).toLocaleDateString('fr-MA')} />
                 <InfoRow label="Jours" value={Math.max(1, Math.round((new Date(c.end_date).getTime() - new Date(c.start_date).getTime()) / 86400000))} />
@@ -490,7 +517,7 @@ export const SubRentalDetailPage: React.FC = () => {
                 <InfoRow label="Année" value={vehicle.year} />
                 <InfoRow label="Couleur" value={vehicle.color} />
                 <InfoRow label="Kilométrage" value={vehicle.mileage_current ? `${vehicle.mileage_current.toLocaleString('fr-MA')} km` : undefined} />
-                <InfoRow label="Statut propriété" value={vehicle.ownership_status} />
+                <InfoRow label="Statut propriété" value={fr(OWNERSHIP_FR, vehicle.ownership_status)} />
                 <div className="mt-4">
                   <Link to={`/fleet/${vehicle.id}`} className="text-sm font-semibold text-indigo-600 hover:underline">
                     Voir le véhicule dans la flotte →
@@ -529,7 +556,7 @@ export const SubRentalDetailPage: React.FC = () => {
                 <InfoRow label="RC" value={agency.rc} />
                 <InfoRow label="Statut" value={
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${agency.status === 'blacklisted' ? 'bg-red-100 text-red-700' : agency.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                    {agency.status}
+                    {fr(AGENCY_STATUS_FR, agency.status)}
                   </span>
                 } />
                 <div className="mt-4">
@@ -598,7 +625,7 @@ export const SubRentalDetailPage: React.FC = () => {
                         <tr key={p.id}>
                           <td className="px-3 py-2 text-slate-600">{new Date(p.payment_date).toLocaleDateString('fr-MA')}</td>
                           <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">{Number(p.amount).toLocaleString('fr-MA')} MAD</td>
-                          <td className="px-3 py-2 text-slate-600">{p.payment_method}</td>
+                          <td className="px-3 py-2 text-slate-600">{fr(METHOD_FR, p.payment_method)}</td>
                           <td className="px-3 py-2 text-slate-500 text-xs">
                             {p.reference ?? '—'}
                             <div className="mt-0.5"><ScanProofLink entityType="sub_rental_payment" entityId={p.id} /></div>
@@ -653,7 +680,7 @@ export const SubRentalDetailPage: React.FC = () => {
               <>
                 <InfoRow label="Date retour" value={new Date((c as any).return_report.returned_at).toLocaleDateString('fr-MA')} />
                 <InfoRow label="Kilométrage" value={(c as any).return_report.odometer_km ? `${(c as any).return_report.odometer_km.toLocaleString('fr-MA')} km` : undefined} />
-                <InfoRow label="Niveau carburant" value={(c as any).return_report.fuel_level} />
+                <InfoRow label="Niveau carburant" value={fr(FUEL_FR, (c as any).return_report.fuel_level)} />
                 <InfoRow label="Signé par" value={(c as any).return_report.signed_by_supplier} />
                 {(c as any).return_report.condition_notes && (
                   <div className="mt-3 rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500 mb-1">État</p><p className="text-sm">{(c as any).return_report.condition_notes}</p></div>
