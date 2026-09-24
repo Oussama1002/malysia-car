@@ -52,6 +52,23 @@ class VehicleRepairController extends Controller
             'created_by'  => auth()->id(),
         ]);
 
+        // La réparation rejoint les Dépenses dès qu'elle a un coût.
+        if (! empty($data['cost_amount']) && (float) $data['cost_amount'] > 0) {
+            app(\App\Services\ExpenseRecorder::class)->record('vehicle_repair', (string) $repair->id, [
+                'company_id' => $vehicle->company_id,
+                'branch_id' => $vehicle->branch_id,
+                'label' => 'Réparation — '.$data['description'],
+                'amount' => $data['cost_amount'],
+                'expense_date' => $data['completed_at'] ?? $data['reported_at'] ?? now()->toDateString(),
+                'category' => 'réparations',
+                'status' => ($repair->status === 'completed') ? 'paid' : 'unpaid',
+                'paid_at' => $data['completed_at'] ?? null,
+                'vehicle_id' => $vehicle->id,
+                'notes' => ! empty($data['vendor_name']) ? 'Prestataire : '.$data['vendor_name'] : null,
+                'created_by' => auth()->id(),
+            ]);
+        }
+
         if (in_array($repair->status, ['in_progress'], true)) {
             $vehicle->update(['status' => 'MAINTENANCE']);
             $this->ops->markUnavailable($vehicle, 'unavailable', 'repair', 'Réparation: '.$repair->repair_type);

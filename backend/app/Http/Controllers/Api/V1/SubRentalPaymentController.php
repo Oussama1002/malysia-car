@@ -72,6 +72,23 @@ class SubRentalPaymentController extends Controller
             title: trim('Chèque '.($payment->check_number ?? '')) ?: 'Preuve de paiement fournisseur',
         );
 
+        // Un paiement fournisseur est de l'argent qui sort : il apparaît dans
+        // les Dépenses comme n'importe quelle autre charge.
+        app(\App\Services\ExpenseRecorder::class)->record('sub_rental_payment', $payment->id, [
+            'company_id' => $contract->company_id,
+            'branch_id' => $contract->branch_id,
+            'label' => 'Paiement fournisseur — '.($contract->contract_number ?? 'sous-location'),
+            'amount' => $payment->amount,
+            'expense_date' => $payment->payment_date,
+            'category' => 'sous-location',
+            'status' => 'paid',
+            'paid_at' => $payment->payment_date,
+            'payment_method' => $payment->payment_method,
+            'reference' => $payment->reference ?? $payment->check_number,
+            'vehicle_id' => $contract->vehicle_id,
+            'created_by' => $request->user()?->id,
+        ]);
+
         AuditLogger::created($payment, $request->user(), ['contract_id' => $contract->id, 'amount' => (float) $payment->amount]);
 
         // Re-fetch contract to get updated payment_status

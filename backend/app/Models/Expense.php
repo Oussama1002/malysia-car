@@ -24,6 +24,7 @@ class Expense extends Model
         'reservation_id', 'mission_id', 'supplier_id',
         'frequency', 'recurring_parent_id',
         'notes', 'created_by', 'paid_at',
+        'source_type', 'source_id',
     ];
 
     protected $casts = [

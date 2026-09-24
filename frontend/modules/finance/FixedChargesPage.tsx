@@ -48,13 +48,14 @@ type Supplier = {
 
 // ── Constants ──────────────────────────────────────────────────────
 const CATEGORIES = [
-  'carburant', 'entretien', 'réparations', 'assurance', 'pneus', 'nettoyage',
+  'carburant', 'entretien', 'réparations', 'sous-location', 'assurance', 'pneus', 'nettoyage',
   'amendes', 'péages', 'salaires', 'loyer', 'SaaS', 'marketing',
   'logistique', 'taxes', 'crédit véhicule', 'autres',
 ];
 
 const CATEGORY_FR: Record<string, string> = {
   carburant: 'Carburant', entretien: 'Entretien', 'réparations': 'Réparations',
+  'sous-location': 'Sous-location',
   assurance: 'Assurance', pneus: 'Pneus', nettoyage: 'Nettoyage',
   amendes: 'Amendes', 'péages': 'Péages', salaires: 'Salaires',
   loyer: 'Loyer', SaaS: 'SaaS', marketing: 'Marketing',
