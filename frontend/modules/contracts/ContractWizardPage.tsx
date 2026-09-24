@@ -15,6 +15,13 @@ type WizardVehicle = FleetVehicleDto & {
   insuranceDeductible?: number;
 };
 
+/** Véhicule pris en sous-location : la valeur varie selon l'origine des données. */
+function isSubRental(ownership?: string | null): boolean {
+  const value = String(ownership ?? '').toLowerCase();
+
+  return value === 'sub_rented' || value === 'sub_rental';
+}
+
 /** French availability of a vehicle, reservations and contracts included. */
 function vehicleAvailability(v: WizardVehicle): { label: string; free: boolean } {
   const status = String(v.status).toUpperCase();
@@ -456,7 +463,9 @@ export const ContractWizardPage: React.FC = () => {
         insuranceExpiry: v.insurance_expiry,
         techControlExpiry: v.tech_control_expiry,
         vignetteExpiry: v.vignette_expiry,
-        ownershipStatus: v.ownership_status,
+        // L'API renvoie ownershipStatus ; lire ownership_status donnait
+        // toujours undefined, donc aucun véhicule n'était marqué SL.
+        ownershipStatus: v.ownershipStatus ?? v.ownership_status,
         insuranceDeductible: v.insuranceDeductible ?? v.insurance_deductible ?? undefined,
         // The list endpoint resolves live usage: a vehicle can sit at status
         // AVAILABLE in the fleet table while a reservation or contract holds it.
@@ -925,7 +934,7 @@ export const ContractWizardPage: React.FC = () => {
                       // collapses to just the registration.
                       const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
                       const label = brandModel || 'Véhicule';
-                      const isSL = v.ownershipStatus === 'sub_rented';
+                      const isSL = isSubRental(v.ownershipStatus);
                       const { label: statusFr, free } = vehicleAvailability(v);
                       return (
                         <option
@@ -936,12 +945,12 @@ export const ContractWizardPage: React.FC = () => {
                           // definition — never lock the current choice out.
                           disabled={!free && state.vehicleId !== v.id}
                         >
-                          {isSL ? '[SL] ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''} — {statusFr}
+                          {isSL ? '🟣 SL · ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''} — {statusFr}
                         </option>
                       );
                     })}
                   </select>
-                  {selectedVehicle?.ownershipStatus === 'sub_rented' && (
+                  {isSubRental(selectedVehicle?.ownershipStatus) && (
                     <p className="mt-1 text-[11px] font-semibold text-amber-700">
                       ⚠️ Véhicule en sous-location (SL) — vérifiez les conditions de re-location.
                     </p>
