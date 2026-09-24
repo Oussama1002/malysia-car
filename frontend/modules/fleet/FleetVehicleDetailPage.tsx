@@ -11,6 +11,7 @@ import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { DateField } from '@/modules/shared/components/DateField';
 import { BrandLogo } from '@/modules/shared/components/BrandLogo';
+import { Modal } from '@/modules/shared/components/Modal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -715,33 +716,44 @@ export const FleetVehicleDetailPage: React.FC = () => {
             </div>
           </SectionCard>
 
-          {/* Add Plan form */}
-          {showPlanForm && (
+          {/* Add Plan form — en popup, la page est déjà longue */}
+          <Modal
+            open={showPlanForm}
+            title="Nouveau plan d'entretien"
+            onClose={() => setShowPlanForm(false)}
+            widthClass="max-w-xl"
+          >
             <MaintenancePlanForm
               vehicleId={id!}
               onSaved={() => { setShowPlanForm(false); invalidate(['maintenance-plans']); }}
               onCancel={() => setShowPlanForm(false)}
             />
-          )}
+          </Modal>
 
           {/* Record a maintenance event */}
           <SectionCard
             title="Enregistrer un entretien"
             action={
-              <button className="df-btn df-btn--subtle df-btn--sm" onClick={() => setShowMaintForm(!showMaintForm)}>
-                {showMaintForm ? 'Fermer' : <><Icon name="plus" size={14} /> Enregistrer</>}
+              <button className="df-btn df-btn--subtle df-btn--sm" onClick={() => setShowMaintForm(true)}>
+                <Icon name="plus" size={14} /> Enregistrer
               </button>
             }
           >
-            {showMaintForm && (
-              <MaintenanceEventForm
-                vehicleId={id!}
-                onSaved={() => { setShowMaintForm(false); invalidate(['maintenance-plans']); }}
-                onCancel={() => setShowMaintForm(false)}
-              />
-            )}
-            {!showMaintForm && <p className="text-sm text-[color:var(--df-text-muted)]">Cliquez sur "Enregistrer" pour saisir un entretien effectué.</p>}
+            <p className="text-sm text-[color:var(--df-text-muted)]">Cliquez sur « Enregistrer » pour saisir un entretien effectué.</p>
           </SectionCard>
+
+          <Modal
+            open={showMaintForm}
+            title="Enregistrer un entretien"
+            onClose={() => setShowMaintForm(false)}
+            widthClass="max-w-xl"
+          >
+            <MaintenanceEventForm
+              vehicleId={id!}
+              onSaved={() => { setShowMaintForm(false); invalidate(['maintenance-plans']); }}
+              onCancel={() => setShowMaintForm(false)}
+            />
+          </Modal>
         </div>
       )}
 
@@ -1339,8 +1351,7 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
   };
 
   return (
-    <div className="df-card df-card--elev p-4">
-      <div className="mb-3 text-sm font-bold">Nouveau plan d'entretien</div>
+    <div>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="df-label">Type d'entretien</label>
