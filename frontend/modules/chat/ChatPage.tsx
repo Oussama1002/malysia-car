@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { chatApi, type ChatConversation, type ChatUser } from '@/services/chatApi';
 import { getApiBase } from '@/services/apiClient';
 import { Icon } from '@/modules/shared/components/Icon';
+import { useVoiceRecorder, formatDuration } from '@/modules/chat/useVoiceRecorder';
 
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('') || '?';
@@ -64,7 +65,8 @@ export const ChatPage: React.FC = () => {
   }, [conversations, users, activePeer]);
 
   const sendM = useMutation({
-    mutationFn: (arg: { body: string; file?: File }) => chatApi.send(activePeer!, arg.body, arg.file),
+    mutationFn: (arg: { body: string; file?: File; seconds?: number }) =>
+      chatApi.send(activePeer!, arg.body, arg.file, arg.seconds),
     onSuccess: () => {
       setDraft('');
       qc.invalidateQueries({ queryKey: ['chat', 'thread', activePeer] });
@@ -77,6 +79,17 @@ export const ChatPage: React.FC = () => {
   const cameraRef = useRef<HTMLInputElement>(null);
   const onPickFile = (f: File | undefined) => {
     if (f && activePeer && !sendM.isPending) sendM.mutate({ body: draft, file: f });
+  };
+
+  // Message vocal : on enregistre, puis on envoie au relâchement. Rien n'est
+  // envoyé tant que l'agent n'a pas arrêté lui-même.
+  const voice = useVoiceRecorder();
+  const finishRecording = async () => {
+    const clip = await voice.stop();
+    if (clip && activePeer) {
+      sendM.mutate({ body: draft, file: clip.file, seconds: clip.seconds });
+      URL.revokeObjectURL(clip.url);
+    }
   };
 
   // Selecting a conversation marks it read on the server (messages endpoint) —
@@ -188,6 +201,15 @@ export const ChatPage: React.FC = () => {
                       <a href={m.attachment.url} target="_blank" rel="noreferrer" className="block">
                         <img src={m.attachment.url} alt={m.attachment.name} className="mb-1 max-h-56 max-w-full rounded-lg object-contain" />
                       </a>
+                    ) : m.attachment.is_audio ? (
+                      <div className="mb-1 flex items-center gap-2">
+                        <audio controls preload="none" src={m.attachment.url} className="h-9 max-w-[240px]" />
+                        {m.attachment.duration ? (
+                          <span className={`text-[10px] font-bold ${m.from_me ? 'text-white/70' : 'text-[color:var(--df-text-faint)]'}`}>
+                            {formatDuration(m.attachment.duration)}
+                          </span>
+                        ) : null}
+                      </div>
                     ) : (
                       <a href={m.attachment.url} target="_blank" rel="noreferrer"
                         className={`mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold ${m.from_me ? 'bg-white/15 text-white' : 'bg-[color:var(--df-surface)] text-[color:var(--df-text)]'}`}>
@@ -225,17 +247,49 @@ export const ChatPage: React.FC = () => {
               <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
                 onChange={(e) => { onPickFile(e.target.files?.[0]); e.target.value = ''; }} />
 
-              <input
-                className="df-input flex-1"
-                placeholder="Écrire un message…"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-              <button type="submit" disabled={!draft.trim() || sendM.isPending}
+              {/* Message vocal */}
+              {voice.supported && (
+                <button
+                  type="button"
+                  title={voice.recording ? "Arrêter et envoyer" : "Enregistrer un message vocal"}
+                  disabled={sendM.isPending}
+                  onClick={() => (voice.recording ? void finishRecording() : void voice.start())}
+                  className={`df-btn df-btn--icon shrink-0 ${voice.recording ? 'bg-rose-600 text-white' : 'df-btn--subtle'}`}
+                >
+                  <Icon name={voice.recording ? 'check' : 'chat'} size={16} />
+                </button>
+              )}
+
+              {voice.recording ? (
+                <div className="flex flex-1 items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+                  <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-600" />
+                  Enregistrement… {formatDuration(voice.seconds)}
+                  <button
+                    type="button"
+                    onClick={voice.cancel}
+                    className="ml-auto rounded-lg px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-100"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              ) : (
+                <input
+                  className="df-input flex-1"
+                  placeholder="Écrire un message…"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              )}
+              <button type="submit" disabled={!draft.trim() || sendM.isPending || voice.recording}
                 className="rounded-xl bg-[color:var(--df-brand-500)] px-4 py-2 text-sm font-black text-white disabled:opacity-50">
                 {sendM.isPending ? '…' : 'Envoyer'}
               </button>
             </form>
+            {voice.error && (
+              <div className="border-t border-[color:var(--df-border)] px-3 py-2 text-xs font-semibold text-rose-600">
+                {voice.error}
+              </div>
+            )}
           </>
         )}
       </section>

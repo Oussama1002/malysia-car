@@ -18,6 +18,13 @@ use Illuminate\Support\Str;
  */
 class ChatController extends Controller
 {
+    /** Ce qu'un agent peut joindre à un message : documents, images, et vocaux. */
+    private const ALLOWED_ATTACHMENT_EXTENSIONS = [
+        'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'zip',
+        'webm', 'ogg', 'oga', 'mp3', 'm4a', 'mp4', 'wav', 'aac',
+    ];
+
     /** GET /v1/chat/users — other users you can message. Mirrors the app's
      *  canonical user list (UserController@index applies no company filter),
      *  excluding yourself. */
@@ -121,7 +128,18 @@ class ChatController extends Controller
         $data = $request->validate([
             'recipient_id' => ['required', 'uuid'],
             'body' => ['nullable', 'string', 'max:5000'],
-            'file' => ['nullable', 'file', 'max:15360', 'mimes:jpg,jpeg,png,webp,gif,bmp,heic,heif,pdf,doc,docx,xls,xlsx,csv,txt,zip'],
+            // On valide l'extension plutôt que le type deviné : l'enregistreur
+            // du navigateur envoie « audio/webm;codecs=opus » ou « audio/mp4 »
+            // selon la plateforme, et la détection par contenu recale des
+            // fichiers parfaitement valides.
+            'file' => ['nullable', 'file', 'max:15360', function ($attribute, $value, $fail) {
+                $extension = strtolower($value->getClientOriginalExtension() ?: '');
+                if (! in_array($extension, self::ALLOWED_ATTACHMENT_EXTENSIONS, true)) {
+                    $fail("Ce format de fichier n'est pas accepté.");
+                }
+            }],
+            // Durée du message vocal, en secondes, mesurée par l'enregistreur.
+            'duration' => ['nullable', 'integer', 'min:0', 'max:600'],
         ]);
         if (blank($data['body'] ?? null) && ! $request->hasFile('file')) {
             return ApiResponse::error('Message vide.', 422);
@@ -147,6 +165,7 @@ class ChatController extends Controller
             'recipient_id' => $recipient->id,
             'body' => $data['body'] ?? null,
             'attachment_file_id' => $attachmentFileId,
+            'attachment_duration' => $data['duration'] ?? null,
         ]);
 
         $files = $this->filesFor(array_filter([$attachmentFileId]));
@@ -196,10 +215,16 @@ class ChatController extends Controller
         $attachment = null;
         if ($m->attachment_file_id && ($f = $files->get($m->attachment_file_id))) {
             $mime = (string) ($f->mime_type ?? '');
+            $extension = strtolower(pathinfo((string) $f->original_name, PATHINFO_EXTENSION));
             $attachment = [
                 'name' => $f->original_name,
                 'mime' => $mime,
                 'is_image' => str_starts_with($mime, 'image/'),
+                // Un message vocal s'écoute dans la conversation : le client a
+                // besoin de le reconnaître sans deviner d'après le nom.
+                'is_audio' => str_starts_with($mime, 'audio/')
+                    || in_array($extension, ['webm', 'ogg', 'oga', 'mp3', 'm4a', 'wav', 'aac'], true),
+                'duration' => $m->attachment_duration !== null ? (int) $m->attachment_duration : null,
                 'url' => rtrim((string) config('app.url'), '/').'/api/v1/files/'.$m->attachment_file_id,
             ];
         }
