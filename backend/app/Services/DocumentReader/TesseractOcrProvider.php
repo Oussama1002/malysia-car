@@ -59,12 +59,31 @@ class TesseractOcrProvider implements OcrProviderInterface
         // half the detail a photo of the same cheque gives Tesseract.
         $isCheque = $docType === 'cheque';
 
+        $isIdCard = in_array($docType, ['cin', 'passport', 'driving_license'], true);
+
         if ($ext === 'pdf') {
-            $imagePaths = $this->renderPdfPages($absolutePath, $isCheque ? 1 : 2);
+            // Une carte d'identité n'a pas besoin d'un rendu A4 à 300 dpi :
+            // rendre à 2 400 px coûte déjà bien moins que 3 508 px, et après
+            // recadrage la carte reste au-delà de 400 dpi.
+            $imagePaths = $this->renderPdfPages($absolutePath, $isCheque ? 1 : 2, $isIdCard ? 2400 : 3508);
             // Crop the surrounding white so the cheque fills the frame, the way
             // it does in a photo.
             foreach ($imagePaths as $page) {
                 $this->trimMargins($page);
+            }
+            // Une CIN ou un permis scanné en PDF arrivait ici en 3 508 px par
+            // page : deux pages de cette taille, c'est plusieurs minutes de
+            // Tesseract pour une carte de 85 mm. Une fois les marges coupées,
+            // la carte occupe toute l'image : 2 000 px la rendent encore à plus
+            // de 500 dpi, pour trois fois moins de pixels à lire.
+            if ($isIdCard) {
+                foreach ($imagePaths as $i => $page) {
+                    $smaller = $this->downsizeImage($page, 2000);
+                    if ($smaller !== null) {
+                        @unlink($page);
+                        $imagePaths[$i] = $smaller;
+                    }
+                }
             }
             $needsCleanup = true;
         } else {
@@ -83,7 +102,7 @@ class TesseractOcrProvider implements OcrProviderInterface
             // plus de 450 dpi, et Tesseract y passe deux fois moins de temps
             // que sur 2400 px. Un chèque ou une carte grise garde la pleine
             // définition, ses chiffres sont fins.
-            $resized = $this->downsizeImage($source, $isPinkDoc || $docType === 'passport' ? 1600 : 2400);
+            $resized = $this->downsizeImage($source, $isIdCard ? 1600 : 2400);
             $working = $resized ?? $source;
             // Preprocessing writes in place. A small jpg/png needs neither
             // conversion nor resizing, so without a copy here we would grayscale

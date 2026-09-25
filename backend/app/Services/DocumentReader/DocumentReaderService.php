@@ -108,8 +108,18 @@ class DocumentReaderService
         $absolute = $disk->path($document->file_path);
 
         try {
+            // Le temps passé est la première question quand un scan traîne :
+            // on le note, par document et par type.
+            $startedAt = microtime(true);
             $ocr = $this->ocr->extract($absolute, ['doc_type' => $hintedType ?? $document->document_type]);
+            $ocrSeconds = round(microtime(true) - $startedAt, 1);
             $parsed = $this->parser->parse($ocr->rawText, $hintedType ?? $document->document_type);
+            Log::info('reader_document.extracted', [
+                'document' => $document->id,
+                'type' => $hintedType ?? $document->document_type,
+                'ocr_seconds' => $ocrSeconds,
+                'total_seconds' => round(microtime(true) - $startedAt, 1),
+            ]);
 
             return DB::transaction(function () use ($document, $ocr, $parsed) {
                 $document->update([
