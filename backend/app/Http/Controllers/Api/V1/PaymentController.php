@@ -158,7 +158,11 @@ class PaymentController extends Controller
                 title: trim('Chèque '.($data['check_number'] ?? '')) ?: 'Preuve '.($payment->payment_number ?? ''),
             );
 
-            if (! empty($data['allocations'])) {
+            // Une caution n'est pas un encaissement : elle rejoint les
+            // franchises d'assurance et ne s'impute sur aucune facture.
+            if (($data['payment_type'] ?? null) === 'caution') {
+                $this->recordFranchise($payment, $request);
+            } elseif (! empty($data['allocations'])) {
                 $this->allocatePayment($payment, $data['allocations'], optional($request->user())->id);
             } else {
                 // No explicit allocation. Resolve the invoice: the one selected on
@@ -350,6 +354,60 @@ class PaymentController extends Controller
         }
 
         return ApiResponse::success($payment->fresh());
+    }
+
+    /**
+     * Une caution saisie depuis Paiements est la même garantie que celle prise
+     * au comptoir : elle doit apparaître dans les franchises, sinon la remise
+     * du véhicule reste bloquée alors que le client a payé.
+     */
+    private function recordFranchise(Payment $payment, Request $request): void
+    {
+        if (\App\Models\ContractDeposit::query()->where('source_payment_id', $payment->id)->exists()) {
+            return;
+        }
+
+        $contractId = $payment->contract_id;
+        if (! $contractId && $payment->reservation_id) {
+            $contractId = \App\Models\Contract::query()
+                ->where('reservation_id', $payment->reservation_id)
+                ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
+                ->orderByDesc('created_at')
+                ->value('id');
+        }
+
+        $reservationId = $payment->reservation_id;
+        if (! $reservationId && $payment->contract_id) {
+            $reservationId = \App\Models\Contract::query()
+                ->whereKey($payment->contract_id)
+                ->value('reservation_id');
+        }
+
+        $isCheque = in_array($payment->payment_method, ['check', 'cheque'], true);
+
+        \App\Models\ContractDeposit::query()->create([
+            'company_id' => $payment->company_id,
+            'branch_id' => $payment->branch_id,
+            'contract_id' => $contractId,
+            'reservation_id' => $reservationId,
+            'customer_id' => $payment->customer_id,
+            'amount' => $payment->amount,
+            'method' => match ($payment->payment_method) {
+                'check', 'cheque' => 'cheque',
+                'cash' => 'cash',
+                'bank_transfer' => 'bank_transfer',
+                'card' => 'card',
+                default => 'other',
+            },
+            'check_number' => $isCheque ? $payment->check_number : null,
+            'check_bank' => $isCheque ? $payment->check_bank : null,
+            'check_date' => $isCheque ? $payment->check_date : null,
+            'status' => \App\Models\ContractDeposit::STATUS_HELD,
+            'notes' => 'Saisie depuis Paiements ('.($payment->payment_number ?? $payment->id).').',
+            'collected_by' => $request->user()?->id,
+            'collected_at' => $payment->payment_date ?? now(),
+            'source_payment_id' => $payment->id,
+        ]);
     }
 
     private function allocatePayment(Payment $payment, array $allocations, ?string $userId): void
