@@ -321,6 +321,9 @@ class ReservationController extends Controller
             // table might not exist or have different columns
         }
 
+        // Le journal est lu par des agents : action, auteur et changements en clair.
+        $history = app(\App\Services\AuditTrailPresenter::class)->present($history);
+
         // Customer/vehicle summary for header
         $customer = $reservation->customer;
         $vehicle = $reservation->vehicle;

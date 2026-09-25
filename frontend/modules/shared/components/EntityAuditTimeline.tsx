@@ -318,7 +318,7 @@ export const EntityAuditTimeline: React.FC<{
               </div>
             </div>
             <div className="mt-1 text-xs text-slate-500">
-              {r.actor_email ?? r.user_id ?? 'Système'}
+              {(r as { actor_name?: string }).actor_name ?? r.actor_email ?? 'Système'}
               {r.ip_address ? <span className="font-mono"> · {r.ip_address}</span> : null}
               {r.legal_significance && (
                 <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-800">
@@ -332,9 +332,10 @@ export const EntityAuditTimeline: React.FC<{
                 r.after_data as Record<string, unknown> | null,
               );
               return (
+                diffs.length === 0 ? null : (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-[11px] font-semibold text-indigo-600">
-                    Voir les changements ({diffs.length || 'aucun détail'})
+                    Voir les changements ({diffs.length})
                   </summary>
                   {diffs.length > 0 ? (
                     <table className="mt-2 w-full border-collapse text-[11px]">
@@ -355,10 +356,9 @@ export const EntityAuditTimeline: React.FC<{
                         ))}
                       </tbody>
                     </table>
-                  ) : (
-                    <p className="mt-1 text-[11px] text-slate-400">Changement enregistré (aucun champ visible).</p>
-                  )}
+                  ) : null}
                 </details>
+                )
               );
             })()}
           </div>
