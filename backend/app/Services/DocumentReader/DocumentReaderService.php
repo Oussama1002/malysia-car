@@ -231,7 +231,70 @@ class DocumentReaderService
             }
         }
 
+        if ($entityType === 'customer') {
+            $this->fileKycChecklist($document, $entityId);
+        }
+
         return $document->fresh();
+    }
+
+    /**
+     * La CIN et le permis scannés à la création du client sont exactement les
+     * pièces que la checklist KYC réclame : sans ce rattachement l'agent voyait
+     * « 0 document » et redemandait au client ce qu'il avait déjà donné.
+     */
+    private function fileKycChecklist(ReaderDocument $document, string $customerId): void
+    {
+        $type = match ($document->document_type) {
+            ReaderDocument::TYPE_CIN, ReaderDocument::TYPE_PASSPORT => 'cin',
+            ReaderDocument::TYPE_DRIVING_LICENSE => 'driving_license',
+            default => null,
+        };
+        if ($type === null || ! $document->file_path) {
+            return;
+        }
+
+        try {
+            $case = \App\Models\CustomerKycCase::query()
+                ->where('customer_id', $customerId)
+                ->orderByDesc('created_at')
+                ->first();
+
+            if (! $case) {
+                $case = \App\Models\CustomerKycCase::query()->create([
+                    'customer_id' => $customerId,
+                    'kyc_status' => 'pending',
+                    'verification_level' => 'basic',
+                ]);
+            }
+
+            $already = \App\Models\CustomerKycDocument::query()
+                ->where('kyc_case_id', $case->id)
+                ->where('file_path', $document->file_path)
+                ->exists();
+            if ($already) {
+                return;
+            }
+
+            \App\Models\CustomerKycDocument::query()->create([
+                'kyc_case_id' => $case->id,
+                'document_type' => $type,
+                'file_path' => $document->file_path,
+                'file_name' => $document->file_name,
+                'file_size' => $document->file_size,
+                'mime_type' => $document->mime_type,
+                'verification_status' => 'pending',
+                'notes' => 'Scanné à la saisie du client.',
+            ]);
+        } catch (Throwable $e) {
+            // La checklist est un confort : son échec ne doit pas faire perdre
+            // le rattachement du document lui-même.
+            Log::warning('reader_document.kyc_checklist_failed', [
+                'document' => $document->id,
+                'customer' => $customerId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function humanizeError(string $raw): string
