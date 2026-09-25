@@ -48,4 +48,44 @@ class CinAddressTest extends TestCase
     {
         $this->assertNull($this->address("Nom: TEST\nPrenom: USER\nCIN AB12345\n"));
     }
+
+    public function test_it_finds_an_address_printed_without_a_label(): void
+    {
+        $this->assertSame(
+            '25 RUE OUED ZEM CASABLANCA',
+            $this->address("ROYAUME DU MAROC
+CARTE NATIONALE D IDENTITE
+EL HADI
+OUSSAMA
+25 RUE OUED ZEM
+CASABLANCA
+Valable jusqu'au 12/05/2030
+"),
+        );
+    }
+
+    public function test_it_finds_a_douar_address(): void
+    {
+        $this->assertSame(
+            'DOUAR OULED BENHAMMOU SIDI BENNOUR',
+            $this->address("CARTE NATIONALE
+TEST USER
+DOUAR OULED BENHAMMOU
+SIDI BENNOUR
+CIN BV819234
+"),
+        );
+    }
+
+    public function test_it_does_not_mistake_a_name_for_an_address(): void
+    {
+        $this->assertNull(
+            $this->address("ROYAUME DU MAROC
+CARTE NATIONALE D IDENTITE
+EL HADI
+OUSSAMA
+Valable jusqu'au 12/05/2030
+"),
+        );
+    }
 }

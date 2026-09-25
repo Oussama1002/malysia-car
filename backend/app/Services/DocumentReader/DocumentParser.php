@@ -1487,7 +1487,9 @@ class DocumentParser
         }
 
         if ($start === null) {
-            return null;
+            // Beaucoup de CIN impriment le domicile sans le mot « Adresse » :
+            // on reconnaît alors la ligne à son vocabulaire (RUE, LOT, HAY…).
+            return $this->addressWithoutLabel($lines);
         }
 
         $parts = $firstPart !== '' ? [$firstPart] : [];
@@ -1512,6 +1514,51 @@ class DocumentParser
         $address = trim(implode(' ', $parts));
 
         return $address !== '' && mb_strlen($address) >= 4 ? $address : null;
+    }
+
+    /** Les mots qui trahissent une adresse marocaine, même sans libellé. */
+    private const ADDRESS_WORDS = [
+        'RUE', 'AV', 'AVENUE', 'BD', 'BLVD', 'BOULEVARD', 'LOT', 'LOTISSEMENT',
+        'HAY', 'DOUAR', 'IMM', 'IMMEUBLE', 'APPT', 'APT', 'RES', 'RESIDENCE',
+        'QUARTIER', 'QRT', 'CITE', 'ZONE', 'SECTEUR', 'BLOC', 'ETAGE', 'KM',
+        'DERB', 'MASSIRA', 'RIAD', 'OULED',
+    ];
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function addressWithoutLabel(array $lines): ?string
+    {
+        $pattern = '/\b(?:'.implode('|', self::ADDRESS_WORDS).')\b/iu';
+
+        foreach ($lines as $i => $line) {
+            $candidate = $this->addressLine($line);
+            if ($candidate === '' || mb_strlen($candidate) < 6) {
+                continue;
+            }
+            // Une ligne de libellés, une MRZ ou une date n'est pas une adresse.
+            if (preg_match('/<</u', $line)
+                || preg_match('/\b(?:VALABLE|EXPIR|NATIONALIT|ROYAUME|CARTE|IDENTIT|N[ÉE]E?\s+LE)\b/iu', $candidate)) {
+                continue;
+            }
+            if (! preg_match($pattern, $candidate)) {
+                continue;
+            }
+
+            $parts = [$candidate];
+            // La suite de l'adresse tient souvent sur la ligne d'après (ville).
+            $next = $this->addressLine($lines[$i + 1] ?? '');
+            if ($next !== ''
+                && mb_strlen($next) >= 4
+                && ! preg_match('/<</u', $lines[$i + 1] ?? '')
+                && ! preg_match('/\b(?:VALABLE|EXPIR|NATIONALIT|ROYAUME|CARTE|IDENTIT|N[ÉE]E?\s+LE|\d{2}[\/.\-]\d{2}[\/.\-]\d{4})\b/iu', $next)) {
+                $parts[] = $next;
+            }
+
+            return trim(implode(' ', $parts));
+        }
+
+        return null;
     }
 
     /** Nettoie une ligne d'adresse : arabe, blancs multiples, ponctuation isolée. */
