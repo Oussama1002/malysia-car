@@ -46,6 +46,16 @@ class VehicleMaintenanceEventController extends Controller
             'completed_at' => ($lifecycle === 'completed') ? now() : null,
         ]);
 
+        // Facture ou photo de l'entretien : elle reste attachée à l'événement.
+        app(\App\Services\ScanEvidenceService::class)->attach(
+            $data['proof_document_id'] ?? null,
+            'maintenance_event',
+            (string) $ev->id,
+            $request->user(),
+            category: 'maintenance_invoice',
+            title: 'Entretien — '.$ev->title,
+        );
+
         // L'entretien coûte : il alimente les Dépenses, catégorie entretien.
         if ($ev->cost_mad !== null && (float) $ev->cost_mad > 0) {
             app(\App\Services\ExpenseRecorder::class)->record('maintenance_event', (string) $ev->id, [

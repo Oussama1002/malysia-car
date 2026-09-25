@@ -24,6 +24,8 @@ class DocumentService
         // Preuves de paiement : le scan du chèque reste attaché au paiement,
         // à la franchise ou au paiement fournisseur qu'il justifie.
         'payment', 'sub_rental_payment', 'contract_deposit',
+        // Facture d'entretien, rattachée à l'intervention.
+        'maintenance_event',
     ];
 
     public function generateChecksum(string $absolutePath): string
@@ -265,6 +267,7 @@ class DocumentService
             'payment' => \App\Models\Payment::class,
             'sub_rental_payment' => \App\Models\SubRentalPayment::class,
             'contract_deposit' => \App\Models\ContractDeposit::class,
+            'maintenance_event' => \App\Models\VehicleMaintenanceEvent::class,
             default => null,
         };
     }

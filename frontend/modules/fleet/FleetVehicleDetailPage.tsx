@@ -12,6 +12,7 @@ import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTime
 import { DateField } from '@/modules/shared/components/DateField';
 import { BrandLogo } from '@/modules/shared/components/BrandLogo';
 import { Modal } from '@/modules/shared/components/Modal';
+import { ProofUploader } from '@/modules/shared/components/ProofUploader';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1386,7 +1387,7 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
 }
 
 function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: string; onSaved: () => void; onCancel: () => void }) {
-  const [form, setForm] = useState({ type: 'OIL_CHANGE', title: '', performed_at: '', odometer_km: '', vendor: '', cost_mad: '' });
+  const [form, setForm] = useState({ type: 'OIL_CHANGE', title: '', performed_at: '', odometer_km: '', vendor: '', cost_mad: '', proof_document_id: '' });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1403,6 +1404,7 @@ function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: str
           odometer_km: form.odometer_km ? Number(form.odometer_km) : null,
           vendor: form.vendor || null,
           cost_mad: form.cost_mad ? Number(form.cost_mad) : null,
+          proof_document_id: form.proof_document_id || null,
         }),
       });
       onSaved();
@@ -1436,6 +1438,14 @@ function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: str
       <div>
         <label className="df-label">Coût (MAD)</label>
         <input className="df-input" type="number" placeholder="0.00" value={form.cost_mad} onChange={e => setForm(f => ({ ...f, cost_mad: e.target.value }))} />
+      </div>
+      <div className="col-span-2">
+        <ProofUploader
+          label="Facture de l'entretien (photo, PDF)"
+          documentId={form.proof_document_id || null}
+          onUploaded={(id) => setForm(f => ({ ...f, proof_document_id: id }))}
+          onCleared={() => setForm(f => ({ ...f, proof_document_id: '' }))}
+        />
       </div>
       {err && <p className="col-span-2 text-xs text-red-600">{err}</p>}
       <div className="col-span-2 flex gap-2">
