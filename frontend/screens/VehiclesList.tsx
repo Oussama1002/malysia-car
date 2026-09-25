@@ -889,17 +889,25 @@ const VehiclesList: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100">
-                {['Immatriculation', 'Immat. provisoire / WW', 'Marque', 'Modèle', 'Mise en circulation', 'Puissance (CV)', 'Carburant', 'Statut', ''].map(h => (
+                {['Photo', 'Immatriculation', 'Immat. provisoire / WW', 'Marque', 'Modèle', 'Mise en circulation', 'Puissance (CV)', 'Carburant', 'Statut', ''].map(h => (
                   <th key={h} className="px-5 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filteredVehicles.length === 0 && (
-                <tr><td colSpan={9} className="px-5 py-10 text-center text-slate-400 font-medium">Aucun véhicule</td></tr>
+                <tr><td colSpan={10} className="px-5 py-10 text-center text-slate-400 font-medium">Aucun véhicule</td></tr>
               )}
               {filteredVehicles.map((v, idx) => (
                 <tr key={v.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/40'}`}>
+                  <td className="px-5 py-3">
+                    {/* Photo principale, à défaut le logo de la marque. */}
+                    {(v as any).photoUrl ? (
+                      <img src={(v as any).photoUrl} alt="" loading="lazy" className="h-10 w-14 rounded-lg object-cover" />
+                    ) : (
+                      <BrandLogo brand={v.brand} size={30} />
+                    )}
+                  </td>
                   <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span>{v.registration || '—'}</span>

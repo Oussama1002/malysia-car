@@ -14,7 +14,6 @@ export interface ScannedVehicleData {
   acquisitionDate?: string;
   vendeur?: string;
   montant?: string;
-  // Attestation de paiement
   registration?: string;
   fuelType?: string;
   miseEnCirculation?: string;
@@ -76,15 +75,8 @@ export const VehicleDocumentScanner: React.FC<{
         onDocumentUploaded={(id) => onDocumentUploaded?.('circulation_authorization', id)}
       />
       <ScanSlot
-        title="Attestation de paiement"
-        description="Immat., carburant, mise en circulation, puissance fiscale"
-        onPrefill={onPrefill}
-        mapFields={mapPaymentAttestation}
-        onDocumentUploaded={(id) => onDocumentUploaded?.('payment_attestation', id)}
-      />
-      <ScanSlot
         title="Visite technique"
-        description="Date expiration, N° visite, centre contrôle"
+        description="Immat., WW, carburant, mise en circulation, puissance (CV), validité"
         onPrefill={onPrefill}
         mapFields={mapVisiteTech}
         onDocumentUploaded={(id) => onDocumentUploaded?.('technical_inspection', id)}
@@ -158,7 +150,6 @@ const ScanSlot: React.FC<{
     setDocPreview({ url: localUrl, isImage: file.type.startsWith('image/') });
     try {
       const docType = mapFields === mapAssurance ? 'insurance'
-        : mapFields === mapPaymentAttestation ? 'payment_attestation'
         : mapFields === mapCarteGrise ? 'vehicle_registration'
         : mapFields === mapAutorisation ? 'autorisation_circulation'
         : 'other';
@@ -314,15 +305,6 @@ function mapAssurance(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
-function mapPaymentAttestation(d: Record<string, unknown>): ScannedVehicleData {
-  return {
-    registration:      str(d.registration_number ?? d.immatriculation ?? d.plate_number),
-    fuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
-    miseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
-    fiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale ?? d.cv_fiscaux),
-  };
-}
-
 function mapAutorisation(d: Record<string, unknown>): ScannedVehicleData {
   return {
     registration:       str(d.registration_number ?? d.immatriculation ?? d.plate_number),
@@ -334,9 +316,19 @@ function mapAutorisation(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
+/**
+ * La visite technique EST l'attestation de paiement : un seul papier, qui porte
+ * l'immatriculation, le WW, le carburant, la mise en circulation et la
+ * puissance fiscale en plus de sa date de validité.
+ */
 function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
   return {
     techControlExpiry: str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_validite ?? d.valid_until ?? d.next_inspection),
+    registration:      str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    immatProvisoire:   wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire),
+    fuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
+    miseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
+    fiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale ?? d.cv_fiscaux),
   };
 }
 
