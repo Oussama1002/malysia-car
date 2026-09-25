@@ -1,0 +1,52 @@
+# Site public Malysia Car — vhost séparé de DriveFlow.
+# Il ne sert que des fichiers statiques : aucun PHP, rien de l'application.
+#
+#   sudo cp nginx.conf.example /etc/nginx/sites-available/malysia-site
+#   sudo ln -sf /etc/nginx/sites-available/malysia-site /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+
+server {
+    listen 8090;
+    listen [::]:8090;
+
+    # Quand le domaine sera en place :
+    #   listen 80;
+    #   server_name malysiacar.ma www.malysiacar.ma;
+    server_name _;
+
+    root /var/www/driveflow/site;
+    index index.html;
+
+    access_log /var/log/nginx/malysia-site.access.log;
+    error_log  /var/log/nginx/malysia-site.error.log;
+
+    # Le site est statique : tout ce qui n'existe pas retombe sur l'accueil.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Les fichiers versionnés par un déploiement : cache court, pour qu'une
+    # correction faite sur le serveur soit visible tout de suite.
+    location ~* \.(css|js)$ {
+        expires 10m;
+        add_header Cache-Control "public, must-revalidate";
+    }
+
+    location ~* \.(jpg|jpeg|png|webp|svg|woff2)$ {
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+
+    # Rien d'exécutable ici, et rien à lire dans les fichiers cachés.
+    location ~ /\. {
+        deny all;
+    }
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    gzip on;
+    gzip_types text/css application/javascript image/svg+xml;
+    gzip_min_length 512;
+}

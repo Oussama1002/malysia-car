@@ -1,5 +1,8 @@
 {
-  "app": { "name": "DriveFlow OS", "tagline": "Automotive & Leasing" },
+  "app": {
+    "name": "DriveFlow OS",
+    "tagline": "Automotive & Leasing"
+  },
   "nav": {
     "group": {
       "overview": "Overview",
@@ -12,7 +15,7 @@
     "fleet": "Fleet",
     "fleetCompliance": "Vehicle compliance",
     "fleetAnalysis": "Fleet analysis",
-    "subRentals": "Sub-rentals",
+    "subRentals": "Sub-rental",
     "fixedCharges": "Fixed charges",
     "customers": "Customers & compliance",
     "contracts": "Reservations",
@@ -31,7 +34,7 @@
     "settings": "Settings",
     "audit": "Audit trail",
     "rentals": "Reservations / Rentals",
-    "subRentals": "Sub-rental"
+    "websiteLeads": "Website requests"
   },
   "auth": {
     "login": "Sign in",

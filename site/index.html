@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Malysia Car — Location de voitures au Maroc</title>
+<meta name="description" content="Malysia Car — location de voitures au Maroc. Véhicules récents, tarifs clairs, livraison à l'aéroport. Réservez en deux minutes." />
+<meta property="og:title" content="Malysia Car — Location de voitures" />
+<meta property="og:description" content="Véhicules récents, tarifs clairs, livraison à l'aéroport. Réservez en deux minutes." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap nav__inner">
+    <a class="brand" href="#top">
+      <span class="brand__mark">MC</span>
+      <span class="brand__text">Malysia<strong>Car</strong></span>
+    </a>
+    <nav class="nav__links" id="navLinks">
+      <a href="#flotte">Notre flotte</a>
+      <a href="#services">Services</a>
+      <a href="#avis">Avis</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <a class="btn btn--sm navCta" href="#reserver">Réserver</a>
+    <button class="nav__burger" id="burger" aria-label="Ouvrir le menu">☰</button>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="hero__glow" aria-hidden="true"></div>
+    <div class="wrap hero__inner">
+      <div class="hero__text">
+        <span class="tag">Agence de location · Maroc</span>
+        <h1>La voiture qu'il vous faut,<br /><span class="grad">prête quand vous arrivez.</span></h1>
+        <p class="lead">
+          Véhicules récents et entretenus, tarifs annoncés sans surprise, livraison à
+          l'aéroport ou à votre adresse. Vous demandez, nous confirmons par téléphone
+          en moins d'une heure.
+        </p>
+        <div class="hero__cta">
+          <a class="btn" href="#quoteForm">Demander un devis</a>
+          <a class="btn btn--ghost" href="#flotte">Voir la flotte</a>
+        </div>
+        <ul class="hero__facts">
+          <li><strong id="factFleet">—</strong><span>véhicules</span></li>
+          <li><strong>24/7</strong><span>assistance</span></li>
+          <li><strong>0 MAD</strong><span>frais de dossier</span></li>
+        </ul>
+      </div>
+
+      <form class="card quote" id="quoteForm" novalidate>
+        <h2 class="quote__title">Réserver en 2 minutes</h2>
+        <p class="quote__sub">Sans paiement en ligne. Nous vous rappelons pour confirmer.</p>
+
+        <label>Nom complet
+          <input name="full_name" required autocomplete="name" placeholder="Votre nom" />
+        </label>
+        <label>Téléphone
+          <input name="phone" required autocomplete="tel" inputmode="tel" placeholder="06 00 00 00 00" />
+        </label>
+        <div class="row">
+          <label>Départ
+            <input name="pickup_at" type="date" required />
+          </label>
+          <label>Retour
+            <input name="return_at" type="date" required />
+          </label>
+        </div>
+        <label>Véhicule souhaité
+          <select name="vehicle_id" id="vehicleSelect">
+            <option value="">Peu importe — conseillez-moi</option>
+          </select>
+        </label>
+        <label>Message <span class="opt">(optionnel)</span>
+          <textarea name="message" rows="2" placeholder="Livraison à l'aéroport, siège bébé…"></textarea>
+        </label>
+
+        <!-- Piege a robots : invisible, jamais rempli par un humain. -->
+        <div class="hp" aria-hidden="true">
+          <label>Ne pas remplir <input name="website" tabindex="-1" autocomplete="off" /></label>
+        </div>
+
+        <button class="btn btn--full" type="submit" id="quoteSubmit">Envoyer ma demande</button>
+        <p class="formNote" id="quoteNote" role="status"></p>
+      </form>
+    </div>
+  </section>
+
+  <section class="strip">
+    <div class="wrap strip__inner">
+      <div><span>✓</span> Kilométrage illimité sur demande</div>
+      <div><span>✓</span> Assurance tous risques disponible</div>
+      <div><span>✓</span> Livraison aéroport Mohammed V</div>
+      <div><span>✓</span> Contrat clair, aucun frais caché</div>
+    </div>
+  </section>
+
+  <section class="section" id="flotte">
+    <div class="wrap">
+      <header class="sectionHead">
+        <span class="tag">Notre flotte</span>
+        <h2>Des voitures récentes, entretenues chez nous</h2>
+        <p>Citadines économiques, berlines et SUV. Chaque véhicule passe au contrôle avant chaque départ.</p>
+      </header>
+      <div class="grid" id="fleetGrid">
+        <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+      </div>
+      <p class="fleetNote" id="fleetNote"></p>
+    </div>
+  </section>
+
+  <section class="section section--alt" id="services">
+    <div class="wrap">
+      <header class="sectionHead">
+        <span class="tag">Services</span>
+        <h2>Ce qui est compris</h2>
+      </header>
+      <div class="cards">
+        <article class="card feature">
+          <div class="feature__icon">🛫</div>
+          <h3>Livraison &amp; reprise</h3>
+          <p>À l'aéroport, à votre hôtel ou à votre domicile, à l'heure que vous indiquez.</p>
+        </article>
+        <article class="card feature">
+          <div class="feature__icon">🛡️</div>
+          <h3>Assurance et assistance</h3>
+          <p>Tous risques en option, assistance routière 24/7 partout au Maroc.</p>
+        </article>
+        <article class="card feature">
+          <div class="feature__icon">📄</div>
+          <h3>Contrat transparent</h3>
+          <p>Le tarif annoncé est celui que vous payez. Caution et conditions écrites noir sur blanc.</p>
+        </article>
+        <article class="card feature">
+          <div class="feature__icon">🔧</div>
+          <h3>Entretien suivi</h3>
+          <p>Vidange, pneus, visite technique : chaque voiture a son carnet à jour.</p>
+        </article>
+        <article class="card feature">
+          <div class="feature__icon">📅</div>
+          <h3>Longue durée</h3>
+          <p>Tarifs dégressifs à la semaine et au mois, pour les particuliers et les sociétés.</p>
+        </article>
+        <article class="card feature">
+          <div class="feature__icon">🤝</div>
+          <h3>Comptes entreprises</h3>
+          <p>Facturation mensuelle, conducteurs multiples, véhicules de remplacement.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="avis">
+    <div class="wrap">
+      <header class="sectionHead">
+        <span class="tag">Ils nous ont loué une voiture</span>
+        <h2>Ce que disent nos clients</h2>
+      </header>
+      <div class="cards">
+        <article class="card quoteCard">
+          <p>« Voiture livrée à l'aéroport à 23h, propre et pleine. Départ en dix minutes. »</p>
+          <footer>Younes — Casablanca</footer>
+        </article>
+        <article class="card quoteCard">
+          <p>« Tarif au mois très correct et facture reçue sans rien demander. »</p>
+          <footer>Imane — Rabat</footer>
+        </article>
+        <article class="card quoteCard">
+          <p>« Un souci de batterie un dimanche : dépannés en moins d'une heure. »</p>
+          <footer>Karim — Marrakech</footer>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta" id="reserver">
+    <div class="wrap cta__inner">
+      <div>
+        <h2>Dites-nous vos dates, on s'occupe du reste.</h2>
+        <p>Réponse par téléphone en moins d'une heure, 7j/7.</p>
+      </div>
+      <div class="cta__actions">
+        <a class="btn" href="#quoteForm">Remplir le formulaire</a>
+        <a class="btn btn--ghost" id="waLink" href="#" target="_blank" rel="noopener">Écrire sur WhatsApp</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer" id="contact">
+  <div class="wrap footer__inner">
+    <div>
+      <a class="brand" href="#top">
+        <span class="brand__mark">MC</span>
+        <span class="brand__text">Malysia<strong>Car</strong></span>
+      </a>
+      <p class="footer__about">Location de voitures courte et longue durée au Maroc.</p>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <p><a id="telLink" href="#">—</a></p>
+      <p><a id="mailLink" href="#">—</a></p>
+      <p id="addrText">—</p>
+    </div>
+    <div>
+      <h4>Horaires</h4>
+      <p>Lundi — Samedi : 8h30 – 20h00</p>
+      <p>Dimanche : sur rendez-vous</p>
+      <p>Assistance routière : 24/7</p>
+    </div>
+  </div>
+  <div class="wrap footer__legal">
+    <span>© <span id="year"></span> Malysia Car. Tous droits réservés.</span>
+    <span>Réservations traitées par nos agents.</span>
+  </div>
+</footer>
+
+<a class="fab" id="waFab" href="#" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

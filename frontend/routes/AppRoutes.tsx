@@ -18,6 +18,7 @@ import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
 import { ContractsPage } from '@/modules/contracts/ContractsPage';
 import { RentalsPage } from '@/modules/rentals/RentalsPage';
+import { WebsiteLeadsPage } from '@/modules/rentals/WebsiteLeadsPage';
 import { ReservationDetailPage } from '@/modules/rentals/ReservationDetailPage';
 import { ContractWizardPage } from '@/modules/contracts/ContractWizardPage';
 import { ContractDetailPage } from '@/modules/contracts/ContractDetailPage';
@@ -273,6 +274,14 @@ export default function AppRoutes(): React.ReactElement {
               element={
                 <ModuleGate module="contracts">
                   <RentalsPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/reservations/website-leads"
+              element={
+                <ModuleGate module="contracts">
+                  <WebsiteLeadsPage />
                 </ModuleGate>
               }
             />

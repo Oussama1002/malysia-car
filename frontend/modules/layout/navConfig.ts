@@ -23,6 +23,7 @@ export const GROUPS: NavGroup[] = [
     icon: 'car',
     items: [
       { to: '/reservations', module: 'contracts', labelKey: 'nav.contractsSidebar', icon: 'calendar' },
+      { to: '/reservations/website-leads', module: 'contracts', labelKey: 'nav.websiteLeads', icon: 'chat' },
       { to: '/contracts', module: 'contracts', labelKey: 'nav.contracts', icon: 'sign' },
       { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
       { to: '/fleet', module: 'fleet', labelKey: 'nav.fleet', icon: 'car' },

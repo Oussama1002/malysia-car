@@ -113,6 +113,14 @@ Route::prefix('v1')->group(function () {
         Route::post('public/signature/{token}/reject', [PublicSignatureController::class, 'reject']);
     });
 
+    // Site public de l'agence : la seule surface que le site connaît. Aucune
+    // authentification, donc tout y est limité en débit et réduit au strict
+    // nécessaire — la flotte visible, et le dépôt d'une demande.
+    Route::get('public/site/vehicles', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'vehicles'])
+        ->middleware('throttle:60,1');
+    Route::post('public/site/reservation-requests', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'storeLead'])
+        ->middleware('throttle:10,1');
+
     // Public auth endpoints
     Route::post('auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');
@@ -632,6 +640,11 @@ Route::prefix('v1')->group(function () {
         // ==================================================================
         Route::get('customers', [CustomerController::class, 'index'])
             ->middleware('permission:customers.view');
+        Route::get('website-leads', [\App\Http\Controllers\Api\V1\WebsiteLeadController::class, 'index'])
+            ->middleware('permission:reservations.view');
+        Route::patch('website-leads/{lead}', [\App\Http\Controllers\Api\V1\WebsiteLeadController::class, 'update'])
+            ->middleware('permission:reservations.update');
+
         Route::get('customers/lookup', [CustomerController::class, 'lookup'])
             ->middleware('permission:customers.view');
         Route::get('customers/{customer}', [CustomerController::class, 'show'])

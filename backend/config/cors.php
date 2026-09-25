@@ -26,6 +26,10 @@ return [
         'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:8080',
+        // Site public de l'agence (vhost séparé, port 8090).
+        'http://79.143.180.186:8090',
+        'https://malysiacar.ma',
+        'https://www.malysiacar.ma',
     ],
 
     // Dev: any port on localhost / 127.0.0.1 (avoids CORS breaks when Vite port changes)
