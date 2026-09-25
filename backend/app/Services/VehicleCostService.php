@@ -33,10 +33,29 @@ class VehicleCostService
         $totalCost          = $maintenanceCost + $repairCost + $accidentCost + $insuranceCost + $taxCost + $gpsCost;
 
         // --- Revenue (from closed/active contracts) ---
-        $totalRevenue = (float) Contract::query()
+        // Chiffre d'affaires réellement encaissé sur ce véhicule : les paiements
+        // reçus pour ses contrats et ses réservations. Le montant des contrats
+        // ne dit que ce qui a été facturé, pas ce qui est rentré en caisse.
+        $contractIds = Contract::query()->where('vehicle_id', $vehicle->id)->pluck('id');
+        $reservationIds = \App\Models\Reservation::query()->where('vehicle_id', $vehicle->id)->pluck('id');
+
+        $collected = (float) \App\Models\Payment::query()
+            ->where('payment_direction', 'incoming')
+            ->whereNotIn('status', ['reversed', 'refunded'])
+            // La franchise d'assurance est une garantie, pas un encaissement.
+            ->where(fn ($q) => $q->whereNull('payment_type')->orWhere('payment_type', '!=', 'caution'))
+            ->where(function ($q) use ($contractIds, $reservationIds) {
+                $q->whereIn('contract_id', $contractIds)
+                    ->orWhereIn('reservation_id', $reservationIds);
+            })
+            ->sum('amount');
+
+        $contracted = (float) Contract::query()
             ->where('vehicle_id', $vehicle->id)
             ->whereIn('status', ['active', 'terminated', 'completed'])
             ->sum('base_amount');
+
+        $totalRevenue = $collected;
 
         // --- Acquisition ---
         $purchaseCost  = (float) ($vehicle->purchase_price ?? $profile?->purchase_cost_mad ?? 0);
@@ -56,6 +75,7 @@ class VehicleCostService
                 'total'        => round($totalCost, 2),
             ],
             'revenue'           => round($totalRevenue, 2),
+            'revenue_contracted' => round($contracted, 2),
             'gross_margin'      => round($totalRevenue - $totalCost, 2),
             'margin_pct'        => $totalRevenue > 0 ? round((($totalRevenue - $totalCost) / $totalRevenue) * 100, 1) : null,
             'purchase_cost'     => round($purchaseCost, 2),

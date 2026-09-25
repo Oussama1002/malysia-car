@@ -22,41 +22,45 @@ class FleetAnalysisService
         }
         $totalVehicles = (clone $vq)->count();
 
-        $available = (clone $vq)->where(function ($q): void {
-            $q->where('availability_status', 'available')
-                ->orWhereNull('availability_status');
-        })->whereRaw('LOWER(status) NOT IN (?,?,?,?,?)', ['sold', 'scrapped', 'maintenance', 'blocked', 'unavailable'])
-            ->count();
+        // Les compteurs se lisent sur le statut du véhicule et sur son usage
+        // réel : availability_status et physical_status ne sont pas renseignés
+        // partout, ce qui affichait des zéros sur un parc bien occupé.
+        $statusCount = function (array $codes) use ($vq): int {
+            return (clone $vq)->whereIn(\DB::raw('UPPER(status)'), $codes)->count();
+        };
 
-        $rentedByReservation = Reservation::query()
+        $liveReservationVehicles = Reservation::query()
             ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
-            ->whereIn('status', ['handed_over', 'active', 'extension_requested', 'return_scheduled'])
-            ->distinct()
-            ->count('vehicle_id');
+            ->whereIn('status', ['reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested', 'return_scheduled'])
+            ->pluck('vehicle_id')
+            ->filter()
+            ->unique();
 
-        $inMaint = (clone $vq)->where(function ($q): void {
-            $q->where('physical_status', 'maintenance')
-                ->orWhereRaw('LOWER(availability_status) IN (?,?,?)', ['maintenance', 'unavailable', 'immobilized']);
-        })->count();
+        $liveContractVehicles = \App\Models\Contract::query()
+            ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+            ->whereIn('status', ['active', 'signed', 'approved'])
+            ->pluck('vehicle_id')
+            ->filter()
+            ->unique();
 
-        // Note: previously had 3 `?` placeholders with only 2 bound values, which
-        // raised PDOException "number of bound variables does not match" and
-        // crashed the whole /fleet/analysis endpoint with a 500.
-        $inRepair = (clone $vq)->where(function ($q): void {
-            $q->where('physical_status', 'repair')
-                ->orWhereRaw('LOWER(status) IN (?,?)', ['maintenance', 'in_repair']);
-        })->count();
+        $busyVehicles = $liveReservationVehicles->merge($liveContractVehicles)->unique();
+        $rentedByReservation = $busyVehicles->count();
 
+        $inMaint = $statusCount(['MAINTENANCE']);
+        $inRepair = $statusCount(['IN_REPAIR', 'REPAIR']);
         $inAccident = (clone $vq)->where('physical_status', 'accident')->count();
 
-        $unavailable = (clone $vq)->where(function ($q): void {
-            $q->whereRaw('LOWER(availability_status) IN (?,?,?,?,?)', ['unavailable', 'maintenance', 'repair', 'accident', 'immobilized'])
-                ->orWhereIn('physical_status', ['maintenance', 'repair', 'accident', 'immobilized']);
-        })->count();
+        $subRented = (clone $vq)
+            ->whereIn(\DB::raw('LOWER(ownership_status)'), ['sub_rented', 'sub_rental'])
+            ->count();
 
+        $unavailable = $inMaint + $inRepair + $inAccident;
+        $available = max(0, $totalVehicles - $rentedByReservation - $unavailable);
+
+        // Taux d'utilisation : part du parc effectivement en location.
         $utilization = $totalVehicles > 0 ? round(($rentedByReservation / $totalVehicles) * 100, 1) : 0.0;
 
-        $vehicles = (clone $vq)->limit(500)->get();
+        $vehicles = (clone $vq)->with(['brand', 'model'])->limit(500)->get();
         $table = [];
         $profits = [];
 
@@ -75,6 +79,13 @@ class FleetAnalysisService
             $table[] = [
                 'vehicleId' => $v->id,
                 'registration' => $v->registration_number,
+                'brand' => $v->brand_name ?? $v->brand?->name,
+                'model' => $v->model_name ?? $v->model?->name,
+                'photoUrl' => $v->photo_file_id
+                    ? rtrim((string) config('app.url'), '/').'/api/v1/files/'.$v->photo_file_id
+                    : null,
+                'isSubRented' => in_array(strtolower((string) ($v->ownership_status ?? '')), ['sub_rented', 'sub_rental'], true),
+                'isBusy' => $busyVehicles->contains($v->id),
                 'status' => $v->status,
                 'availability' => $v->availability_status,
                 'physical' => $v->physical_status,
@@ -104,13 +115,14 @@ class FleetAnalysisService
                 'vehiclesInAccident' => $inAccident,
                 'vehiclesUnavailable' => $unavailable,
                 'utilizationRatePct' => $utilization,
+                'subRentedVehicles' => $subRented,
             ],
             'vehicles' => $table,
             'mostProfitableVehicleIds' => $mostProfitable,
             'leastProfitableVehicleIds' => $leastProfitable,
             'upcomingMaintenance' => $this->upcomingMaintenanceHints($companyId),
             'expiredDocuments' => $this->expiredDocHints($companyId),
-            'subRentedCount' => (clone $vq)->where('ownership_status', 'sub_rented')->count(),
+            'subRentedCount' => $subRented,
         ];
     }
 

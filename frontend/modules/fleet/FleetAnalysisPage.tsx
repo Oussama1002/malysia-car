@@ -2,6 +2,19 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, getApiBase, ApiError } from '@/services/apiClient';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { BrandLogo } from '@/modules/shared/components/BrandLogo';
+
+/* Les statuts stockés sont des codes : ils ne s'affichent jamais tels quels. */
+const STATUS_FR: Record<string, string> = {
+  available: 'Disponible', rented: 'Loué', reserved: 'Réservé',
+  maintenance: 'Maintenance', in_repair: 'Réparation', repair: 'Réparation',
+  accident: 'Sinistre', immobilized: 'Immobilisé', unavailable: 'Indisponible',
+  sold: 'Vendu', scrapped: 'Réformé', in_use: 'En service', blocked: 'Bloqué',
+};
+const statusFr = (value: unknown): string => {
+  const key = String(value ?? '').toLowerCase();
+  return STATUS_FR[key] ?? (value ? String(value) : '—');
+};
 
 export const FleetAnalysisPage: React.FC = () => {
   const apiReady = !!getApiBase();
@@ -88,6 +101,7 @@ export const FleetAnalysisPage: React.FC = () => {
           ['Maintenance', k?.vehiclesInMaintenance],
           ['Réparation', k?.vehiclesInRepair],
           ['Sinistre', k?.vehiclesInAccident],
+          ['Sous-location', k?.subRentedVehicles],
           ['Indisponibles', k?.vehiclesUnavailable],
           ['Utilisation %', k?.utilizationRatePct],
         ].map(([label, val]) => (
@@ -104,10 +118,10 @@ export const FleetAnalysisPage: React.FC = () => {
           <table className="df-table w-full text-xs">
             <thead>
               <tr>
+                <th>Véhicule</th>
                 <th>Immat.</th>
                 <th>Statut</th>
-                <th>Dispo.</th>
-                <th>CA</th>
+                <th>CA encaissé</th>
                 <th>Coûts</th>
                 <th>Marge</th>
               </tr>
@@ -115,9 +129,32 @@ export const FleetAnalysisPage: React.FC = () => {
             <tbody>
               {(data?.vehicles ?? []).map((v) => (
                 <tr key={String(v.vehicleId)}>
+                  <td>
+                    <span className="flex items-center gap-2">
+                      {v.photoUrl ? (
+                        <img
+                          src={String(v.photoUrl)}
+                          alt=""
+                          className="h-9 w-12 shrink-0 rounded-lg object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <BrandLogo brand={v.brand ? String(v.brand) : null} size={28} />
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">
+                          {[v.brand, v.model].filter(Boolean).join(' ') || '—'}
+                        </span>
+                        {v.isSubRented ? (
+                          <span className="text-[10px] font-black uppercase tracking-wider text-violet-600">
+                            Sous-location
+                          </span>
+                        ) : null}
+                      </span>
+                    </span>
+                  </td>
                   <td className="font-mono">{String(v.registration ?? '')}</td>
-                  <td>{String(v.status ?? '')}</td>
-                  <td>{String(v.availability ?? '')}</td>
+                  <td>{v.isBusy ? 'En location' : statusFr(v.status)}</td>
                   <td>{formatCurrencyMad(Number(v.revenue ?? 0))}</td>
                   <td>{formatCurrencyMad(Number(v.totalCost ?? 0))}</td>
                   <td className="font-semibold">{formatCurrencyMad(Number(v.profitability ?? 0))}</td>
