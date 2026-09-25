@@ -44,7 +44,7 @@ window.MALYSIA = {
 
 ## Mise en ligne
 
-Le site est servi par son propre vhost, sur son propre port (8090 par défaut).
+Le site est servi par son propre vhost, sur son propre port (9900 par défaut).
 Un déploiement de DriveFlow ne le touche pas, et une panne du site ne touche pas
 l'application.
 
@@ -61,5 +61,5 @@ deux appels.
 ## Nom de domaine
 
 Quand le domaine sera prêt : pointer l'enregistrement A sur le serveur, remplacer
-`listen 8090;` par `listen 80; server_name malysiacar.ma www.malysiacar.ma;` puis
+`listen 9900;` par `listen 80; server_name malysiacar.ma www.malysiacar.ma;` puis
 `sudo certbot --nginx -d malysiacar.ma -d www.malysiacar.ma` pour le HTTPS.

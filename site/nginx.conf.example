@@ -6,8 +6,8 @@
 #   sudo nginx -t && sudo systemctl reload nginx
 
 server {
-    listen 8090;
-    listen [::]:8090;
+    listen 9900;
+    listen [::]:9900;
 
     # Quand le domaine sera en place :
     #   listen 80;

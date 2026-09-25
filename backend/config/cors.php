@@ -26,8 +26,8 @@ return [
         'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:8080',
-        // Site public de l'agence (vhost séparé, port 8090).
-        'http://79.143.180.186:8090',
+        // Site public de l'agence (vhost séparé, port 9900).
+        'http://79.143.180.186:9900',
         'https://malysiacar.ma',
         'https://www.malysiacar.ma',
     ],
