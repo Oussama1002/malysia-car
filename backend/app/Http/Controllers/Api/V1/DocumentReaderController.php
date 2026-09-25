@@ -236,6 +236,81 @@ class DocumentReaderController extends Controller
         ]);
     }
 
+    /**
+     * Une vignette du document, toujours en image — y compris pour un PDF, dont
+     * on rend la première page. L'agent doit voir la pièce qu'il vient de
+     * déposer, pas le nom de son fichier.
+     */
+    public function thumbnail(Request $request, string $id): StreamedResponse|JsonResponse
+    {
+        $doc = $this->find($request, $id);
+        $disk = Storage::disk(config('filesystems.default', 'local'));
+        if (! $disk->exists($doc->file_path)) {
+            return ApiResponse::error('Fichier introuvable sur le disque.', 404);
+        }
+
+        $isPdf = str_contains((string) $doc->mime_type, 'pdf')
+            || strtolower(pathinfo($doc->file_name, PATHINFO_EXTENSION)) === 'pdf';
+
+        if (! $isPdf) {
+            return response()->streamDownload(function () use ($disk, $doc) {
+                $stream = $disk->readStream($doc->file_path);
+                if (is_resource($stream)) {
+                    fpassthru($stream);
+                    fclose($stream);
+                }
+            }, $doc->file_name, [
+                'Content-Type' => $doc->mime_type ?: 'image/jpeg',
+                'Content-Disposition' => 'inline; filename="'.$doc->file_name.'"',
+            ]);
+        }
+
+        $cachePath = 'reader-thumbnails/'.$doc->id.'.png';
+        if (! $disk->exists($cachePath)) {
+            $png = $this->renderPdfThumbnail($disk->path($doc->file_path));
+            if ($png === null) {
+                return ApiResponse::error('Aperçu indisponible pour ce PDF.', 415);
+            }
+            $disk->put($cachePath, file_get_contents($png));
+            @unlink($png);
+        }
+
+        return response()->streamDownload(function () use ($disk, $cachePath) {
+            $stream = $disk->readStream($cachePath);
+            if (is_resource($stream)) {
+                fpassthru($stream);
+                fclose($stream);
+            }
+        }, $doc->id.'.png', [
+            'Content-Type' => 'image/png',
+            'Content-Disposition' => 'inline; filename="'.$doc->id.'.png"',
+        ]);
+    }
+
+    /** Première page du PDF en PNG, via pdftoppm. Null si poppler manque. */
+    private function renderPdfThumbnail(string $absolutePath): ?string
+    {
+        $prefix = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_thumb_'.bin2hex(random_bytes(6));
+        try {
+            $process = new \Symfony\Component\Process\Process([
+                (string) config('document_reader.tesseract.pdftoppm_bin', 'pdftoppm'),
+                '-png', '-f', '1', '-l', '1', '-scale-to', '900',
+                $absolutePath,
+                $prefix,
+            ]);
+            $process->setTimeout(30);
+            $process->mustRun();
+        } catch (Throwable) {
+            return null;
+        }
+
+        foreach (glob($prefix.'*.png') ?: [] as $candidate) {
+            return $candidate;
+        }
+
+        return null;
+    }
+
     public function destroy(Request $request, string $id): JsonResponse
     {
         $doc = $this->find($request, $id);

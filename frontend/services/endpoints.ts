@@ -52,6 +52,7 @@ export const endpoints = {
     validate: (id: string) => `/v1/document-reader/documents/${id}/validate`,
     link: (id: string) => `/v1/document-reader/documents/${id}/link`,
     preview: (id: string) => `/v1/document-reader/documents/${id}/preview`,
+    thumbnail: (id: string) => `/v1/document-reader/documents/${id}/thumbnail`,
     remove: (id: string) => `/v1/document-reader/documents/${id}`,
   },
   credit: {

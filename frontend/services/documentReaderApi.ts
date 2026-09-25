@@ -100,6 +100,25 @@ export const documentReaderApi = {
   },
 
   /**
+   * Vignette du document, en image même pour un PDF (le serveur en rend la
+   * première page). L'URL est protégée par le jeton, donc on récupère le blob
+   * plutôt que de la poser dans un <img src>.
+   */
+  async thumbnailObjectUrl(id: string): Promise<string | null> {
+    try {
+      const raw = localStorage.getItem('df_session');
+      const token = raw ? (JSON.parse(raw) as { token?: string }).token : undefined;
+      const res = await fetch(`${getApiBase()}${endpoints.documentReader.thumbnail(id)}`, {
+        headers: { Accept: 'image/*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!res.ok) return null;
+      return URL.createObjectURL(await res.blob());
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * Poll GET /documents/{id} every `intervalMs` until the document reaches a
    * terminal status (extracted | validated | failed) or `timeoutMs` elapses.
    *

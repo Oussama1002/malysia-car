@@ -244,6 +244,8 @@ Route::prefix('v1')->group(function () {
             ->middleware(['permission:documents.upload', 'role:ADMIN,DIRECTEUR,AGENT_COMMERCIAL']);
         Route::get('document-reader/documents/{id}/preview', [DocumentReaderController::class, 'preview'])
             ->middleware('permission:documents.view');
+        Route::get('document-reader/documents/{id}/thumbnail', [DocumentReaderController::class, 'thumbnail'])
+            ->middleware('permission:documents.view');
         Route::delete('document-reader/documents/{id}', [DocumentReaderController::class, 'destroy'])
             ->middleware('permission:documents.delete');
 

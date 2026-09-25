@@ -118,7 +118,7 @@ const ScanSlot: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [docType, setDocType] = useState<ReaderDocumentType>(defaultType);
-  const [preview, setPreview] = useState<{ url: string; name: string; isPdf: boolean } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
   const [existing, setExisting] = useState<ExistingCustomer | null>(null);
 
   // L'aperçu vit le temps du formulaire : on libère l'URL quand il change.
@@ -131,9 +131,12 @@ const ScanSlot: React.FC<{
       setSuccess(null);
       setExisting(null);
       // L'agent doit voir ce qu'il vient de déposer, avant même l'OCR.
+      const isPdf = file.type === 'application/pdf';
       setPreview((prev) => {
         if (prev) URL.revokeObjectURL(prev.url);
-        return { url: URL.createObjectURL(file), name: file.name, isPdf: file.type === 'application/pdf' };
+        // Un PDF n'a pas d'aperçu dans le navigateur : on affiche sa première
+        // page rendue par le serveur, une fois le fichier déposé.
+        return isPdf ? null : { url: URL.createObjectURL(file), name: file.name };
       });
       try {
         // 1. Upload the file — fast, just stores it.
@@ -143,6 +146,16 @@ const ScanSlot: React.FC<{
         // Register the document ID immediately so the parent can attach it
         // to the customer even if OCR partially fails.
         onScanComplete?.({ documentId: docId, documentType: docType });
+
+        if (isPdf) {
+          const thumb = await documentReaderApi.thumbnailObjectUrl(docId);
+          if (thumb) {
+            setPreview((prev) => {
+              if (prev) URL.revokeObjectURL(prev.url);
+              return { url: thumb, name: file.name };
+            });
+          }
+        }
 
         // 2. Trigger OCR — returns 202 instantly, OCR runs in a background worker.
         await documentReaderApi.extract(docId, docType);
@@ -262,22 +275,12 @@ const ScanSlot: React.FC<{
         <div className="mt-1 text-[10px] text-slate-500">PDF, JPG, PNG · 15 Mo max</div>
         {preview ? (
           <div className="mt-2 w-full">
-            {preview.isPdf ? (
-              <a
-                href={preview.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                📄 {preview.name}
-              </a>
-            ) : (
-              <img
-                src={preview.url}
-                alt={`Aperçu ${title}`}
-                className="mx-auto max-h-32 rounded-lg border border-slate-200 object-contain"
-              />
-            )}
+            <img
+              src={preview.url}
+              alt={`Aperçu ${title}`}
+              className="mx-auto max-h-40 w-full rounded-lg border border-slate-200 bg-white object-contain"
+            />
+            <div className="mt-1 truncate text-center text-[10px] text-slate-400">{preview.name}</div>
           </div>
         ) : null}
         <ElapsedTimer running={loading} />
