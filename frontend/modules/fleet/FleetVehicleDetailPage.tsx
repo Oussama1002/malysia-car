@@ -154,6 +154,72 @@ const REPAIR_LABELS: Record<string, string> = {
   OTHER: 'Autre',
 };
 
+/** Valeurs stockées en anglais qu'un agent ne doit jamais voir telles quelles. */
+const TRANSMISSION_FR: Record<string, string> = {
+  manual: 'Manuelle',
+  automatic: 'Automatique',
+  semi_automatic: 'Semi-automatique',
+  cvt: 'CVT',
+};
+
+const FUEL_FR: Record<string, string> = {
+  diesel: 'Diesel',
+  gasoline: 'Essence',
+  petrol: 'Essence',
+  essence: 'Essence',
+  hybrid: 'Hybride',
+  electric: 'Électrique',
+  lpg: 'GPL',
+};
+
+const PHYSICAL_STATUS_FR: Record<string, string> = {
+  good: 'Bon état',
+  new: 'Neuf',
+  fair: 'État moyen',
+  poor: 'Mauvais état',
+  damaged: 'Endommagé',
+  under_repair: 'En réparation',
+  scrapped: 'Rebut',
+};
+
+const AVAILABILITY_FR: Record<string, string> = {
+  available: 'Disponible',
+  reserved: 'Réservé',
+  rented: 'En location',
+  in_use: 'En service',
+  maintenance: 'En maintenance',
+  unavailable: 'Indisponible',
+  for_sale: 'En vente',
+  sold: 'Vendu',
+};
+
+const OWNERSHIP_FR: Record<string, string> = {
+  owned: "Propriété de l'agence",
+  sub_rented: 'Sous-location',
+  sub_rental: 'Sous-location',
+  leased: 'Leasing',
+  financed: 'Financé (crédit)',
+  managed: 'Gestion pour compte de tiers',
+};
+
+const MOVEMENT_FR: Record<string, string> = {
+  entry: 'Entrée',
+  exit: 'Sortie',
+  return: 'Retour',
+  transfer: 'Transfert',
+  immobilization: 'Immobilisation',
+  release: 'Remise en service',
+  checkout: 'Départ',
+  checkin: 'Retour',
+};
+
+/** Traduit une valeur brute ; garde la valeur d'origine si elle est inconnue. */
+function fr(map: Record<string, string>, value: unknown): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  return map[raw.toLowerCase()] ?? raw;
+}
+
 function planStatusBadge(status: MaintenancePlan['status']) {
   if (status === 'overdue') return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">● En retard</span>;
   if (status === 'due_soon') return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">● Bientôt dû</span>;
@@ -525,10 +591,10 @@ export const FleetVehicleDetailPage: React.FC = () => {
               <Field label="Immatriculation" value={<span className="font-mono">{veh.registration}</span>} />
               <Field label="VIN" value={<span className="font-mono text-xs">{veh.vin}</span>} />
               <Field label="Châssis" value={veh.chassisNumber} />
-              <Field label="Transmission" value={veh.transmission} />
-              <Field label="Statut physique" value={veh.physicalStatus} />
-              <Field label="Disponibilité" value={veh.availabilityStatus} />
-              <Field label="Propriété" value={veh.ownershipStatus} />
+              <Field label="Transmission" value={fr(TRANSMISSION_FR, veh.transmission)} />
+              <Field label="Statut physique" value={fr(PHYSICAL_STATUS_FR, veh.physicalStatus)} />
+              <Field label="Disponibilité" value={fr(AVAILABILITY_FR, veh.availabilityStatus)} />
+              <Field label="Propriété" value={fr(OWNERSHIP_FR, veh.ownershipStatus)} />
               <Field label="Emplacement" value={veh.currentLocation} />
               <Field label="Motif indispo." value={veh.unavailabilityReason} />
             </div>
@@ -604,7 +670,7 @@ export const FleetVehicleDetailPage: React.FC = () => {
                   {(vehicleQ.data?.movements ?? []).map((m: Record<string, unknown>) => (
                     <tr key={String(m.id)}>
                       <td>{m.performed_at ? formatDate(String(m.performed_at)) : '—'}</td>
-                      <td className="font-semibold">{String(m.movement_type ?? '')}</td>
+                      <td className="font-semibold">{fr(MOVEMENT_FR, m.movement_type) ?? '—'}</td>
                       <td>{m.odometer_km != null ? String(m.odometer_km) : '—'}</td>
                       <td>{m.fuel_level != null ? String(m.fuel_level) : '—'}</td>
                       <td className="max-w-xs truncate">{String(m.condition_notes ?? '')}</td>
@@ -635,7 +701,7 @@ export const FleetVehicleDetailPage: React.FC = () => {
               <Field label="Immatriculation" value={<span className="font-mono">{veh.registration}</span>} />
               <Field label="N° Carte Grise" value={veh.registrationCard} />
               <Field label="VIN" value={<span className="font-mono text-xs">{veh.vin}</span>} />
-              <Field label="Carburant" value={veh.fuel} />
+              <Field label="Carburant" value={fr(FUEL_FR, veh.fuel)} />
               <Field label="Puissance fiscale" value={veh.cv ? `${veh.cv} CV` : null} />
               <Field label="Kilométrage" value={veh.mileageKm ? `${veh.mileageKm.toLocaleString('fr-MA')} km` : null} />
             </div>
