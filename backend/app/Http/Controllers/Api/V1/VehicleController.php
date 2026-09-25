@@ -161,6 +161,8 @@ class VehicleController extends Controller
             $v->date_immatriculation = $data['date_immatriculation'] ?? null;
             $v->categorie = $data['categorie'] ?? null;
             $v->immat_online = $data['immat_online'] ?? null;
+            $v->carte_grise_status = $data['carte_grise_status'] ?? null;
+            $v->immat_provisoire_expiry = $data['immat_provisoire_expiry'] ?? null;
             if (isset($data['chassis'])) {
                 $v->chassis_number = $data['chassis'];
             }
@@ -364,6 +366,8 @@ class VehicleController extends Controller
                 'date_immatriculation',
                 'categorie',
                 'immat_online',
+                'carte_grise_status',
+                'immat_provisoire_expiry',
             ] as $k) {
                 if (array_key_exists($k, $data)) {
                     $vehicle->{$k} = $data[$k];

@@ -67,6 +67,8 @@ class VehicleResource extends JsonResource
             'dateImmatriculation' => $v->date_immatriculation?->toDateString(),
             'categorie' => $v->categorie,
             'immatOnline' => $v->immat_online,
+            'carteGriseStatus' => $v->carte_grise_status,
+            'immatProvisoireExpiry' => $v->immat_provisoire_expiry?->toDateString(),
         ];
     }
 

@@ -57,6 +57,8 @@ class StoreVehicleRequest extends ApiFormRequest
             'date_immatriculation' => ['nullable', 'date'],
             'categorie' => ['nullable', 'string', 'max:50'],
             'immat_online' => ['nullable', 'string', 'max:100'],
+            'carte_grise_status' => ['nullable', 'string', 'max:20'],
+            'immat_provisoire_expiry' => ['nullable', 'date'],
             'chassis' => ['nullable', 'string', 'max:100'],
         ];
     }

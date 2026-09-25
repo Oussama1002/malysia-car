@@ -392,44 +392,72 @@ const VehiclesList: React.FC = () => {
     setVehicles(data);
   };
 
-  const handleOpenModal = (v?: Vehicle) => {
-    if (v) {
-      setEditingVehicle(v);
-      const matchedBrand = brands.find(b => b.name === v.brand);
-      const matchedModel = matchedBrand?.models.find(m => m.name === v.model);
-      const plate = parsePlate(v.registration);
-      setFormData({
-        ...emptyForm(),
-        ...v,
-        brand_id: v.brand_id ?? matchedBrand?.id ?? null,
-        model_id: v.model_id ?? matchedModel?.id ?? null,
-        platNum: plate.platNum,
-        platLetter: plate.platLetter,
-        platRegion: plate.platRegion,
-        cv: (v as any).cv ?? '',
-        mileageKm: (v as any).mileageKm ?? '',
-        fuel: (v as any).fuel ?? 'Diesel',
-        vehicleType: (v as any).vehicleType ?? '',
-        numeroPolice: (v as any).numeroPolice ?? '',
-        nombreCylindres: (v as any).nombreCylindres ?? '',
-        gamme: (v as any).gamme ?? '',
-        acquisitionDate: (v as any).acquisitionDate ?? '',
-        miseEnCirculation: (v as any).miseEnCirculation ?? '',
-        dateImmatriculation: (v as any).dateImmatriculation ?? '',
-        categorie: (v as any).categorie ?? '',
-        chassis: (v as any).chassisNumber ?? '',
-        immatOnline: (v as any).immatOnline ?? '',
-        montant: (v as any).purchaseCostMad ?? '',
-        docPhotos: emptyForm().docPhotos,
-        photoPreviews: [],
-        videoPreview: '',
-      });
-    } else {
+  const fillForm = (v: any) => {
+    const matchedBrand = brands.find(b => b.name === v.brand);
+    const matchedModel = matchedBrand?.models.find(m => m.name === v.model);
+    const plate = parsePlate(v.registration);
+    setFormData({
+      ...emptyForm(),
+      ...v,
+      brand_id: v.brand_id ?? matchedBrand?.id ?? null,
+      model_id: v.model_id ?? matchedModel?.id ?? null,
+      platNum: plate.platNum,
+      platLetter: plate.platLetter,
+      platRegion: plate.platRegion,
+      cv: v.cv ?? '',
+      mileageKm: v.mileageKm ?? '',
+      fuel: v.fuel ?? 'Diesel',
+      pricePerDay: v.pricePerDay ?? 0,
+      insuranceDeductible: v.insuranceDeductible ?? '',
+      registrationCard: v.registrationCard ?? '',
+      insuranceStart: v.insuranceStart ?? '',
+      insuranceExpiry: v.insuranceExpiry ?? '',
+      techControlExpiry: v.techControlExpiry ?? '',
+      vignetteExpiry: v.vignetteExpiry ?? '',
+      vehicleType: v.vehicleType ?? '',
+      numeroPolice: v.numeroPolice ?? '',
+      nombreCylindres: v.nombreCylindres ?? '',
+      gamme: v.gamme ?? '',
+      acquisitionDate: v.acquisitionDate ?? '',
+      miseEnCirculation: v.miseEnCirculation ?? '',
+      dateImmatriculation: v.dateImmatriculation ?? '',
+      categorie: v.categorie ?? '',
+      chassis: v.chassisNumber ?? '',
+      immatOnline: v.immatOnline ?? '',
+      carteGriseStatus: v.carteGriseStatus === 'recue' ? 'recue' : 'en_attente',
+      immatProvisoireExpiry: v.immatProvisoireExpiry ?? '',
+      montant: v.purchaseCostMad ?? '',
+      docPhotos: emptyForm().docPhotos,
+      // La photo déjà en base doit rester visible : sans elle l'agent croit
+      // qu'il n'y en a pas et en reverse une autre.
+      photoPreviews: v.photoUrl ? [String(v.photoUrl)] : [],
+      photoUrl: v.photoUrl ?? null,
+      videoPreview: '',
+    });
+  };
+
+  const handleOpenModal = async (v?: Vehicle) => {
+    selectedPhotoFiles.current = [];
+    if (!v) {
       setEditingVehicle(null);
       setFormData(emptyForm());
+      setIsModalOpen(true);
+      return;
     }
-    selectedPhotoFiles.current = [];
+    setEditingVehicle(v);
+    fillForm(v);
     setIsModalOpen(true);
+    // La liste ne porte qu'une partie de la fiche : on recharge le véhicule
+    // complet pour que l'édition parte de toutes ses données.
+    if (getApiBase()) {
+      try {
+        const res = await apiClient<{ data: any }>(`/v1/vehicles/${v.id}`);
+        const full = (res.data as any)?.vehicle ?? res.data;
+        if (full) fillForm({ ...v, ...full });
+      } catch {
+        // La fiche partielle reste éditable.
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -460,6 +488,8 @@ const VehiclesList: React.FC = () => {
         categorie: formData.categorie || undefined,
         chassis: formData.chassis || undefined,
         immat_online: formData.immatOnline || undefined,
+        carte_grise_status: formData.carteGriseStatus || undefined,
+        immat_provisoire_expiry: formData.immatProvisoireExpiry || undefined,
         purchase_price: formData.montant !== '' ? Number(formData.montant) : undefined,
       };
       if (formData.brand_id) body.brand_id = formData.brand_id;

@@ -81,6 +81,8 @@ class Vehicle extends Model
         'date_immatriculation',
         'categorie',
         'immat_online',
+        'carte_grise_status',
+        'immat_provisoire_expiry',
     ];
 
     protected $casts = [
@@ -92,6 +94,7 @@ class Vehicle extends Model
         'vignette_expiry' => 'date',
         'mise_en_circulation' => 'date',
         'date_immatriculation' => 'date',
+        'immat_provisoire_expiry' => 'date',
         'purchase_price' => 'decimal:2',
         'insurance_deductible' => 'decimal:2',
         'residual_value' => 'decimal:2',

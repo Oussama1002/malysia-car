@@ -71,6 +71,8 @@ class UpdateVehicleRequest extends ApiFormRequest
             'date_immatriculation' => ['sometimes', 'nullable', 'date'],
             'categorie' => ['sometimes', 'nullable', 'string', 'max:50'],
             'immat_online' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'carte_grise_status' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'immat_provisoire_expiry' => ['sometimes', 'nullable', 'date'],
             'chassis' => ['sometimes', 'nullable', 'string', 'max:100'],
         ];
     }
