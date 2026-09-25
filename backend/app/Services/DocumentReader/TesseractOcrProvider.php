@@ -116,6 +116,12 @@ class TesseractOcrProvider implements OcrProviderInterface
 
         try {
             $text = '';
+            $rotation = 0;
+            // Chaque langue supplémentaire est un modèle de plus à faire tourner.
+            // Une CIN ou un permis marocain n'est écrit qu'en français (et en
+            // arabe, que l'on ne lit pas) : le modèle anglais ne fait qu'ajouter
+            // du temps. Le passage chiffres, lui, reste en anglais.
+            $pageLang = $isIdCard && str_contains($lang, 'fra') ? 'fra' : $lang;
             foreach ($imagePaths as $i => $image) {
                 // Pink docs (permis/CIN): red-channel watermark suppression.
                 // Everything else: gentle grayscale + mild contrast that keeps
@@ -125,8 +131,15 @@ class TesseractOcrProvider implements OcrProviderInterface
                 // sideways comes back as column-wise gibberish. Straighten it
                 // first, and for a cheque fall back to trying the quarter turns
                 // when the host has no `osd` traineddata.
-                $this->autoRotate($image);
-                $pageText = $this->runTesseract($image, $lang);
+                // Les pages d'un même scan sortent toutes dans le même sens :
+                // sonder l'orientation une fois suffit, et la sonde coûte un
+                // passage Tesseract complet par page.
+                if ($i === 0) {
+                    $rotation = $this->autoRotate($image);
+                } elseif ($rotation !== 0) {
+                    $this->rotateImage($image, $rotation);
+                }
+                $pageText = $this->runTesseract($image, $pageLang);
                 if ($isCheque && ! $this->looksLikeCheque($pageText)) {
                     $pageText = $this->retryRotations($image, $lang, $pageText);
                 }
@@ -214,7 +227,7 @@ class TesseractOcrProvider implements OcrProviderInterface
      * (`--psm 0`, needs the `osd` traineddata). Best-effort: a host without
      * `osd` or ImageMagick keeps the page as it is.
      */
-    private function autoRotate(string $image): void
+    private function autoRotate(string $image): int
     {
         try {
             $probe = $this->tameProcess(new Process([$this->tesseractBin, $image, 'stdout', '--psm', '0', '-l', 'osd']));
@@ -222,11 +235,17 @@ class TesseractOcrProvider implements OcrProviderInterface
             $probe->run();
             $report = $probe->getOutput().$probe->getErrorOutput();
             if (! preg_match('/Rotate:\s*(\d{1,3})/i', $report, $m)) {
-                return;
+                return 0;
             }
-            $this->rotateImage($image, (int) $m[1]);
+            $degrees = (int) $m[1];
+            if ($degrees !== 0) {
+                $this->rotateImage($image, $degrees);
+            }
+
+            return $degrees;
         } catch (Throwable) {
             // Orientation detection is optional — carry on with the page as-is.
+            return 0;
         }
     }
 
