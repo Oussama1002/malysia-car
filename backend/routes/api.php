@@ -630,6 +630,8 @@ Route::prefix('v1')->group(function () {
         // ==================================================================
         Route::get('customers', [CustomerController::class, 'index'])
             ->middleware('permission:customers.view');
+        Route::get('customers/lookup', [CustomerController::class, 'lookup'])
+            ->middleware('permission:customers.view');
         Route::get('customers/{customer}', [CustomerController::class, 'show'])
             ->middleware('permission:customers.view');
         Route::get('customers/{customer}/dossier', [CustomerController::class, 'dossier'])

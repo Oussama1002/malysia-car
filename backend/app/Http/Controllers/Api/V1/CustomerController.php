@@ -17,6 +17,69 @@ use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
+    /**
+     * Un document déjà scanné appartient peut-être à un client existant : on le
+     * dit avant que l'agent ne recrée la même fiche en double.
+     */
+    public function lookup(Request $request): JsonResponse
+    {
+        $nationalId = $this->normalizeId($request->query('national_id_number'));
+        $license = $this->normalizeId($request->query('driving_license_number'));
+
+        if ($nationalId === null && $license === null) {
+            return ApiResponse::success(null);
+        }
+
+        $customer = Customer::query()
+            ->with(['individualProfile'])
+            ->whereHas('individualProfile', function ($p) use ($nationalId, $license) {
+                $p->where(function ($w) use ($nationalId, $license) {
+                    if ($nationalId !== null) {
+                        $w->orWhereRaw($this->normalizedColumn('national_id_number').' = ?', [$nationalId]);
+                    }
+                    if ($license !== null) {
+                        $w->orWhereRaw($this->normalizedColumn('driving_license_number').' = ?', [$license]);
+                    }
+                });
+            })
+            ->first();
+
+        if (! $customer) {
+            return ApiResponse::success(null);
+        }
+
+        $profile = $customer->individualProfile;
+
+        return ApiResponse::success([
+            'id' => $customer->id,
+            'customer_code' => $customer->customer_code,
+            'name' => trim(($profile?->first_name ?? '').' '.($profile?->last_name ?? '')) ?: $customer->customer_code,
+            'matched_on' => $nationalId !== null
+                && $this->normalizeId($profile?->national_id_number) === $nationalId
+                    ? 'cin'
+                    : 'permis',
+        ]);
+    }
+
+    /** Un numéro se lit pareil avec ou sans espaces, tirets, points ou barres. */
+    private function normalizeId(mixed $value): ?string
+    {
+        $value = strtoupper(str_replace([' ', '-', '.', '/'], '', trim((string) $value)));
+
+        return $value !== '' ? $value : null;
+    }
+
+    /** La même normalisation, côté base, pour comparer ce qui est comparable. */
+    private function normalizedColumn(string $column): string
+    {
+        $expression = $column;
+        foreach ([' ', '-', '.', '/'] as $char) {
+            $expression = "REPLACE({$expression}, '{$char}', '')";
+        }
+
+        return "UPPER({$expression})";
+    }
+
     public function index(Request $request): JsonResponse
     {
         $q = Customer::query()->with(['individualProfile', 'companyProfile', 'latestKycCase']);

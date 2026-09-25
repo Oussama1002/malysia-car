@@ -237,7 +237,8 @@ class DocumentParser
                 'Birth',
             ]),
             'nationality' => $mrz['nationality'] ?? $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+'),
-            'address' => null,
+            // Certains passeports impriment le domicile : on le prend quand il y est.
+            'address' => $this->extractAddress($text),
             'issue_date' => $this->extractDate($text, ['Date\s+of\s+issue', 'Date\s+de\s+d[ée]livrance']),
             'expiry_date' => $this->extractDate($text, ['Date\s+of\s+expiry', 'Date\s+d\'expiration', 'Expiry']),
         ];

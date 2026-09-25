@@ -78,9 +78,12 @@ class TesseractOcrProvider implements OcrProviderInterface
                     $source = $convertedSource;
                 }
             }
-            // Phone cameras produce 12+ MP images — resize to max 2400px
-            // longest edge before OCR so Tesseract runs in ~5-10s not 60s.
-            $resized = $this->downsizeImage($source);
+            // Phone cameras produce 12+ MP images — resize before OCR. Une CIN
+            // ou un permis est une carte de 85 mm : 1600 px la rendent déjà à
+            // plus de 450 dpi, et Tesseract y passe deux fois moins de temps
+            // que sur 2400 px. Un chèque ou une carte grise garde la pleine
+            // définition, ses chiffres sont fins.
+            $resized = $this->downsizeImage($source, $isPinkDoc || $docType === 'passport' ? 1600 : 2400);
             $working = $resized ?? $source;
             // Preprocessing writes in place. A small jpg/png needs neither
             // conversion nor resizing, so without a copy here we would grayscale
@@ -498,7 +501,7 @@ class TesseractOcrProvider implements OcrProviderInterface
      * the longest edge. Returns the path to a temporary resized file, or null
      * if no resize was needed or ImageMagick is unavailable.
      */
-    private function downsizeImage(string $imagePath): ?string
+    private function downsizeImage(string $imagePath, int $maxDim = 2400): ?string
     {
         try {
             $info = @getimagesize($imagePath);
@@ -506,7 +509,6 @@ class TesseractOcrProvider implements OcrProviderInterface
                 return null;
             }
             [$w, $h] = $info;
-            $maxDim = 2400;
             if ($w <= $maxDim && $h <= $maxDim) {
                 return null; // already small enough
             }
