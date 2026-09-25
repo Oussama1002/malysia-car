@@ -265,7 +265,9 @@ class DocumentReaderController extends Controller
             ]);
         }
 
-        $cachePath = 'reader-thumbnails/'.$doc->id.'.png';
+        // Le suffixe change avec le rendu : les vignettes d'une seule page
+        // déjà en cache ne doivent pas masquer le document complet.
+        $cachePath = 'reader-thumbnails/'.$doc->id.'-full.png';
         if (! $disk->exists($cachePath)) {
             $png = $this->renderPdfThumbnail($disk->path($doc->file_path));
             if ($png === null) {
@@ -287,28 +289,55 @@ class DocumentReaderController extends Controller
         ]);
     }
 
-    /** Première page du PDF en PNG, via pdftoppm. Null si poppler manque. */
+    /**
+     * Le document entier en une image : une CIN scannée est un PDF recto/verso,
+     * et n'en montrer que la première page revenait à cacher la moitié de la
+     * pièce. Les pages sont empilées l'une sous l'autre. Null si poppler manque.
+     */
     private function renderPdfThumbnail(string $absolutePath): ?string
     {
         $prefix = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_thumb_'.bin2hex(random_bytes(6));
         try {
             $process = new \Symfony\Component\Process\Process([
                 (string) config('document_reader.tesseract.pdftoppm_bin', 'pdftoppm'),
-                '-png', '-f', '1', '-l', '1', '-scale-to', '900',
+                '-png', '-f', '1', '-l', '4', '-scale-to', '900',
                 $absolutePath,
                 $prefix,
             ]);
-            $process->setTimeout(30);
+            $process->setTimeout(60);
             $process->mustRun();
         } catch (Throwable) {
             return null;
         }
 
-        foreach (glob($prefix.'*.png') ?: [] as $candidate) {
-            return $candidate;
+        $pages = glob($prefix.'*.png') ?: [];
+        sort($pages);
+        if ($pages === []) {
+            return null;
+        }
+        if (count($pages) === 1) {
+            return $pages[0];
         }
 
-        return null;
+        $merged = $prefix.'-all.png';
+        try {
+            $append = new \Symfony\Component\Process\Process(array_merge(
+                [(string) config('document_reader.tesseract.convert_bin', 'convert')],
+                $pages,
+                ['-append', $merged],
+            ));
+            $append->setTimeout(60);
+            $append->mustRun();
+        } catch (Throwable) {
+            // Sans ImageMagick on montre au moins le recto.
+            return $pages[0];
+        }
+
+        foreach ($pages as $page) {
+            @unlink($page);
+        }
+
+        return is_file($merged) ? $merged : $pages[0];
     }
 
     public function destroy(Request $request, string $id): JsonResponse

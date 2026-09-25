@@ -14,6 +14,8 @@ return [
         'bin' => env('TESSERACT_BIN', 'tesseract'),
         'pdftoppm_bin' => env('PDFTOPPM_BIN', 'pdftoppm'),
         'lang' => env('TESSERACT_LANG', 'fra+eng'),
+        // ImageMagick : assemblage des pages d'un PDF pour l'aperçu.
+        'convert_bin' => env('IMAGEMAGICK_CONVERT_BIN', 'convert'),
         'timeout' => (int) env('TESSERACT_TIMEOUT', 180),
     ],
 

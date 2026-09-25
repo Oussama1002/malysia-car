@@ -275,11 +275,15 @@ const ScanSlot: React.FC<{
         <div className="mt-1 text-[10px] text-slate-500">PDF, JPG, PNG · 15 Mo max</div>
         {preview ? (
           <div className="mt-2 w-full">
-            <img
-              src={preview.url}
-              alt={`Aperçu ${title}`}
-              className="mx-auto max-h-40 w-full rounded-lg border border-slate-200 bg-white object-contain"
-            />
+            {/* Recto et verso empilés : on laisse de la hauteur, et un clic
+                ouvre la pièce en grand pour la relire. */}
+            <a href={preview.url} target="_blank" rel="noreferrer" title="Ouvrir en grand">
+              <img
+                src={preview.url}
+                alt={`Aperçu ${title}`}
+                className="mx-auto max-h-72 w-full rounded-lg border border-slate-200 bg-white object-contain"
+              />
+            </a>
             <div className="mt-1 truncate text-center text-[10px] text-slate-400">{preview.name}</div>
           </div>
         ) : null}
