@@ -45,7 +45,7 @@ class AuditLogController extends Controller
         $resolved = $this->resolveEntityType($entityType);
 
         $paginator = AuditLog::query()
-            ->with('user:id,name,email')
+            ->with('user')
             ->when($request->user()->company_id, fn ($q, $cid) => $q->where('company_id', $cid))
             ->where(function ($q) use ($resolved) {
                 $q->whereIn('entity_type', $resolved);
@@ -107,7 +107,7 @@ class AuditLogController extends Controller
     private function buildQuery(Request $request)
     {
         return AuditLog::query()
-            ->with('user:id,name,email')
+            ->with('user')
             ->when($request->user()->company_id, fn ($q, $cid) => $q->where('company_id', $cid))
             ->when($request->query('module'), fn ($q, $v) => $q->where('module_name', $v))
             ->when($request->query('action'), fn ($q, $v) => $q->where('action_type', $v))

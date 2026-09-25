@@ -101,7 +101,10 @@ class AuditTrailPresenter
 
         return User::query()
             ->whereIn('id', $ids)
-            ->get(['id', 'name', 'email'])
+            // Pas de liste de colonnes : `name` n'existe pas sur toutes les
+            // bases (production stocke first_name/last_name) et la restreindre
+            // faisait tomber toute la fiche en 500.
+            ->get()
             ->mapWithKeys(fn (User $u) => [$u->id => $u->name ?: $u->email])
             ->all();
     }

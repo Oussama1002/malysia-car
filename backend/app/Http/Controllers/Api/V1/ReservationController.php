@@ -340,7 +340,7 @@ class ReservationController extends Controller
 
         $missions = Mission::query()
             ->where('reservation_id', $reservation->id)
-            ->with('assignedAgent:id,name,first_name,last_name,email')
+            ->with('assignedAgent')
             ->orderBy('scheduled_start_at')
             ->get();
 
