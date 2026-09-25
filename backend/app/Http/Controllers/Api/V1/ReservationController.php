@@ -344,18 +344,38 @@ class ReservationController extends Controller
             ->orderBy('scheduled_start_at')
             ->get();
 
+        // Contrat lié et franchises encaissées. Sur une base dont les migrations
+        // sont en retard, ces colonnes peuvent manquer : la fiche doit quand
+        // même s'ouvrir plutôt que de renvoyer une 500.
+        $linkedContract = null;
+        $deposits = collect();
+        try {
+            if (\Schema::hasColumn('contracts', 'reservation_id')) {
+                $columns = ['id', 'contract_number', 'status'];
+                if (\Schema::hasColumn('contracts', 'deposit_amount')) {
+                    $columns[] = 'deposit_amount';
+                }
+                $linkedContract = Contract::query()
+                    ->where('reservation_id', $reservation->id)
+                    ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
+                    ->orderByDesc('created_at')
+                    ->first($columns);
+            }
+            if (\Schema::hasTable('contract_deposits') && \Schema::hasColumn('contract_deposits', 'reservation_id')) {
+                $deposits = \App\Models\ContractDeposit::query()
+                    ->where('reservation_id', $reservation->id)
+                    ->orderByDesc('collected_at')
+                    ->get();
+            }
+        } catch (\Throwable) {
+            // Pas de franchise affichée, mais la réservation reste consultable.
+        }
+
         return ApiResponse::success([
             'reservation' => $reservation,
             // The contract carries the franchise the check-out asks for.
-            'contract' => Contract::query()
-                ->where('reservation_id', $reservation->id)
-                ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
-                ->orderByDesc('created_at')
-                ->first(['id', 'contract_number', 'status', 'deposit_amount']),
-            'deposits' => \App\Models\ContractDeposit::query()
-                ->where('reservation_id', $reservation->id)
-                ->orderByDesc('collected_at')
-                ->get(),
+            'contract' => $linkedContract,
+            'deposits' => $deposits,
             'customer_name' => $customerName,
             'vehicle_name' => $vehicleName,
             'vehicle_registration' => $vehicle?->registration_number ?? null,
