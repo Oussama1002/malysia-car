@@ -256,6 +256,19 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:vehicles.create');
         Route::post('vehicle-models', [VehicleBrandController::class, 'storeModel'])
             ->middleware('permission:vehicles.create');
+        // Catalogue marques & modèles : renommer, illustrer, supprimer.
+        Route::put('vehicle-brands/{id}', [VehicleBrandController::class, 'updateBrand'])
+            ->middleware('permission:vehicles.update');
+        Route::post('vehicle-brands/{id}/logo', [VehicleBrandController::class, 'uploadLogo'])
+            ->middleware('permission:vehicles.update');
+        Route::delete('vehicle-brands/{id}/logo', [VehicleBrandController::class, 'deleteLogo'])
+            ->middleware('permission:vehicles.update');
+        Route::delete('vehicle-brands/{id}', [VehicleBrandController::class, 'destroyBrand'])
+            ->middleware('permission:vehicles.delete');
+        Route::put('vehicle-models/{id}', [VehicleBrandController::class, 'updateModel'])
+            ->middleware('permission:vehicles.update');
+        Route::delete('vehicle-models/{id}', [VehicleBrandController::class, 'destroyModel'])
+            ->middleware('permission:vehicles.delete');
 
         Route::get('vehicles', [VehicleController::class, 'index'])
             ->middleware('permission:vehicles.view');

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { brandLogoUrl } from '@/modules/shared/brandLogo';
+import { getApiBase } from '@/services/apiClient';
 
 /**
  * Logo de la marque, avec repli sur ses initiales : une marque sans fichier —
@@ -7,11 +8,15 @@ import { brandLogoUrl } from '@/modules/shared/brandLogo';
  */
 export const BrandLogo: React.FC<{
   brand?: string | null;
+  /** Logo téléversé par l'agence ; sinon celui livré avec l'application. */
+  url?: string | null;
   size?: number;
   className?: string;
-}> = ({ brand, size = 28, className = '' }) => {
+}> = ({ brand, url: uploaded, size = 28, className = '' }) => {
   const [failed, setFailed] = useState(false);
-  const url = brandLogoUrl(brand);
+  const url = uploaded
+    ? (uploaded.startsWith('http') ? uploaded : `${getApiBase() ?? ''}${uploaded}`)
+    : brandLogoUrl(brand);
   const initials = (brand ?? '?').trim().slice(0, 2).toUpperCase();
 
   if (!url || failed) {

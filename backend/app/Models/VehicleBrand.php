@@ -18,6 +18,7 @@ class VehicleBrand extends Model
     const UPDATED_AT = null;
 
     protected $fillable = [
+        'logo_file_id',
         'name',
     ];
 
