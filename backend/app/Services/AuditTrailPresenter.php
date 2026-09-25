@@ -49,6 +49,24 @@ class AuditTrailPresenter
         'vignette_expiry' => 'Expiration vignette',
     ];
 
+    /** Le nom de la classe n'a rien à faire sous les yeux d'un agent. */
+    private const ENTITIES = [
+        'Reservation' => 'de la réservation',
+        'Contract' => 'du contrat',
+        'SubRentalContract' => 'de la sous-location',
+        'SubRentalPayment' => 'du paiement fournisseur',
+        'Vehicle' => 'du véhicule',
+        'Customer' => 'du client',
+        'Payment' => 'du paiement',
+        'Invoice' => 'de la facture',
+        'Expense' => 'de la dépense',
+        'ContractDeposit' => "de la franchise d'assurance",
+        'VehicleMaintenanceEvent' => "de l'entretien",
+        'VehicleRepair' => 'de la réparation',
+        'RentalExtension' => 'de la prolongation',
+        'User' => "de l'utilisateur",
+    ];
+
     /** Valeurs stockées en anglais qu'on ne montre jamais telles quelles. */
     private const VALUES = [
         'draft' => 'Brouillon', 'reserved' => 'Réservée', 'confirmed' => 'Confirmée',
@@ -80,7 +98,7 @@ class AuditTrailPresenter
             return [
                 'id' => $row->id ?? null,
                 'action' => $action,
-                'label' => $row->action_label ?: (self::ACTIONS[$action] ?? $this->humanize($action)),
+                'label' => $this->label($action, (string) ($row->action_label ?? '')),
                 'detail' => $this->detail($action, $before, $after),
                 'changes' => $this->changes($before, $after),
                 'userName' => $userNames[$row->user_id ?? ''] ?? null,
@@ -89,6 +107,30 @@ class AuditTrailPresenter
                 'createdAt' => $row->created_at ?? null,
             ];
         })->all();
+    }
+
+    /**
+     * Le libellé écrit dans la ligne date parfois d'avant la traduction
+     * ("Statut reserved → confirmed", "Création Reservation") : on le remet en
+     * français plutôt que de le montrer tel quel.
+     */
+    private function label(string $action, string $stored): string
+    {
+        if ($action === 'status_changed') {
+            return self::ACTIONS['status_changed'];
+        }
+
+        if ($stored === '') {
+            return self::ACTIONS[$action] ?? $this->humanize($action);
+        }
+
+        if (preg_match('/^(Création|Mise à jour|Suppression) ([A-Za-z]+)$/u', $stored, $m)) {
+            $entity = self::ENTITIES[$m[2]] ?? null;
+
+            return $entity ? $m[1].' '.$entity : (self::ACTIONS[$action] ?? $stored);
+        }
+
+        return $stored;
     }
 
     /** @return array<string, string> */
@@ -174,7 +216,8 @@ class AuditTrailPresenter
         return $changes;
     }
 
-    private function value(mixed $value): ?string
+    /** Traduit une valeur stockée ; rend la valeur d'origine si on ne la connaît pas. */
+    public static function translate(mixed $value): ?string
     {
         if ($value === null || $value === '') {
             return null;
@@ -185,6 +228,11 @@ class AuditTrailPresenter
         $key = mb_strtolower((string) $value);
 
         return self::VALUES[$key] ?? (string) $value;
+    }
+
+    private function value(mixed $value): ?string
+    {
+        return self::translate($value);
     }
 
     private function humanize(string $value): string
