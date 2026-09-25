@@ -194,6 +194,56 @@
       });
   }
 
+  // ── Popup de confirmation ────────────────────────────────
+  var lastFocused = null;
+
+  function openDone(reference) {
+    var modal = $('doneModal');
+    if (!modal) return;
+
+    var ref = $('doneRef');
+    if (ref) {
+      if (reference) {
+        ref.querySelector('strong').textContent = reference;
+        ref.hidden = false;
+      } else {
+        ref.hidden = true;
+      }
+    }
+
+    var wa = $('doneWa');
+    var fab = $('waFab');
+    if (wa) {
+      if (fab && fab.href && fab.style.display !== 'none') wa.href = fab.href;
+      else wa.style.display = 'none';
+    }
+
+    lastFocused = document.activeElement;
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    var closeBtn = modal.querySelector('.modal__x');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeDone() {
+    var modal = $('doneModal');
+    if (!modal || modal.hidden) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    if (lastFocused && lastFocused.focus) lastFocused.focus();
+  }
+
+  function wireModal() {
+    var modal = $('doneModal');
+    if (!modal) return;
+    modal.addEventListener('click', function (e) {
+      if (e.target.hasAttribute && e.target.hasAttribute('data-close')) closeDone();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeDone();
+    });
+  }
+
   // ── Demande de réservation ───────────────────────────────
   function wireForm() {
     var form = $('quoteForm');
@@ -255,9 +305,9 @@
           if (res.ok) {
             var ref = (res.body && res.body.data && res.body.data.reference) || '';
             form.reset();
-            note.className = 'formNote formNote--ok';
-            note.textContent = 'Demande reçue' + (ref ? ' (réf. ' + ref + ')' : '')
-              + '. Un agent vous rappelle sous une heure.';
+            note.className = 'formNote';
+            note.textContent = '';
+            openDone(ref);
             return;
           }
           if (res.status === 429) {
@@ -279,6 +329,7 @@
 
   fillContacts();
   wireMenu();
+  wireModal();
   wireForm();
   loadFleet();
 })();
