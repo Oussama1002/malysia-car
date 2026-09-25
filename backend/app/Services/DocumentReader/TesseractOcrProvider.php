@@ -217,7 +217,7 @@ class TesseractOcrProvider implements OcrProviderInterface
     private function autoRotate(string $image): void
     {
         try {
-            $probe = new Process([$this->tesseractBin, $image, 'stdout', '--psm', '0', '-l', 'osd']);
+            $probe = $this->tameProcess(new Process([$this->tesseractBin, $image, 'stdout', '--psm', '0', '-l', 'osd']));
             $probe->setTimeout(60);
             $probe->run();
             $report = $probe->getOutput().$probe->getErrorOutput();
@@ -320,6 +320,7 @@ class TesseractOcrProvider implements OcrProviderInterface
                 '-c', 'user_defined_dpi=300',
                 '-c', 'tessedit_do_invert=0',
             ]);
+            $this->tameProcess($process);
             $process->setTimeout($this->timeoutSeconds);
             $process->mustRun();
 
@@ -385,6 +386,23 @@ class TesseractOcrProvider implements OcrProviderInterface
         return $fallback;
     }
 
+    /**
+     * Tesseract ouvre par défaut autant de fils qu'il y a de cœurs. Sur le
+     * serveur, un scan mettait alors toute la machine à genoux — l'application
+     * devenait lente pour tout le monde pendant l'OCR — et le multi-threading
+     * ne lui fait presque rien gagner sur une image de cette taille. Un fil,
+     * exécuté en basse priorité, laisse le site répondre.
+     */
+    private function tameProcess(Process $process): Process
+    {
+        $process->setEnv([
+            'OMP_THREAD_LIMIT' => '1',
+            'OMP_NUM_THREADS' => '1',
+        ]);
+
+        return $process;
+    }
+
     private function runTesseract(string $image, string $lang): string
     {
         // `tesseract <image> stdout -l <lang> --oem 1 --psm 6 \
@@ -409,6 +427,7 @@ class TesseractOcrProvider implements OcrProviderInterface
             '-c', 'user_defined_dpi=300',
             '-c', 'tessedit_do_invert=0',
         ]);
+        $this->tameProcess($process);
         $process->setTimeout($this->timeoutSeconds);
 
         try {
@@ -446,6 +465,7 @@ class TesseractOcrProvider implements OcrProviderInterface
             '-c', 'user_defined_dpi=300',
             '-c', 'tessedit_do_invert=0',
         ]);
+        $this->tameProcess($process);
         $process->setTimeout($this->timeoutSeconds);
 
         try {
