@@ -1520,8 +1520,12 @@ class DocumentParser
     private const ADDRESS_WORDS = [
         'RUE', 'AV', 'AVENUE', 'BD', 'BLVD', 'BOULEVARD', 'LOT', 'LOTISSEMENT',
         'HAY', 'DOUAR', 'IMM', 'IMMEUBLE', 'APPT', 'APT', 'RES', 'RESIDENCE',
-        'QUARTIER', 'QRT', 'CITE', 'ZONE', 'SECTEUR', 'BLOC', 'ETAGE', 'KM',
+        'QUARTIER', 'QRT', 'CITE', 'ZONE', 'SECTEUR', 'BLOC', 'ETAGE', 'ETG', 'KM',
         'DERB', 'MASSIRA', 'RIAD', 'OULED',
+        // Une adresse marocaine s'écrit aussi en transcription de l'arabe.
+        'ZANKA', 'ZNIQA', 'CHARIA', 'CHAREH', 'SHARIA', 'ANGLE', 'VILLA',
+        'OPERATION', 'TARIK', 'SIDI', 'MERS', 'DIOUR', 'SAKAN', 'AIN',
+        'BENI', 'OUED', 'TABRIQUET', 'NAHDA', 'SALAM', 'FATH', 'INARA',
     ];
 
     /**

@@ -88,4 +88,18 @@ Valable jusqu'au 12/05/2030
 "),
         );
     }
+
+    public function test_it_reads_a_transliterated_moroccan_address(): void
+    {
+        $this->assertSame(
+            'ZANKA 12 HAY SALAM SALE',
+            $this->address("CARTE NATIONALE D IDENTITE
+BOUTAMA
+SARA
+ZANKA 12 HAY SALAM
+SALE
+CIN AB123456
+"),
+        );
+    }
 }
