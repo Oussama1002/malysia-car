@@ -134,9 +134,12 @@ export const CustomerForm: React.FC<{
           <SectionTitle>Identité particulier</SectionTitle>
           {mode === 'create' ? (
             <CustomerIdentityScanner
-              onPrefill={(scanned: ScannedIdentity) =>
-                setIndividual((prev) => ({ ...prev, ...scanned }))
-              }
+              onPrefill={({ address, ...scanned }: ScannedIdentity) => {
+                setIndividual((prev) => ({ ...prev, ...scanned }));
+                // L'adresse n'appartient pas à l'identité : elle alimente le
+                // bloc adresse, et ne remplace pas une saisie déjà faite.
+                if (address) setAddressLine((prev) => prev || address);
+              }}
               onScanComplete={(scan) =>
                 setScannedDocs((prev) =>
                   prev.some((s) => s.documentId === scan.documentId) ? prev : [...prev, scan],

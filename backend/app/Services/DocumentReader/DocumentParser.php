@@ -208,7 +208,7 @@ class DocumentParser
             'date_of_birth' => $birthDate,
             'nationality' => $this->labelValue($text, ['Nationalit[ée]', 'Nationality'], '[A-Za-z\s\-]+')
                 ?: ($this->containsAny($text, ['MAROC', 'MOROCCAN']) ? 'Maroc' : null),
-            'address' => $this->labelValue($text, ['Adresse', 'Address'], '.+'),
+            'address' => $this->extractAddress($text),
             'issue_date' => $this->extractDate($text, ['Date\s+de\s+d[ée]livrance', 'Issued', 'D[ée]livr[ée]\s+le'])
                 ?? $classified['issue'],
             'expiry_date' => $expiryDate,
@@ -1465,6 +1465,64 @@ class DocumentParser
      * line below; this matches that layout. The label is also allowed to be
      * followed by a slash + Arabic gloss (`Nom / لقب`, `Né(e) le /…`).
      */
+    /**
+     * L'adresse de la CIN tient rarement sur une ligne : le libellé « Adresse »
+     * est suivi d'une à trois lignes, souvent doublées en arabe, et l'OCR y
+     * laisse de larges blancs. On prend la suite du libellé puis les lignes
+     * suivantes tant qu'elles ressemblent encore à une adresse.
+     */
+    private function extractAddress(string $text): ?string
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $start = null;
+        $firstPart = '';
+
+        foreach ($lines as $i => $line) {
+            if (preg_match('/\b(?:ADRESSE|ADDRESS)\b[^\p{L}\d]*(?P<rest>.*)$/iu', $line, $m)) {
+                $start = $i;
+                $firstPart = $this->addressLine($m['rest']);
+                break;
+            }
+        }
+
+        if ($start === null) {
+            return null;
+        }
+
+        $parts = $firstPart !== '' ? [$firstPart] : [];
+        for ($i = $start + 1; $i < count($lines) && count($parts) < 3; $i++) {
+            $candidate = $this->addressLine($lines[$i]);
+            if ($candidate === '') {
+                // Une ligne vide après un début d'adresse clôt le bloc.
+                if ($parts !== []) {
+                    break;
+                }
+
+                continue;
+            }
+            // Un autre libellé de la carte, ou la MRZ, ferme le bloc.
+            if (preg_match('/<</u', $lines[$i])
+                || preg_match('/\b(?:CIN|C\.?N\.?I\.?E?|VALABLE|EXPIR|N[ÉE]E?\s+LE|DATE|SEXE|NATIONALIT|FILS|FILLE|ROYAUME)\b/iu', $candidate)) {
+                break;
+            }
+            $parts[] = $candidate;
+        }
+
+        $address = trim(implode(' ', $parts));
+
+        return $address !== '' && mb_strlen($address) >= 4 ? $address : null;
+    }
+
+    /** Nettoie une ligne d'adresse : arabe, blancs multiples, ponctuation isolée. */
+    private function addressLine(string $line): string
+    {
+        $line = preg_replace('/[\x{0600}-\x{06FF}\x{FB50}-\x{FEFF}]+/u', ' ', $line) ?? $line;
+        $line = preg_replace('/\s+/u', ' ', $line) ?? $line;
+        $line = trim($line, " \t:-—.,");
+
+        return preg_match('/\p{L}/u', $line) ? trim($line) : '';
+    }
+
     private function labelValue(string $text, array $labels, string $valuePattern): ?string
     {
         foreach ($labels as $label) {

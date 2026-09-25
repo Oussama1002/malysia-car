@@ -32,7 +32,7 @@ type DashboardData = {
   upcoming_count: number;
   by_category: Record<string, number>;
   by_type: Record<string, number>;
-  top_vehicles: Array<{ vehicle_id: string; total: number }>;
+  top_vehicles: Array<{ vehicle_id: string; total: number; brand?: string | null; model?: string | null; registration?: string | null }>;
   monthly_trend: Record<string, number>;
 };
 
@@ -210,8 +210,13 @@ export const FixedChargesPage: React.FC = () => {
               <h3 className="mb-3 mt-6 text-xs font-black uppercase tracking-widest text-slate-400">Top véhicules les plus coûteux</h3>
               <div className="space-y-2">
                 {d.top_vehicles.map((v, i) => {
+                  // Le serveur nomme le véhicule ; la liste locale ne servait
+                  // que de repli et ne portait pas les mêmes clés.
                   const veh = (vehiclesQ.data ?? []).find((x: any) => x.id === v.vehicle_id);
-                  const name = veh ? `${veh.brand?.name ?? veh.brand_name ?? ''} ${veh.model?.model_name ?? veh.model?.name ?? veh.model_name ?? ''} · ${veh.registration_number ?? ''}` : v.vehicle_id.slice(0, 8);
+                  const name =
+                    [[v.brand, v.model].filter(Boolean).join(' '), v.registration].filter(Boolean).join(' · ')
+                    || [[veh?.brand, veh?.model].filter(Boolean).join(' '), veh?.registration].filter(Boolean).join(' · ')
+                    || 'Véhicule supprimé';
                   return (
                     <div key={v.vehicle_id} className="flex items-center justify-between text-sm">
                       <span className="text-slate-600">{i + 1}. {name}</span>

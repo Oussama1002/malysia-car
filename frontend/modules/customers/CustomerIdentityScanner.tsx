@@ -13,6 +13,8 @@ export interface ScannedIdentity {
   nationality?: string;
   driving_license_number?: string;
   driving_license_expiry?: string;
+  /** Adresse lue sur la CIN — le formulaire la place dans le bloc adresse. */
+  address?: string;
 }
 
 /** A single uploaded-and-extracted reader document that the parent should
@@ -43,7 +45,7 @@ export const CustomerIdentityScanner: React.FC<{
       </div>
       <p className="mb-3 text-xs text-slate-600">
         Déposez la CIN ou le passeport, puis le permis de conduire. Les champs détectés
-        (nom, CIN, date de naissance, nationalité…) seront préremplis ci-dessous. Vous pouvez tout corriger
+        (nom, CIN, date de naissance, nationalité, adresse…) seront préremplis ci-dessous. Vous pouvez tout corriger
         avant d'enregistrer.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -308,6 +310,7 @@ function frenchFieldLabel(key: string): string {
     nationality: 'Nationalité',
     driving_license_number: 'N° de permis',
     driving_license_expiry: 'Expiration permis',
+    address: 'Adresse',
   };
   return map[key] ?? key;
 }
@@ -319,6 +322,7 @@ function mapIdCardFields(extracted: Record<string, unknown>): ScannedIdentity {
     national_id_number: asString(extracted.document_number),
     date_of_birth: asString(extracted.date_of_birth),
     nationality: normalizeNationality(extracted.nationality),
+    address: asString(extracted.address),
   };
 }
 
