@@ -64,6 +64,7 @@ const STATUS_FR: Record<string, { label: string; cls: string }> = {
   processing:{ label: 'En cours', cls: 'bg-amber-100 text-amber-700' },
   failed:    { label: 'Échoué', cls: 'bg-rose-100 text-rose-700' },
   refunded:  { label: 'Remboursé', cls: 'bg-slate-100 text-slate-600' },
+  reversed:  { label: 'Chèque rejeté', cls: 'bg-rose-100 text-rose-700' },
   cancelled: { label: 'Annulé', cls: 'bg-slate-100 text-slate-600' },
   partial:   { label: 'Partiel', cls: 'bg-amber-100 text-amber-700' },
 };
@@ -136,10 +137,14 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
               <tbody className="divide-y divide-slate-100">
                 {payments.map((p: any) => {
                   const badge = STATUS_FR[String(p.status ?? '').toLowerCase()] ?? { label: p.status ?? '—', cls: 'bg-slate-100 text-slate-600' };
+                  // Un chèque rejeté reste visible, mais il n'a rien payé.
+                  const voided = ['reversed', 'refunded'].includes(String(p.status ?? '').toLowerCase());
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50">
+                    <tr key={p.id} className={`hover:bg-slate-50 ${voided ? 'opacity-60' : ''}`}>
                       <td className="px-4 py-3 text-slate-600">{fmtDate(p.payment_date)}</td>
-                      <td className="px-4 py-3 text-right font-black text-slate-800">{fmtMad(Number(p.amount ?? 0))}</td>
+                      <td className={`px-4 py-3 text-right font-black ${voided ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                        {fmtMad(Number(p.amount ?? 0))}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{frLabel(METHOD_FR, p.payment_method)}</td>
                       <td className="px-4 py-3 text-center">
                         {/* Encaissé ou non : la même information que sur Finance → Paiements. */}

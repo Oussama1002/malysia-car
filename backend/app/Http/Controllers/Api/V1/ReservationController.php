@@ -393,7 +393,10 @@ class ReservationController extends Controller
                     'estimated_price' => $rentAmount,
                     'extensions_total' => (float) $extensions->where('status', 'applied')->sum('additional_amount'),
                     'damages_total' => (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0),
-                    'paid' => (float) $payments->sum('amount'),
+                    // Un chèque rejeté reste dans la liste, mais il n'a rien payé.
+                    'paid' => (float) $payments
+                        ->reject(fn ($p) => in_array((string) $p->status, ['reversed', 'refunded'], true))
+                        ->sum('amount'),
                 ];
             })(),
         ]);

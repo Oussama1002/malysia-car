@@ -33,7 +33,7 @@ class CustomerBalanceController extends Controller
         $overdueAmount = (float) $overdueInvoices->sum('amount_due');
 
         $unallocatedPayments = (float) Payment::where('customer_id', $customer->id)
-            ->where('status', '!=', 'refunded')
+            ->whereNotIn('status', ['refunded', 'reversed'])
             // La franchise d'assurance ne fait pas partie du solde client.
             ->where(fn ($q) => $q->whereNull('payment_type')->orWhere('payment_type', '!=', 'caution'))
             ->sum('amount_unallocated');
@@ -67,7 +67,7 @@ class CustomerBalanceController extends Controller
             ->get();
 
         $payments = Payment::where('customer_id', $customer->id)
-            ->where('status', '!=', 'refunded')
+            ->whereNotIn('status', ['refunded', 'reversed'])
             ->where(fn ($q) => $q->whereNull('payment_type')->orWhere('payment_type', '!=', 'caution'))
             ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('payment_date', '<=', $to))

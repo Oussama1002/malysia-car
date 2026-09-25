@@ -320,20 +320,19 @@ class PaymentController extends Controller
                 ? ($data['bounce_reason'] ?? null)
                 : null;
 
-            // A bounced cheque means the money never landed — unwind allocations
-            // so the invoice reverts to its owed state, flip the payment status
-            // to "reversed", and soft-delete it so the reservation Paiements
-            // list no longer counts it.
+            // Un chèque rejeté, c'est de l'argent qui n'est jamais arrivé : on
+            // défait les allocations et le paiement passe en « reversed ». Il
+            // reste visible dans l'historique du client — l'effacer laissait un
+            // trou inexplicable — mais il ne compte plus nulle part.
             if ($data['cheque_status'] === 'bounced') {
                 foreach ($payment->allocations()->get() as $alloc) {
                     if ($alloc->invoice_id) $touchedInvoices[] = $alloc->invoice_id;
                     $alloc->delete();
                 }
                 $payment->amount_allocated = 0;
-                $payment->amount_unallocated = (float) $payment->amount;
+                $payment->amount_unallocated = 0;
                 $payment->status = 'reversed';
                 $payment->save();
-                $payment->delete(); // soft-delete
             } else {
                 // Cleared / back-to-pending: keep the payment as-is, just
                 // record the new cheque status.

@@ -19,3 +19,4 @@ Schedule::command('driveflow:check-reservation-alerts')->everyFourHours();
 Schedule::command('driveflow:check-reservation-confirmations')->hourly();
 Schedule::command('driveflow:check-fixed-charge-alerts')->dailyAt('07:30');
 Schedule::command('driveflow:check-sub-rental-alerts')->dailyAt('08:00');
+Schedule::command('driveflow:check-pending-cheques')->dailyAt('08:30');

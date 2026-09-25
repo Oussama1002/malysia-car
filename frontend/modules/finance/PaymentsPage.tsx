@@ -273,7 +273,8 @@ export const PaymentsPage: React.FC = () => {
             key: 'cheque',
             header: 'Chèque',
             render: (r) => {
-              if (r.payment_method !== 'check') return <span className="text-slate-300">—</span>;
+              const method = String(r.payment_method ?? '').toLowerCase();
+              if (method !== 'check' && method !== 'cheque') return <span className="text-slate-300">—</span>;
               const s = String(r.cheque_status ?? 'pending');
               const tone = s === 'cleared' ? 'success' : s === 'bounced' ? 'danger' : 'warning';
               const label = s === 'cleared' ? 'Encaissé' : s === 'bounced' ? 'Rejeté' : 'En attente';
@@ -434,7 +435,7 @@ const PaymentDetailView: React.FC<{
   const [err, setErr] = useState<string | null>(null);
   const [bounceReason, setBounceReason] = useState('');
 
-  const isCheque = payment.payment_method === 'check';
+  const isCheque = ['check', 'cheque'].includes(String(payment.payment_method ?? '').toLowerCase());
   const chequeStatus = String(payment.cheque_status ?? 'pending');
 
   const setCheque = async (
