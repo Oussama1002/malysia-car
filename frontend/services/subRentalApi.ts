@@ -89,6 +89,9 @@ export interface SubRentalDashboard {
   overdue: number;
   monthly_supplier_cost: number;
   total_margin: number;
+  total_revenue?: number;
+  total_collected?: number;
+  total_supplier_cost?: number;
 }
 
 type ApiList<T> = { data: T[]; meta?: { total: number; current_page: number; last_page: number; per_page: number } };

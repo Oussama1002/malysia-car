@@ -216,6 +216,7 @@ class SubRentalService
         return [
             'supplier_cost'     => $supplierCost,
             'customer_revenue'  => $customerRevenue,
+            'customer_collected' => $contract->customerReservationsCollected(),
             'margin'            => $margin,
             'margin_percentage' => $marginPct,
             'total_paid'        => $contract->totalPaid(),

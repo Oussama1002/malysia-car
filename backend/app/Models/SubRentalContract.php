@@ -141,21 +141,77 @@ class SubRentalContract extends Model
         return Carbon::today()->greaterThan($this->end_date);
     }
 
+    /**
+     * Ce que le véhicule loué au fournisseur rapporte : les locations client
+     * qui chevauchent la période de sous-location. L'ancienne version exigeait
+     * une location terminée ET entièrement contenue dans la période, si bien
+     * qu'un véhicule loué en ce moment comptait pour zéro et que la marge
+     * affichait l'opposé du coût.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Reservation>
+     */
+    private function overlappingReservations(): \Illuminate\Database\Eloquent\Builder
+    {
+        return Reservation::query()
+            ->where('vehicle_id', $this->vehicle_id)
+            ->whereNotIn('status', ['cancelled', 'draft', 'rejected'])
+            ->where('desired_start_at', '<=', Carbon::parse($this->end_date)->endOfDay())
+            ->where('desired_end_at', '>=', Carbon::parse($this->start_date)->startOfDay());
+    }
+
+    /** Le chiffre d'affaires contracté sur la période — la contrepartie du coût fournisseur. */
     public function customerReservationsRevenue(): float
     {
         if (!$this->vehicle_id) {
             return 0;
         }
-        return (float) Reservation::query()
-            ->where('vehicle_id', $this->vehicle_id)
-            ->whereIn('status', ['closed', 'billing_pending', 'damage_pending', 'inspection_pending', 'returned'])
-            ->where('desired_start_at', '>=', $this->start_date)
-            ->where('desired_end_at', '<=', Carbon::parse($this->end_date)->endOfDay())
-            ->sum('estimated_price');
+
+        return (float) $this->overlappingReservations()->sum('estimated_price');
+    }
+
+    /** Ce qui est réellement rentré : une caution ou un chèque rejeté ne compte pas. */
+    public function customerReservationsCollected(): float
+    {
+        if (!$this->vehicle_id) {
+            return 0;
+        }
+
+        $reservationIds = $this->overlappingReservations()->pluck('id');
+        if ($reservationIds->isEmpty()) {
+            return 0;
+        }
+
+        return (float) Payment::query()
+            ->whereIn('reservation_id', $reservationIds)
+            ->where(fn ($q) => $q->whereNull('payment_direction')->orWhere('payment_direction', 'incoming'))
+            ->whereNotIn('status', ['reversed', 'refunded', 'cancelled'])
+            ->where(fn ($q) => $q->whereNull('payment_type')->orWhere('payment_type', '!=', 'caution'))
+            ->sum('amount');
     }
 
     public function margin(): float
     {
         return $this->customerReservationsRevenue() - (float) $this->total_cost;
+    }
+
+    /** La part du coût fournisseur qui tombe dans une période donnée. */
+    public function costForPeriod(Carbon $from, Carbon $to): float
+    {
+        if (!$this->start_date || !$this->end_date) {
+            return 0;
+        }
+
+        $start = Carbon::parse($this->start_date)->startOfDay();
+        $end = Carbon::parse($this->end_date)->endOfDay();
+        $overlapStart = $start->greaterThan($from) ? $start : $from->copy()->startOfDay();
+        $overlapEnd = $end->lessThan($to) ? $end : $to->copy()->endOfDay();
+        if ($overlapEnd->lessThan($overlapStart)) {
+            return 0;
+        }
+
+        $totalDays = max(1, (int) $start->diffInDays($end) + 1);
+        $days = (int) $overlapStart->diffInDays($overlapEnd) + 1;
+
+        return round((float) $this->total_cost * min($days, $totalDays) / $totalDays, 2);
     }
 }

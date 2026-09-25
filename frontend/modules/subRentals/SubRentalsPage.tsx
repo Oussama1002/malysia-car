@@ -125,6 +125,16 @@ export const SubRentalsPage: React.FC = () => {
         </div>
       )}
 
+      {/* De quoi lire la marge : une marge négative n'est pas une erreur si
+          les locations ne couvrent pas encore le coût fournisseur. */}
+      {dashboard && dashboard.total_supplier_cost !== undefined && (
+        <p className="-mt-2 text-xs text-slate-500">
+          Contrats actifs : locations client {Number(dashboard.total_revenue ?? 0).toLocaleString('fr-MA')} MAD
+          {' '}(dont {Number(dashboard.total_collected ?? 0).toLocaleString('fr-MA')} MAD encaissés)
+          {' '}− coût fournisseur {Number(dashboard.total_supplier_cost).toLocaleString('fr-MA')} MAD.
+        </p>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
         {filterBtn('', 'Tous')}

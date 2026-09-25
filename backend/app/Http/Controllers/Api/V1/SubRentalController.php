@@ -208,25 +208,33 @@ class SubRentalController extends Controller
             ->whereDate('end_date', '<', Carbon::today()->toDateString())
             ->count();
 
-        // Monthly supplier cost (current month)
+        // Coût du mois : la part du contrat qui tombe dans le mois, pas son
+        // coût total. Un contrat de six mois ne coûte pas six mois en janvier.
         $monthStart = Carbon::now()->startOfMonth();
         $monthEnd   = Carbon::now()->endOfMonth();
         $monthlyCost = (clone $base)
             ->whereIn('status', ['active', 'returned', 'closed'])
             ->whereDate('start_date', '<=', $monthEnd->toDateString())
             ->whereDate('end_date', '>=', $monthStart->toDateString())
-            ->sum('total_cost');
+            ->get()
+            ->sum(fn ($c) => $c->costForPeriod($monthStart, $monthEnd));
 
-        // Total margin from all contracts with vehicles
         $contracts = (clone $base)->where('status', 'active')->get();
-        $totalMargin = $contracts->sum(fn ($c) => $c->margin());
+        $revenue = $contracts->sum(fn ($c) => $c->customerReservationsRevenue());
+        $collected = $contracts->sum(fn ($c) => $c->customerReservationsCollected());
+        $cost = $contracts->sum(fn ($c) => (float) $c->total_cost);
 
         return ApiResponse::success([
             'active_sub_rentals'  => $activeCount,
             'due_soon'            => $dueSoonCount,
             'overdue'             => $overdueCount,
-            'monthly_supplier_cost' => (float) $monthlyCost,
-            'total_margin'        => $totalMargin,
+            'monthly_supplier_cost' => round((float) $monthlyCost, 2),
+            'total_margin'        => round($revenue - $cost, 2),
+            // De quoi lire la marge : ce que les locations rapportent, ce qui
+            // est déjà encaissé, et ce que les fournisseurs coûtent.
+            'total_revenue'       => round($revenue, 2),
+            'total_collected'     => round($collected, 2),
+            'total_supplier_cost' => round($cost, 2),
         ]);
     }
 
