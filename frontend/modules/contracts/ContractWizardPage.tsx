@@ -1050,13 +1050,57 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Durée">
+                  {/* Date de début / fin — surfaced when the wizard was NOT
+                      pre-filled from a reservation, so the user can enter the
+                      window directly and the Durée is derived from it. When
+                      the contract comes from a reservation these are already
+                      set from the reservation window (see prefill effect). */}
+                  <Field label="Date de début">
+                    <input
+                      type="date"
+                      className="df-input"
+                      value={state.startDate ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value || null;
+                        setState((s) => {
+                          const next = { ...s, startDate: v };
+                          if (v && s.endDate) {
+                            const dur = durationBetween(v, s.endDate);
+                            next.durationMonths = dur.months;
+                            next.durationExtraDays = dur.days;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </Field>
+                  <Field label="Date de fin">
+                    <input
+                      type="date"
+                      className="df-input"
+                      value={state.endDate ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value || null;
+                        setState((s) => {
+                          const next = { ...s, endDate: v };
+                          if (v && s.startDate) {
+                            const dur = durationBetween(s.startDate, v);
+                            next.durationMonths = dur.months;
+                            next.durationExtraDays = dur.days;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </Field>
+                  <Field label="Durée (calculée)">
                     <div className="flex items-stretch gap-2">
                       <div className="flex-1">
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
                             min={0}
+                            readOnly={!!state.startDate && !!state.endDate}
                             className="df-input"
                             value={state.durationMonths}
                             onChange={(e) => patch('durationMonths', Math.max(0, Number(e.target.value)))}
@@ -1070,6 +1114,7 @@ export const ContractWizardPage: React.FC = () => {
                             type="number"
                             min={0}
                             max={30}
+                            readOnly={!!state.startDate && !!state.endDate}
                             className="df-input"
                             value={state.durationExtraDays}
                             onChange={(e) => patch('durationExtraDays', Math.max(0, Math.min(30, Number(e.target.value))))}
