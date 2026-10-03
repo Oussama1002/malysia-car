@@ -155,9 +155,12 @@
     return el;
   }
 
+  var SITE_BRAND_MODELS = {};
+
   function chooseVehicle(id, name) {
     var select = $('vehicleSelect');
     if (select && id) select.value = id;
+    togglePreferences();
     var form = $('quoteForm');
     if (form) {
       form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -167,6 +170,47 @@
         note.textContent = name + ' — complétez vos dates, on vous rappelle.';
       }
     }
+  }
+
+  function populatePreferences(brandModels) {
+    var brandSelect = $('brandSelect');
+    var modelSelect = $('modelSelect');
+    if (!brandSelect || !modelSelect) return;
+    brandSelect.innerHTML = '';
+    Object.keys(brandModels).sort().forEach(function (b) {
+      var opt = document.createElement('option');
+      opt.value = b;
+      opt.textContent = b;
+      brandSelect.appendChild(opt);
+    });
+    refreshModels();
+    brandSelect.addEventListener('change', refreshModels);
+  }
+
+  function refreshModels() {
+    var brandSelect = $('brandSelect');
+    var modelSelect = $('modelSelect');
+    if (!brandSelect || !modelSelect) return;
+    var picked = Array.from(brandSelect.selectedOptions).map(function (o) { return o.value; });
+    var brands = picked.length ? picked : Object.keys(SITE_BRAND_MODELS);
+    var models = new Set();
+    brands.forEach(function (b) {
+      (SITE_BRAND_MODELS[b] || []).forEach(function (m) { models.add(m); });
+    });
+    modelSelect.innerHTML = '';
+    Array.from(models).sort().forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      modelSelect.appendChild(opt);
+    });
+  }
+
+  function togglePreferences() {
+    var vehicleSelect = $('vehicleSelect');
+    var block = $('prefsBlock');
+    if (!vehicleSelect || !block) return;
+    block.hidden = !!vehicleSelect.value;
   }
 
   function loadFleet() {
@@ -184,6 +228,9 @@
           return;
         }
         var select = $('vehicleSelect');
+        // Pré-calcule {marque: Set<modèle>} depuis la flotte pour alimenter les
+        // menus de préférences quand le client choisit "Peu importe".
+        var brandModels = {};
         list.forEach(function (v) {
           grid.appendChild(vehicleCard(v));
           if (select) {
@@ -193,7 +240,15 @@
               + (v.price_per_day ? ' — ' + money(v.price_per_day) + '/j' : '');
             select.appendChild(opt);
           }
+          var b = (v.brand || '').trim();
+          var m = (v.model || '').trim();
+          if (b) {
+            if (!brandModels[b]) brandModels[b] = new Set();
+            if (m) brandModels[b].add(m);
+          }
         });
+        SITE_BRAND_MODELS = brandModels;
+        populatePreferences(brandModels);
         var fact = $('factFleet');
         if (fact) fact.textContent = list.length;
         note.textContent = 'Tarifs à la journée, dégressifs à la semaine et au mois. Disponibilité confirmée par téléphone.';
@@ -280,17 +335,42 @@
       if (input) input.min = today;
     });
 
+    var vehicleSelect = $('vehicleSelect');
+    if (vehicleSelect) {
+      vehicleSelect.addEventListener('change', togglePreferences);
+      togglePreferences();
+    }
+
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (!API) return;
 
+      // Build vehicle_label from the specific pick, OR from the "Peu importe"
+      // preference multi-selects — so agents still see what the client wants.
+      var vehicleId = form.elements.vehicle_id.value || null;
+      var vehicleLabel = null;
+      if (vehicleId) {
+        vehicleLabel = form.elements.vehicle_id.selectedOptions[0]
+          ? form.elements.vehicle_id.selectedOptions[0].textContent.split(' — ')[0]
+          : null;
+      } else {
+        var brandSel = $('brandSelect');
+        var modelSel = $('modelSelect');
+        var brands = brandSel ? Array.from(brandSel.selectedOptions).map(function (o) { return o.value; }) : [];
+        var models = modelSel ? Array.from(modelSel.selectedOptions).map(function (o) { return o.value; }) : [];
+        if (brands.length || models.length) {
+          var parts = [];
+          if (brands.length) parts.push('Marques: ' + brands.join(', '));
+          if (models.length) parts.push('Modèles: ' + models.join(', '));
+          vehicleLabel = ('Peu importe · ' + parts.join(' · ')).slice(0, 160);
+        }
+      }
+
       var data = {
         full_name: form.elements.full_name.value.trim(),
         phone: form.elements.phone.value.trim(),
-        vehicle_id: form.elements.vehicle_id.value || null,
-        vehicle_label: form.elements.vehicle_id.selectedOptions[0]
-          ? form.elements.vehicle_id.selectedOptions[0].textContent.split(' — ')[0]
-          : null,
+        vehicle_id: vehicleId,
+        vehicle_label: vehicleLabel,
         pickup_at: form.elements.pickup_at.value || null,
         return_at: form.elements.return_at.value || null,
         message: form.elements.message.value.trim() || null,

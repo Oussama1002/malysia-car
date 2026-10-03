@@ -176,6 +176,23 @@ p { margin: 0 0 1rem; }
 .formNote--ok { color: var(--ok); font-weight: 700; }
 .formNote--err { color: var(--brand); font-weight: 700; }
 
+.preferences {
+  display: grid;
+  gap: .6rem;
+  padding: .9rem 1rem 1rem;
+  border-radius: 14px;
+  background: #f7f9ff;
+  border: 1px solid #e3e8f4;
+  animation: popIn .22s ease both;
+}
+.preferences[hidden] { display: none; }
+.preferences__hint { margin: 0; font-size: .85rem; color: var(--muted); }
+.preferences__tip  { margin: 0; font-size: .72rem; color: var(--muted); font-style: italic; }
+.preferences select[multiple] {
+  min-height: 110px;
+  background: #fff;
+}
+
 /* ── Bandeau ─────────────────────────────────────────────── */
 .strip { background: var(--ink); color: #fff; }
 .strip__inner {
