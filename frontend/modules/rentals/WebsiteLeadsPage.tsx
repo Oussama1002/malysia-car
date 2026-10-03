@@ -56,15 +56,24 @@ const STATUS_TONE: Record<WebsiteLead['status'], string> = {
   rejected: 'bg-slate-100 text-slate-500',
 };
 
-const fmtDate = (v?: string | null) =>
-  v ? new Date(v).toLocaleDateString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+const pad2 = (n: number) => (n < 10 ? '0' + n : String(n));
 
-const fmtDateTime = (v?: string | null) =>
-  v
-    ? new Date(v).toLocaleString('fr-MA', {
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-      })
-    : '—';
+// Formatage déterministe JJ/MM/AAAA : certains navigateurs (notamment via
+// locale 'fr-MA') retombent sur en-US et affichent MM/JJ/AAAA — on fabrique
+// nous-mêmes la chaîne pour éviter toute confusion.
+const fmtDate = (v?: string | null): string => {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
+
+const fmtDateTime = (v?: string | null): string => {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${fmtDate(v)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
 
 export const WebsiteLeadsPage: React.FC = () => {
   const qc = useQueryClient();
