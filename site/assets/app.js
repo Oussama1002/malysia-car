@@ -350,11 +350,21 @@
     var submit = $('quoteSubmit');
     if (!form) return;
 
-    // Les dates passées n'ont pas de sens pour une location à venir.
-    var today = new Date().toISOString().slice(0, 10);
+    // Masque JJ/MM/AAAA : on insère les slashes au fil de la frappe pour que
+    // le client n'ait qu'à taper 10 chiffres, sans se préoccuper du séparateur.
     ['pickup_at', 'return_at'].forEach(function (name) {
       var input = form.elements[name];
-      if (input) input.min = today;
+      if (!input) return;
+      input.addEventListener('input', function () {
+        var digits = input.value.replace(/\D/g, '').slice(0, 8);
+        var out = digits;
+        if (digits.length > 4) {
+          out = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+        } else if (digits.length > 2) {
+          out = digits.slice(0, 2) + '/' + digits.slice(2);
+        }
+        input.value = out;
+      });
     });
 
     var vehicleSelect = $('vehicleSelect');
@@ -386,16 +396,40 @@
         }
       }
 
+      function toIso(ddmmyyyy) {
+        if (!ddmmyyyy) return null;
+        var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(ddmmyyyy);
+        if (!m) return null;
+        var d = m[1], mo = m[2], y = m[3];
+        var di = +d, moi = +mo;
+        if (moi < 1 || moi > 12 || di < 1 || di > 31) return null;
+        return y + '-' + mo + '-' + d;
+      }
+
+      var pickupIso = toIso(form.elements.pickup_at.value.trim());
+      var returnIso = toIso(form.elements.return_at.value.trim());
+
       var data = {
         full_name: form.elements.full_name.value.trim(),
         phone: form.elements.phone.value.trim(),
         vehicle_id: vehicleId,
         vehicle_label: vehicleLabel,
-        pickup_at: form.elements.pickup_at.value || null,
-        return_at: form.elements.return_at.value || null,
+        pickup_at: pickupIso,
+        return_at: returnIso,
         message: form.elements.message.value.trim() || null,
         website: form.elements.website.value
       };
+
+      if (form.elements.pickup_at.value && !pickupIso) {
+        note.className = 'formNote formNote--err';
+        note.textContent = 'Date de départ invalide (format attendu : JJ/MM/AAAA).';
+        return;
+      }
+      if (form.elements.return_at.value && !returnIso) {
+        note.className = 'formNote formNote--err';
+        note.textContent = 'Date de retour invalide (format attendu : JJ/MM/AAAA).';
+        return;
+      }
 
       if (!data.full_name || !data.phone) {
         note.className = 'formNote formNote--err';
