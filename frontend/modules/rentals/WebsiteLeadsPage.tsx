@@ -15,8 +15,32 @@ interface WebsiteLead {
   message?: string | null;
   status: 'new' | 'contacted' | 'converted' | 'rejected';
   handling_notes?: string | null;
+  handled_at?: string | null;
+  handler?: {
+    id: string;
+    name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+  } | null;
   created_at?: string | null;
 }
+
+const agentDisplayName = (u: NonNullable<WebsiteLead['handler']>) =>
+  (u.name && u.name.trim())
+    || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
+    || u.email
+    || '—';
+
+const agentInitials = (u: NonNullable<WebsiteLead['handler']>) => {
+  const name = agentDisplayName(u);
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('') || '?';
+};
 
 const STATUS_FR: Record<WebsiteLead['status'], string> = {
   new: 'Nouvelle',
@@ -149,6 +173,35 @@ export const WebsiteLeadsPage: React.FC = () => {
 
                 {lead.message && (
                   <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{lead.message}</p>
+                )}
+
+                {lead.status !== 'new' && lead.handler && (
+                  <div className="flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2.5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-sm font-black text-white">
+                      {agentInitials(lead.handler)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                        Pris en charge par
+                      </div>
+                      <div className="truncate text-sm font-bold text-slate-800">
+                        {agentDisplayName(lead.handler)}
+                      </div>
+                      {lead.handler.email && (
+                        <a
+                          className="truncate text-[11px] text-amber-700/80 hover:underline"
+                          href={`mailto:${lead.handler.email}`}
+                        >
+                          {lead.handler.email}
+                        </a>
+                      )}
+                    </div>
+                    {lead.handled_at && (
+                      <div className="text-right text-[11px] text-amber-700">
+                        {fmtDateTime(lead.handled_at)}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <div className="flex flex-wrap gap-2">

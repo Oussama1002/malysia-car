@@ -51,4 +51,10 @@ class WebsiteLead extends Model
     {
         return $this->belongsTo(Vehicle::class);
     }
+
+    /** Agent qui a pris en charge la demande (contacté / qualifié). */
+    public function handler(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'handled_by');
+    }
 }

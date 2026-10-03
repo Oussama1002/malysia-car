@@ -14,7 +14,7 @@ class WebsiteLeadController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $q = WebsiteLead::query()->orderByDesc('created_at');
+        $q = WebsiteLead::query()->with('handler')->orderByDesc('created_at');
 
         if ($status = $request->query('status')) {
             $q->where('status', $status);
@@ -54,6 +54,6 @@ class WebsiteLeadController extends Controller
 
         AuditLogger::statusChanged($lead, $before, $data['status'], $request->user(), $request, 'rentals');
 
-        return ApiResponse::success($lead->fresh());
+        return ApiResponse::success($lead->fresh('handler'));
     }
 }
