@@ -178,7 +178,7 @@ p { margin: 0 0 1rem; }
 
 .preferences {
   display: grid;
-  gap: .6rem;
+  gap: .8rem;
   padding: .9rem 1rem 1rem;
   border-radius: 14px;
   background: #f7f9ff;
@@ -187,10 +187,50 @@ p { margin: 0 0 1rem; }
 }
 .preferences[hidden] { display: none; }
 .preferences__hint { margin: 0; font-size: .85rem; color: var(--muted); }
-.preferences__tip  { margin: 0; font-size: .72rem; color: var(--muted); font-style: italic; }
-.preferences select[multiple] {
-  min-height: 110px;
+.preferences__group { display: grid; gap: .4rem; }
+.preferences__label {
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.chips:empty::before {
+  content: 'Choisissez d\'abord une marque';
+  font-size: .78rem;
+  color: var(--muted);
+  font-style: italic;
+}
+.chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .4rem .8rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
   background: #fff;
+  color: var(--ink);
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+  user-select: none;
+}
+.chip-toggle:hover { border-color: var(--brand); color: var(--brand); }
+.chip-toggle[aria-pressed="true"] {
+  background: linear-gradient(100deg, var(--brand), var(--brand-2));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px -4px rgba(225, 29, 72, .4);
+}
+.chip-toggle[aria-pressed="true"]::before {
+  content: '✓';
+  font-weight: 800;
 }
 
 /* ── Bandeau ─────────────────────────────────────────────── */

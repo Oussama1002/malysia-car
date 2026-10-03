@@ -80,16 +80,15 @@
           </select>
         </label>
         <div class="preferences" id="prefsBlock" hidden>
-          <p class="preferences__hint">Vous pouvez pré-sélectionner une ou plusieurs marques et modèles — nous vous proposerons ce qui est libre.</p>
-          <div class="row">
-            <label>Marques
-              <select name="preferred_brands" id="brandSelect" multiple size="4"></select>
-            </label>
-            <label>Modèles
-              <select name="preferred_models" id="modelSelect" multiple size="4"></select>
-            </label>
+          <p class="preferences__hint">Pré-sélectionnez une ou plusieurs marques et modèles — cliquez pour ajouter ou retirer.</p>
+          <div class="preferences__group">
+            <span class="preferences__label">Marques</span>
+            <div class="chips" id="brandChips" role="group" aria-label="Marques"></div>
           </div>
-          <p class="preferences__tip">Astuce : Ctrl / ⌘ + clic pour en choisir plusieurs.</p>
+          <div class="preferences__group">
+            <span class="preferences__label">Modèles</span>
+            <div class="chips" id="modelChips" role="group" aria-label="Modèles"></div>
+          </div>
         </div>
         <label>Message <span class="opt">(optionnel)</span>
           <textarea name="message" rows="2" placeholder="Livraison à l'aéroport, siège bébé…"></textarea>

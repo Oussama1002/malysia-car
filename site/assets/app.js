@@ -172,37 +172,59 @@
     }
   }
 
-  function populatePreferences(brandModels) {
-    var brandSelect = $('brandSelect');
-    var modelSelect = $('modelSelect');
-    if (!brandSelect || !modelSelect) return;
-    brandSelect.innerHTML = '';
-    Object.keys(brandModels).sort().forEach(function (b) {
-      var opt = document.createElement('option');
-      opt.value = b;
-      opt.textContent = b;
-      brandSelect.appendChild(opt);
+  var SELECTED_BRANDS = new Set();
+  var SELECTED_MODELS = new Set();
+
+  function makeChip(label, isSelected, onToggle) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip-toggle';
+    btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    btn.textContent = label;
+    btn.addEventListener('click', function () {
+      var next = btn.getAttribute('aria-pressed') !== 'true';
+      btn.setAttribute('aria-pressed', next ? 'true' : 'false');
+      onToggle(label, next);
     });
-    refreshModels();
-    brandSelect.addEventListener('change', refreshModels);
+    return btn;
   }
 
-  function refreshModels() {
-    var brandSelect = $('brandSelect');
-    var modelSelect = $('modelSelect');
-    if (!brandSelect || !modelSelect) return;
-    var picked = Array.from(brandSelect.selectedOptions).map(function (o) { return o.value; });
-    var brands = picked.length ? picked : Object.keys(SITE_BRAND_MODELS);
+  function populatePreferences(brandModels) {
+    var brandWrap = $('brandChips');
+    if (!brandWrap) return;
+    brandWrap.innerHTML = '';
+    Object.keys(brandModels).sort().forEach(function (b) {
+      brandWrap.appendChild(makeChip(b, SELECTED_BRANDS.has(b), function (val, on) {
+        if (on) SELECTED_BRANDS.add(val); else SELECTED_BRANDS.delete(val);
+        // Drop any selected model that no longer belongs to a selected brand.
+        var allowed = brandsAllowedModels();
+        Array.from(SELECTED_MODELS).forEach(function (m) {
+          if (!allowed.has(m)) SELECTED_MODELS.delete(m);
+        });
+        refreshModels();
+      }));
+    });
+    refreshModels();
+  }
+
+  function brandsAllowedModels() {
     var models = new Set();
+    var brands = SELECTED_BRANDS.size ? SELECTED_BRANDS : new Set(Object.keys(SITE_BRAND_MODELS));
     brands.forEach(function (b) {
       (SITE_BRAND_MODELS[b] || []).forEach(function (m) { models.add(m); });
     });
-    modelSelect.innerHTML = '';
-    Array.from(models).sort().forEach(function (m) {
-      var opt = document.createElement('option');
-      opt.value = m;
-      opt.textContent = m;
-      modelSelect.appendChild(opt);
+    return models;
+  }
+
+  function refreshModels() {
+    var modelWrap = $('modelChips');
+    if (!modelWrap) return;
+    modelWrap.innerHTML = '';
+    var allowed = Array.from(brandsAllowedModels()).sort();
+    allowed.forEach(function (m) {
+      modelWrap.appendChild(makeChip(m, SELECTED_MODELS.has(m), function (val, on) {
+        if (on) SELECTED_MODELS.add(val); else SELECTED_MODELS.delete(val);
+      }));
     });
   }
 
@@ -354,10 +376,8 @@
           ? form.elements.vehicle_id.selectedOptions[0].textContent.split(' — ')[0]
           : null;
       } else {
-        var brandSel = $('brandSelect');
-        var modelSel = $('modelSelect');
-        var brands = brandSel ? Array.from(brandSel.selectedOptions).map(function (o) { return o.value; }) : [];
-        var models = modelSel ? Array.from(modelSel.selectedOptions).map(function (o) { return o.value; }) : [];
+        var brands = Array.from(SELECTED_BRANDS);
+        var models = Array.from(SELECTED_MODELS);
         if (brands.length || models.length) {
           var parts = [];
           if (brands.length) parts.push('Marques: ' + brands.join(', '));
@@ -407,6 +427,10 @@
           if (res.ok) {
             var ref = (res.body && res.body.data && res.body.data.reference) || '';
             form.reset();
+            SELECTED_BRANDS.clear();
+            SELECTED_MODELS.clear();
+            populatePreferences(SITE_BRAND_MODELS);
+            togglePreferences();
             note.className = 'formNote';
             note.textContent = '';
             openDone(ref);
