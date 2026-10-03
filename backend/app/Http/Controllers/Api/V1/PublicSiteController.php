@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Cache;
 class PublicSiteController extends Controller
 {
     /** La flotte telle qu'un visiteur peut la voir : disponible, sans prix d'achat ni interne. */
-    public function vehicles(): JsonResponse
+    public function vehicles(NotificationService $notifications): JsonResponse
     {
         $vehicles = Cache::remember('public_site.vehicles', 300, function () {
             return Vehicle::query()
@@ -45,7 +45,44 @@ class PublicSiteController extends Controller
                 ->all();
         });
 
+        $this->alertMissingPrices($vehicles, $notifications);
+
         return ApiResponse::success($vehicles);
+    }
+
+    /**
+     * Alerte l'ADMIN et le GESTIONNAIRE_FLOTTE pour chaque véhicule exposé sur
+     * le site public sans tarif. Throttle 24h par véhicule pour éviter de
+     * saturer les notifications à chaque chargement de la landing page.
+     *
+     * @param  array<int, array<string, mixed>>  $vehicles
+     */
+    private function alertMissingPrices(array $vehicles, NotificationService $notifications): void
+    {
+        foreach ($vehicles as $v) {
+            if (! empty($v['price_per_day'])) {
+                continue;
+            }
+            $key = 'public_site.pricing_alert:'.$v['id'];
+            if (Cache::has($key)) {
+                continue;
+            }
+            $label = trim(($v['brand'] ?? '').' '.($v['model'] ?? '')) ?: 'Véhicule sans marque';
+            try {
+                $notifications->notifyRoles(
+                    roleCodes: ['ADMIN', 'GESTIONNAIRE_FLOTTE'],
+                    category: 'fleet.price_missing',
+                    title: 'Tarif à définir pour un véhicule du site',
+                    body: $label.' est affiché sur la landing sans prix / jour. Merci de renseigner le tarif.',
+                    module: 'fleet',
+                    priority: 'high',
+                    linkUrl: '/fleet/'.$v['id'],
+                );
+                Cache::put($key, true, now()->addDay());
+            } catch (\Throwable) {
+                // Une notif ratée ne doit pas casser la page publique.
+            }
+        }
     }
 
     /** Une demande laissée sur le site. Elle atterrit dans DriveFlow, pas dans une boîte mail. */
