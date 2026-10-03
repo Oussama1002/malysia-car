@@ -241,6 +241,8 @@ export const ContractWizardPage: React.FC = () => {
   const [maxStepIdx, setMaxStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
   const [scanningPayment, setScanningPayment] = useState<string | null>(null);
+  const [scanningFranchise, setScanningFranchise] = useState(false);
+  const [franchiseScanError, setFranchiseScanError] = useState<string | null>(null);
   // Un chèque déjà encaissé ailleurs bloque l'enregistrement du contrat.
   const [chequeDuplicates, setChequeDuplicates] = useState<Record<string, string | null>>({});
   const hasUsedCheque = Object.values(chequeDuplicates).some(Boolean);
@@ -588,6 +590,31 @@ export const ContractWizardPage: React.FC = () => {
       setScanError((prev) => ({ ...prev, [paymentId]: e instanceof Error ? e.message : 'Erreur OCR' }));
     } finally {
       setScanningPayment(null);
+    }
+  }
+
+  async function handleFranchiseChequeScan(file: File): Promise<void> {
+    setScanningFranchise(true);
+    setFranchiseScanError(null);
+    try {
+      const data = await scanCheque(file);
+      if (data.existing_payment) {
+        setFranchiseScanError(
+          `Ce chèque a déjà été utilisé pour le paiement ${data.existing_payment.payment_number}. Un même chèque ne peut pas être payé deux fois.`,
+        );
+        return;
+      }
+      setState((s) => ({
+        ...s,
+        depositChequeNumber: data.check_number ?? s.depositChequeNumber,
+        depositChequeBank:   data.bank ?? s.depositChequeBank,
+        depositChequeDate:   data.check_date ?? s.depositChequeDate,
+        securityDepositMad:  data.amount != null ? Number(data.amount) : s.securityDepositMad,
+      }));
+    } catch (e) {
+      setFranchiseScanError(e instanceof Error ? e.message : 'Erreur OCR');
+    } finally {
+      setScanningFranchise(false);
     }
   }
 
@@ -1219,6 +1246,40 @@ export const ContractWizardPage: React.FC = () => {
                             )
                           }
                         />
+                      </div>
+                      <div className="md:col-span-2">
+                        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-black text-indigo-900">Scanner le chèque de franchise</div>
+                            <div className="text-[11px] text-indigo-700/80">Extraction automatique du n°, banque, date et montant.</div>
+                          </div>
+                          <label
+                            htmlFor="franchise-cheque-scan"
+                            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition ${
+                              scanningFranchise
+                                ? 'bg-indigo-400 text-white cursor-wait'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                            }`}
+                          >
+                            <Icon name="scan" size={12} />
+                            {scanningFranchise ? 'Analyse…' : 'Importer / Photo'}
+                          </label>
+                          <input
+                            id="franchise-cheque-scan"
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            disabled={scanningFranchise}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFranchiseChequeScan(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </div>
+                        {franchiseScanError && (
+                          <div className="mt-1 text-[11px] font-semibold text-rose-700">⚠ {franchiseScanError}</div>
+                        )}
                       </div>
                     </>
                   )}
