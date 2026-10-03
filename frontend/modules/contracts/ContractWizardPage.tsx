@@ -524,8 +524,14 @@ export const ContractWizardPage: React.FC = () => {
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
 
+  // When the rental is less than a month long, treat monthlyRentMad as a
+  // daily rate — the UI relabels the field "Loyer journalier" accordingly and
+  // the total engagement is rent × days instead of rent × months.
+  const isDailyRent = state.durationMonths === 0 && state.durationExtraDays > 0;
   const totalAmount = Math.round(
-    state.monthlyRentMad * (state.durationMonths + state.durationExtraDays / 30),
+    isDailyRent
+      ? state.monthlyRentMad * state.durationExtraDays
+      : state.monthlyRentMad * (state.durationMonths + state.durationExtraDays / 30),
   );
 
   const canNext = useMemo(() => {
@@ -1132,7 +1138,7 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
-                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : 'Loyer mensuel'} (MAD)`}>
+                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer journalier' : 'Loyer mensuel'} (MAD)`}>
                     <input
                       type="number"
                       className="df-input"
@@ -1508,7 +1514,11 @@ export const ContractWizardPage: React.FC = () => {
                     : `${state.durationMonths} mois`
                 }
               />
-              <SummaryRow label="Mensualité" value={formatCurrencyMad(state.monthlyRentMad)} highlight />
+              <SummaryRow
+                label={isDailyRent ? 'Loyer journalier' : 'Mensualité'}
+                value={formatCurrencyMad(state.monthlyRentMad)}
+                highlight
+              />
               <SummaryRow label="Km inclus / mois" value={state.kmInclMonth.toLocaleString('fr-MA')} />
               <SummaryRow label="Franchise d'assurance" value={formatCurrencyMad(state.securityDepositMad)} />
               {state.type === 'LOA' && <SummaryRow label="Valeur résiduelle" value={`${state.residualValuePct}%`} />}
