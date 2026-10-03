@@ -1014,7 +1014,6 @@ export const ContractWizardPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    <AIHint text="Véhicule éligible LLD & LOA. IA prédit un risque d'usure faible sur 36 mois." tone="success" />
                   </div>
                 )}
               </>
