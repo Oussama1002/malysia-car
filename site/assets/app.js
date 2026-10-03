@@ -89,15 +89,25 @@
 
     var media = document.createElement('div');
     media.className = 'veh__media';
+    function fallbackLogo() {
+      media.innerHTML = '';
+      media.classList.add('veh__media--fallback');
+      var logo = document.createElement('img');
+      logo.className = 'veh__logo';
+      logo.src = 'assets/logo.png';
+      logo.alt = 'Malysia Car';
+      logo.loading = 'lazy';
+      media.appendChild(logo);
+    }
     if (v.photo_url) {
       var img = document.createElement('img');
       img.src = API.replace(/\/api$/, '') + v.photo_url;
       img.alt = name;
       img.loading = 'lazy';
-      img.onerror = function () { media.textContent = '🚗'; };
+      img.onerror = fallbackLogo;
       media.appendChild(img);
     } else {
-      media.textContent = '🚗';
+      fallbackLogo();
     }
 
     var body = document.createElement('div');
