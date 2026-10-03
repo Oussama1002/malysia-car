@@ -147,11 +147,18 @@ export const ContractsPage: React.FC = () => {
       ?? '—'
     );
   };
-  const vehicleLabel = (id: string | number | undefined): { name: string; plate: string } => {
-    if (!id) return { name: '—', plate: '—' };
-    const v: any = vehicleById.get(String(id));
+  const vehicleLabel = (
+    id: string | number | undefined,
+    inline?: any,
+  ): { name: string; plate: string } => {
+    // Prefer the vehicle object embedded on the contract row (new API shape)
+    // and only fall back to the global vehicles-by-id map, so rows for
+    // vehicles past the 200-item fleet fetch still show their marque+modèle.
+    const v: any = inline ?? (id ? vehicleById.get(String(id)) : null);
     if (!v) return { name: '—', plate: '—' };
-    const name = [v.brand, v.model].filter(Boolean).join(' ').trim() || 'Véhicule';
+    const brand = typeof v.brand === 'object' ? (v.brand?.name ?? '') : (v.brand ?? v.brand_name ?? '');
+    const model = typeof v.model === 'object' ? (v.model?.model_name ?? v.model?.name ?? '') : (v.model ?? v.model_name ?? '');
+    const name = [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule';
     return { name, plate: v.registration ?? v.registration_number ?? '—' };
   };
 
@@ -159,7 +166,7 @@ export const ContractsPage: React.FC = () => {
     return (q.data ?? []).filter((c: any) => {
       if (!filters.q) return true;
       const cust = customerLabel(c.customerId ?? c.customer_id).toLowerCase();
-      const veh = vehicleLabel(c.vehicleId ?? c.vehicle_id);
+      const veh = vehicleLabel(c.vehicleId ?? c.vehicle_id, c.vehicle);
       const hay = [
         c.reference,
         c.type,
@@ -253,7 +260,7 @@ export const ContractsPage: React.FC = () => {
             key: 'vehicle',
             header: 'Véhicule',
             render: (r: any) => {
-              const v = vehicleLabel(r.vehicleId ?? r.vehicle_id);
+              const v = vehicleLabel(r.vehicleId ?? r.vehicle_id, r.vehicle);
               return (
                 <div>
                   <div className="text-sm font-semibold text-slate-800">{v.name}</div>

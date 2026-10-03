@@ -26,6 +26,12 @@ class ContractResource extends JsonResource
             'signatureStatus' => $c->signature_status,
             'customerId' => $c->customer_id,
             'vehicleId' => $c->vehicle_id,
+            'vehicle' => $c->relationLoaded('vehicle') && $c->vehicle ? [
+                'id' => $c->vehicle->id,
+                'brand' => $c->vehicle->brand?->name ?? $c->vehicle->brand_name,
+                'model' => $c->vehicle->model?->model_name ?? $c->vehicle->model?->name ?? $c->vehicle->model_name,
+                'registration' => $c->vehicle->registration_number,
+            ] : null,
             'reservationId' => $c->reservation_id,
             'templateId' => $c->template_id,
             'creditApplicationId' => $c->credit_application_id,

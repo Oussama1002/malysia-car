@@ -35,7 +35,7 @@ class ContractController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = Contract::query();
+        $q = Contract::query()->with(['vehicle.brand', 'vehicle.model']);
 
         if ($type = $request->query('type')) {
             $q->where('contract_type', $type);
