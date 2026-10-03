@@ -224,8 +224,20 @@
     var wa = $('doneWa');
     var fab = $('waFab');
     if (wa) {
-      if (fab && fab.href && fab.style.display !== 'none') wa.href = fab.href;
-      else wa.style.display = 'none';
+      if (fab && fab.href && fab.style.display !== 'none') {
+        wa.href = fab.href;
+        wa.style.display = '';
+      } else {
+        wa.style.display = 'none';
+      }
+    }
+
+    // Replay the circle+check animation every time the modal opens — CSS
+    // keyframes only run on first mount, so cloning the SVG restarts them.
+    var checkWrap = modal.querySelector('.modal__check');
+    if (checkWrap) {
+      var clone = checkWrap.cloneNode(true);
+      checkWrap.parentNode.replaceChild(clone, checkWrap);
     }
 
     lastFocused = document.activeElement;
