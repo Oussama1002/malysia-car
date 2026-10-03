@@ -1106,10 +1106,10 @@ export const ContractWizardPage: React.FC = () => {
                           <input
                             type="number"
                             min={0}
-                            readOnly={!!state.startDate && !!state.endDate}
-                            className="df-input"
+                            disabled
+                            className="df-input bg-slate-50 cursor-not-allowed"
                             value={state.durationMonths}
-                            onChange={(e) => patch('durationMonths', Math.max(0, Number(e.target.value)))}
+                            readOnly
                           />
                           <span className="text-xs font-bold text-slate-500">mois</span>
                         </div>
@@ -1120,10 +1120,10 @@ export const ContractWizardPage: React.FC = () => {
                             type="number"
                             min={0}
                             max={30}
-                            readOnly={!!state.startDate && !!state.endDate}
-                            className="df-input"
+                            disabled
+                            className="df-input bg-slate-50 cursor-not-allowed"
                             value={state.durationExtraDays}
-                            onChange={(e) => patch('durationExtraDays', Math.max(0, Math.min(30, Number(e.target.value))))}
+                            readOnly
                           />
                           <span className="text-xs font-bold text-slate-500">jours</span>
                         </div>
