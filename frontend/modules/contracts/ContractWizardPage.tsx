@@ -1376,10 +1376,6 @@ export const ContractWizardPage: React.FC = () => {
                     </select>
                   </Field>
                 </div>
-                <AIHint
-                  tone="brand"
-                  text={`Suggestion IA: pour ce profil client et véhicule, le loyer optimal est ${formatCurrencyMad(4280)}/mois. Conforme Bank Al-Maghrib.`}
-                />
               </>
             )}
 
