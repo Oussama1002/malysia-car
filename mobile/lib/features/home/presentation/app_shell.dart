@@ -58,7 +58,11 @@ class _AppShellState extends ConsumerState<AppShell> {
         backgroundColor: const Color(0xFFF5F6FB),
         body: SafeArea(
           bottom: false,
-          child: IndexedStack(
+          child: Column(
+            children: [
+              const _PersistentTopBar(),
+              Expanded(
+                child: IndexedStack(
             index: _tab,
             children: [
               _TabNavigator(navigatorKey: _navKeys[0], child: const HomeTab()),
@@ -78,6 +82,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                       icon: Icons.chat_bubble_outline)),
               _TabNavigator(
                   navigatorKey: _navKeys[4], child: const ProfilTab()),
+            ],
+          ),
+              ),
             ],
           ),
         ),
@@ -106,6 +113,117 @@ class _AppShellState extends ConsumerState<AppShell> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Barre supérieure persistante, inspirée du header web `AppLayout` :
+/// burger menu, fil d'Ariane « Opérations », thème, chat, notifications,
+/// lien externe. Reste visible sur chaque onglet et chaque sous-page.
+class _PersistentTopBar extends StatelessWidget {
+  const _PersistentTopBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: SizedBox(
+        height: 52,
+        child: Row(
+          children: [
+            _TopIcon(icon: Icons.menu, onTap: () {}),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Row(
+                children: const [
+                  Text('Opérations',
+                      style: TextStyle(
+                          color: Colors.black54,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                  Icon(Icons.chevron_right, size: 18, color: Colors.black26),
+                  Flexible(
+                    child: Text('DriveFlow',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ),
+            ),
+            _TopIcon(icon: Icons.dark_mode_outlined, onTap: () {}),
+            _TopIcon(icon: Icons.chat_bubble_outline, onTap: () {}),
+            _TopBadgeIcon(
+              icon: Icons.notifications_none,
+              count: 99,
+              onTap: () {},
+            ),
+            _TopIcon(icon: Icons.open_in_new, onTap: () {}),
+            const SizedBox(width: 6),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TopIcon extends StatelessWidget {
+  const _TopIcon({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(icon, size: 22, color: Colors.black87),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _TopBadgeIcon extends StatelessWidget {
+  const _TopBadgeIcon({
+    required this.icon,
+    required this.count,
+    required this.onTap,
+  });
+  final IconData icon;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        _TopIcon(icon: icon, onTap: onTap),
+        if (count > 0)
+          Positioned(
+            right: 2,
+            top: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: Colors.red.shade500,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              constraints: const BoxConstraints(minWidth: 20),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
