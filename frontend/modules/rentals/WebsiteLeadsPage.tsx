@@ -84,7 +84,21 @@ interface MissingPriceVehicle {
   fuel?: string | null;
   transmission?: string | null;
   categorie?: string | null;
+  /** Chemin relatif renvoyé par l'API (ex. `/api/v1/files/<uuid>`). */
   photo_url?: string | null;
+}
+
+/** URL absolue de la photo à partir du chemin relatif renvoyé par l'API. */
+function photoUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^https?:/i.test(path)) return path;
+  const base = (import.meta as unknown as { env?: { VITE_API_BASE?: string } })
+    .env?.VITE_API_BASE?.replace(/\/+$/, '');
+  if (!base) return path;
+  // `photo_url` arrive en `/api/v1/files/...` alors que `VITE_API_BASE` est
+  // deja l'origine + `/api` : on retire le prefixe pour eviter le `/api/api`.
+  const normalized = path.replace(/^\/api\//, '/');
+  return base + normalized;
 }
 
 type TabKey = 'leads' | 'pricing';
@@ -400,9 +414,26 @@ const PricingRow: React.FC<{
     setSavedAt(Date.now());
     setPrice('');
   };
+  const img = photoUrl(v.photo_url);
   return (
     <article className="df-card">
       <div className="df-card__body flex flex-wrap items-center gap-4">
+        <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200">
+          {img ? (
+            <img
+              src={img}
+              alt={label}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                const parent = (e.currentTarget as HTMLImageElement).parentElement;
+                if (parent) parent.textContent = '🚗';
+              }}
+            />
+          ) : (
+            <span className="text-2xl opacity-50">🚗</span>
+          )}
+        </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-black text-slate-900">{label}</div>
           <div className="text-xs text-slate-500">
