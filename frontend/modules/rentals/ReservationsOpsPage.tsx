@@ -609,9 +609,27 @@ export const ReservationsOpsPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="text-lg">🔔</span>
             <div>
-              <div className="font-black text-amber-900">
-                {visibleUrgent.length} réservation{visibleUrgent.length > 1 ? 's' : ''} sans contrat — départ aujourd'hui ou hier
-              </div>
+              {(() => {
+                // On precise au client s'il s'agit de departs du jour, de
+                // la veille, ou d'un mix — "aujourd'hui ou hier" n'etait
+                // pas assez concret quand il n'y en avait qu'un des deux.
+                const todayDay = new Date();
+                todayDay.setHours(0, 0, 0, 0);
+                const todayCount = visibleUrgent.filter((r) => {
+                  const s = new Date(r.desired_start_at);
+                  s.setHours(0, 0, 0, 0);
+                  return s.getTime() === todayDay.getTime();
+                }).length;
+                const yesterdayCount = visibleUrgent.length - todayCount;
+                const bits: string[] = [];
+                if (todayCount > 0) bits.push(
+                  `${todayCount} réservation${todayCount > 1 ? 's' : ''} sans contrat — départ aujourd'hui`,
+                );
+                if (yesterdayCount > 0) bits.push(
+                  `${yesterdayCount} réservation${yesterdayCount > 1 ? 's' : ''} sans contrat — départ hier`,
+                );
+                return <div className="font-black text-amber-900">{bits.join(' · ')}</div>;
+              })()}
               <div className="text-xs text-amber-700">Générez le contrat avant la remise des clés.</div>
             </div>
           </div>
