@@ -642,8 +642,12 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:customers.view');
         Route::get('website-leads', [\App\Http\Controllers\Api\V1\WebsiteLeadController::class, 'index'])
             ->middleware('permission:reservations.view');
+        Route::get('website-leads/missing-prices', [\App\Http\Controllers\Api\V1\WebsiteLeadController::class, 'missingPrices'])
+            ->middleware('permission:reservations.view');
         Route::patch('website-leads/{lead}', [\App\Http\Controllers\Api\V1\WebsiteLeadController::class, 'update'])
             ->middleware('permission:reservations.update');
+        Route::patch('website-leads/vehicles/{vehicle}/price', [\App\Http\Controllers\Api\V1\WebsiteLeadController::class, 'setPrice'])
+            ->middleware('permission:vehicles.update');
 
         Route::get('customers/lookup', [CustomerController::class, 'lookup'])
             ->middleware('permission:customers.view');

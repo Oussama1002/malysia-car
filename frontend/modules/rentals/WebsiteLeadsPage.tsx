@@ -75,8 +75,23 @@ const fmtDateTime = (v?: string | null): string => {
   return `${fmtDate(v)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
 
+interface MissingPriceVehicle {
+  id: string;
+  brand?: string | null;
+  model?: string | null;
+  year?: number | null;
+  registration?: string | null;
+  fuel?: string | null;
+  transmission?: string | null;
+  categorie?: string | null;
+  photo_url?: string | null;
+}
+
+type TabKey = 'leads' | 'pricing';
+
 export const WebsiteLeadsPage: React.FC = () => {
   const qc = useQueryClient();
+  const [tab, setTab] = useState<TabKey>('leads');
   const [status, setStatus] = useState<string>('');
   const [search, setSearch] = useState('');
 
@@ -92,6 +107,16 @@ export const WebsiteLeadsPage: React.FC = () => {
     },
   });
 
+  // Véhicules visibles sur la landing sans tarif journalier — admin et
+  // responsable flotte reçoivent la notif, et peuvent corriger ici.
+  const missingPricesQ = useQuery({
+    queryKey: ['website-leads', 'missing-prices'],
+    queryFn: () =>
+      apiClient<{ data: MissingPriceVehicle[]; meta?: { total: number } }>(
+        '/v1/website-leads/missing-prices',
+      ),
+  });
+
   const updateM = useMutation({
     mutationFn: (vars: { id: string; status: WebsiteLead['status'] }) =>
       apiClient(`/v1/website-leads/${vars.id}`, {
@@ -101,8 +126,21 @@ export const WebsiteLeadsPage: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['website-leads'] }),
   });
 
+  const setPriceM = useMutation({
+    mutationFn: (vars: { vehicleId: string; price: number }) =>
+      apiClient(`/v1/website-leads/vehicles/${vars.vehicleId}/price`, {
+        method: 'PATCH',
+        body: JSON.stringify({ daily_rental_price: vars.price }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['website-leads', 'missing-prices'] });
+    },
+  });
+
   const leads = leadsQ.data?.data ?? [];
   const newCount = leadsQ.data?.meta?.new_count ?? 0;
+  const missing = missingPricesQ.data?.data ?? [];
+  const missingCount = missing.length;
 
   return (
     <div className="space-y-6">
@@ -113,12 +151,66 @@ export const WebsiteLeadsPage: React.FC = () => {
             Les réservations demandées depuis le site public. Rappelez le client, puis créez sa fiche et sa réservation.
           </p>
         </div>
-        {newCount > 0 && (
-          <span className="rounded-full bg-rose-100 px-4 py-2 text-sm font-black text-rose-700">
-            {newCount} demande{newCount > 1 ? 's' : ''} à traiter
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {newCount > 0 && (
+            <span className="rounded-full bg-rose-100 px-4 py-2 text-sm font-black text-rose-700">
+              {newCount} demande{newCount > 1 ? 's' : ''} à traiter
+            </span>
+          )}
+          {missingCount > 0 && (
+            <span className="rounded-full bg-amber-100 px-4 py-2 text-sm font-black text-amber-700">
+              {missingCount} véhicule{missingCount > 1 ? 's' : ''} sans tarif
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Onglets : Demandes du site · Véhicules à tarifer */}
+      <div className="flex gap-1 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setTab('leads')}
+          className={`px-4 py-2.5 text-sm font-black transition border-b-2 ${
+            tab === 'leads'
+              ? 'border-indigo-600 text-indigo-700'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Demandes
+          {leads.length > 0 && (
+            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+              {leads.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('pricing')}
+          className={`px-4 py-2.5 text-sm font-black transition border-b-2 ${
+            tab === 'pricing'
+              ? 'border-indigo-600 text-indigo-700'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Véhicules à tarifer
+          {missingCount > 0 && (
+            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-700">
+              {missingCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {tab === 'pricing' && (
+        <PricingTab
+          vehicles={missing}
+          loading={missingPricesQ.isLoading}
+          onSetPrice={(vehicleId, price) => setPriceM.mutateAsync({ vehicleId, price })}
+          pending={setPriceM.isPending}
+        />
+      )}
+
+      {tab === 'leads' && (<>
 
       <div className="flex flex-wrap gap-2">
         <input
@@ -250,7 +342,102 @@ export const WebsiteLeadsPage: React.FC = () => {
           ))}
         </div>
       )}
+      </>)}
     </div>
+  );
+};
+
+/* ────────────────────────────────────────────────────────────
+   Onglet « Véhicules à tarifer »
+   ──────────────────────────────────────────────────────────── */
+const PricingTab: React.FC<{
+  vehicles: MissingPriceVehicle[];
+  loading: boolean;
+  onSetPrice: (vehicleId: string, price: number) => Promise<unknown>;
+  pending: boolean;
+}> = ({ vehicles, loading, onSetPrice, pending }) => {
+  if (loading) {
+    return <div className="df-card df-card__body text-sm text-slate-500">Chargement…</div>;
+  }
+  if (vehicles.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 p-10 text-center text-sm text-emerald-700">
+        <div className="mb-1 text-base font-black">✓ Tous les véhicules du site ont un tarif.</div>
+        <div className="text-xs">Aucune action à faire — rien ne saute à l'œil du visiteur.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="font-black">
+          {vehicles.length} véhicule{vehicles.length > 1 ? 's' : ''} apparaissent sur le site sans tarif journalier.
+        </div>
+        <div className="mt-0.5 text-xs">
+          Les visiteurs voient « Tarif sur demande ». Renseignez le prix pour qu'ils puissent décider sans vous appeler.
+        </div>
+      </div>
+      {vehicles.map((v) => (
+        <PricingRow key={v.id} v={v} onSetPrice={onSetPrice} pending={pending} />
+      ))}
+    </div>
+  );
+};
+
+const PricingRow: React.FC<{
+  v: MissingPriceVehicle;
+  onSetPrice: (vehicleId: string, price: number) => Promise<unknown>;
+  pending: boolean;
+}> = ({ v, onSetPrice, pending }) => {
+  const [price, setPrice] = useState('');
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const label = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
+  const sub = [v.year, v.categorie, v.fuel, v.transmission].filter(Boolean).join(' · ');
+  const submit = async () => {
+    const n = Number(price);
+    if (!(n > 0)) return;
+    await onSetPrice(v.id, n);
+    setSavedAt(Date.now());
+    setPrice('');
+  };
+  return (
+    <article className="df-card">
+      <div className="df-card__body flex flex-wrap items-center gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-black text-slate-900">{label}</div>
+          <div className="text-xs text-slate-500">
+            {v.registration ? <span className="font-mono">{v.registration}</span> : null}
+            {v.registration && sub ? ' · ' : null}
+            {sub}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <input
+              type="number"
+              min={0}
+              className="df-input w-32 pr-14"
+              placeholder="Tarif"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">MAD/j</span>
+          </div>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={pending || !(Number(price) > 0)}
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-40"
+          >
+            {pending ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+          {savedAt && (
+            <span className="text-xs font-semibold text-emerald-600">✓ Enregistré</span>
+          )}
+        </div>
+      </div>
+    </article>
   );
 };
 
