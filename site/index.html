@@ -315,16 +315,44 @@
           </select>
         </label>
         <div class="preferences" id="prefsBlock" hidden>
-          <p class="preferences__hint">Pré-sélectionnez une ou plusieurs marques et modèles — nous vous proposerons ce qui est libre.</p>
-          <div class="row">
-            <label>Marques
-              <select name="preferred_brands" id="brandSelect" multiple size="4"></select>
-            </label>
-            <label>Modèles
-              <select name="preferred_models" id="modelSelect" multiple size="4"></select>
-            </label>
+          <p class="preferences__hint">
+            <strong>Dites-nous vos envies.</strong>
+            Choisissez des marques dans le catalogue — on filtre les modèles correspondants automatiquement.
+          </p>
+
+          <div class="prefs__field">
+            <div class="prefs__label">
+              <span>Marques souhaitées</span>
+              <span class="prefs__counter" id="brandCount">0 sélectionnée</span>
+            </div>
+            <div class="prefs__search">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input id="brandSearch" type="search" placeholder="Rechercher une marque…" autocomplete="off" />
+            </div>
+            <div class="prefs__chips" id="brandChips">
+              <!-- rempli par app.js depuis /public/site/catalog -->
+            </div>
           </div>
-          <p class="preferences__tip">Astuce : Ctrl / ⌘ + clic pour en choisir plusieurs.</p>
+
+          <div class="prefs__field" id="modelField" hidden>
+            <div class="prefs__label">
+              <span>Modèles souhaités</span>
+              <span class="prefs__counter" id="modelCount">0 sélectionné</span>
+            </div>
+            <div class="prefs__search">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input id="modelSearch" type="search" placeholder="Rechercher un modèle…" autocomplete="off" />
+            </div>
+            <div class="prefs__chips" id="modelChips">
+              <!-- rempli apres choix d'au moins une marque -->
+            </div>
+            <p class="prefs__hint" id="modelHint" hidden>Sélectionnez d'abord une ou plusieurs marques pour voir leurs modèles.</p>
+          </div>
+
+          <!-- Les anciennes selects natives restent, cachees et synchronisees,
+               pour que le submit du formulaire envoie les memes donnees qu'avant. -->
+          <select name="preferred_brands" id="brandSelect" multiple hidden></select>
+          <select name="preferred_models" id="modelSelect" multiple hidden></select>
         </div>
         <label>Message <span class="opt">(optionnel)</span>
           <textarea name="message" rows="2" placeholder="Livraison à l'aéroport, siège bébé…"></textarea>

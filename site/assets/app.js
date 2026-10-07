@@ -292,7 +292,12 @@
     });
   }
 
-  var SITE_BRAND_MODELS = {};
+  // Catalogue complet marques + modeles charge depuis le backend. Les
+  // selections courantes vivent dans deux Set() pour que le toggle d'une
+  // chip soit immediat.
+  var CATALOG = { brands: [], models: [], modelsByBrand: {}, brandById: {} };
+  var SELECTED_BRANDS = new Set();   // ids
+  var SELECTED_MODELS = new Set();   // ids
 
   function chooseVehicle(id, name) {
     var select = $('vehicleSelect');
@@ -309,60 +314,194 @@
     }
   }
 
-  var SELECTED_BRANDS = new Set();
-  var SELECTED_MODELS = new Set();
-
-  function makeChip(label, isSelected, onToggle) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'chip-toggle';
-    btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
-    btn.textContent = label;
-    btn.addEventListener('click', function () {
-      var next = btn.getAttribute('aria-pressed') !== 'true';
-      btn.setAttribute('aria-pressed', next ? 'true' : 'false');
-      onToggle(label, next);
-    });
-    return btn;
-  }
-
-  function populatePreferences(brandModels) {
-    var brandWrap = $('brandChips');
-    if (!brandWrap) return;
-    brandWrap.innerHTML = '';
-    Object.keys(brandModels).sort().forEach(function (b) {
-      brandWrap.appendChild(makeChip(b, SELECTED_BRANDS.has(b), function (val, on) {
-        if (on) SELECTED_BRANDS.add(val); else SELECTED_BRANDS.delete(val);
-        // Drop any selected model that no longer belongs to a selected brand.
-        var allowed = brandsAllowedModels();
-        Array.from(SELECTED_MODELS).forEach(function (m) {
-          if (!allowed.has(m)) SELECTED_MODELS.delete(m);
+  // ── Catalogue public : marques + modeles complets de la base ──
+  function loadCatalog() {
+    if (!API) return;
+    fetch(API + '/v1/public/site/catalog', { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (payload) {
+        var data = (payload && payload.data) || payload || {};
+        var brands = Array.isArray(data.brands) ? data.brands : [];
+        var models = Array.isArray(data.models) ? data.models : [];
+        CATALOG.brands = brands;
+        CATALOG.models = models;
+        CATALOG.brandById = {};
+        brands.forEach(function (b) { CATALOG.brandById[b.id] = b; });
+        CATALOG.modelsByBrand = {};
+        models.forEach(function (m) {
+          if (!m.brand_id) return;
+          (CATALOG.modelsByBrand[m.brand_id] = CATALOG.modelsByBrand[m.brand_id] || []).push(m);
         });
-        refreshModels();
-      }));
-    });
-    refreshModels();
+        renderBrandChips('');
+        renderModelChips('');
+        wireChipsSearch();
+      })
+      .catch(function () {
+        // Silence : le visiteur peut toujours envoyer sa demande via Message.
+      });
   }
 
-  function brandsAllowedModels() {
-    var models = new Set();
-    var brands = SELECTED_BRANDS.size ? SELECTED_BRANDS : new Set(Object.keys(SITE_BRAND_MODELS));
-    brands.forEach(function (b) {
-      (SITE_BRAND_MODELS[b] || []).forEach(function (m) { models.add(m); });
+  function renderBrandChips(filter) {
+    var host = $('brandChips');
+    if (!host) return;
+    host.innerHTML = '';
+    var q = (filter || '').trim().toLowerCase();
+    var list = CATALOG.brands.filter(function (b) {
+      return !q || b.name.toLowerCase().indexOf(q) >= 0;
     });
-    return models;
+    if (list.length === 0) {
+      var empty = document.createElement('span');
+      empty.className = 'prefs__chip prefs__chip--empty';
+      empty.textContent = 'Aucune marque ne correspond.';
+      host.appendChild(empty);
+      updateBrandCount();
+      return;
+    }
+    list.forEach(function (b) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'prefs__chip' + (SELECTED_BRANDS.has(b.id) ? ' prefs__chip--on' : '');
+      chip.textContent = b.name;
+      chip.dataset.brandId = b.id;
+      chip.addEventListener('click', function () { toggleBrand(b.id); });
+      host.appendChild(chip);
+    });
+    updateBrandCount();
   }
 
-  function refreshModels() {
-    var modelWrap = $('modelChips');
-    if (!modelWrap) return;
-    modelWrap.innerHTML = '';
-    var allowed = Array.from(brandsAllowedModels()).sort();
-    allowed.forEach(function (m) {
-      modelWrap.appendChild(makeChip(m, SELECTED_MODELS.has(m), function (val, on) {
-        if (on) SELECTED_MODELS.add(val); else SELECTED_MODELS.delete(val);
-      }));
+  function renderModelChips(filter) {
+    var host = $('modelChips');
+    var hint = $('modelHint');
+    var field = $('modelField');
+    if (!host || !field) return;
+    var brandIds = Array.from(SELECTED_BRANDS);
+    if (brandIds.length === 0) {
+      field.hidden = false;
+      host.innerHTML = '';
+      if (hint) hint.hidden = false;
+      updateModelCount();
+      return;
+    }
+    field.hidden = false;
+    if (hint) hint.hidden = true;
+    host.innerHTML = '';
+    var q = (filter || '').trim().toLowerCase();
+    var collected = [];
+    brandIds.forEach(function (bid) {
+      (CATALOG.modelsByBrand[bid] || []).forEach(function (m) {
+        if (!q || m.name.toLowerCase().indexOf(q) >= 0) collected.push(m);
+      });
     });
+    var seen = {};
+    collected = collected.filter(function (m) {
+      if (seen[m.id]) return false;
+      seen[m.id] = true;
+      return true;
+    });
+    collected.sort(function (a, b) {
+      var ab = (a.brand_name || '').localeCompare(b.brand_name || '');
+      return ab !== 0 ? ab : (a.name || '').localeCompare(b.name || '');
+    });
+    if (collected.length === 0) {
+      var empty = document.createElement('span');
+      empty.className = 'prefs__chip prefs__chip--empty';
+      empty.textContent = q
+        ? 'Aucun modèle ne correspond à votre recherche.'
+        : 'Aucun modèle disponible pour cette sélection.';
+      host.appendChild(empty);
+      updateModelCount();
+      return;
+    }
+    collected.forEach(function (m) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'prefs__chip' + (SELECTED_MODELS.has(m.id) ? ' prefs__chip--on' : '');
+      chip.innerHTML = '<small style="opacity:.6;font-weight:600;margin-right:4px;">' + (m.brand_name || '') + '</small>' + m.name;
+      chip.dataset.modelId = m.id;
+      chip.addEventListener('click', function () { toggleModel(m.id); });
+      host.appendChild(chip);
+    });
+    updateModelCount();
+  }
+
+  function toggleBrand(id) {
+    if (SELECTED_BRANDS.has(id)) {
+      SELECTED_BRANDS.delete(id);
+      (CATALOG.modelsByBrand[id] || []).forEach(function (m) {
+        SELECTED_MODELS.delete(m.id);
+      });
+    } else {
+      SELECTED_BRANDS.add(id);
+    }
+    syncHiddenSelects();
+    renderBrandChips($('brandSearch') ? $('brandSearch').value : '');
+    renderModelChips($('modelSearch') ? $('modelSearch').value : '');
+  }
+
+  function toggleModel(id) {
+    if (SELECTED_MODELS.has(id)) SELECTED_MODELS.delete(id);
+    else SELECTED_MODELS.add(id);
+    syncHiddenSelects();
+    renderModelChips($('modelSearch') ? $('modelSearch').value : '');
+  }
+
+  function updateBrandCount() {
+    var el = $('brandCount');
+    if (!el) return;
+    var n = SELECTED_BRANDS.size;
+    el.textContent = n + ' sélectionnée' + (n > 1 ? 's' : '');
+    el.style.opacity = n ? '1' : '0.6';
+  }
+
+  function updateModelCount() {
+    var el = $('modelCount');
+    if (!el) return;
+    var n = SELECTED_MODELS.size;
+    el.textContent = n + ' sélectionné' + (n > 1 ? 's' : '');
+    el.style.opacity = n ? '1' : '0.6';
+  }
+
+  function syncHiddenSelects() {
+    // Les anciens <select multiple> caches restent remplis avec les noms
+    // selectionnes, pour que wireForm (envoi) renvoie les memes labels
+    // qu'avant au backend (vehicle_label texte).
+    var bs = $('brandSelect');
+    var ms = $('modelSelect');
+    if (bs) {
+      bs.innerHTML = '';
+      SELECTED_BRANDS.forEach(function (id) {
+        var b = CATALOG.brandById[id];
+        var o = document.createElement('option');
+        o.value = b ? b.name : id;
+        o.textContent = o.value;
+        o.selected = true;
+        bs.appendChild(o);
+      });
+    }
+    if (ms) {
+      ms.innerHTML = '';
+      SELECTED_MODELS.forEach(function (id) {
+        var m = CATALOG.models.find(function (x) { return x.id === id; });
+        var o = document.createElement('option');
+        o.value = m ? m.name : id;
+        o.textContent = o.value;
+        o.selected = true;
+        ms.appendChild(o);
+      });
+    }
+  }
+
+  function wireChipsSearch() {
+    var bs = $('brandSearch');
+    var ms = $('modelSearch');
+    if (bs && !bs.dataset.wired) {
+      bs.dataset.wired = '1';
+      bs.addEventListener('input', function () { renderBrandChips(bs.value); });
+    }
+    if (ms && !ms.dataset.wired) {
+      ms.dataset.wired = '1';
+      ms.addEventListener('input', function () { renderModelChips(ms.value); });
+    }
   }
 
   function togglePreferences() {
@@ -387,9 +526,6 @@
           return;
         }
         var select = $('vehicleSelect');
-        // Pré-calcule {marque: Set<modèle>} depuis la flotte pour alimenter les
-        // menus de préférences quand le client choisit "Peu importe".
-        var brandModels = {};
         list.forEach(function (v) {
           grid.appendChild(vehicleCard(v));
           if (select) {
@@ -399,15 +535,10 @@
               + (v.price_per_day ? ' — ' + money(v.price_per_day) + '/j' : '');
             select.appendChild(opt);
           }
-          var b = (v.brand || '').trim();
-          var m = (v.model || '').trim();
-          if (b) {
-            if (!brandModels[b]) brandModels[b] = new Set();
-            if (m) brandModels[b].add(m);
-          }
         });
-        SITE_BRAND_MODELS = brandModels;
-        populatePreferences(brandModels);
+        // Les marques et modeles du formulaire ne viennent plus de la flotte
+        // visible : loadCatalog() les tire de l'API /public/site/catalog
+        // pour couvrir tout le referentiel.
         var fact = $('factFleet');
         if (fact) fact.textContent = list.length;
         note.textContent = 'Tarifs à la journée, dégressifs à la semaine et au mois. Disponibilité confirmée par téléphone.';
@@ -600,7 +731,9 @@
             form.reset();
             SELECTED_BRANDS.clear();
             SELECTED_MODELS.clear();
-            populatePreferences(SITE_BRAND_MODELS);
+            syncHiddenSelects();
+            renderBrandChips('');
+            renderModelChips('');
             togglePreferences();
             note.className = 'formNote';
             note.textContent = '';
@@ -633,4 +766,5 @@
   wireAgencies();
   wireFleetFilters();
   loadFleet();
+  loadCatalog();
 })();

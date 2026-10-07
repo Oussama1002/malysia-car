@@ -118,6 +118,8 @@ Route::prefix('v1')->group(function () {
     // nécessaire — la flotte visible, et le dépôt d'une demande.
     Route::get('public/site/vehicles', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'vehicles'])
         ->middleware('throttle:60,1');
+    Route::get('public/site/catalog', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'catalog'])
+        ->middleware('throttle:60,1');
     Route::post('public/site/reservation-requests', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'storeLead'])
         ->middleware('throttle:10,1');
 

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\Vehicle;
+use App\Models\VehicleBrand;
+use App\Models\VehicleModel;
 use App\Models\WebsiteLead;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -83,6 +85,51 @@ class PublicSiteController extends Controller
                 // Une notif ratée ne doit pas casser la page publique.
             }
         }
+    }
+
+    /**
+     * Le catalogue marques + modèles de la base, exposé au site public pour
+     * alimenter les menus « Marques souhaitées » et « Modèles souhaités »
+     * du formulaire de réservation. On renvoie TOUT le référentiel, pas
+     * uniquement les véhicules disponibles — ça aide le visiteur à exprimer
+     * une préférence même sur un modèle qu'on n'a pas en stock aujourd'hui.
+     *
+     * Format : {brands: [{id, name}], models: [{id, name, brand_id, brand_name}]}
+     * Cache 1h : le référentiel bouge rarement.
+     */
+    public function catalog(): JsonResponse
+    {
+        $data = Cache::remember('public_site.catalog', 3600, function () {
+            $brands = VehicleBrand::query()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (VehicleBrand $b) => [
+                    'id' => $b->id,
+                    'name' => $b->name,
+                ])
+                ->values()
+                ->all();
+
+            $models = VehicleModel::query()
+                ->with('brand:id,name')
+                ->orderBy('name')
+                ->get(['id', 'brand_id', 'name'])
+                ->map(fn (VehicleModel $m) => [
+                    'id' => $m->id,
+                    'name' => $m->name,
+                    'brand_id' => $m->brand_id,
+                    'brand_name' => $m->brand?->name,
+                ])
+                ->values()
+                ->all();
+
+            return [
+                'brands' => $brands,
+                'models' => $models,
+            ];
+        });
+
+        return ApiResponse::success($data);
     }
 
     /** Une demande laissée sur le site. Elle atterrit dans DriveFlow, pas dans une boîte mail. */
