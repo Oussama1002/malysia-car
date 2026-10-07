@@ -19,16 +19,25 @@
     var year = $('year');
     if (year) year.textContent = new Date().getFullYear();
 
-    var tel = $('telLink');
-    if (tel && CFG.phone) {
-      tel.textContent = CFG.phone;
-      tel.href = 'tel:' + CFG.phone.replace(/\s/g, '');
-    }
-    var mail = $('mailLink');
-    if (mail && CFG.email) {
-      mail.textContent = CFG.email;
-      mail.href = 'mailto:' + CFG.email;
-    }
+    var phoneValue = CFG.phone || '';
+    var mailValue = CFG.email || '';
+
+    ['telLink', 'telLinkFooter'].forEach(function (id) {
+      var el = $(id);
+      if (!el || !phoneValue) return;
+      var span = el.querySelector('.reserve__contactValue');
+      if (span) span.textContent = phoneValue;
+      else el.textContent = phoneValue;
+      el.href = 'tel:' + phoneValue.replace(/\s/g, '');
+    });
+    ['mailLink', 'mailLinkFooter'].forEach(function (id) {
+      var el = $(id);
+      if (!el || !mailValue) return;
+      var span = el.querySelector('.reserve__contactValue');
+      if (span) span.textContent = mailValue;
+      else el.textContent = mailValue;
+      el.href = 'mailto:' + mailValue;
+    });
     var addr = $('addrText');
     if (addr && CFG.address) addr.textContent = CFG.address;
 
@@ -41,6 +50,44 @@
       if (waHref) el.href = waHref;
       else el.style.display = 'none';
     });
+  }
+
+  // ── Slider des marques ───────────────────────────────────
+  var BRAND_FILES = [
+    'abarth-1707227603.png', 'alfa-romeo-1707227628.png', 'audi-1707227800.png',
+    'bmw-1707227856.png', 'chery-1707227888.png', 'chevrolet-1707227932.png',
+    'chrysler-1707227968.png', 'citroen-1707227988.png', 'cupra-1707228025.png',
+    'dacia-1707228045.png', 'daihatsu-1707228069.png', 'dfsk-1707228085.png',
+    'dodge-1707228116.png', 'ds-1707228155.png', 'fiat-1707228180.png',
+    'ford-1707228198.png', 'foton-1707228209.png', 'gaz-1707228234.png',
+    'honda-1707228272.png', 'hummer-1707228285.png', 'hyundai-1707228297.png',
+    'isuzu-1707228314.png', 'jaguar-1707228328.png', 'jeep-1707228354.png',
+    'kia-1707228364.png', 'lancia-1707228376.png', 'land-rover-1707228401.png',
+    'lexus-1707228422.png', 'mahindra-1707228441.png', 'maserati-1707228475.png',
+    'mazda-1707228490.png', 'mercedes-1707228505.png', 'mini-1707228534.png',
+    'mitsubishi-1707228551.png', 'nissan-1707228569.png', 'opel-1707228581.png',
+    'peugeot-1707228598.png', 'porsche-1707228614.png', 'renault-1707228630.png',
+    'seat-1707228641.png', 'skoda-1707228661.png', 'ssangyong-1707228673.png',
+    'subaru-1707228691.png', 'suzuki-1707228719.png', 'tesla-1738948636.png',
+    'toyota-1707228730.png', 'volkswagen-1707228743.png', 'volvo-1707228777.png'
+  ];
+  function fillBrandsMarquee() {
+    var track = $('brandsTrack');
+    if (!track) return;
+    // On ajoute deux fois les logos pour que la boucle CSS soit fluide
+    // (translateX de -50% à 0 revient au point de départ sans à-coup).
+    var render = function () {
+      BRAND_FILES.forEach(function (file) {
+        var img = document.createElement('img');
+        img.src = 'assets/brands/' + file;
+        img.alt = file.split('-')[0];
+        img.loading = 'lazy';
+        img.width = 100;
+        img.height = 42;
+        track.appendChild(img);
+      });
+    };
+    render(); render();
   }
 
   // ── Menu mobile ──────────────────────────────────────────
@@ -77,26 +124,28 @@
 
   function vehicleCard(v) {
     var name = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
-    var chips = [
-      v.year,
-      label(FUEL_FR, v.fuel),
-      label(TRANS_FR, v.transmission),
-      v.categorie
-    ].filter(Boolean);
 
     var el = document.createElement('article');
-    el.className = 'card veh';
+    el.className = 'car';
+    el.dataset.category = inferCategory(v);
 
     var media = document.createElement('div');
-    media.className = 'veh__media';
+    media.className = 'car__photo';
+
+    var badge = document.createElement('span');
+    badge.className = 'car__badge';
+    badge.textContent = v.categorie || (v.year ? 'Année ' + v.year : 'Nouveau');
+    media.appendChild(badge);
+
     function fallbackLogo() {
-      media.innerHTML = '';
-      media.classList.add('veh__media--fallback');
+      media.querySelectorAll('img').forEach(function (n) { n.remove(); });
       var logo = document.createElement('img');
-      logo.className = 'veh__logo';
       logo.src = 'assets/logo.png';
       logo.alt = 'Malysia Car';
       logo.loading = 'lazy';
+      logo.style.objectFit = 'contain';
+      logo.style.padding = '28px';
+      logo.style.background = 'linear-gradient(135deg, #fbf5e4, #ece2c6)';
       media.appendChild(logo);
     }
     if (v.photo_url) {
@@ -111,41 +160,52 @@
     }
 
     var body = document.createElement('div');
-    body.className = 'veh__body';
+    body.className = 'car__body';
 
-    var title = document.createElement('div');
-    title.className = 'veh__name';
+    var title = document.createElement('h3');
+    title.className = 'car__name';
     title.textContent = name;
     body.appendChild(title);
 
-    if (chips.length) {
-      var meta = document.createElement('div');
-      meta.className = 'veh__meta';
-      chips.forEach(function (c) {
-        var chip = document.createElement('span');
-        chip.className = 'chip';
-        chip.textContent = c;
-        meta.appendChild(chip);
-      });
-      body.appendChild(meta);
-    }
+    var sub = document.createElement('p');
+    sub.className = 'car__sub';
+    sub.textContent = [v.year, v.color].filter(Boolean).join(' · ') || 'Entretien suivi';
+    body.appendChild(sub);
+
+    var specs = document.createElement('div');
+    specs.className = 'car__specs';
+    [
+      { icon: 'fuel', text: label(FUEL_FR, v.fuel) },
+      { icon: 'gear', text: label(TRANS_FR, v.transmission) },
+      { icon: 'seat', text: v.seats ? v.seats + ' places' : null }
+    ].filter(function (s) { return s.text; }).forEach(function (s) {
+      var sp = document.createElement('span');
+      sp.className = 'car__spec';
+      sp.innerHTML = iconSvg(s.icon) + '<span>' + s.text + '</span>';
+      specs.appendChild(sp);
+    });
+    if (specs.children.length) body.appendChild(specs);
 
     var foot = document.createElement('div');
-    foot.className = 'veh__foot';
+    foot.className = 'car__footer';
 
     var price = document.createElement('div');
-    price.className = 'veh__price';
+    price.className = 'car__price';
     if (v.price_per_day) {
-      price.innerHTML = '<strong>' + money(v.price_per_day) + '</strong> <span>/ jour</span>';
+      price.innerHTML =
+        '<span class="car__priceValue">' + Number(v.price_per_day).toLocaleString('fr-MA') + ' MAD</span>' +
+        '<span class="car__priceLabel">/ jour</span>';
     } else {
-      price.innerHTML = '<span>Tarif sur demande</span>';
+      price.innerHTML =
+        '<span class="car__priceValue">Sur devis</span>' +
+        '<span class="car__priceLabel">tarif personnalisé</span>';
     }
     foot.appendChild(price);
 
     var pick = document.createElement('button');
     pick.type = 'button';
-    pick.className = 'btn btn--sm';
-    pick.textContent = 'Réserver';
+    pick.className = 'car__cta';
+    pick.textContent = 'Réserver →';
     pick.addEventListener('click', function () { chooseVehicle(v.id, name); });
     foot.appendChild(pick);
 
@@ -153,6 +213,83 @@
     el.appendChild(media);
     el.appendChild(body);
     return el;
+  }
+
+  function iconSvg(name) {
+    var paths = {
+      fuel: '<path d="M3 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 11h10"/><path d="M14 7l3 3v8a2 2 0 1 0 4 0V9l-3-3"/>',
+      gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      seat: '<path d="M4 18V9a3 3 0 0 1 3-3h2v8H4z"/><path d="M4 18h16"/><path d="M14 6h3a3 3 0 0 1 3 3v9h-6V6z"/>'
+    };
+    return '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || '') + '</svg>';
+  }
+
+  function inferCategory(v) {
+    var raw = ((v.categorie || v.category || v.body || '') + '').toLowerCase();
+    var model = ((v.model || '') + ' ' + (v.brand || '')).toLowerCase();
+    if (raw.indexOf('suv') >= 0 || /range|x5|q5|q7|cayenne|touareg|land/i.test(model)) return 'suv';
+    if (raw.indexOf('sport') >= 0 || /gt-r|911|m3|m5|supra|amg/i.test(model)) return 'sportive';
+    if (raw.indexOf('premium') >= 0 || raw.indexOf('luxe') >= 0 ||
+        /mercedes|bmw|audi|porsche|lexus|jaguar|maserati|tesla/i.test(model)) return 'premium';
+    if (raw.indexOf('berline') >= 0 || /class|accord|camry|a4|a6|serie/i.test(model)) return 'berline';
+    if (raw.indexOf('citadine') >= 0 || /clio|208|polo|yaris|picanto|i10|sandero/i.test(model)) return 'citadine';
+    return 'all';
+  }
+
+  function wireFleetFilters() {
+    var bar = $('fleetFilters');
+    var grid = $('fleetGrid');
+    if (!bar || !grid) return;
+    bar.addEventListener('click', function (e) {
+      var btn = e.target.closest('.chip');
+      if (!btn) return;
+      bar.querySelectorAll('.chip').forEach(function (b) { b.classList.remove('chip--active'); });
+      btn.classList.add('chip--active');
+      var filter = btn.dataset.filter;
+      grid.querySelectorAll('.car').forEach(function (card) {
+        var cat = card.dataset.category || 'all';
+        card.style.display = (filter === 'all' || cat === filter) ? '' : 'none';
+      });
+    });
+  }
+
+  // ── Barre de recherche hero ─────────────────────────────
+  function wireSearchbar() {
+    var form = $('searchForm');
+    var quote = $('quoteForm');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var pickup = $('searchPickup').value;
+      var ret = $('searchReturn').value;
+      if (quote) {
+        if (pickup && quote.elements.pickup_at) quote.elements.pickup_at.value = pickup;
+        if (ret && quote.elements.return_at) quote.elements.return_at.value = ret;
+      }
+      var target = document.getElementById('flotte') || quote;
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // ── Agences : clic sur une carte → re-centre l'iframe ──
+  function wireAgencies() {
+    var list = $('agenciesList');
+    var frame = $('agencyMapFrame');
+    if (!list || !frame) return;
+    list.addEventListener('click', function (e) {
+      var card = e.target.closest('.agency');
+      if (!card) return;
+      list.querySelectorAll('.agency').forEach(function (c) { c.classList.remove('agency--active'); });
+      card.classList.add('agency--active');
+      var lat = parseFloat(card.dataset.lat);
+      var lng = parseFloat(card.dataset.lng);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        var dLat = 0.08, dLng = 0.15;
+        var bbox = (lng - dLng) + ',' + (lat - dLat) + ',' + (lng + dLng) + ',' + (lat + dLat);
+        frame.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox +
+          '&layer=mapnik&marker=' + lat + ',' + lng;
+      }
+    });
   }
 
   var SITE_BRAND_MODELS = {};
@@ -488,8 +625,12 @@
   }
 
   fillContacts();
+  fillBrandsMarquee();
   wireMenu();
   wireModal();
   wireForm();
+  wireSearchbar();
+  wireAgencies();
+  wireFleetFilters();
   loadFleet();
 })();
