@@ -765,12 +765,24 @@
           ? form.elements.vehicle_id.selectedOptions[0].textContent.split(' — ')[0]
           : null;
       } else {
-        var brands = Array.from(SELECTED_BRANDS);
-        var models = Array.from(SELECTED_MODELS);
-        if (brands.length || models.length) {
+        // Resoudre les UUID selectionnes en noms lisibles via le catalogue
+        // (sinon l'agent voit juste une liste d'UUID dans « vehicle_label »).
+        var brandNames = Array.from(SELECTED_BRANDS)
+          .map(function (id) { return (CATALOG.brandById[id] || {}).name; })
+          .filter(Boolean);
+        var modelsById = {};
+        (CATALOG.models || []).forEach(function (m) { modelsById[m.id] = m; });
+        var modelNames = Array.from(SELECTED_MODELS)
+          .map(function (id) {
+            var m = modelsById[id];
+            if (!m) return null;
+            return (m.brand_name ? m.brand_name + ' ' : '') + m.name;
+          })
+          .filter(Boolean);
+        if (brandNames.length || modelNames.length) {
           var parts = [];
-          if (brands.length) parts.push('Marques: ' + brands.join(', '));
-          if (models.length) parts.push('Modèles: ' + models.join(', '));
+          if (brandNames.length) parts.push('Marques: ' + brandNames.join(', '));
+          if (modelNames.length) parts.push('Modèles: ' + modelNames.join(', '));
           vehicleLabel = ('Peu importe · ' + parts.join(' · ')).slice(0, 160);
         }
       }
