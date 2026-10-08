@@ -380,6 +380,17 @@ class _TabContent extends ConsumerWidget {
             subtitle: vehicle.year?.toString(),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => VehicleDetailScreen(id: vehicle.id))),
+          )
+        else if (p.vehicleLabel != null && p.vehicleLabel!.isNotEmpty)
+          // Fallback : le vehicule lie n'est pas dans le cache local
+          // (listes paginees), mais le backend attache `vehicle_label`
+          // (marque + modele + plaque). On l'affiche sans lien.
+          _linkRow(
+            context: context,
+            icon: Icons.directions_car,
+            label: 'Véhicule',
+            value: p.vehicleLabel!,
+            onTap: null,
           ),
         if (p.invoiceId != null)
           _linkRow(
