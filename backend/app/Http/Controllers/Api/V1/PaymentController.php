@@ -95,7 +95,29 @@ class PaymentController extends Controller
 
     public function show(Payment $payment): JsonResponse
     {
-        $payment->load(['customer.individualProfile', 'customer.companyProfile', 'bankAccount', 'allocations.invoice', 'allocations.installment']);
+        $payment->load([
+            'customer.individualProfile',
+            'customer.companyProfile',
+            'bankAccount',
+            'allocations.invoice',
+            'allocations.installment',
+            'contract.vehicle.brand',
+            'contract.vehicle.model',
+            'reservation.vehicle.brand',
+            'reservation.vehicle.model',
+        ]);
+
+        $v = $payment->contract?->vehicle ?? $payment->reservation?->vehicle;
+        if ($v) {
+            $name = trim(
+                ($v->brand?->name ?? $v->brand_name ?? '').' '.
+                ($v->model?->model_name ?? $v->model?->name ?? $v->model_name ?? '')
+            );
+            $label = trim($name.($v->registration_number ? ' · '.$v->registration_number : ''));
+            if ($label !== '') {
+                $payment->setAttribute('vehicle_label', $label);
+            }
+        }
 
         return ApiResponse::success($payment);
     }
