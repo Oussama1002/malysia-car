@@ -127,6 +127,11 @@ class PaymentDto {
                   m.map((k, v) => MapEntry(k.toString(), v))))
               .toList()
           : const [],
+      // Le backend attache maintenant un `vehicle_label` quand le paiement
+      // est lie a un contrat/une reservation avec vehicule. Ca evite au
+      // mobile d'avoir a recouper les listes locales (contrats/reservations)
+      // qui peuvent etre paginees ou en cache stale.
+      vehicleLabel: j['vehicle_label']?.toString(),
     );
   }
 }

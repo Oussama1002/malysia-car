@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Models\Contract;
+use App\Models\ContractHistory;
 use App\Models\ContractInstallment;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -21,7 +23,19 @@ class PaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = Payment::query()->with(['customer.individualProfile', 'customer.companyProfile', 'bankAccount', 'allocations']);
+        $q = Payment::query()->with([
+            'customer.individualProfile',
+            'customer.companyProfile',
+            'bankAccount',
+            'allocations',
+            // Pour que la carte paiement cote mobile / web affiche le vehicule
+            // (marque + modele + plaque), on precharge le vehicule lie au
+            // contrat ou a la reservation. Attache ci-dessous via accessor.
+            'contract.vehicle.brand',
+            'contract.vehicle.model',
+            'reservation.vehicle.brand',
+            'reservation.vehicle.model',
+        ]);
 
         if ($status = $request->query('status')) {
             $q->where('status', $status);
@@ -60,6 +74,21 @@ class PaymentController extends Controller
 
         $per = min(100, max(1, (int) $request->query('per_page', 25)));
         $page = $q->orderByDesc('payment_date')->orderByDesc('created_at')->paginate($per);
+
+        $page->getCollection()->transform(function (Payment $p) {
+            $v = $p->contract?->vehicle ?? $p->reservation?->vehicle;
+            if ($v) {
+                $name = trim(
+                    ($v->brand?->name ?? $v->brand_name ?? '').' '.
+                    ($v->model?->model_name ?? $v->model?->name ?? $v->model_name ?? '')
+                );
+                $label = trim($name.($v->registration_number ? ' · '.$v->registration_number : ''));
+                if ($label !== '') {
+                    $p->setAttribute('vehicle_label', $label);
+                }
+            }
+            return $p;
+        });
 
         return ApiResponse::paginated($page);
     }
@@ -129,6 +158,32 @@ class PaymentController extends Controller
 
             if (! empty($data['allocations'])) {
                 $this->allocatePayment($payment, $data['allocations'], optional($request->user())->id);
+            }
+
+            // Auto-promotion : des qu'un paiement (location, avance, solde)
+            // OU une caution/franchise d'assurance est enregistre contre un
+            // contrat encore en `draft`, on le passe automatiquement en
+            // `signed` (= Approuve cote UI). Un contrat « brouillon » n'est
+            // qu'une saisie en cours : l'argent recu scelle l'engagement.
+            if (!empty($payment->contract_id)) {
+                $this->maybePromoteContract($payment->contract_id, optional($request->user())->id);
+            }
+            // Meme logique quand le paiement est rattache a une reservation :
+            // on promeut n'importe quel contrat `draft` du meme client+vehicule.
+            if (!empty($payment->reservation_id)) {
+                $reservation = \App\Models\Reservation::withoutGlobalScopes()
+                    ->find($payment->reservation_id);
+                if ($reservation && $reservation->customer_id && $reservation->vehicle_id) {
+                    $linkedDraft = Contract::withoutGlobalScopes()
+                        ->where('customer_id', $reservation->customer_id)
+                        ->where('vehicle_id', $reservation->vehicle_id)
+                        ->where('status', 'draft')
+                        ->orderByDesc('created_at')
+                        ->first();
+                    if ($linkedDraft) {
+                        $this->maybePromoteContract($linkedDraft->id, optional($request->user())->id);
+                    }
+                }
             }
         });
 
@@ -266,5 +321,37 @@ class PaymentController extends Controller
         $seq = $last ? (int) substr($last, strlen($prefix)) + 1 : 1;
 
         return $prefix . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Si le contrat identifié est encore en `draft`, on le promeut vers
+     * `signed` (= Approuvé côté UI) et on inscrit l'événement dans
+     * `contract_history`. Un contrat qui a reçu de l'argent n'est plus
+     * un brouillon : il engage les deux parties.
+     */
+    private function maybePromoteContract(string $contractId, ?string $actorUserId): void
+    {
+        $contract = Contract::withoutGlobalScopes()->find($contractId);
+        if (!$contract || $contract->status !== 'draft') {
+            return;
+        }
+        $previous = $contract->status;
+        $contract->status = 'signed';
+        $contract->signed_at = $contract->signed_at ?? now();
+        $contract->save();
+
+        try {
+            ContractHistory::query()->create([
+                'id' => (string) Str::uuid(),
+                'contract_id' => $contract->id,
+                'action' => 'payment_auto_promoted',
+                'from_status' => $previous,
+                'to_status' => $contract->status,
+                'actor_id' => $actorUserId,
+                'at' => now(),
+            ]);
+        } catch (\Throwable) {
+            // L'historique rate ne doit pas casser l'enregistrement du paiement.
+        }
     }
 }
