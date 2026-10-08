@@ -262,15 +262,9 @@
       e.preventDefault();
       var pickup = $('searchPickup').value;
       var ret = $('searchReturn').value;
-      // Le quoteForm attend JJ/MM/AAAA (champs texte masques), alors que la
-      // searchbar hero est un <input type="date"> au format ISO YYYY-MM-DD.
-      function isoToFr(iso) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
-        return m ? (m[3] + '/' + m[2] + '/' + m[1]) : '';
-      }
       if (quote) {
-        if (pickup && quote.elements.pickup_at) quote.elements.pickup_at.value = isoToFr(pickup);
-        if (ret && quote.elements.return_at) quote.elements.return_at.value = isoToFr(ret);
+        if (pickup && quote.elements.pickup_at) quote.elements.pickup_at.value = pickup;
+        if (ret && quote.elements.return_at) quote.elements.return_at.value = ret;
       }
       var target = document.getElementById('flotte') || quote;
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -731,22 +725,8 @@
     var submit = $('quoteSubmit');
     if (!form) return;
 
-    // Masque JJ/MM/AAAA : on insère les slashes au fil de la frappe pour que
-    // le client n'ait qu'à taper 10 chiffres, sans se préoccuper du séparateur.
-    ['pickup_at', 'return_at'].forEach(function (name) {
-      var input = form.elements[name];
-      if (!input) return;
-      input.addEventListener('input', function () {
-        var digits = input.value.replace(/\D/g, '').slice(0, 8);
-        var out = digits;
-        if (digits.length > 4) {
-          out = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
-        } else if (digits.length > 2) {
-          out = digits.slice(0, 2) + '/' + digits.slice(2);
-        }
-        input.value = out;
-      });
-    });
+    // Les champs Départ / Retour sont des <input type="date"> : le navigateur
+    // gère le picker et renvoie une ISO YYYY-MM-DD. Pas de masque a appliquer.
 
     var vehicleSelect = $('vehicleSelect');
     if (vehicleSelect) {
@@ -777,14 +757,10 @@
         }
       }
 
-      function toIso(ddmmyyyy) {
-        if (!ddmmyyyy) return null;
-        var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(ddmmyyyy);
-        if (!m) return null;
-        var d = m[1], mo = m[2], y = m[3];
-        var di = +d, moi = +mo;
-        if (moi < 1 || moi > 12 || di < 1 || di > 31) return null;
-        return y + '-' + mo + '-' + d;
+      // <input type="date"> renvoie deja une ISO YYYY-MM-DD valide.
+      function toIso(iso) {
+        if (!iso) return null;
+        return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
       }
 
       var pickupIso = toIso(form.elements.pickup_at.value.trim());
@@ -803,12 +779,12 @@
 
       if (form.elements.pickup_at.value && !pickupIso) {
         note.className = 'formNote formNote--err';
-        note.textContent = 'Date de départ invalide (format attendu : JJ/MM/AAAA).';
+        note.textContent = 'Date de départ invalide.';
         return;
       }
       if (form.elements.return_at.value && !returnIso) {
         note.className = 'formNote formNote--err';
-        note.textContent = 'Date de retour invalide (format attendu : JJ/MM/AAAA).';
+        note.textContent = 'Date de retour invalide.';
         return;
       }
 
