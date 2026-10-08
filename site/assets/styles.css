@@ -306,6 +306,11 @@ a { color: inherit; text-decoration: none; }
   color: var(--ink);
   padding: 2px 0;
   outline: none;
+}
+/* `appearance: none` masque le picker natif de <input type="date"> ET
+   la valeur affichée ; on ne l'applique qu'au <select> pour retirer
+   la flèche par défaut. */
+.searchbar__field select {
   appearance: none;
   -webkit-appearance: none;
 }
