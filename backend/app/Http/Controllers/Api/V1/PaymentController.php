@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Models\Contract;
+use App\Models\ContractHistory;
 use App\Models\ContractInstallment;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
-use App\Models\Reservation;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
-use App\Services\ReservationInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,14 +38,10 @@ class PaymentController extends Controller
             $q->where('customer_id', $customer);
         }
         if ($contract = $request->query('contract_id')) {
-            // A payment is tied to a contract either directly (contract_id column)
-            // or through an allocation to one of the contract's installments.
-            $q->where(function ($w) use ($contract) {
-                $w->where('contract_id', $contract)
-                    ->orWhereHas('allocations.installment', function ($a) use ($contract) {
-                        $a->where('contract_id', $contract);
-                    });
-            });
+            $q->where('contract_id', $contract);
+        }
+        if ($reservation = $request->query('reservation_id')) {
+            $q->where('reservation_id', $reservation);
         }
         if ($branch = $request->query('branch_id')) {
             $q->where('branch_id', $branch);
@@ -96,9 +92,6 @@ class PaymentController extends Controller
             'check_number' => ['nullable', 'string', 'max:60'],
             'check_date' => ['nullable', 'date'],
             'check_bank' => ['nullable', 'string', 'max:160'],
-            // Scan du chèque déjà stocké par /v1/cheque-ocr : on le rattache au
-            // paiement comme preuve.
-            'cheque_document_id' => ['nullable', 'uuid'],
             'notes' => ['nullable', 'string'],
             'allocations' => ['nullable', 'array'],
             'allocations.*.invoice_id' => ['nullable', 'uuid'],
@@ -107,26 +100,12 @@ class PaymentController extends Controller
             'allocations.*.notes' => ['nullable', 'string'],
         ]);
 
-        // Un même chèque ne peut être encaissé qu'une fois, quel que soit
-        // l'endroit où il est saisi : paiement client, paiement fournisseur ou
-        // franchise. L'ancien contrôle ne regardait que les paiements clients,
-        // et ratait le doublon dès que la banque différait d'un côté.
-        if (in_array($data['payment_method'] ?? '', ['check', 'cheque'], true) && ! empty($data['check_number'])) {
-            $message = \App\Support\ChequeRegistry::duplicateMessage(
-                (string) $data['check_number'],
-                $data['check_bank'] ?? null,
-            );
-            if ($message) {
-                return ApiResponse::error($message, 422, ['check_number' => [$message]]);
-            }
-        }
-
         $payment = null;
         DB::transaction(function () use (&$payment, $data, $request) {
             $payment = Payment::create([
                 'id' => (string) Str::uuid(),
                 'company_id' => optional($request->user())->company_id,
-                'branch_id' => $data['branch_id'] ?? null,
+                'branch_id' => $data['branch_id'] ?? optional($request->user())->branch_id,
                 'payment_number' => $this->generatePaymentNumber(),
                 'customer_id' => $data['customer_id'],
                 'contract_id' => $data['contract_id'] ?? null,
@@ -150,48 +129,32 @@ class PaymentController extends Controller
                 'received_by_user_id' => optional($request->user())->id,
             ]);
 
-            app(\App\Services\ScanEvidenceService::class)->attach(
-                $data['cheque_document_id'] ?? null,
-                'payment',
-                $payment->id,
-                $request->user(),
-                title: trim('Chèque '.($data['check_number'] ?? '')) ?: 'Preuve '.($payment->payment_number ?? ''),
-            );
-
-            // Une caution n'est pas un encaissement : elle rejoint les
-            // franchises d'assurance et ne s'impute sur aucune facture.
-            if (($data['payment_type'] ?? null) === 'caution') {
-                $this->recordFranchise($payment, $request);
-            } elseif (! empty($data['allocations'])) {
+            if (! empty($data['allocations'])) {
                 $this->allocatePayment($payment, $data['allocations'], optional($request->user())->id);
-            } else {
-                // No explicit allocation. Resolve the invoice: the one selected on
-                // the form, else the reservation's invoice (create/issue it if
-                // needed). This runs server-side so it never depends on the
-                // frontend having finished loading the invoice id.
-                $invoice = ! empty($data['invoice_id']) ? Invoice::find($data['invoice_id']) : null;
-                if (! $invoice && ! empty($data['reservation_id'])) {
-                    $reservation = Reservation::find($data['reservation_id']);
-                    if ($reservation) {
-                        $invoice = app(ReservationInvoiceService::class)->ensure($reservation, optional($request->user())->id);
-                        $payment->invoice_id = $invoice->id;
-                        $payment->save();
-                    }
-                }
-                if ($invoice) {
-                    // Auto-allocate this payment (or advance) so the invoice leaves
-                    // "draft" and reflects the amount received.
-                    $due = (float) ($invoice->amount_due ?? 0);
-                    if ($due <= 0) {
-                        $due = (float) ($invoice->total_amount ?? 0);
-                    }
-                    $alloc = $due > 0 ? min((float) $data['amount'], $due) : (float) $data['amount'];
-                    if ($alloc > 0) {
-                        $this->allocatePayment(
-                            $payment,
-                            [['invoice_id' => $invoice->id, 'amount_allocated' => $alloc]],
-                            optional($request->user())->id,
-                        );
+            }
+
+            // Auto-promotion : des qu'un paiement (location, avance, solde)
+            // OU une caution/franchise d'assurance est enregistre contre un
+            // contrat encore en `draft`, on le passe automatiquement en
+            // `signed` (= Approuve cote UI). Un contrat « brouillon » n'est
+            // qu'une saisie en cours : l'argent recu scelle l'engagement.
+            if (!empty($payment->contract_id)) {
+                $this->maybePromoteContract($payment->contract_id, optional($request->user())->id);
+            }
+            // Meme logique quand le paiement est rattache a une reservation :
+            // on promeut n'importe quel contrat `draft` du meme client+vehicule.
+            if (!empty($payment->reservation_id)) {
+                $reservation = \App\Models\Reservation::withoutGlobalScopes()
+                    ->find($payment->reservation_id);
+                if ($reservation && $reservation->customer_id && $reservation->vehicle_id) {
+                    $linkedDraft = Contract::withoutGlobalScopes()
+                        ->where('customer_id', $reservation->customer_id)
+                        ->where('vehicle_id', $reservation->vehicle_id)
+                        ->where('status', 'draft')
+                        ->orderByDesc('created_at')
+                        ->first();
+                    if ($linkedDraft) {
+                        $this->maybePromoteContract($linkedDraft->id, optional($request->user())->id);
                     }
                 }
             }
@@ -218,42 +181,6 @@ class PaymentController extends Controller
         );
 
         return ApiResponse::success($payment->fresh(['allocations', 'customer']), null, null, 201);
-    }
-
-    /** GET /v1/payments/{payment}/receipt — download a payment receipt PDF. */
-    public function receipt(Request $request, Payment $payment): \Symfony\Component\HttpFoundation\Response
-    {
-        $payment->load(['customer.individualProfile', 'customer.companyProfile']);
-        $invoice = $payment->invoice_id ? Invoice::find($payment->invoice_id) : null;
-
-        $customer = $payment->customer;
-        $customerName = '—';
-        if ($customer) {
-            if (method_exists($customer, 'displayName')) {
-                $customerName = $customer->displayName();
-            } else {
-                $ind = trim(($customer->individualProfile->first_name ?? '').' '.($customer->individualProfile->last_name ?? ''));
-                $customerName = $ind !== '' ? $ind : ($customer->companyProfile->legal_name ?? '—');
-            }
-        }
-
-        $methods = [
-            'cash' => 'Espèces', 'cheque' => 'Chèque', 'check' => 'Chèque',
-            'bank_transfer' => 'Virement', 'transfer' => 'Virement', 'card' => 'Carte',
-            'mobile' => 'Mobile', 'wallet' => 'Portefeuille', 'online' => 'En ligne',
-        ];
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.receipt', [
-            'payment' => $payment,
-            'invoice' => $invoice,
-            'customerName' => $customerName,
-            'company' => null,
-            'methodLabel' => $methods[strtolower((string) $payment->payment_method)] ?? ($payment->payment_method ?? '—'),
-            'reference' => $payment->external_reference ?: $payment->bank_reference,
-            'title' => 'Reçu '.($payment->payment_number ?? ''),
-        ]);
-
-        return $pdf->download('recu-'.($payment->payment_number ?? substr($payment->id, 0, 8)).'.pdf');
     }
 
     public function allocate(Request $request, Payment $payment): JsonResponse
@@ -300,114 +227,6 @@ class PaymentController extends Controller
         }
 
         return ApiResponse::message('Allocation removed');
-    }
-
-    public function updateChequeStatus(Request $request, Payment $payment): JsonResponse
-    {
-        if ($payment->payment_method !== 'check') {
-            return ApiResponse::error('Ce paiement n\'est pas un chèque.', 422);
-        }
-
-        $data = $request->validate([
-            'cheque_status' => ['required', 'in:pending,cleared,bounced'],
-            'cashed_at' => ['nullable', 'date'],
-            'bounce_reason' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $touchedInvoices = [];
-        DB::transaction(function () use ($payment, $data, &$touchedInvoices) {
-            $payment->cheque_status = $data['cheque_status'];
-            $payment->cheque_cashed_at = $data['cheque_status'] === 'cleared'
-                ? ($data['cashed_at'] ?? now())
-                : null;
-            $payment->cheque_bounce_reason = $data['cheque_status'] === 'bounced'
-                ? ($data['bounce_reason'] ?? null)
-                : null;
-
-            // Un chèque rejeté, c'est de l'argent qui n'est jamais arrivé : on
-            // défait les allocations et le paiement passe en « reversed ». Il
-            // reste visible dans l'historique du client — l'effacer laissait un
-            // trou inexplicable — mais il ne compte plus nulle part.
-            if ($data['cheque_status'] === 'bounced') {
-                foreach ($payment->allocations()->get() as $alloc) {
-                    if ($alloc->invoice_id) $touchedInvoices[] = $alloc->invoice_id;
-                    $alloc->delete();
-                }
-                $payment->amount_allocated = 0;
-                $payment->amount_unallocated = 0;
-                $payment->status = 'reversed';
-                $payment->save();
-            } else {
-                // Cleared / back-to-pending: keep the payment as-is, just
-                // record the new cheque status.
-                if ($payment->trashed()) {
-                    $payment->restore();
-                }
-                $payment->save();
-            }
-        });
-
-        foreach (array_unique($touchedInvoices) as $invoiceId) {
-            if ($invoice = Invoice::find($invoiceId)) {
-                $invoice->refreshPaymentStatus();
-            }
-        }
-
-        return ApiResponse::success($payment->fresh());
-    }
-
-    /**
-     * Une caution saisie depuis Paiements est la même garantie que celle prise
-     * au comptoir : elle doit apparaître dans les franchises, sinon la remise
-     * du véhicule reste bloquée alors que le client a payé.
-     */
-    private function recordFranchise(Payment $payment, Request $request): void
-    {
-        if (\App\Models\ContractDeposit::query()->where('source_payment_id', $payment->id)->exists()) {
-            return;
-        }
-
-        $contractId = $payment->contract_id;
-        if (! $contractId && $payment->reservation_id) {
-            $contractId = \App\Models\Contract::query()
-                ->where('reservation_id', $payment->reservation_id)
-                ->whereNotIn('status', ['cancelled', 'rejected', 'expired'])
-                ->orderByDesc('created_at')
-                ->value('id');
-        }
-
-        $reservationId = $payment->reservation_id;
-        if (! $reservationId && $payment->contract_id) {
-            $reservationId = \App\Models\Contract::query()
-                ->whereKey($payment->contract_id)
-                ->value('reservation_id');
-        }
-
-        $isCheque = in_array($payment->payment_method, ['check', 'cheque'], true);
-
-        \App\Models\ContractDeposit::query()->create([
-            'company_id' => $payment->company_id,
-            'branch_id' => $payment->branch_id,
-            'contract_id' => $contractId,
-            'reservation_id' => $reservationId,
-            'customer_id' => $payment->customer_id,
-            'amount' => $payment->amount,
-            'method' => match ($payment->payment_method) {
-                'check', 'cheque' => 'cheque',
-                'cash' => 'cash',
-                'bank_transfer' => 'bank_transfer',
-                'card' => 'card',
-                default => 'other',
-            },
-            'check_number' => $isCheque ? $payment->check_number : null,
-            'check_bank' => $isCheque ? $payment->check_bank : null,
-            'check_date' => $isCheque ? $payment->check_date : null,
-            'status' => \App\Models\ContractDeposit::STATUS_HELD,
-            'notes' => 'Saisie depuis Paiements ('.($payment->payment_number ?? $payment->id).').',
-            'collected_by' => $request->user()?->id,
-            'collected_at' => $payment->payment_date ?? now(),
-            'source_payment_id' => $payment->id,
-        ]);
     }
 
     private function allocatePayment(Payment $payment, array $allocations, ?string $userId): void
@@ -470,17 +289,42 @@ class PaymentController extends Controller
     private function generatePaymentNumber(): string
     {
         $prefix = 'PAY-' . now()->format('Ym') . '-';
-        // withTrashed + withoutGlobalScopes so soft-deleted payments (bounced
-        // cheques) and cross-tenant rows still occupy their sequence number.
-        // Otherwise a bounced payment leaves its number reusable, which trips
-        // payments_payment_number_unique the next time we try to insert it.
-        $last = Payment::withTrashed()
-            ->withoutGlobalScopes()
-            ->where('payment_number', 'like', $prefix . '%')
-            ->orderByDesc('payment_number')
-            ->value('payment_number');
+        $last = Payment::where('payment_number', 'like', $prefix . '%')
+            ->orderByDesc('payment_number')->value('payment_number');
         $seq = $last ? (int) substr($last, strlen($prefix)) + 1 : 1;
 
         return $prefix . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Si le contrat identifié est encore en `draft`, on le promeut vers
+     * `signed` (= Approuvé côté UI) et on inscrit l'événement dans
+     * `contract_history`. Un contrat qui a reçu de l'argent n'est plus
+     * un brouillon : il engage les deux parties.
+     */
+    private function maybePromoteContract(string $contractId, ?string $actorUserId): void
+    {
+        $contract = Contract::withoutGlobalScopes()->find($contractId);
+        if (!$contract || $contract->status !== 'draft') {
+            return;
+        }
+        $previous = $contract->status;
+        $contract->status = 'signed';
+        $contract->signed_at = $contract->signed_at ?? now();
+        $contract->save();
+
+        try {
+            ContractHistory::query()->create([
+                'id' => (string) Str::uuid(),
+                'contract_id' => $contract->id,
+                'action' => 'payment_auto_promoted',
+                'from_status' => $previous,
+                'to_status' => $contract->status,
+                'actor_id' => $actorUserId,
+                'at' => now(),
+            ]);
+        } catch (\Throwable) {
+            // L'historique rate ne doit pas casser l'enregistrement du paiement.
+        }
     }
 }
