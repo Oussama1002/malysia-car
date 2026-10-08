@@ -253,20 +253,38 @@
     });
   }
 
-  // Masque DD/MM/YYYY — on insère les slashes au fil de la frappe pour que
-  // la valeur reste toujours affichée au format demandé par le client.
-  function attachDateMask(input) {
-    if (!input) return;
-    input.addEventListener('input', function () {
-      var digits = input.value.replace(/\D/g, '').slice(0, 8);
-      var out = digits;
-      if (digits.length > 4) {
-        out = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
-      } else if (digits.length > 2) {
-        out = digits.slice(0, 2) + '/' + digits.slice(2);
-      }
-      input.value = out;
-    });
+  // DateField : lie l'<input type="date"> au <span> overlay qui affiche
+  // JJ/MM/AAAA. Le picker natif s'ouvre quand on clique sur le champ ;
+  // on reformate juste la valeur a l'ecran pour forcer le format FR.
+  function wireDateFields(scope) {
+    var displays = (scope || document).querySelectorAll('.dateField__display');
+    for (var i = 0; i < displays.length; i++) {
+      (function (display) {
+        var input = document.getElementById(display.getAttribute('data-for'));
+        if (!input) return;
+        function refresh() {
+          var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value);
+          if (m) {
+            display.textContent = m[3] + '/' + m[2] + '/' + m[1];
+            display.dataset.empty = 'false';
+          } else {
+            display.textContent = 'JJ/MM/AAAA';
+            display.dataset.empty = 'true';
+          }
+        }
+        input.addEventListener('input', refresh);
+        input.addEventListener('change', refresh);
+        // Si l'utilisateur tape sur le champ (y compris sur l'overlay),
+        // on ouvre le picker natif quand le navigateur le permet.
+        function openPicker() {
+          try { if (typeof input.showPicker === 'function') input.showPicker(); }
+          catch (_) {}
+        }
+        display.addEventListener('click', openPicker);
+        input.addEventListener('focus', openPicker);
+        refresh();
+      })(displays[i]);
+    }
   }
 
   // ── Barre de recherche hero ─────────────────────────────
@@ -274,8 +292,6 @@
     var form = $('searchForm');
     var quote = $('quoteForm');
     if (!form) return;
-    attachDateMask($('searchPickup'));
-    attachDateMask($('searchReturn'));
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var pickup = $('searchPickup').value;
@@ -743,8 +759,8 @@
     var submit = $('quoteSubmit');
     if (!form) return;
 
-    attachDateMask(form.elements.pickup_at);
-    attachDateMask(form.elements.return_at);
+    // Les champs date sont des <input type="date"> habilles d'un overlay
+    // JJ/MM/AAAA (voir wireDateFields). Rien a wirer ici.
 
     var vehicleSelect = $('vehicleSelect');
     if (vehicleSelect) {
@@ -787,15 +803,10 @@
         }
       }
 
-      // Les champs sont masques DD/MM/YYYY : on convertit en ISO pour l'API.
-      function toIso(ddmmyyyy) {
-        if (!ddmmyyyy) return null;
-        var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(ddmmyyyy);
-        if (!m) return null;
-        var d = m[1], mo = m[2], y = m[3];
-        var di = +d, moi = +mo;
-        if (moi < 1 || moi > 12 || di < 1 || di > 31) return null;
-        return y + '-' + mo + '-' + d;
+      // <input type="date"> renvoie deja une ISO YYYY-MM-DD valide.
+      function toIso(iso) {
+        if (!iso) return null;
+        return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
       }
 
       var pickupIso = toIso(form.elements.pickup_at.value.trim());
@@ -814,12 +825,12 @@
 
       if (form.elements.pickup_at.value && !pickupIso) {
         note.className = 'formNote formNote--err';
-        note.textContent = 'Date de départ invalide (format attendu : JJ/MM/AAAA).';
+        note.textContent = 'Date de départ invalide.';
         return;
       }
       if (form.elements.return_at.value && !returnIso) {
         note.className = 'formNote formNote--err';
-        note.textContent = 'Date de retour invalide (format attendu : JJ/MM/AAAA).';
+        note.textContent = 'Date de retour invalide.';
         return;
       }
 
@@ -887,6 +898,7 @@
   wireModal();
   wireForm();
   wireSearchbar();
+  wireDateFields();
   wireAgencies();
   wireFleetFilters();
   loadFleet();

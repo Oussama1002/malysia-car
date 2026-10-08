@@ -68,20 +68,16 @@
           </select>
         </div>
         <div class="searchbar__sep"></div>
-        <div class="searchbar__field">
+        <div class="searchbar__field dateField">
           <span class="searchbar__label">Départ</span>
-          <input name="pickup_at" id="searchPickup" type="text"
-                 inputmode="numeric" maxlength="10"
-                 placeholder="JJ/MM/AAAA" pattern="\d{2}/\d{2}/\d{4}"
-                 autocomplete="off" required />
+          <input name="pickup_at" id="searchPickup" type="date" required />
+          <span class="dateField__display" data-for="searchPickup" aria-hidden="true">JJ/MM/AAAA</span>
         </div>
         <div class="searchbar__sep"></div>
-        <div class="searchbar__field">
+        <div class="searchbar__field dateField">
           <span class="searchbar__label">Retour</span>
-          <input name="return_at" id="searchReturn" type="text"
-                 inputmode="numeric" maxlength="10"
-                 placeholder="JJ/MM/AAAA" pattern="\d{2}/\d{2}/\d{4}"
-                 autocomplete="off" required />
+          <input name="return_at" id="searchReturn" type="date" required />
+          <span class="dateField__display" data-for="searchReturn" aria-hidden="true">JJ/MM/AAAA</span>
         </div>
         <div class="searchbar__sep"></div>
         <div class="searchbar__field">
@@ -309,14 +305,16 @@
         </label>
         <div class="row">
           <label>Départ
-            <input name="pickup_at" type="text" inputmode="numeric"
-                   maxlength="10" placeholder="JJ/MM/AAAA"
-                   pattern="\d{2}/\d{2}/\d{4}" autocomplete="off" required />
+            <span class="dateField">
+              <input name="pickup_at" id="quotePickup" type="date" required />
+              <span class="dateField__display" data-for="quotePickup" aria-hidden="true">JJ/MM/AAAA</span>
+            </span>
           </label>
           <label>Retour
-            <input name="return_at" type="text" inputmode="numeric"
-                   maxlength="10" placeholder="JJ/MM/AAAA"
-                   pattern="\d{2}/\d{2}/\d{4}" autocomplete="off" required />
+            <span class="dateField">
+              <input name="return_at" id="quoteReturn" type="date" required />
+              <span class="dateField__display" data-for="quoteReturn" aria-hidden="true">JJ/MM/AAAA</span>
+            </span>
           </label>
         </div>
         <label>Véhicule souhaité
