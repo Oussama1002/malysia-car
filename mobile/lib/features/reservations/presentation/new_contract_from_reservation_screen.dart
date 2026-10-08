@@ -270,7 +270,6 @@ class _NewContractFromReservationScreenState
     if (widget.reservationId != null) {
       final async = ref.watch(reservationDetailProvider(widget.reservationId!));
       return Scaffold(
-        backgroundColor: const Color(0xFFF5F6FB),
         body: SafeArea(
           child: async.when(
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -286,7 +285,6 @@ class _NewContractFromReservationScreenState
       );
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FB),
       body: SafeArea(child: _buildBody()),
     );
   }
@@ -338,8 +336,8 @@ class _NewContractFromReservationScreenState
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Row(
         children: [
@@ -509,8 +507,8 @@ class _NewContractFromReservationScreenState
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: SafeArea(
         top: false,
@@ -809,8 +807,8 @@ class _NewContractFromReservationScreenState
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade200),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Theme.of(context).dividerColor),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -1006,9 +1004,9 @@ class _NewContractFromReservationScreenState
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: Column(
             children: [
@@ -1207,7 +1205,7 @@ class _ClientPreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1281,11 +1279,11 @@ InputDecoration _dec({String? label, String? hint}) {
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.grey.shade300),
+      borderSide: const BorderSide(color: Color(0x33888888)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.grey.shade300),
+      borderSide: const BorderSide(color: Color(0x33888888)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -1293,3 +1291,6 @@ InputDecoration _dec({String? label, String? hint}) {
     ),
   );
 }
+
+
+

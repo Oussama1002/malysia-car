@@ -5,9 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/widgets/module_scaffold.dart';
 import '../data/website_lead_dto.dart';
 import '../data/website_leads_repo.dart';
+
+enum _LeadsTab { leads, pricing }
 
 /// Demandes du site — reproduit à l'identique la page web `WebsiteLeadsPage` :
 /// titre, badge compteur, recherche + filtre statut, cartes complètes (avec
@@ -24,6 +27,7 @@ class _WebsiteLeadsScreenState extends ConsumerState<WebsiteLeadsScreen> {
   late final TextEditingController _search =
       TextEditingController(text: ref.read(websiteLeadsFiltersProvider).search);
   Timer? _debounce;
+  _LeadsTab _tab = _LeadsTab.leads;
 
   @override
   void dispose() {
@@ -85,53 +89,80 @@ class _WebsiteLeadsScreenState extends ConsumerState<WebsiteLeadsScreen> {
                         color: Colors.black54, fontSize: 13, height: 1.4),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: ModuleSearchField(
-                    controller: _search,
-                    hint: 'Rechercher (nom, téléphone, email)…',
-                    onChanged: _onSearchChanged,
-                  ),
+                const SizedBox(height: 14),
+                _TabsBar(
+                  current: _tab,
+                  pricingCount: ref
+                          .watch(missingPriceVehiclesProvider)
+                          .valueOrNull
+                          ?.length ??
+                      0,
+                  onChanged: (t) => setState(() => _tab = t),
                 ),
                 const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _StatusDropdown(
-                    selected: filters.status,
-                    onChanged: (v) => ref
-                        .read(websiteLeadsFiltersProvider.notifier)
-                        .update((s) => s.copyWith(status: v)),
+                if (_tab == _LeadsTab.leads) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: ModuleSearchField(
+                      controller: _search,
+                      hint: 'Rechercher (nom, téléphone, email)…',
+                      onChanged: _onSearchChanged,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                async.when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40),
-                    child: Center(child: CircularProgressIndicator()),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _StatusDropdown(
+                      selected: filters.status,
+                      onChanged: (v) => ref
+                          .read(websiteLeadsFiltersProvider.notifier)
+                          .update((s) => s.copyWith(status: v)),
+                    ),
                   ),
-                  error: (e, _) => ModuleErrorView(message: '$e'),
-                  data: (page) {
-                    if (page.leads.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 20),
-                        child: _EmptyLeadsCard(),
-                      );
-                    }
-                    return Column(
-                      children: [
-                        for (final l in page.leads)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                            child: _LeadCard(
-                              lead: l,
-                              onUpdate: _update,
+                  const SizedBox(height: 16),
+                  async.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    error: (e, _) => ModuleErrorView(message: '$e'),
+                    data: (page) {
+                      if (page.leads.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: _EmptyLeadsCard(),
+                        );
+                      }
+                      return Column(
+                        children: [
+                          for (final l in page.leads)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: _LeadCard(lead: l, onUpdate: _update),
                             ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
+                        ],
+                      );
+                    },
+                  ),
+                ] else
+                  _PricingTab(
+                    onSetPrice: (id, price) async {
+                      try {
+                        await ref
+                            .read(websiteLeadsRepoProvider)
+                            .setPrice(id, price);
+                        ref.invalidate(missingPriceVehiclesProvider);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Tarif enregistré.')));
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Erreur : $e')));
+                      }
+                    },
+                  ),
               ],
             ),
           ),
@@ -229,9 +260,9 @@ class _StatusDropdown extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: Theme.of(context).dividerColor),
         ),
         child: Row(
           children: [
@@ -282,7 +313,7 @@ class _EmptyLeadsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid),
       ),
@@ -625,7 +656,7 @@ class _GhostAction extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: color,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        side: BorderSide(color: destructive ? Colors.red.shade200 : Colors.grey.shade300),
+        side: BorderSide(color: destructive ? Colors.red.shade200 : Theme.of(context).dividerColor),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5),
         minimumSize: const Size(0, 36),
@@ -656,3 +687,324 @@ class _PrimaryAction extends StatelessWidget {
     );
   }
 }
+
+// ───────────────────────────────────────────────────────────
+// Onglets : Demandes · Véhicules à tarifer
+// ───────────────────────────────────────────────────────────
+
+class _TabsBar extends StatelessWidget {
+  const _TabsBar({
+    required this.current,
+    required this.pricingCount,
+    required this.onChanged,
+  });
+  final _LeadsTab current;
+  final int pricingCount;
+  final ValueChanged<_LeadsTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tab(_LeadsTab t, String label, {int badge = 0, Color? badgeColor}) {
+      final active = current == t;
+      return Expanded(
+        child: InkWell(
+          onTap: () => onChanged(t),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  width: 2,
+                  color: active ? const Color(0xFF4F46E5) : Colors.transparent,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                      color: active ? const Color(0xFF4338CA) : Colors.black54,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    )),
+                if (badge > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: badgeColor ?? const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(999)),
+                    child: Text('$badge',
+                        style: TextStyle(
+                            color: badgeColor != null ? Colors.white : Colors.black54,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        children: [
+          tab(_LeadsTab.leads, 'Demandes'),
+          tab(_LeadsTab.pricing, 'À tarifer',
+              badge: pricingCount,
+              badgeColor: pricingCount > 0 ? const Color(0xFFF59E0B) : null),
+        ],
+      ),
+    );
+  }
+}
+
+class _PricingTab extends ConsumerStatefulWidget {
+  const _PricingTab({required this.onSetPrice});
+  final Future<void> Function(String id, double price) onSetPrice;
+
+  @override
+  ConsumerState<_PricingTab> createState() => _PricingTabState();
+}
+
+class _PricingTabState extends ConsumerState<_PricingTab> {
+  final Map<String, TextEditingController> _controllers = {};
+  final Set<String> _submitting = {};
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _controllerFor(String id) {
+    return _controllers.putIfAbsent(id, () => TextEditingController());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(missingPriceVehiclesProvider);
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => ModuleErrorView(message: '$e'),
+      data: (vehicles) {
+        if (vehicles.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('✓ Tous les véhicules du site ont un tarif.',
+                      style: TextStyle(
+                          color: Color(0xFF065F46),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13.5)),
+                  SizedBox(height: 4),
+                  Text("Rien ne saute à l'œil du visiteur — aucune action à faire.",
+                      style: TextStyle(color: Color(0xFF065F46), fontSize: 12)),
+                ],
+              ),
+            ),
+          );
+        }
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        color: Color(0xFFB45309), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${vehicles.length} véhicule${vehicles.length > 1 ? 's' : ''} apparaissent sur le site sans tarif.',
+                        style: const TextStyle(
+                            color: Color(0xFF78350F),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            for (final v in vehicles)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: _PricingRow(
+                  vehicle: v,
+                  controller: _controllerFor(v.id),
+                  submitting: _submitting.contains(v.id),
+                  onSubmit: () async {
+                    final n = double.tryParse(_controllerFor(v.id).text.trim());
+                    if (n == null || n <= 0) return;
+                    setState(() => _submitting.add(v.id));
+                    try {
+                      await widget.onSetPrice(v.id, n);
+                      _controllerFor(v.id).clear();
+                    } finally {
+                      if (mounted) setState(() => _submitting.remove(v.id));
+                    }
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PricingRow extends StatelessWidget {
+  const _PricingRow({
+    required this.vehicle,
+    required this.controller,
+    required this.submitting,
+    required this.onSubmit,
+  });
+  final MissingPriceVehicle vehicle;
+  final TextEditingController controller;
+  final bool submitting;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final sub = [
+      vehicle.year?.toString(),
+      vehicle.categorie,
+      vehicle.fuel,
+      vehicle.transmission,
+    ].where((e) => e != null && e!.isNotEmpty).join(' · ');
+    final photo = vehicle.photoUrl(AppConfig.apiBaseUrl);
+    return ModuleCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 72,
+                height: 54,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF1F5F9), Color(0xFFE2E8F0)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: photo != null
+                    ? Image.network(
+                        photo,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.directions_car,
+                              color: Colors.black26, size: 24),
+                        ),
+                      )
+                    : const Center(
+                        child: Icon(Icons.directions_car,
+                            color: Colors.black26, size: 24),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(vehicle.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if (vehicle.registration != null) vehicle.registration!,
+                        if (sub.isNotEmpty) sub,
+                      ].join(' · '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.black54, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Tarif MAD / jour',
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: submitting ? null : onSubmit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  textStyle: const TextStyle(
+                      fontWeight: FontWeight.w900, fontSize: 12),
+                ),
+                child: Text(submitting ? '…' : 'Enregistrer'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+
