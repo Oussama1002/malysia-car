@@ -12,6 +12,7 @@ use App\Models\CreditApplication;
 use App\Models\CreditScore;
 use App\Models\ContractHistory;
 use App\Models\ContractInstallment;
+use App\Models\Payment;
 use App\Models\Reservation;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
@@ -35,7 +36,7 @@ class ContractController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = Contract::query()->with(['vehicle.brand', 'vehicle.model']);
+        $q = Contract::query();
 
         if ($type = $request->query('type')) {
             $q->where('contract_type', $type);
@@ -49,10 +50,8 @@ class ContractController extends Controller
         if ($vehicleId = $request->query('vehicle_id')) {
             $q->where('vehicle_id', $vehicleId);
         }
-        if ($reservationId = $request->query('reservation_id')) {
-            $q->where('reservation_id', $reservationId);
-        }
 
+        $q->with(['customer', 'vehicle.brand', 'vehicle.model']);
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
         $page = $q->orderByDesc('updated_at')->paginate($per);
 
@@ -69,29 +68,25 @@ class ContractController extends Controller
 
     public function show(Request $request, Contract $contract): JsonResponse
     {
-        $contract->load(['history']);
+        $contract->load(['history', 'customer', 'vehicle.brand', 'vehicle.model']);
+
+        $linkedReservation = Reservation::query()
+            ->where('customer_id', $contract->customer_id)
+            ->where('vehicle_id', $contract->vehicle_id)
+            ->whereNotIn('status', ['cancelled', 'closed'])
+            ->orderByDesc('created_at')
+            ->first();
 
         return ApiResponse::success([
             'contract' => (new ContractResource($contract))->resolve($request),
             'history' => $contract->history,
+            'linked_reservation_id' => $linkedReservation?->id,
         ]);
     }
 
     public function store(StoreContractRequest $request): JsonResponse
     {
         $data = $request->validated();
-
-        // Le chèque de franchise suit la même règle que les autres : une fois.
-        if (($data['deposit_method'] ?? null) === 'cheque' && ! empty($data['deposit_check_number'])) {
-            $message = \App\Support\ChequeRegistry::duplicateMessage(
-                (string) $data['deposit_check_number'],
-                $data['deposit_check_bank'] ?? null,
-            );
-            if ($message) {
-                return ApiResponse::error($message, 422, ['deposit_check_number' => [$message]]);
-            }
-        }
-
         $actorRole = method_exists($request->user(), 'primaryRoleCode') ? $request->user()->primaryRoleCode() : '';
         $isDirectorLevel = in_array($actorRole, ['ADMIN', 'DIRECTEUR'], true);
 
@@ -118,13 +113,9 @@ class ContractController extends Controller
             $c->contract_type = $data['contract_type'];
             $c->customer_id = $data['customer_id'];
             $c->vehicle_id = $data['vehicle_id'] ?? null;
-            $c->reservation_id = $data['reservation_id'] ?? null;
             $c->template_id = $data['template_id'] ?? null;
             $c->credit_application_id = $data['credit_application_id'] ?? null;
-            // New contracts always start as brouillon — approval must go through
-            // the dedicated approve() action (audited + notified). Any status
-            // sent by the client is intentionally ignored on create.
-            $c->status = 'draft';
+            $c->status = $data['status'] ?? 'draft';
             $c->legal_status = $data['legal_status'] ?? 'pending';
             $c->signature_status = $data['signature_status'] ?? 'pending';
             $c->start_date = $data['start_date'] ?? null;
@@ -155,30 +146,6 @@ class ContractController extends Controller
             $c->created_by = auth()->id();
             $c->save();
 
-            // La franchise encaissée à la signature est une garantie détenue,
-            // pas un encaissement : elle rejoint le registre des franchises et
-            // débloque la remise du véhicule.
-            $depositAmount = (float) ($data['deposit_amount'] ?? 0);
-            $depositMethod = $data['deposit_method'] ?? null;
-            if ($depositAmount > 0 && $depositMethod) {
-                \App\Models\ContractDeposit::query()->create([
-                    'company_id' => $c->company_id,
-                    'branch_id' => $c->branch_id,
-                    'contract_id' => $c->id,
-                    'reservation_id' => $c->reservation_id,
-                    'customer_id' => $c->customer_id,
-                    'amount' => $depositAmount,
-                    'method' => $depositMethod,
-                    'check_number' => $depositMethod === 'cheque' ? ($data['deposit_check_number'] ?? null) : null,
-                    'check_bank' => $depositMethod === 'cheque' ? ($data['deposit_check_bank'] ?? null) : null,
-                    'check_date' => $depositMethod === 'cheque' ? ($data['deposit_check_date'] ?? null) : null,
-                    'status' => \App\Models\ContractDeposit::STATUS_HELD,
-                    'notes' => 'Encaissée à la signature du contrat '.$c->contract_number,
-                    'collected_by' => auth()->id(),
-                    'collected_at' => now(),
-                ]);
-            }
-
             ContractHistory::query()->create([
                 'id' => (string) Str::uuid(),
                 'contract_id' => $c->id,
@@ -192,6 +159,59 @@ class ContractController extends Controller
         });
 
         AuditLogger::created($c, $request->user(), request: $request);
+
+        // Auto-promote status when contract has payments and a linked reservation
+        $paymentEntries = $request->input('payment_entries', []);
+        $hasPayments = is_array($paymentEntries) && collect($paymentEntries)->contains(fn ($e) => ((float) ($e['amount'] ?? 0)) > 0);
+        if ($hasPayments && (string) $c->status === 'draft') {
+            $linkedReservation = Reservation::query()
+                ->where('customer_id', $c->customer_id)
+                ->where('vehicle_id', $c->vehicle_id)
+                ->whereNotIn('status', ['cancelled', 'closed', 'draft'])
+                ->first();
+            if ($linkedReservation) {
+                $c->status = 'pending_approval';
+                $c->save();
+                ContractHistory::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'contract_id' => $c->id,
+                    'action' => 'status_changed',
+                    'from_status' => 'draft',
+                    'to_status' => 'pending_approval',
+                    'actor_id' => auth()->id(),
+                    'at' => now(),
+                    'note' => 'Auto-promu: paiement reçu + réservation confirmée',
+                ]);
+            }
+        }
+
+        // Create Payment records from wizard payment entries
+        if (is_array($paymentEntries)) {
+            foreach ($paymentEntries as $entry) {
+                $amount = (float) ($entry['amount'] ?? 0);
+                if ($amount <= 0) {
+                    continue;
+                }
+                $paymentNumber = 'PAY-' . strtoupper(substr((string) \Illuminate\Support\Str::uuid(), 0, 8));
+                Payment::query()->create([
+                    'id' => (string) \Illuminate\Support\Str::uuid(),
+                    'company_id' => $c->company_id,
+                    'customer_id' => $c->customer_id,
+                    'contract_id' => $c->id,
+                    'payment_number' => $paymentNumber,
+                    'payment_method' => PaymentMethodNormalizer::normalize($entry['method'] ?? 'cash'),
+                    'payment_type' => 'down_payment',
+                    'amount' => $amount,
+                    'amount_unallocated' => $amount,
+                    'currency_code' => 'MAD',
+                    'payment_date' => now(),
+                    'status' => 'completed',
+                    'payment_direction' => 'incoming',
+                    'external_reference' => $entry['reference'] ?? null,
+                    'check_number' => $entry['cheque_number'] ?? null,
+                ]);
+            }
+        }
 
         // Auto-create a reservation if none exists for this contract's customer+vehicle+period.
         // Business rule: every contract must have a matching reservation.
@@ -579,8 +599,38 @@ class ContractController extends Controller
 
         $start = isset($data['start_date']) ? Carbon::parse($data['start_date']) : ($contract->start_date ? Carbon::parse($contract->start_date) : now());
         $months = (int) ($data['months'] ?? $contract->duration_months ?? 12);
-        $monthly = (float) ($data['monthly_amount'] ?? $contract->monthly_payment ?? 0);
-        $taxRate = (float) ($data['tax_rate'] ?? 0.2);
+
+        // Si `monthly_payment` n'a pas ete saisi dans le wizard, on retombe
+        // d'abord sur `base_amount / duree` (montant global divise par le
+        // nombre de mois) puis sur `estimated_price` de la reservation liee.
+        // Sans ca, chaque echeance est generee a 0 MAD — ce qui donnait
+        // l'erreur "Tableau de bord des echeances : 0 / 0 / 0".
+        $explicitMonthly = $data['monthly_amount'] ?? $contract->monthly_payment;
+        $monthly = (float) ($explicitMonthly ?? 0);
+        if ($monthly <= 0 && $months > 0) {
+            $base = (float) ($contract->base_amount ?? 0);
+            if ($base > 0) {
+                $monthly = round($base / $months, 2);
+            }
+        }
+        if ($monthly <= 0 && $contract->customer_id && $contract->vehicle_id) {
+            $reservationPrice = \App\Models\Reservation::withoutGlobalScopes()
+                ->where('customer_id', $contract->customer_id)
+                ->where('vehicle_id', $contract->vehicle_id)
+                ->whereNotIn('status', ['cancelled', 'draft'])
+                ->orderByDesc('created_at')
+                ->value('estimated_price');
+            if ($reservationPrice && $months > 0) {
+                $monthly = round(((float) $reservationPrice) / $months, 2);
+            }
+        }
+        if ($monthly <= 0) {
+            return ApiResponse::error(
+                'Mensualité introuvable : renseignez le loyer / mensualité du contrat avant de générer l\'échéancier.',
+                422,
+            );
+        }
+        $taxRate = (float) ($data['tax_rate'] ?? 0);
 
         $rows = DB::transaction(function () use ($contract, $start, $months, $monthly, $taxRate) {
             ContractInstallment::query()->where('contract_id', $contract->id)->delete();
@@ -716,7 +766,7 @@ class ContractController extends Controller
 
     private function generateReservationNumber(): string
     {
-        $latest = Reservation::query()
+        $latest = Reservation::withoutGlobalScopes()
             ->where('reservation_number', 'like', 'RSV-%')
             ->orderByRaw("CAST(SUBSTRING(reservation_number, 5) AS UNSIGNED) DESC")
             ->value('reservation_number');
@@ -731,7 +781,7 @@ class ContractController extends Controller
 
     private function generateContractNumber(): string
     {
-        $latest = Contract::query()
+        $latest = Contract::withoutGlobalScopes()
             ->where('contract_number', 'like', 'CTR-%')
             ->orderByRaw("CAST(SUBSTRING(contract_number, 5) AS UNSIGNED) DESC")
             ->value('contract_number');
