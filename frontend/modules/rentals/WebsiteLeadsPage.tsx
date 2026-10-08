@@ -425,13 +425,18 @@ const PricingRow: React.FC<{
               alt={label}
               className="h-full w-full object-cover"
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-                const parent = (e.currentTarget as HTMLImageElement).parentElement;
-                if (parent) parent.textContent = '🚗';
+                // Pas de photo pour ce vehicule → logo DriveFlow.
+                (e.currentTarget as HTMLImageElement).src = '/logo.png';
+                (e.currentTarget as HTMLImageElement).className =
+                  'h-10 w-auto object-contain opacity-80';
               }}
             />
           ) : (
-            <span className="text-2xl opacity-50">🚗</span>
+            <img
+              src="/logo.png"
+              alt="DriveFlow"
+              className="h-10 w-auto object-contain opacity-80"
+            />
           )}
         </div>
         <div className="min-w-0 flex-1">
