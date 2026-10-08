@@ -262,9 +262,15 @@
       e.preventDefault();
       var pickup = $('searchPickup').value;
       var ret = $('searchReturn').value;
+      // Le quoteForm attend JJ/MM/AAAA (champs texte masques), alors que la
+      // searchbar hero est un <input type="date"> au format ISO YYYY-MM-DD.
+      function isoToFr(iso) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+        return m ? (m[3] + '/' + m[2] + '/' + m[1]) : '';
+      }
       if (quote) {
-        if (pickup && quote.elements.pickup_at) quote.elements.pickup_at.value = pickup;
-        if (ret && quote.elements.return_at) quote.elements.return_at.value = ret;
+        if (pickup && quote.elements.pickup_at) quote.elements.pickup_at.value = isoToFr(pickup);
+        if (ret && quote.elements.return_at) quote.elements.return_at.value = isoToFr(ret);
       }
       var target = document.getElementById('flotte') || quote;
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -303,10 +303,14 @@
         </label>
         <div class="row">
           <label>Départ
-            <input name="pickup_at" type="date" required />
+            <input name="pickup_at" type="text" inputmode="numeric"
+                   maxlength="10" placeholder="JJ/MM/AAAA"
+                   pattern="\d{2}/\d{2}/\d{4}" required />
           </label>
           <label>Retour
-            <input name="return_at" type="date" required />
+            <input name="return_at" type="text" inputmode="numeric"
+                   maxlength="10" placeholder="JJ/MM/AAAA"
+                   pattern="\d{2}/\d{2}/\d{4}" required />
           </label>
         </div>
         <label>Véhicule souhaité
