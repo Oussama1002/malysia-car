@@ -722,12 +722,18 @@ class _TabsBar extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label,
-                    style: TextStyle(
-                      color: active ? const Color(0xFF4338CA) : Colors.black54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    )),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color:
+                            active ? const Color(0xFF4338CA) : Colors.black54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ),
                 if (badge > 0) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -759,7 +765,7 @@ class _TabsBar extends StatelessWidget {
       child: Row(
         children: [
           tab(_LeadsTab.leads, 'Demandes'),
-          tab(_LeadsTab.pricing, 'À tarifer',
+          tab(_LeadsTab.pricing, 'Véhicules à tarifer',
               badge: pricingCount,
               badgeColor: pricingCount > 0 ? const Color(0xFFF59E0B) : null),
         ],
@@ -929,15 +935,10 @@ class _PricingRow extends StatelessWidget {
                     ? Image.network(
                         photo,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Center(
-                          child: Icon(Icons.directions_car,
-                              color: Colors.black26, size: 24),
-                        ),
+                        errorBuilder: (_, __, ___) =>
+                            const _VehicleLogoFallback(),
                       )
-                    : const Center(
-                        child: Icon(Icons.directions_car,
-                            color: Colors.black26, size: 24),
-                      ),
+                    : const _VehicleLogoFallback(),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1008,3 +1009,26 @@ class _PricingRow extends StatelessWidget {
 
 
 
+
+/// Fallback utilise quand un vehicule n'a pas de photo : on affiche le logo
+/// de la landing page (assets/logo.png) plutot qu'une icone generique.
+class _VehicleLogoFallback extends StatelessWidget {
+  const _VehicleLogoFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Image.asset(
+          'assets/logo.png',
+          fit: BoxFit.contain,
+          color: Colors.black.withOpacity(0.45),
+          colorBlendMode: BlendMode.srcIn,
+          errorBuilder: (_, __, ___) => const Icon(Icons.directions_car,
+              color: Colors.black26, size: 24),
+        ),
+      ),
+    );
+  }
+}
