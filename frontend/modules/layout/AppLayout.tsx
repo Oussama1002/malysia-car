@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { canAccessModule } from '@/domain/appRole';
 import { useAuthSession } from '@/modules/auth/AuthContext';
-import { setLanguage } from '@/i18n';
 import { useUIPrefs } from '@/providers/UIPreferencesProvider';
 import { Icon } from '@/modules/shared/components/Icon';
 import { ThemeToggle } from '@/modules/shared/components/ThemeToggle';
@@ -33,7 +32,7 @@ function useBreadcrumb(): { group: string; current: string } {
 }
 
 export const AppLayout: React.FC = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { session, logout } = useAuthSession();
   const navigate = useNavigate();
   const { theme, sidebarCollapsed, toggleSidebar } = useUIPrefs();
@@ -331,24 +330,6 @@ export const AppLayout: React.FC = () => {
           </button>
 
           <ThemeToggle />
-
-          <div className="hidden sm:flex rounded-xl border border-[color:var(--df-border-strong)] bg-[color:var(--df-surface-sunk)] p-0.5">
-            {(['fr', 'en', 'ar'] as const).map((lng) => {
-              const active = i18n.language.startsWith(lng);
-              return (
-                <button
-                  key={lng}
-                  type="button"
-                  onClick={() => setLanguage(lng)}
-                  className={`h-8 px-2 text-[10px] font-black uppercase tracking-[0.14em] rounded-lg transition ${
-                    active ? 'bg-[color:var(--df-surface-elev)] text-[color:var(--df-text)] shadow' : 'text-[color:var(--df-text-muted)]'
-                  }`}
-                >
-                  {lng}
-                </button>
-              );
-            })}
-          </div>
 
           <button
             type="button"
