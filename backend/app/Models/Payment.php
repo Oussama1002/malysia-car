@@ -72,6 +72,18 @@ class Payment extends Model
         return $this->hasMany(PaymentAllocation::class, 'payment_id');
     }
 
+    /** @return BelongsTo<Contract, $this> */
+    public function contract(): BelongsTo
+    {
+        return $this->belongsTo(Contract::class, 'contract_id');
+    }
+
+    /** @return BelongsTo<Reservation, $this> */
+    public function reservation(): BelongsTo
+    {
+        return $this->belongsTo(Reservation::class, 'reservation_id');
+    }
+
     public function recalculateAllocation(): void
     {
         $total = (float) $this->allocations()->sum('amount_allocated');

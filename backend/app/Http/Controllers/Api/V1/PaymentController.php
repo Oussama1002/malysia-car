@@ -23,7 +23,19 @@ class PaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = Payment::query()->with(['customer.individualProfile', 'customer.companyProfile', 'bankAccount', 'allocations']);
+        $q = Payment::query()->with([
+            'customer.individualProfile',
+            'customer.companyProfile',
+            'bankAccount',
+            'allocations',
+            // Pour que la carte paiement cote mobile / web affiche le vehicule
+            // (marque + modele + plaque), on precharge le vehicule lie au
+            // contrat ou a la reservation. Attache ci-dessous via accessor.
+            'contract.vehicle.brand',
+            'contract.vehicle.model',
+            'reservation.vehicle.brand',
+            'reservation.vehicle.model',
+        ]);
 
         if ($status = $request->query('status')) {
             $q->where('status', $status);
@@ -62,6 +74,21 @@ class PaymentController extends Controller
 
         $per = min(100, max(1, (int) $request->query('per_page', 25)));
         $page = $q->orderByDesc('payment_date')->orderByDesc('created_at')->paginate($per);
+
+        $page->getCollection()->transform(function (Payment $p) {
+            $v = $p->contract?->vehicle ?? $p->reservation?->vehicle;
+            if ($v) {
+                $name = trim(
+                    ($v->brand?->name ?? $v->brand_name ?? '').' '.
+                    ($v->model?->model_name ?? $v->model?->name ?? $v->model_name ?? '')
+                );
+                $label = trim($name.($v->registration_number ? ' · '.$v->registration_number : ''));
+                if ($label !== '') {
+                    $p->setAttribute('vehicle_label', $label);
+                }
+            }
+            return $p;
+        });
 
         return ApiResponse::paginated($page);
     }
