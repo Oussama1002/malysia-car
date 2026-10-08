@@ -100,17 +100,17 @@ class PublicSiteController extends Controller
     public function catalog(): JsonResponse
     {
         $data = Cache::remember('public_site.catalog', 3600, function () {
-            $brands = VehicleBrand::query()
+            // 1. Référentiel officiel (tables vehicle_brands / vehicle_models).
+            $brandRows = VehicleBrand::query()
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(fn (VehicleBrand $b) => [
                     'id' => $b->id,
                     'name' => $b->name,
                 ])
-                ->values()
                 ->all();
 
-            $models = VehicleModel::query()
+            $modelRows = VehicleModel::query()
                 ->with('brand:id,name')
                 ->orderBy('name')
                 ->get(['id', 'brand_id', 'name'])
@@ -120,8 +120,79 @@ class PublicSiteController extends Controller
                     'brand_id' => $m->brand_id,
                     'brand_name' => $m->brand?->name,
                 ])
-                ->values()
                 ->all();
+
+            // 2. Enrichissement depuis les véhicules : certains véhicules
+            // importés via XLS n'ont pas de FK brand_id/model_id mais stockent
+            // brand_name / model_name en texte. On fusionne pour que les
+            // menus du formulaire soient alimentés même sans référentiel.
+            $vehicleBrandNames = Vehicle::query()
+                ->withoutGlobalScopes()
+                ->whereNull('deleted_at')
+                ->whereNotNull('brand_name')
+                ->where('brand_name', '!=', '')
+                ->distinct()
+                ->pluck('brand_name')
+                ->all();
+            $vehicleModelRows = Vehicle::query()
+                ->withoutGlobalScopes()
+                ->whereNull('deleted_at')
+                ->whereNotNull('model_name')
+                ->where('model_name', '!=', '')
+                ->whereNotNull('brand_name')
+                ->where('brand_name', '!=', '')
+                ->distinct()
+                ->get(['brand_name', 'model_name'])
+                ->all();
+
+            // 3. Fusion : on indexe par nom (slug lower-case) pour éviter les
+            // doublons entre référentiel officiel et noms libres.
+            $brandByKey = [];
+            foreach ($brandRows as $b) {
+                $key = mb_strtolower(trim($b['name']));
+                $brandByKey[$key] = $b;
+            }
+            foreach ($vehicleBrandNames as $name) {
+                $key = mb_strtolower(trim((string) $name));
+                if ($key === '' || isset($brandByKey[$key])) {
+                    continue;
+                }
+                // Les marques sans FK n'ont pas d'id en base — on prefixe pour
+                // signaler que c'est un nom libre.
+                $brandByKey[$key] = [
+                    'id' => 'name:'.$key,
+                    'name' => $name,
+                ];
+            }
+            $brands = array_values($brandByKey);
+            usort($brands, fn ($a, $b) => strcmp($a['name'], $b['name']));
+
+            $modelByKey = [];
+            foreach ($modelRows as $m) {
+                $key = mb_strtolower(trim(($m['brand_name'] ?? '').'|'.$m['name']));
+                $modelByKey[$key] = $m;
+            }
+            foreach ($vehicleModelRows as $row) {
+                $brandName = (string) $row->brand_name;
+                $modelName = (string) $row->model_name;
+                $key = mb_strtolower(trim($brandName.'|'.$modelName));
+                if ($key === '|' || isset($modelByKey[$key])) {
+                    continue;
+                }
+                $brandKey = mb_strtolower(trim($brandName));
+                $brandId = $brandByKey[$brandKey]['id'] ?? ('name:'.$brandKey);
+                $modelByKey[$key] = [
+                    'id' => 'name:'.$key,
+                    'name' => $modelName,
+                    'brand_id' => $brandId,
+                    'brand_name' => $brandName,
+                ];
+            }
+            $models = array_values($modelByKey);
+            usort($models, function ($a, $b) {
+                $c = strcmp((string) ($a['brand_name'] ?? ''), (string) ($b['brand_name'] ?? ''));
+                return $c !== 0 ? $c : strcmp((string) $a['name'], (string) $b['name']);
+            });
 
             return [
                 'brands' => $brands,

@@ -341,6 +341,22 @@
       });
   }
 
+  // Mapping marque -> fichier logo (meme dossier que le marquee).
+  // On fabrique la cle a partir du nom (lowercase + espaces → tirets) et on
+  // trouve le fichier qui commence par cette cle. Fallback : premiere lettre.
+  function brandLogo(name) {
+    if (!name) return null;
+    var key = String(name).toLowerCase().trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+    var match = BRAND_FILES.find(function (f) { return f.indexOf(key + '-') === 0; });
+    return match ? 'assets/brands/' + match : null;
+  }
+
+  function brandInitial(name) {
+    return (name || '?').charAt(0).toUpperCase();
+  }
+
   function renderBrandChips(filter) {
     var host = $('brandChips');
     if (!host) return;
@@ -350,23 +366,63 @@
       return !q || b.name.toLowerCase().indexOf(q) >= 0;
     });
     if (list.length === 0) {
-      var empty = document.createElement('span');
-      empty.className = 'prefs__chip prefs__chip--empty';
-      empty.textContent = 'Aucune marque ne correspond.';
+      var empty = document.createElement('div');
+      empty.style.cssText = 'grid-column: 1/-1; padding: 20px; text-align: center; color: var(--mist); font-size: 12px; font-style: italic;';
+      empty.textContent = q
+        ? 'Aucune marque ne correspond à votre recherche.'
+        : 'Catalogue de marques en cours de chargement…';
       host.appendChild(empty);
       updateBrandCount();
       return;
     }
     list.forEach(function (b) {
-      var chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'prefs__chip' + (SELECTED_BRANDS.has(b.id) ? ' prefs__chip--on' : '');
-      chip.textContent = b.name;
-      chip.dataset.brandId = b.id;
-      chip.addEventListener('click', function () { toggleBrand(b.id); });
-      host.appendChild(chip);
+      var card = document.createElement('button');
+      card.type = 'button';
+      var isOn = SELECTED_BRANDS.has(b.id);
+      card.className = 'brandCard' + (isOn ? ' brandCard--on' : '');
+      card.dataset.brandId = b.id;
+      card.title = b.name;
+
+      // Logo (ou fallback initiale cerclee dorée si pas d'image).
+      var logoUrl = brandLogo(b.name);
+      if (logoUrl) {
+        var img = document.createElement('img');
+        img.className = 'brandCard__logo';
+        img.src = logoUrl;
+        img.alt = b.name;
+        img.loading = 'lazy';
+        img.onerror = function () { img.remove(); card.insertBefore(fallbackInitial(b.name), card.firstChild); };
+        card.appendChild(img);
+      } else {
+        card.appendChild(fallbackInitial(b.name));
+      }
+
+      var label = document.createElement('span');
+      label.className = 'brandCard__name';
+      label.textContent = b.name;
+      card.appendChild(label);
+
+      if (isOn) {
+        var check = document.createElement('span');
+        check.className = 'brandCard__check';
+        check.textContent = '✓';
+        card.appendChild(check);
+      }
+
+      card.addEventListener('click', function () { toggleBrand(b.id); });
+      host.appendChild(card);
     });
     updateBrandCount();
+  }
+
+  function fallbackInitial(name) {
+    var span = document.createElement('span');
+    span.style.cssText =
+      'width:48px;height:32px;display:inline-flex;align-items:center;justify-content:center;' +
+      'background:linear-gradient(135deg,var(--gold),var(--gold-light));' +
+      'color:#fff;font-weight:900;border-radius:6px;font-size:13px;';
+    span.textContent = brandInitial(name);
+    return span;
   }
 
   function renderModelChips(filter) {
@@ -447,18 +503,49 @@
 
   function updateBrandCount() {
     var el = $('brandCount');
-    if (!el) return;
-    var n = SELECTED_BRANDS.size;
-    el.textContent = n + ' sélectionnée' + (n > 1 ? 's' : '');
-    el.style.opacity = n ? '1' : '0.6';
+    if (el) {
+      var n = SELECTED_BRANDS.size;
+      el.textContent = n + ' sélectionnée' + (n > 1 ? 's' : '');
+      el.style.opacity = n ? '1' : '0.6';
+    }
+    var clear = $('brandClear');
+    if (clear) clear.hidden = SELECTED_BRANDS.size === 0;
+    updateSummary();
   }
 
   function updateModelCount() {
     var el = $('modelCount');
-    if (!el) return;
-    var n = SELECTED_MODELS.size;
-    el.textContent = n + ' sélectionné' + (n > 1 ? 's' : '');
-    el.style.opacity = n ? '1' : '0.6';
+    if (el) {
+      var n = SELECTED_MODELS.size;
+      el.textContent = n + ' sélectionné' + (n > 1 ? 's' : '');
+      el.style.opacity = n ? '1' : '0.6';
+    }
+    var clear = $('modelClear');
+    if (clear) clear.hidden = SELECTED_MODELS.size === 0;
+    updateSummary();
+  }
+
+  // Résumé en direct : explique au visiteur ce qu'il envoie, pour qu'il
+  // comprenne l'algorithme sans ouvrir la documentation.
+  function updateSummary() {
+    var box = $('prefsSummary');
+    var txt = $('prefsSummaryText');
+    if (!box || !txt) return;
+    var bn = SELECTED_BRANDS.size;
+    var mn = SELECTED_MODELS.size;
+    if (bn === 0 && mn === 0) { box.hidden = true; return; }
+    box.hidden = false;
+    var brandNames = Array.from(SELECTED_BRANDS)
+      .map(function (id) { return (CATALOG.brandById[id] || {}).name; })
+      .filter(Boolean);
+    var parts = [];
+    if (brandNames.length) {
+      parts.push('<strong>' + brandNames.slice(0, 3).join(', ') +
+        (brandNames.length > 3 ? ' +' + (brandNames.length - 3) : '') + '</strong>');
+    }
+    if (mn > 0) parts.push(mn + ' modèle' + (mn > 1 ? 's' : '') + ' précis');
+    txt.innerHTML = 'Nous chercherons un véhicule disponible chez ' + parts.join(' · ') +
+      '. Si tout est pris, on vous propose le modèle le plus proche.';
   }
 
   function syncHiddenSelects() {
@@ -501,6 +588,26 @@
     if (ms && !ms.dataset.wired) {
       ms.dataset.wired = '1';
       ms.addEventListener('input', function () { renderModelChips(ms.value); });
+    }
+    var bc = $('brandClear');
+    if (bc && !bc.dataset.wired) {
+      bc.dataset.wired = '1';
+      bc.addEventListener('click', function () {
+        SELECTED_BRANDS.clear();
+        SELECTED_MODELS.clear();
+        syncHiddenSelects();
+        renderBrandChips(bs ? bs.value : '');
+        renderModelChips(ms ? ms.value : '');
+      });
+    }
+    var mc = $('modelClear');
+    if (mc && !mc.dataset.wired) {
+      mc.dataset.wired = '1';
+      mc.addEventListener('click', function () {
+        SELECTED_MODELS.clear();
+        syncHiddenSelects();
+        renderModelChips(ms ? ms.value : '');
+      });
     }
   }
 
