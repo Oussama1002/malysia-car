@@ -7,6 +7,7 @@ import '../../../core/widgets/module_scaffold.dart';
 import '../../placeholders/placeholder_screen.dart';
 import '../data/vehicle_dto.dart';
 import '../data/vehicles_repo.dart';
+import 'new_vehicle_screen.dart';
 import 'vehicle_detail_screen.dart';
 
 /// Liste de la flotte — même structure que `FleetListPage.tsx` du web :
@@ -64,11 +65,8 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => const PlaceholderScreen(
-              title: 'Nouveau véhicule',
-              icon: Icons.directions_car,
-            ),
-          ));
+            builder: (_) => const NewVehicleScreen(),
+          )).then((_) => ref.invalidate(vehiclesListProvider));
         },
         icon: const Icon(Icons.add),
         label: const Text('Nouveau véhicule'),
