@@ -140,18 +140,39 @@ export const AppLayout: React.FC = () => {
   });
   const criticalMaintenanceCount = maintenanceQ.data?.data?.criticalAlertsCount ?? 0;
 
-  const carteGriseQ = useQuery({
-    queryKey: ['fleet', 'carte-grise-pending'],
+  const fleetPendingQ = useQuery({
+    queryKey: ['fleet', 'pending-docs'],
     queryFn: async () => {
       const { apiClient: api, getApiBase: base } = await import('@/services/apiClient');
-      if (!base()) return [];
+      if (!base()) return [] as any[];
       const res = await api<{ data: any[] }>('/v1/vehicles?per_page=200');
-      return res.data.filter((v: any) => !v.registration_card_number && !v.registrationCard && !v.registration_card);
+      return res.data;
     },
     staleTime: 60_000,
     refetchInterval: 120_000,
   });
-  const carteGrisePending = carteGriseQ.data ?? [];
+  const fleetAll = fleetPendingQ.data ?? [];
+  // Un vehicule est "en alerte" si le champ est vide OU la date est passee.
+  const isMissingOrPast = (raw: unknown): boolean => {
+    if (raw === null || raw === undefined || raw === '') return true;
+    const d = new Date(String(raw));
+    if (isNaN(d.getTime())) return true;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return d < today;
+  };
+  const carteGrisePending = fleetAll.filter(
+    (v: any) => !v.registration_card_number && !v.registrationCard && !v.registration_card,
+  );
+  const insurancePending = fleetAll.filter((v: any) =>
+    isMissingOrPast(v.insurance_expiry ?? v.insuranceExpiry),
+  );
+  const techPending = fleetAll.filter((v: any) =>
+    isMissingOrPast(v.tech_control_expiry ?? v.techControlExpiry),
+  );
+  const vignettePending = fleetAll.filter((v: any) =>
+    isMissingOrPast(v.vignette_expiry ?? v.vignetteExpiry),
+  );
 
   const renderNavLink = (it: NavItem) => (
     <NavLink
@@ -468,22 +489,32 @@ export const AppLayout: React.FC = () => {
           </button>
         </header>
 
-        {carteGrisePending.length > 0 && (
-          <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900 dark:bg-amber-950/40">
-            <span className="text-lg">⚠️</span>
-            <p className="flex-1 text-[12.5px] font-semibold text-amber-900 dark:text-amber-300">
-              {carteGrisePending.length === 1
-                ? `1 véhicule sans carte grise — ${(carteGrisePending[0] as any).registration ?? ''}`
-                : `${carteGrisePending.length} véhicules sans carte grise`}
-              {' '}· Statut <strong>En attente</strong> — uploadez le document pour lever cette alerte.
-            </p>
-            <NavLink
-              to="/fleet"
-              className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-amber-700"
+        {[
+          { pending: carteGrisePending, label: 'carte grise' },
+          { pending: insurancePending, label: 'assurance à jour' },
+          { pending: techPending, label: 'visite technique à jour' },
+          { pending: vignettePending, label: 'vignette à jour' },
+        ].map(({ pending, label }) =>
+          pending.length === 0 ? null : (
+            <div
+              key={label}
+              className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900 dark:bg-amber-950/40"
             >
-              Voir le parc →
-            </NavLink>
-          </div>
+              <span className="text-lg">⚠️</span>
+              <p className="flex-1 text-[12.5px] font-semibold text-amber-900 dark:text-amber-300">
+                {pending.length === 1
+                  ? `1 véhicule sans ${label} — ${(pending[0] as any).registration ?? ''}`
+                  : `${pending.length} véhicules sans ${label}`}
+                {' '}· Statut <strong>En attente</strong> — uploadez le document pour lever cette alerte.
+              </p>
+              <NavLink
+                to="/fleet"
+                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-amber-700"
+              >
+                Voir le parc →
+              </NavLink>
+            </div>
+          ),
         )}
 
         <main className="min-h-0 flex-1 overflow-y-auto">

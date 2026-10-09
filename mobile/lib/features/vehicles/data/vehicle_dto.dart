@@ -17,6 +17,7 @@ class VehicleDto {
     this.insuranceExpiry,
     this.techControlExpiry,
     this.vignetteExpiry,
+    this.registrationCardNumber,
   });
 
   final String id;
@@ -34,6 +35,7 @@ class VehicleDto {
   final DateTime? insuranceExpiry;
   final DateTime? techControlExpiry;
   final DateTime? vignetteExpiry;
+  final String? registrationCardNumber;
 
   String get label {
     final parts = [brand, model].where((e) => e != null && (e as String).isNotEmpty).toList();
@@ -65,6 +67,10 @@ class VehicleDto {
       insuranceExpiry: _date(json['insuranceExpiry'] ?? json['insurance_expiry']),
       techControlExpiry: _date(json['techControlExpiry'] ?? json['tech_control_expiry']),
       vignetteExpiry: _date(json['vignetteExpiry'] ?? json['vignette_expiry']),
+      registrationCardNumber: (json['registration_card_number'] ??
+              json['registrationCardNumber'] ??
+              json['registrationCard'])
+          ?.toString(),
     );
   }
 }

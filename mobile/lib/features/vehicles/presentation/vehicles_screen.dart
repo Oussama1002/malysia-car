@@ -82,6 +82,32 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
               error: (e, _) => ModuleErrorView(message: '$e'),
               data: (items) {
                 final list = _apply(items);
+                final now = DateTime.now();
+                bool missingOrPast(DateTime? d) =>
+                    d == null || d.isBefore(now);
+                final noCarteGrise = items
+                    .where((v) =>
+                        (v.registrationCardNumber ?? '').isEmpty)
+                    .toList();
+                final insurancePending = items
+                    .where((v) => missingOrPast(v.insuranceExpiry))
+                    .toList();
+                final techPending = items
+                    .where((v) => missingOrPast(v.techControlExpiry))
+                    .toList();
+                final vignettePending = items
+                    .where((v) => missingOrPast(v.vignetteExpiry))
+                    .toList();
+                final banners = <_FleetAlert>[
+                  if (noCarteGrise.isNotEmpty)
+                    _FleetAlert('carte grise', noCarteGrise),
+                  if (insurancePending.isNotEmpty)
+                    _FleetAlert('assurance à jour', insurancePending),
+                  if (techPending.isNotEmpty)
+                    _FleetAlert('visite technique à jour', techPending),
+                  if (vignettePending.isNotEmpty)
+                    _FleetAlert('vignette à jour', vignettePending),
+                ];
                 return ListView(
                   padding: const EdgeInsets.only(bottom: 100),
                   children: [
@@ -91,6 +117,15 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                           'Parc complet — conformité, maintenance, documents et pièces.',
                       onBack: () => Navigator.of(context).maybePop(),
                     ),
+                    if (banners.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      for (final b in banners)
+                        Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: _AlertBanner(alert: b),
+                        ),
+                    ],
                     const SizedBox(height: 18),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -419,3 +454,57 @@ class _Thumb extends StatelessWidget {
   }
 }
 
+
+class _FleetAlert {
+  const _FleetAlert(this.label, this.vehicles);
+  final String label;
+  final List<VehicleDto> vehicles;
+}
+
+class _AlertBanner extends StatelessWidget {
+  const _AlertBanner({required this.alert});
+  final _FleetAlert alert;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = alert.vehicles.length;
+    final reg = n == 1 ? ' — ${alert.vehicles.first.registration}' : '';
+    final count = n == 1 ? '1 véhicule' : '$n véhicules';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        children: [
+          const Text('⚠️', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                    color: Color(0xFF78350F),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700),
+                children: [
+                  TextSpan(text: '$count sans ${alert.label}$reg · '),
+                  const TextSpan(
+                      text: 'Statut ',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                  const TextSpan(
+                      text: 'En attente',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                  const TextSpan(
+                      text:
+                          " — uploadez le document pour lever cette alerte."),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
