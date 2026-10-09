@@ -26,11 +26,10 @@ class NewContractFromReservationScreen extends ConsumerStatefulWidget {
       _NewContractFromReservationScreenState();
 }
 
-enum _Step { client, agent, vehicle, type, terms, annex, review }
+enum _Step { client, vehicle, type, terms, annex, review }
 
 const _stepLabels = {
   _Step.client: 'Client',
-  _Step.agent: 'Agent',
   _Step.vehicle: 'Véhicule',
   _Step.type: 'Type',
   _Step.terms: 'Conditions',
@@ -515,59 +514,64 @@ class _NewContractFromReservationScreenState
         child: Row(
           children: [
             if (idx > 0)
-              OutlinedButton.icon(
-                onPressed: _busy ? null : _prev,
-                icon: const Icon(Icons.arrow_back, size: 14),
-                label: const Text('Précédent'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF334155),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 10),
-                  textStyle: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _prev,
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: const Text('Précédent'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF334155),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    minimumSize: const Size.fromHeight(48),
+                    textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
                 ),
               ),
-            const Spacer(),
+            if (idx > 0) const SizedBox(width: 8),
             if (isLast) ...[
-              OutlinedButton(
-                onPressed: _busy ? null : () => _save(draft: true),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF334155),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 10),
-                  textStyle: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : () => _save(draft: true),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF334155),
+                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    minimumSize: const Size.fromHeight(48),
+                    textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                  child: Text(_busy ? '…' : 'Brouillon'),
                 ),
-                child: Text(_busy ? '…' : 'Brouillon'),
               ),
-              const SizedBox(width: 6),
-              FilledButton.icon(
-                onPressed: _busy ? null : () => _save(draft: false),
-                icon: const Icon(Icons.check, size: 14),
-                label: Text(_busy ? 'Création…' : 'Signer et créer'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 11),
-                  textStyle: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 12),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : () => _save(draft: false),
+                  icon: const Icon(Icons.check, size: 16),
+                  label: Text(_busy ? 'Création…' : 'Signer et créer'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(48),
+                    textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
                 ),
               ),
             ] else
-              FilledButton.icon(
-                onPressed: _busy || !_canAdvance() ? null : _next,
-                icon: const Icon(Icons.arrow_forward, size: 14),
-                label: const Text('Suivant'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 11),
-                  textStyle: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 12),
+              Expanded(
+                flex: idx > 0 ? 1 : 2,
+                child: FilledButton.icon(
+                  onPressed: _busy || !_canAdvance() ? null : _next,
+                  icon: const Icon(Icons.arrow_forward, size: 16),
+                  label: const Text('Suivant'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(48),
+                    textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
                 ),
               ),
           ],
@@ -584,8 +588,6 @@ class _NewContractFromReservationScreenState
     switch (_step) {
       case _Step.client:
         return _clientStep();
-      case _Step.agent:
-        return _agentStep();
       case _Step.vehicle:
         return _vehicleStep();
       case _Step.type:
@@ -626,19 +628,6 @@ class _NewContractFromReservationScreenState
           const SizedBox(height: 12),
           _ClientPreview(c: selected.first),
         ],
-      ],
-    );
-  }
-
-  Widget _agentStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _Section('Agent commercial assigné'),
-        TextField(
-          decoration: _dec(hint: 'Nom de l\'agent (optionnel)'),
-          onChanged: (v) => _assignedAgent = v,
-        ),
       ],
     );
   }
@@ -747,6 +736,12 @@ class _NewContractFromReservationScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const _Section('Agent commercial assigné'),
+        TextField(
+          decoration: _dec(hint: 'Nom de l\'agent (optionnel)'),
+          onChanged: (v) => _assignedAgent = v,
+        ),
+        const SizedBox(height: 6),
         _Section(isShort ? 'Durée (jours)' : 'Durée (mois)'),
         _NumberField(controller: _duration),
         _Section(_type == 'CREDIT_AUTO'
