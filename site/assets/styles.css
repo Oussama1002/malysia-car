@@ -1446,5 +1446,15 @@ a { color: inherit; text-decoration: none; }
   font-weight: 400;
 }
 /* Dans la searchbar hero : padding plus serre */
-.searchbar__field .dateField__display { left: 0; right: 24px; font-size: 14.5px; }
+/* Hero searchbar : la .dateField contient aussi le label en haut (flex
+   column). On ancre l'overlay sur la zone de l'input (en bas) au lieu
+   du centre vertical pour qu'il ne chevauche pas « Départ / Retour ». */
+.searchbar__field .dateField__display {
+  top: auto;
+  bottom: 6px;
+  transform: none;
+  left: 0;
+  right: 24px;
+  font-size: 14.5px;
+}
 .searchbar__field .dateField input[type="date"] { padding: 2px 24px 2px 0; }
