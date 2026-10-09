@@ -108,14 +108,30 @@ class CustomersRepo {
   }
 
   /// Lance l'OCR sur un fichier et attend le résultat.
+  /// Sur mobile on peut passer `filePath` (dart:io dispo) ; sur le web il
+  /// faut passer `fileBytes` + `fileName` (dart:io absent — MultipartFile.
+  /// fromFile throw sinon).
   Future<Map<String, dynamic>> scanDocument({
-    required String filePath,
+    String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
     required String type,
   }) async {
+    final MultipartFile multipart;
+    if (fileBytes != null) {
+      multipart = MultipartFile.fromBytes(
+        fileBytes,
+        filename: fileName ?? 'upload.jpg',
+      );
+    } else if (filePath != null) {
+      multipart = await MultipartFile.fromFile(filePath);
+    } else {
+      throw ArgumentError('scanDocument: filePath or fileBytes is required');
+    }
     final upload = await _api.raw.post(
       '/document-reader/uploads',
       data: FormData.fromMap({
-        'file': await MultipartFile.fromFile(filePath),
+        'file': multipart,
         'document_type': type,
       }),
     );

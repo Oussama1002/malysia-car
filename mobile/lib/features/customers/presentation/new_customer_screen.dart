@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'dart:html' as io;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -59,6 +60,9 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         imageQuality: 80,
       );
       if (f == null) return;
+      // Sur web, f.path est un blob URL inutilisable par dart:io ;
+      // on lit les octets et on les passe directement.
+      final bytes = kIsWeb ? await f.readAsBytes() : null;
       setState(() {
         _cinPhotoPath = f.path;
         _scanning = true;
@@ -66,7 +70,9 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         _duplicate = null;
       });
       final result = await ref.read(customersRepoProvider).scanDocument(
-            filePath: f.path,
+            filePath: kIsWeb ? null : f.path,
+            fileBytes: bytes,
+            fileName: f.name,
             type: 'cin',
           );
       _applyScanFields(result);
@@ -418,7 +424,9 @@ class _ScanCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: AspectRatio(
                     aspectRatio: 16 / 10,
-                    child: Image.file(File(photoPath!), fit: BoxFit.cover),
+                    child: kIsWeb
+                        ? Image.network(photoPath!, fit: BoxFit.cover)
+                        : Image.file(io.File(photoPath!), fit: BoxFit.cover),
                   ),
                 ),
                 if (!scanning)
