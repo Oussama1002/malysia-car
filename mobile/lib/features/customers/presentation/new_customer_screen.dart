@@ -1,11 +1,10 @@
-import 'dart:io' if (dart.library.html) 'dart:html' as io;
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/file_image.dart' as df_img;
 import '../../../core/widgets/module_scaffold.dart';
 import '../data/customer_dto.dart';
 import '../data/customers_repo.dart';
@@ -15,6 +14,8 @@ import 'customer_detail_screen.dart';
 /// date de naissance, nationalité et adresse — l'agent ne retape pas ce qui
 /// se lit sur la carte, et vérifie en même temps que le client n'est pas
 /// déjà dans la base.
+enum _CinSide { recto, verso }
+
 class NewCustomerScreen extends ConsumerStatefulWidget {
   const NewCustomerScreen({super.key});
 
@@ -32,11 +33,15 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   final _address = TextEditingController();
 
   DateTime? _birthDate;
-  String? _cinPhotoPath;
-  String? _scannedDocId;
-  CustomerDto? _duplicate;
-  bool _scanning = false;
+  // La CIN marocaine a un recto (nom, prenom, DOB, N° CIN) et un verso
+  // (adresse, parents). On scanne chaque face separement et on fusionne.
+  String? _rectoPath;
+  String? _versoPath;
+  String? _scannedDocIdRecto;
+  String? _scannedDocIdVerso;
+  _CinSide? _scanningSide;
   String? _scanNotice;
+  CustomerDto? _duplicate;
   bool _submitting = false;
   String? _error;
 
@@ -51,7 +56,10 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     super.dispose();
   }
 
-  Future<void> _scanCin({required ImageSource source}) async {
+  Future<void> _scanCin({
+    required ImageSource source,
+    required _CinSide side,
+  }) async {
     try {
       final picker = ImagePicker();
       final f = await picker.pickImage(
@@ -60,13 +68,16 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         imageQuality: 80,
       );
       if (f == null) return;
-      // Sur web, f.path est un blob URL inutilisable par dart:io ;
-      // on lit les octets et on les passe directement.
       final bytes = kIsWeb ? await f.readAsBytes() : null;
       setState(() {
-        _cinPhotoPath = f.path;
-        _scanning = true;
-        _scanNotice = 'OCR en cours… cela prend 10 à 30 secondes.';
+        if (side == _CinSide.recto) {
+          _rectoPath = f.path;
+        } else {
+          _versoPath = f.path;
+        }
+        _scanningSide = side;
+        _scanNotice =
+            'OCR ${side == _CinSide.recto ? 'recto' : 'verso'} en cours…';
         _duplicate = null;
       });
       final result = await ref.read(customersRepoProvider).scanDocument(
@@ -75,36 +86,55 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
             fileName: f.name,
             type: 'cin',
           );
-      _applyScanFields(result);
+      await _applyScanFields(result, side: side);
     } catch (e) {
       setState(() {
-        _scanNotice = 'Scan impossible : ${_shortError(e)}. Saisissez les champs manuellement.';
+        _scanNotice =
+            'Scan impossible : ${_shortError(e)}. Saisissez les champs manuellement.';
       });
     } finally {
-      if (mounted) setState(() => _scanning = false);
+      if (mounted) setState(() => _scanningSide = null);
     }
   }
 
-  Future<void> _applyScanFields(Map<String, dynamic> result) async {
+  Future<void> _applyScanFields(
+    Map<String, dynamic> result, {
+    required _CinSide side,
+  }) async {
     final fields = (result['fields'] as Map<String, dynamic>? ?? const {});
     final docId = result['document_id']?.toString();
-    _scannedDocId = docId;
-    String? firstName = _str(fields['first_name']);
-    String? lastName = _str(fields['last_name']);
-    final doc = _str(fields['document_number']) ?? _str(fields['national_id_number']);
+    if (side == _CinSide.recto) {
+      _scannedDocIdRecto = docId;
+    } else {
+      _scannedDocIdVerso = docId;
+    }
+    final firstName = _str(fields['first_name']);
+    final lastName = _str(fields['last_name']);
+    final doc = _str(fields['document_number']) ??
+        _str(fields['national_id_number']);
     final birth = _str(fields['date_of_birth']);
     final address = _str(fields['address']);
 
     setState(() {
-      if (firstName != null) _firstName.text = _titleCase(firstName);
-      if (lastName != null) _lastName.text = _titleCase(lastName);
-      if (doc != null) _cin.text = doc.toUpperCase();
+      // Les deux faces peuvent chacune renvoyer certains champs ; on ne les
+      // ecrase pas si l'agent a deja saisi quelque chose. L'adresse se lit
+      // en general sur le verso, les noms + CIN sur le recto.
+      if (firstName != null && _firstName.text.isEmpty) {
+        _firstName.text = _titleCase(firstName);
+      }
+      if (lastName != null && _lastName.text.isEmpty) {
+        _lastName.text = _titleCase(lastName);
+      }
+      if (doc != null && _cin.text.isEmpty) _cin.text = doc.toUpperCase();
       if (address != null && _address.text.isEmpty) _address.text = address;
-      if (birth != null) _birthDate = DateTime.tryParse(birth);
-      _scanNotice = 'Champs détectés — vérifiez avant d\'enregistrer.';
+      if (birth != null && _birthDate == null) {
+        _birthDate = DateTime.tryParse(birth);
+      }
+      final sideLabel = side == _CinSide.recto ? 'recto' : 'verso';
+      _scanNotice =
+          'Champs détectés ($sideLabel) — vérifiez avant d\'enregistrer.';
     });
 
-    // Si on reconnaît le CIN, on avertit : c'est peut-être un doublon.
     if (doc != null) {
       final existing = await ref.read(customersRepoProvider).lookup(cin: doc);
       if (existing != null && mounted) {
@@ -155,10 +185,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
       final created = await ref.read(customersRepoProvider).create(body: body);
       // Si l'OCR a produit un document, on le rattache au client créé pour
       // qu'il apparaisse dans son dossier KYC.
-      if (_scannedDocId != null) {
+      for (final docId in [_scannedDocIdRecto, _scannedDocIdVerso]) {
+        if (docId == null) continue;
         try {
           await ref.read(customersRepoProvider).linkDocument(
-                documentId: _scannedDocId!,
+                documentId: docId,
                 customerId: created.id,
               );
         } catch (_) {}
@@ -217,15 +248,20 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _ScanCard(
-                  photoPath: _cinPhotoPath,
-                  scanning: _scanning,
-                  notice: _scanNotice,
+                  title: 'Scanner la CIN — recto',
+                  subtitle:
+                      'Côté avec la photo et le numéro BH… (nom, prénom, date de naissance, CIN).',
+                  photoPath: _rectoPath,
+                  scanning: _scanningSide == _CinSide.recto,
+                  notice: _scanningSide == null ? _scanNotice : null,
                   duplicate: _duplicate,
-                  onCamera: () => _scanCin(source: ImageSource.camera),
-                  onGallery: () => _scanCin(source: ImageSource.gallery),
+                  onCamera: () => _scanCin(
+                      source: ImageSource.camera, side: _CinSide.recto),
+                  onGallery: () => _scanCin(
+                      source: ImageSource.gallery, side: _CinSide.recto),
                   onClear: () => setState(() {
-                    _cinPhotoPath = null;
-                    _scannedDocId = null;
+                    _rectoPath = null;
+                    _scannedDocIdRecto = null;
                     _scanNotice = null;
                     _duplicate = null;
                   }),
@@ -235,6 +271,25 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                       builder: (_) => CustomerDetailScreen(id: _duplicate!.id),
                     ));
                   },
+                ),
+                const SizedBox(height: 12),
+                _ScanCard(
+                  title: 'Scanner la CIN — verso',
+                  subtitle:
+                      "Côté avec l'adresse et les parents (adresse, état civil).",
+                  photoPath: _versoPath,
+                  scanning: _scanningSide == _CinSide.verso,
+                  notice: null,
+                  duplicate: null,
+                  onCamera: () => _scanCin(
+                      source: ImageSource.camera, side: _CinSide.verso),
+                  onGallery: () => _scanCin(
+                      source: ImageSource.gallery, side: _CinSide.verso),
+                  onClear: () => setState(() {
+                    _versoPath = null;
+                    _scannedDocIdVerso = null;
+                  }),
+                  onOpenDuplicate: () {},
                 ),
                 const SizedBox(height: 12),
                 ModuleCard(
@@ -376,6 +431,8 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
 
 class _ScanCard extends StatelessWidget {
   const _ScanCard({
+    required this.title,
+    required this.subtitle,
     required this.photoPath,
     required this.scanning,
     required this.notice,
@@ -386,6 +443,8 @@ class _ScanCard extends StatelessWidget {
     required this.onOpenDuplicate,
   });
 
+  final String title;
+  final String subtitle;
   final String? photoPath;
   final bool scanning;
   final String? notice;
@@ -401,19 +460,19 @@ class _ScanCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.credit_card, size: 18, color: Colors.black54),
-              SizedBox(width: 6),
-              Text('Scanner la CIN',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              const Icon(Icons.credit_card, size: 18, color: Colors.black54),
+              const SizedBox(width: 6),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Prenez une photo nette de la carte, recto. L\'OCR remplit les champs ci-dessous.',
-            style: TextStyle(color: Colors.black54, fontSize: 12),
+          Text(
+            subtitle,
+            style: const TextStyle(color: Colors.black54, fontSize: 12),
           ),
           const SizedBox(height: 12),
           if (photoPath != null) ...[
@@ -424,9 +483,7 @@ class _ScanCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: AspectRatio(
                     aspectRatio: 16 / 10,
-                    child: kIsWeb
-                        ? Image.network(photoPath!, fit: BoxFit.cover)
-                        : Image.file(io.File(photoPath!), fit: BoxFit.cover),
+                    child: df_img.fileImage(photoPath!, fit: BoxFit.cover),
                   ),
                 ),
                 if (!scanning)
