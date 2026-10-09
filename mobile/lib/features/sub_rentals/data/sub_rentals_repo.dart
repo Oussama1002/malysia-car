@@ -52,15 +52,18 @@ class SubRentalsRepo {
     return SubRentalProfitabilityDto.fromJson(m);
   }
 
-  /// Les paiements renvoient `{payments, total_paid, remaining_balance,
-  /// payment_status}` à plat (pas sous `data`), donc on tape l'endpoint via
-  /// Dio directement.
+  /// Les paiements sont servis par ApiResponse::success(...) donc enveloppes
+  /// dans `{"data": {payments, total_paid, remaining_balance, payment_status}}`.
+  /// Un vieux build regardait a plat → la liste restait toujours vide, meme
+  /// quand le web en affichait plusieurs. On deballe maintenant.
   Future<SubRentalPaymentsPage> payments(String id) async {
     final res = await _api.raw.get('/sub-rentals/$id/payments');
-    final body = res.data;
-    final map = body is Map
-        ? body.map((k, v) => MapEntry(k.toString(), v))
+    final root = res.data is Map
+        ? (res.data as Map).map((k, v) => MapEntry(k.toString(), v))
         : <String, dynamic>{};
+    final map = root['data'] is Map
+        ? (root['data'] as Map).map((k, v) => MapEntry(k.toString(), v))
+        : root;
     final list = map['payments'];
     final payments = list is List
         ? list
