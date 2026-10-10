@@ -1,7 +1,10 @@
+import 'dart:io' show File;
 import 'dart:math';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_client.dart';
@@ -104,7 +107,10 @@ class _NewContractFromReservationScreenState
   final List<_PaymentEntry> _payments = [
     _PaymentEntry(id: '${DateTime.now().millisecondsSinceEpoch}')
   ];
-  final List<String> _annexes = []; // noms des documents « uploadés » (local)
+  // Annexes : chaque libellé peut porter UNE pièce jointe (photo ou fichier
+  // image choisi dans la galerie). Les clés sont stables pour que le mapping
+  // vers la catégorie backend reste prédictible (voir `_annexCategoryFor`).
+  final Map<String, XFile> _annexFiles = <String, XFile>{};
 
   @override
   void dispose() {
@@ -240,7 +246,40 @@ class _NewContractFromReservationScreenState
                 })
             .toList(),
       };
-      await ref.read(apiClientProvider).postData('/contracts', body: payload);
+      final created = await ref
+          .read(apiClientProvider)
+          .postData('/contracts', body: payload);
+      final contractId = created is Map
+          ? (created['id'] ?? created['contract']?['id'])?.toString()
+          : null;
+      // Upload des annexes : non bloquant pour la création du contrat. On
+      // remonte un snack si une pièce n'a pas pu partir, pour que l'agent
+      // sache qu'il reste à les charger depuis la fiche contrat.
+      if (contractId != null && contractId.isNotEmpty && _annexFiles.isNotEmpty) {
+        final failed = <String>[];
+        for (final entry in _annexFiles.entries) {
+          try {
+            final multipart = await MultipartFile.fromFile(entry.value.path);
+            await ref.read(apiClientProvider).raw.post(
+                  '/entities/contract/$contractId/documents',
+                  data: FormData.fromMap({
+                    'file': multipart,
+                    'category': _annexCategoryFor(entry.key),
+                    'title': entry.key,
+                  }),
+                );
+          } catch (_) {
+            failed.add(entry.key);
+          }
+        }
+        if (failed.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(
+                    'Contrat créé. ${failed.length} annexe(s) n\'ont pas pu être envoyée(s) : ${failed.join(', ')}.')),
+          );
+        }
+      }
       ref.invalidate(contractsListProvider);
       if (widget.reservationId != null) {
         ref.invalidate(reservationDetailProvider(widget.reservationId!));
@@ -898,55 +937,138 @@ class _NewContractFromReservationScreenState
   }
 
   Widget _uploadZone(String label) {
-    final added = _annexes.contains(label);
-    return InkWell(
-      onTap: () {
-        setState(() {
-          if (added) {
-            _annexes.remove(label);
-          } else {
-            _annexes.add(label);
-          }
-        });
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: added ? const Color(0xFFECFDF5) : Colors.white,
-          border: Border.all(
-            color: added
-                ? const Color(0xFF059669)
-                : Colors.grey.shade300,
-            style: BorderStyle.solid,
+    final file = _annexFiles[label];
+    final added = file != null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: added ? const Color(0xFFECFDF5) : Colors.white,
+        border: Border.all(
+          color: added ? const Color(0xFF059669) : Colors.grey.shade300,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                added ? Icons.check_circle : Icons.cloud_upload_outlined,
+                color: added ? const Color(0xFF059669) : Colors.black45,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(label,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 12.5)),
+              ),
+              if (added)
+                IconButton(
+                  tooltip: 'Supprimer',
+                  onPressed: () => setState(() => _annexFiles.remove(label)),
+                  icon:
+                      const Icon(Icons.close, size: 16, color: Colors.redAccent),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                ),
+            ],
           ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              added ? Icons.check_circle : Icons.cloud_upload_outlined,
-              color: added ? const Color(0xFF059669) : Colors.black45,
-              size: 18,
+          if (added) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 16 / 10,
+                child: Image.file(File(file.path), fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFFF1F5F9),
+                        child: const Center(
+                            child: Icon(Icons.description_outlined,
+                                color: Colors.black45, size: 36)))),
+              ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(label,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 12.5)),
-            ),
-            Text(added ? 'Ajouté' : 'Choisir',
-                style: TextStyle(
-                    color: added
-                        ? const Color(0xFF059669)
-                        : const Color(0xFF4F46E5),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900)),
           ],
-        ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _pickAnnex(label, ImageSource.camera),
+                  icon: const Icon(Icons.photo_camera, size: 14),
+                  label: Text(added ? 'Reprendre' : 'Photo',
+                      style: const TextStyle(fontSize: 11.5)),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(34),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _pickAnnex(label, ImageSource.gallery),
+                  icon: const Icon(Icons.image_outlined, size: 14),
+                  label: Text(added ? 'Remplacer' : 'Fichier',
+                      style: const TextStyle(fontSize: 11.5)),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(34),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _pickAnnex(String label, ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final f = await picker.pickImage(
+          source: source, maxWidth: 2000, imageQuality: 85);
+      if (f != null) setState(() => _annexFiles[label] = f);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(source == ImageSource.camera
+                ? "Impossible d'ouvrir la caméra."
+                : "Impossible d'ouvrir la galerie.")),
+      );
+    }
+  }
+
+  /// Catégorie posée sur l'EntityAttachment côté backend, pour que l'audit
+  /// sache à quoi correspond chaque document (CIN du client, chèque, photo
+  /// véhicule avant livraison, etc.).
+  String _annexCategoryFor(String label) {
+    switch (label) {
+      case "Pièce d'identité (CIN)":
+        return 'cin';
+      case 'Permis de conduire':
+        return 'driving_license';
+      case 'Justificatif de revenus / CNSS':
+        return 'income_proof';
+      case 'Bilans financiers (3 derniers exercices)':
+        return 'financial_statements';
+      case 'Photo / scan du chèque':
+        return 'cheque';
+      case 'Avant':
+      case 'Arrière':
+      case 'Côté gauche':
+      case 'Côté droit':
+      case 'Intérieur / tableau de bord':
+        return 'handover_photo';
+      default:
+        return 'other';
+    }
   }
 
   Widget _reviewStep() {
@@ -989,8 +1111,8 @@ class _NewContractFromReservationScreenState
           _payments.map((p) => _paymentMethodLabels[p.method] ?? p.method).join(' + ')),
       if (_paymentTerms.text.isNotEmpty)
         ('Conditions', _paymentTerms.text),
-      if (_annexes.isNotEmpty)
-        ('Annexes', '${_annexes.length} document(s)'),
+      if (_annexFiles.isNotEmpty)
+        ('Annexes', '${_annexFiles.length} document(s)'),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
