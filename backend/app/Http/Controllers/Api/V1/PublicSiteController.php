@@ -40,7 +40,14 @@ class PublicSiteController extends Controller
                     'fuel' => $v->fuel_type,
                     'transmission' => $v->transmission,
                     'categorie' => $v->categorie,
+                    // `price_per_day` reste le palier 1-2 j (= daily_rental_price)
+                    // pour la rétrocompatibilité des composants qui n'ont pas
+                    // encore été portés sur les paliers.
                     'price_per_day' => $v->daily_rental_price !== null ? (float) $v->daily_rental_price : null,
+                    // `price_from_per_day` est le minimum parmi tous les paliers
+                    // définis — c'est ce que le site public affiche en « À partir
+                    // de X MAD/j » pour inciter le visiteur sur la durée longue.
+                    'price_from_per_day' => $v->minTierDailyPrice(),
                     'photo_url' => $v->photo_file_id ? '/api/v1/files/'.$v->photo_file_id : null,
                 ])
                 ->values()

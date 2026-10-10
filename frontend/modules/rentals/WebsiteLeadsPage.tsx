@@ -99,7 +99,26 @@ interface MissingPriceVehicle {
   categorie?: string | null;
   /** Chemin relatif renvoyé par l'API (ex. `/api/v1/files/<uuid>`). */
   photo_url?: string | null;
+  /** Prix /jour par palier (clés : tier_1_2, tier_3_6, …). */
+  rental_price_tiers?: Record<string, number> | null;
 }
+
+interface TierSchemaItem {
+  key: string;
+  min_days: number;
+  max_days: number | null;
+  label: string;
+}
+
+/** Les 5 paliers prédéfinis — doivent rester alignés avec `Vehicle::RENTAL_PRICE_TIERS`
+ *  côté backend. Le fallback local sert si l'API ne renvoie pas la grille. */
+const DEFAULT_TIER_SCHEMA: TierSchemaItem[] = [
+  { key: 'tier_1_2',   min_days: 1,  max_days: 2,    label: '1-2 jours' },
+  { key: 'tier_3_6',   min_days: 3,  max_days: 6,    label: '3-6 jours' },
+  { key: 'tier_7_14',  min_days: 7,  max_days: 14,   label: '7-14 jours' },
+  { key: 'tier_15_29', min_days: 15, max_days: 29,   label: '15-29 jours' },
+  { key: 'tier_30',    min_days: 30, max_days: null, label: '30 jours et +' },
+];
 
 /** URL absolue de la photo à partir du chemin relatif renvoyé par l'API. */
 function photoUrl(path: string | null | undefined): string | null {
@@ -140,9 +159,10 @@ export const WebsiteLeadsPage: React.FC = () => {
   const missingPricesQ = useQuery({
     queryKey: ['website-leads', 'missing-prices'],
     queryFn: () =>
-      apiClient<{ data: MissingPriceVehicle[]; meta?: { total: number } }>(
-        '/v1/website-leads/missing-prices',
-      ),
+      apiClient<{
+        data: MissingPriceVehicle[];
+        meta?: { total: number; tier_schema?: TierSchemaItem[] };
+      }>('/v1/website-leads/missing-prices'),
   });
 
   const updateM = useMutation({
@@ -155,10 +175,10 @@ export const WebsiteLeadsPage: React.FC = () => {
   });
 
   const setPriceM = useMutation({
-    mutationFn: (vars: { vehicleId: string; price: number }) =>
+    mutationFn: (vars: { vehicleId: string; tiers: Record<string, number> }) =>
       apiClient(`/v1/website-leads/vehicles/${vars.vehicleId}/price`, {
         method: 'PATCH',
-        body: JSON.stringify({ daily_rental_price: vars.price }),
+        body: JSON.stringify({ tiers: vars.tiers }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['website-leads', 'missing-prices'] });
@@ -233,7 +253,8 @@ export const WebsiteLeadsPage: React.FC = () => {
         <PricingTab
           vehicles={missing}
           loading={missingPricesQ.isLoading}
-          onSetPrice={(vehicleId, price) => setPriceM.mutateAsync({ vehicleId, price })}
+          tierSchema={missingPricesQ.data?.meta?.tier_schema ?? DEFAULT_TIER_SCHEMA}
+          onSetPrice={(vehicleId, tiers) => setPriceM.mutateAsync({ vehicleId, tiers })}
           pending={setPriceM.isPending}
         />
       )}
@@ -408,9 +429,10 @@ export const WebsiteLeadsPage: React.FC = () => {
 const PricingTab: React.FC<{
   vehicles: MissingPriceVehicle[];
   loading: boolean;
-  onSetPrice: (vehicleId: string, price: number) => Promise<unknown>;
+  tierSchema: TierSchemaItem[];
+  onSetPrice: (vehicleId: string, tiers: Record<string, number>) => Promise<unknown>;
   pending: boolean;
-}> = ({ vehicles, loading, onSetPrice, pending }) => {
+}> = ({ vehicles, loading, tierSchema, onSetPrice, pending }) => {
   if (loading) {
     return <div className="df-card df-card__body text-sm text-slate-500">Chargement…</div>;
   }
@@ -429,11 +451,17 @@ const PricingTab: React.FC<{
           {vehicles.length} véhicule{vehicles.length > 1 ? 's' : ''} apparaissent sur le site sans tarif journalier.
         </div>
         <div className="mt-0.5 text-xs">
-          Les visiteurs voient « Tarif sur demande ». Renseignez le prix pour qu'ils puissent décider sans vous appeler.
+          Les visiteurs voient « Tarif sur demande ». Cliquez sur <strong>Tarif</strong> pour configurer les prix par durée — un prix /jour pour 1-2 j, puis les paliers plus longs si vous voulez remiser.
         </div>
       </div>
       {vehicles.map((v) => (
-        <PricingRow key={v.id} v={v} onSetPrice={onSetPrice} pending={pending} />
+        <PricingRow
+          key={v.id}
+          v={v}
+          tierSchema={tierSchema}
+          onSetPrice={onSetPrice}
+          pending={pending}
+        />
       ))}
     </div>
   );
@@ -441,80 +469,222 @@ const PricingTab: React.FC<{
 
 const PricingRow: React.FC<{
   v: MissingPriceVehicle;
-  onSetPrice: (vehicleId: string, price: number) => Promise<unknown>;
+  tierSchema: TierSchemaItem[];
+  onSetPrice: (vehicleId: string, tiers: Record<string, number>) => Promise<unknown>;
   pending: boolean;
-}> = ({ v, onSetPrice, pending }) => {
-  const [price, setPrice] = useState('');
+}> = ({ v, tierSchema, onSetPrice, pending }) => {
+  const [open, setOpen] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const label = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
   const sub = [v.year, v.categorie, v.fuel, v.transmission].filter(Boolean).join(' · ');
-  const submit = async () => {
-    const n = Number(price);
-    if (!(n > 0)) return;
-    await onSetPrice(v.id, n);
-    setSavedAt(Date.now());
-    setPrice('');
-  };
   const img = photoUrl(v.photo_url);
   return (
-    <article className="df-card">
-      <div className="df-card__body flex flex-wrap items-center gap-4">
-        <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200">
-          {img ? (
-            <img
-              src={img}
-              alt={label}
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                // Pas de photo pour ce vehicule → logo DriveFlow.
-                (e.currentTarget as HTMLImageElement).src = '/logo.png';
-                (e.currentTarget as HTMLImageElement).className =
-                  'h-10 w-auto object-contain opacity-80';
-              }}
-            />
-          ) : (
-            <img
-              src="/logo.png"
-              alt="DriveFlow"
-              className="h-10 w-auto object-contain opacity-80"
-            />
+    <>
+      <article className="df-card">
+        <div className="df-card__body flex flex-wrap items-center gap-4">
+          <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200">
+            {img ? (
+              <img
+                src={img}
+                alt={label}
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/logo.png';
+                  (e.currentTarget as HTMLImageElement).className =
+                    'h-10 w-auto object-contain opacity-80';
+                }}
+              />
+            ) : (
+              <img
+                src="/logo.png"
+                alt="DriveFlow"
+                className="h-10 w-auto object-contain opacity-80"
+              />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-black text-slate-900">{label}</div>
+            <div className="text-xs text-slate-500">
+              {v.registration ? <span className="font-mono">{v.registration}</span> : null}
+              {v.registration && sub ? ' · ' : null}
+              {sub}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              disabled={pending}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-40"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Tarif
+            </button>
+            {savedAt && (
+              <span className="text-xs font-semibold text-emerald-600">✓ Enregistré</span>
+            )}
+          </div>
+        </div>
+      </article>
+      {open && (
+        <TierPricingModal
+          v={v}
+          label={label}
+          tierSchema={tierSchema}
+          pending={pending}
+          onClose={() => setOpen(false)}
+          onSave={async (tiers) => {
+            await onSetPrice(v.id, tiers);
+            setSavedAt(Date.now());
+            setOpen(false);
+          }}
+        />
+      )}
+    </>
+  );
+};
+
+/* ────────────────────────────────────────────────────────────
+   Popup « Tarif par palier de durée »
+   ──────────────────────────────────────────────────────────── */
+const TierPricingModal: React.FC<{
+  v: MissingPriceVehicle;
+  label: string;
+  tierSchema: TierSchemaItem[];
+  pending: boolean;
+  onClose: () => void;
+  onSave: (tiers: Record<string, number>) => Promise<void>;
+}> = ({ v, label, tierSchema, pending, onClose, onSave }) => {
+  // Chaque palier est une string (champ libre). On parse à la volée pour
+  // calculer le prix de départ, et à la soumission pour construire le payload.
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const seed: Record<string, string> = {};
+    for (const t of tierSchema) {
+      const existing = v.rental_price_tiers?.[t.key];
+      seed[t.key] = existing != null ? String(existing) : '';
+    }
+    return seed;
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const base = Number(values.tier_1_2);
+  const canSave = base > 0 && !pending;
+
+  // « À partir de » : plus petit prix /jour parmi les paliers remplis, pour
+  // montrer en live ce que le visiteur du site verra.
+  const fromPrice = (() => {
+    const nums = tierSchema
+      .map((t) => Number(values[t.key]))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    return nums.length > 0 ? Math.min(...nums) : null;
+  })();
+
+  const submit = async () => {
+    setError(null);
+    const tiers: Record<string, number> = {};
+    for (const t of tierSchema) {
+      const n = Number(values[t.key]);
+      if (Number.isFinite(n) && n > 0) {
+        tiers[t.key] = n;
+      }
+    }
+    if (!tiers.tier_1_2) {
+      setError('Le palier 1-2 jours est obligatoire.');
+      return;
+    }
+    try {
+      await onSave(tiers);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Enregistrement impossible');
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:items-center"
+      onClick={() => !pending && onClose()}
+    >
+      <div
+        className="my-4 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-slate-100 px-6 py-5">
+          <div className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
+            Configurer le tarif
+          </div>
+          <h3 className="mt-1 text-base font-black text-slate-900">{label}</h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Un prix /jour pour chaque durée. Seul le palier <strong>1-2 jours</strong> est obligatoire ; laissez les autres vides si vous ne faites pas de remise sur la durée.
+          </p>
+        </div>
+
+        <div className="space-y-2 px-6 py-5">
+          {tierSchema.map((t) => {
+            const required = t.key === 'tier_1_2';
+            return (
+              <label key={t.key} className="flex items-center gap-3">
+                <div className="min-w-[7.5rem] text-sm font-bold text-slate-700">
+                  {t.label}
+                  {required && <span className="ml-1 text-rose-600">*</span>}
+                </div>
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    className="df-input w-full pr-16"
+                    placeholder={required ? 'Obligatoire' : 'Optionnel'}
+                    value={values[t.key] ?? ''}
+                    onChange={(e) =>
+                      setValues((s) => ({ ...s, [t.key]: e.target.value }))
+                    }
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                    MAD / j
+                  </span>
+                </div>
+              </label>
+            );
+          })}
+
+          {fromPrice != null && (
+            <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+              <strong>Aperçu site :</strong>{' '}
+              {fromPrice < base
+                ? `« À partir de ${fromPrice.toLocaleString('fr-MA')} MAD / j »`
+                : `« ${base.toLocaleString('fr-MA')} MAD / j »`}
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">
+              {error}
+            </div>
           )}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-black text-slate-900">{label}</div>
-          <div className="text-xs text-slate-500">
-            {v.registration ? <span className="font-mono">{v.registration}</span> : null}
-            {v.registration && sub ? ' · ' : null}
-            {sub}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <input
-              type="number"
-              min={0}
-              className="df-input w-32 pr-14"
-              placeholder="Tarif"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-            />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">MAD/j</span>
-          </div>
+
+        <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
-            onClick={submit}
-            disabled={pending || !(Number(price) > 0)}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-40"
+            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+            onClick={onClose}
+            disabled={pending}
           >
-            {pending ? 'Enregistrement…' : 'Enregistrer'}
+            Annuler
           </button>
-          {savedAt && (
-            <span className="text-xs font-semibold text-emerald-600">✓ Enregistré</span>
-          )}
+          <button
+            type="button"
+            className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-40"
+            onClick={submit}
+            disabled={!canSave}
+          >
+            {pending ? 'Enregistrement…' : 'Enregistrer les tarifs'}
+          </button>
         </div>
       </div>
-    </article>
+    </div>
   );
 };
 

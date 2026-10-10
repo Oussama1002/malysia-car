@@ -191,9 +191,20 @@
 
     var price = document.createElement('div');
     price.className = 'car__price';
-    if (v.price_per_day) {
+    // `price_from_per_day` est le prix /jour le plus bas parmi tous les paliers
+    // (ex. palier 30 j et +). Quand il est plus bas que le tarif « jour simple »,
+    // on l'affiche sous forme « À partir de X MAD/j » pour accrocher le visiteur
+    // sur les durées longues. Sinon, on retombe sur l'ancien affichage.
+    var dayPrice = v.price_per_day ? Number(v.price_per_day) : null;
+    var fromPrice = v.price_from_per_day ? Number(v.price_from_per_day) : null;
+    if (dayPrice && fromPrice && fromPrice < dayPrice) {
       price.innerHTML =
-        '<span class="car__priceValue">' + Number(v.price_per_day).toLocaleString('fr-MA') + ' MAD</span>' +
+        '<span class="car__priceLabel">À partir de</span>' +
+        '<span class="car__priceValue">' + fromPrice.toLocaleString('fr-MA') + ' MAD</span>' +
+        '<span class="car__priceLabel">/ jour</span>';
+    } else if (dayPrice) {
+      price.innerHTML =
+        '<span class="car__priceValue">' + dayPrice.toLocaleString('fr-MA') + ' MAD</span>' +
         '<span class="car__priceLabel">/ jour</span>';
     } else {
       price.innerHTML =

@@ -67,11 +67,21 @@ class WebsiteLeadController extends Controller
                 'transmission' => $v->transmission,
                 'categorie' => $v->categorie,
                 'photo_url' => $v->photo_file_id ? '/api/v1/files/'.$v->photo_file_id : null,
+                'rental_price_tiers' => $v->rental_price_tiers ?? [],
             ])
             ->values()
             ->all();
 
-        return ApiResponse::success($rows, ['total' => count($rows)]);
+        return ApiResponse::success($rows, [
+            'total' => count($rows),
+            // On expose la grille des paliers pour que le popup web n'ait
+            // pas à la dupliquer — un seul endroit où elle est définie.
+            'tier_schema' => array_map(
+                fn ($k, $v) => ['key' => $k, 'min_days' => $v['min_days'], 'max_days' => $v['max_days'], 'label' => $v['label']],
+                array_keys(Vehicle::RENTAL_PRICE_TIERS),
+                array_values(Vehicle::RENTAL_PRICE_TIERS),
+            ),
+        ]);
     }
 
     /**
@@ -82,11 +92,54 @@ class WebsiteLeadController extends Controller
      */
     public function setPrice(Request $request, Vehicle $vehicle): JsonResponse
     {
-        $data = $request->validate([
-            'daily_rental_price' => ['required', 'numeric', 'min:0'],
-        ]);
+        // Deux modes de saisie :
+        //  1. legacy : juste `daily_rental_price` (ancien formulaire inline).
+        //  2. nouveau : `tiers` = {tier_1_2: number, tier_3_6?: number, …}.
+        //     Le palier 1-2 j est obligatoire ; les autres sont optionnels et
+        //     retombent sur le palier précédent côté calcul de devis.
+        $rules = [
+            'daily_rental_price' => ['nullable', 'numeric', 'min:0'],
+            'tiers' => ['nullable', 'array'],
+        ];
+        foreach (array_keys(Vehicle::RENTAL_PRICE_TIERS) as $key) {
+            $rules['tiers.'.$key] = ['nullable', 'numeric', 'min:0'];
+        }
+        $data = $request->validate($rules);
 
-        $vehicle->daily_rental_price = $data['daily_rental_price'];
+        $tiers = $data['tiers'] ?? null;
+        if (is_array($tiers)) {
+            // Nettoyage : on garde uniquement les clés connues avec une valeur
+            // numérique > 0, pour ne pas écrire de null/0 trompeurs en base.
+            $clean = [];
+            foreach (array_keys(Vehicle::RENTAL_PRICE_TIERS) as $key) {
+                $v = $tiers[$key] ?? null;
+                if (is_numeric($v) && (float) $v > 0) {
+                    $clean[$key] = (float) $v;
+                }
+            }
+            if (! isset($clean['tier_1_2'])) {
+                return response()->json([
+                    'message' => 'Le palier 1-2 jours est obligatoire.',
+                    'errors' => ['tiers.tier_1_2' => ['Le prix du palier 1-2 jours est obligatoire.']],
+                ], 422);
+            }
+            $vehicle->rental_price_tiers = $clean;
+            // On aligne le tarif de base sur le palier 1-2 j pour que tout le
+            // code existant (devis, missing-prices, PublicSite) reste cohérent
+            // sans refactor global.
+            $vehicle->daily_rental_price = $clean['tier_1_2'];
+        } elseif (array_key_exists('daily_rental_price', $data) && $data['daily_rental_price'] !== null) {
+            $vehicle->daily_rental_price = $data['daily_rental_price'];
+            // En mode legacy : on efface les paliers pour que « À partir de »
+            // ne contredise pas le prix de base.
+            $vehicle->rental_price_tiers = null;
+        } else {
+            return response()->json([
+                'message' => 'Prix manquant.',
+                'errors' => ['daily_rental_price' => ['Prix manquant.']],
+            ], 422);
+        }
+
         $vehicle->save();
 
         Cache::forget('public_site.vehicles');
@@ -97,6 +150,7 @@ class WebsiteLeadController extends Controller
         return ApiResponse::success([
             'id' => $vehicle->id,
             'daily_rental_price' => (float) $vehicle->daily_rental_price,
+            'rental_price_tiers' => $vehicle->rental_price_tiers,
         ]);
     }
 
