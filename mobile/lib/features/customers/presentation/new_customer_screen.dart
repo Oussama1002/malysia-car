@@ -1,9 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/widgets/file_image.dart' as df_img;
 import '../../../core/widgets/module_scaffold.dart';
 import '../data/customer_dto.dart';
@@ -72,7 +74,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   final _address = TextEditingController();
   final _city = TextEditingController();
 
-  // OCR
+  // OCR — recto (déclenche l'OCR, remplit les champs)
   String? _cinPhotoPath;
   String? _permisPhotoPath;
   String? _cinDocId;
@@ -80,6 +82,12 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   _ScanDoc? _scanningDoc;
   String? _scanNotice;
   CustomerDto? _duplicate;
+
+  // Verso (pas d'OCR) : juste joint comme pièce au client après création
+  // via POST /entities/customer/{id}/documents. On stocke le chemin pour
+  // pouvoir prévisualiser dans l'UI.
+  String? _cinBackPath;
+  String? _permisBackPath;
 
   bool _submitting = false;
   String? _error;
@@ -326,6 +334,37 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
               );
         } catch (_) {}
       }
+      // Verso des pièces : upload direct comme pièce rattachée au client.
+      // Non bloquant — si l'upload rate on log en snack, le client est créé.
+      final backs = <(String path, String category, String title)>[
+        if (_cinBackPath != null)
+          (_cinBackPath!, 'cin_back', 'CIN — Verso'),
+        if (_permisBackPath != null)
+          (_permisBackPath!, 'driving_license_back', 'Permis — Verso'),
+      ];
+      final failedBacks = <String>[];
+      for (final b in backs) {
+        try {
+          final multipart = await MultipartFile.fromFile(b.$1);
+          await ref.read(apiClientProvider).raw.post(
+                '/entities/customer/${created.id}/documents',
+                data: FormData.fromMap({
+                  'file': multipart,
+                  'category': b.$2,
+                  'title': b.$3,
+                }),
+              );
+        } catch (_) {
+          failedBacks.add(b.$3);
+        }
+      }
+      if (failedBacks.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Client créé. Verso non envoyé : ${failedBacks.join(', ')} — réessayez depuis la fiche.')),
+        );
+      }
       ref.invalidate(customersListProvider);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -531,12 +570,14 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           const Text(
-            "Prenez la CIN puis le permis. Les champs détectés remplissent le formulaire ci-dessous.",
+            "Prenez le recto de chaque pièce (CIN puis permis) : l'OCR remplit le formulaire. Ajoutez ensuite le verso — il sera attaché au dossier client.",
             style: TextStyle(color: Colors.black54, fontSize: 12),
           ),
           const SizedBox(height: 10),
+
+          // CIN — Recto (OCR)
           _ScanSlot(
-            title: 'CIN',
+            title: 'CIN — Recto',
             photoPath: _cinPhotoPath,
             scanning: _scanningDoc == _ScanDoc.cin,
             notice: _scanningDoc == null ? _scanNotice : null,
@@ -557,9 +598,22 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
               ));
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          _BackSlot(
+            title: 'CIN — Verso',
+            photoPath: _cinBackPath,
+            onCamera: () =>
+                _pickBack(ImageSource.camera, _ScanDoc.cin),
+            onGallery: () =>
+                _pickBack(ImageSource.gallery, _ScanDoc.cin),
+            onClear: () => setState(() => _cinBackPath = null),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Permis — Recto (OCR)
           _ScanSlot(
-            title: 'Permis de conduire',
+            title: 'Permis — Recto',
             photoPath: _permisPhotoPath,
             scanning: _scanningDoc == _ScanDoc.permis,
             notice: null,
@@ -574,9 +628,42 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
             }),
             onOpenDuplicate: () {},
           ),
+          const SizedBox(height: 6),
+          _BackSlot(
+            title: 'Permis — Verso',
+            photoPath: _permisBackPath,
+            onCamera: () =>
+                _pickBack(ImageSource.camera, _ScanDoc.permis),
+            onGallery: () =>
+                _pickBack(ImageSource.gallery, _ScanDoc.permis),
+            onClear: () => setState(() => _permisBackPath = null),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _pickBack(ImageSource source, _ScanDoc doc) async {
+    try {
+      final picker = ImagePicker();
+      final f = await picker.pickImage(
+          source: source, maxWidth: 2000, imageQuality: 85);
+      if (f == null) return;
+      setState(() {
+        if (doc == _ScanDoc.cin) {
+          _cinBackPath = f.path;
+        } else {
+          _permisBackPath = f.path;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(source == ImageSource.camera
+            ? "Impossible d'ouvrir la caméra."
+            : "Impossible d'ouvrir la galerie.")),
+      );
+    }
   }
 
   Widget _particulierCard() {
@@ -970,6 +1057,108 @@ class _ScanSlot extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Zone « Verso » d'une pièce (CIN / Permis) : prise photo ou galerie, pas
+/// d'OCR. L'image est attachée au dossier client après la création via
+/// POST /entities/customer/{id}/documents.
+class _BackSlot extends StatelessWidget {
+  const _BackSlot({
+    required this.title,
+    required this.photoPath,
+    required this.onCamera,
+    required this.onGallery,
+    required this.onClear,
+  });
+
+  final String title;
+  final String? photoPath;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoPath != null;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: hasPhoto ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasPhoto
+              ? const Color(0xFF059669)
+              : Theme.of(context).dividerColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(hasPhoto ? Icons.check_circle : Icons.flip_to_back,
+                  size: 16,
+                  color: hasPhoto ? const Color(0xFF059669) : Colors.black45),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w800)),
+              ),
+              if (hasPhoto)
+                IconButton(
+                  tooltip: 'Supprimer',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close,
+                      size: 16, color: Colors.redAccent),
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
+                ),
+            ],
+          ),
+          if (hasPhoto) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 16 / 10,
+                child: df_img.fileImage(photoPath!, fit: BoxFit.cover),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onCamera,
+                  icon: const Icon(Icons.photo_camera, size: 14),
+                  label: Text(hasPhoto ? 'Reprendre' : 'Photo',
+                      style: const TextStyle(fontSize: 11.5)),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(34),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onGallery,
+                  icon: const Icon(Icons.image_outlined, size: 14),
+                  label: Text(hasPhoto ? 'Remplacer' : 'Fichier',
+                      style: const TextStyle(fontSize: 11.5)),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(34),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
