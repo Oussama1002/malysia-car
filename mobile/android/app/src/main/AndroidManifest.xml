@@ -1,8 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Scanner CIN / Permis via image_picker : il faut déclarer la caméra
+         pour que le plugin puisse demander l'autorisation à l'exécution sur
+         Android 6+, sinon l'intent capture reste silencieuse. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- `required="false"` : l'app reste installable sur les rares appareils
+         sans appareil photo ; la caméra sera juste indisponible. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Choisir une photo dans la galerie — ancien et nouveau modèle de
+         permissions médias (Android 13+). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
     <application
-        android:label="driveflow_mobile"
+        android:label="DriveFlow"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -40,6 +56,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Nécessaire sur Android 11+ pour que `image_picker` puisse résoudre
+             l'intent de capture et déclencher l'app Appareil photo. Sans cela
+             le picker renvoyait `null` sans ouvrir la caméra. -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE"/>
         </intent>
     </queries>
 </manifest>
