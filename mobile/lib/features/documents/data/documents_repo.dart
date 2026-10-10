@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
@@ -9,24 +11,46 @@ class DocumentsRepo {
   final ApiClient _api;
 
   /// Repository central (/v1/documents) avec les mêmes filtres que le web.
+  /// NB : le backend plafonne `per_page` à 100, inutile d'en demander plus.
   Future<List<DocumentDto>> list(DocumentFilters f) async {
-    final q = <String, dynamic>{'per_page': 200};
+    final q = <String, dynamic>{'per_page': 100};
     if (f.entityType.isNotEmpty) q['entity_type'] = f.entityType;
     if (f.category.isNotEmpty) q['category'] = f.category;
     if (f.expiryStatus.isNotEmpty) q['expiry_status'] = f.expiryStatus;
     if (f.uploadedBy.isNotEmpty) q['uploaded_by'] = f.uploadedBy;
     if (f.dateFrom.isNotEmpty) q['date_from'] = f.dateFrom;
     if (f.dateTo.isNotEmpty) q['date_to'] = f.dateTo;
-    final res = await _api.raw.get('/documents', queryParameters: q);
-    final data = (res.data is Map && (res.data as Map).containsKey('data'))
-        ? (res.data as Map)['data']
-        : res.data;
-    if (data is! List) return const [];
-    return data
-        .whereType<Map>()
-        .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
-        .map(DocumentDto.fromJson)
-        .toList();
+    // On passe par `getData` (comme `expiring()`) pour bénéficier du
+    // déballage automatique de l'enveloppe `{data: ...}`.
+    try {
+      final data = await _api.getData('/documents', query: q);
+      if (data is! List) {
+        if (kDebugMode) {
+          debugPrint('[documents.list] réponse inattendue: ${data.runtimeType}');
+        }
+        return const [];
+      }
+      return data
+          .whereType<Map>()
+          .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
+          .map(DocumentDto.fromJson)
+          .toList();
+    } on DioException catch (e) {
+      // On rejette l'erreur avec un message lisible — l'écran l'affiche tel
+      // quel au lieu d'une pile Dio illisible.
+      final status = e.response?.statusCode;
+      if (status == 403) {
+        throw DocumentsForbidden();
+      }
+      if (status == 401) {
+        throw Exception('Session expirée — reconnectez-vous.');
+      }
+      final body = e.response?.data;
+      final msg = body is Map && body['message'] is String
+          ? body['message'] as String
+          : (e.message ?? 'Erreur réseau');
+      throw Exception('Chargement impossible (HTTP ${status ?? '—'}) : $msg');
+    }
   }
 
   /// Cockpit expiration (/v1/documents/expiring) — renvoie
@@ -121,3 +145,11 @@ final documentsListProvider = FutureProvider<List<DocumentDto>>((ref) {
 
 final documentsExpiringProvider = FutureProvider<List<DocumentDto>>(
     (ref) => ref.watch(documentsRepoProvider).expiring());
+
+/// Marqueur d'erreur « permission refusée » — l'écran peut alors afficher un
+/// message spécifique au lieu de la trace brute.
+class DocumentsForbidden implements Exception {
+  @override
+  String toString() =>
+      'Accès refusé — votre compte n\'a pas la permission `documents.view`.';
+}

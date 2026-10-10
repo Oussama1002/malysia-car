@@ -17,6 +17,10 @@ class DocumentsScreen extends ConsumerStatefulWidget {
 }
 
 class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
+  // Les filtres sont riches (6 champs) et masqueraient la liste sous la ligne
+  // de flottaison sur mobile — on les plie par défaut.
+  bool _filtersOpen = false;
+
   @override
   Widget build(BuildContext context) {
     final listAsync = ref.watch(documentsListProvider);
@@ -39,13 +43,62 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                   onBack: () => Navigator.of(context).maybePop(),
                 ),
                 const SizedBox(height: 14),
-                const _FiltersCard(),
+                // La liste d'abord : c'est ce que l'utilisateur attend en
+                // ouvrant le module. Les filtres et le cockpit viennent après.
+                _RepositoryCard(async: listAsync),
                 const SizedBox(height: 14),
                 _ExpiringCard(async: expiringAsync),
                 const SizedBox(height: 14),
-                _RepositoryCard(async: listAsync),
+                _FiltersToggle(
+                  open: _filtersOpen,
+                  onToggle: () =>
+                      setState(() => _filtersOpen = !_filtersOpen),
+                ),
+                if (_filtersOpen) ...[
+                  const SizedBox(height: 10),
+                  const _FiltersCard(),
+                ],
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FiltersToggle extends StatelessWidget {
+  const _FiltersToggle({required this.open, required this.onToggle});
+  final bool open;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: InkWell(
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.filter_alt_outlined,
+                  size: 18, color: Color(0xFF4F46E5)),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Filtres',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 13.5)),
+              ),
+              Icon(open ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.black45, size: 20),
+            ],
           ),
         ),
       ),
