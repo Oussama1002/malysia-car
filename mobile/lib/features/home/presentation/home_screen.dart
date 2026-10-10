@@ -488,13 +488,8 @@ class ProfilTab extends ConsumerWidget {
                       _InfoRow(
                           label: 'Compte créé le',
                           value: dateFmt.format(u.createdAt!)),
-                    _InfoRow(
-                        label: 'Permissions',
-                        value: '${u.permissions.length}'),
                   ],
                 ),
-                if (u.permissions.isNotEmpty)
-                  _PermissionsCard(permissions: u.permissions),
                 // Préférence thème — même toggle que la top bar, mais ici
                 // en interrupteur explicite pour le reglage.
                 Padding(
@@ -694,56 +689,3 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _PermissionsCard extends StatelessWidget {
-  const _PermissionsCard({required this.permissions});
-  final List<String> permissions;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Theme.of(context).dividerColor),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('PERMISSIONS (${permissions.length})',
-                style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface.withOpacity(0.55),
-                    letterSpacing: 1.3)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final p in permissions)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEEF2FF),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(p,
-                        style: const TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF4338CA),
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w700)),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
