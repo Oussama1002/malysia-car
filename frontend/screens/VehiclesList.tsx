@@ -125,6 +125,8 @@ const emptyForm = () => ({
   vehicleType: '',
   numeroPolice: '',
   nombreCylindres: '' as string | number,
+  nombrePlaces: '' as string | number,
+  nombrePortes: '' as string | number,
   gamme: '',
   acquisitionDate: '',
   miseEnCirculation: '',
@@ -503,6 +505,8 @@ const VehiclesList: React.FC = () => {
       vehicleType: v.vehicleType ?? '',
       numeroPolice: v.numeroPolice ?? '',
       nombreCylindres: v.nombreCylindres ?? '',
+      nombrePlaces: (v as any).nombrePlaces ?? '',
+      nombrePortes: (v as any).nombrePortes ?? '',
       gamme: v.gamme ?? '',
       acquisitionDate: v.acquisitionDate ?? '',
       miseEnCirculation: v.miseEnCirculation ?? '',
@@ -568,6 +572,8 @@ const VehiclesList: React.FC = () => {
         vehicle_type: formData.vehicleType || undefined,
         numero_police: formData.numeroPolice || undefined,
         nombre_cylindres: formData.nombreCylindres !== '' ? Number(formData.nombreCylindres) : undefined,
+        nombre_places: formData.nombrePlaces !== '' ? Number(formData.nombrePlaces) : undefined,
+        nombre_portes: formData.nombrePortes !== '' ? Number(formData.nombrePortes) : undefined,
         gamme: formData.gamme || undefined,
         acquisition_date: formData.acquisitionDate || undefined,
         mise_en_circulation: formData.miseEnCirculation || undefined,
@@ -1484,6 +1490,22 @@ const VehiclesList: React.FC = () => {
                     <input type="number" min="1" max="16" className={inputCls} placeholder="ex: 4"
                       value={formData.nombreCylindres}
                       onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
+                  </div>
+
+                  {/* Nombre de places */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Places</label>
+                    <input type="number" min="1" max="60" className={inputCls} placeholder="ex: 5"
+                      value={formData.nombrePlaces}
+                      onChange={e => setFormData(fd => ({ ...fd, nombrePlaces: e.target.value }))} />
+                  </div>
+
+                  {/* Nombre de portes */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Portes</label>
+                    <input type="number" min="1" max="10" className={inputCls} placeholder="ex: 5"
+                      value={formData.nombrePortes}
+                      onChange={e => setFormData(fd => ({ ...fd, nombrePortes: e.target.value }))} />
                   </div>
 
                   {/* Index conteur / Km */}

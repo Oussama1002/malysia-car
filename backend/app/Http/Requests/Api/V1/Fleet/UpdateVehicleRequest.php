@@ -67,6 +67,8 @@ class UpdateVehicleRequest extends ApiFormRequest
             'vehicle_type' => ['sometimes', 'nullable', 'string', 'max:50'],
             'numero_police' => ['sometimes', 'nullable', 'string', 'max:100'],
             'nombre_cylindres' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:16'],
+            'nombre_places' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:60'],
+            'nombre_portes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:10'],
             'gamme' => ['sometimes', 'nullable', 'string', 'max:50'],
             'mise_en_circulation' => ['sometimes', 'nullable', 'date'],
             'date_immatriculation' => ['sometimes', 'nullable', 'date'],

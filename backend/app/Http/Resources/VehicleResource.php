@@ -73,6 +73,8 @@ class VehicleResource extends JsonResource
             // libellés tels que listés dans `Vehicle::EQUIPMENTS` — stocké
             // en JSON pour éviter une table de pivot sur une liste figée.
             'equipments' => $v->equipments ?? [],
+            'nombrePlaces' => $v->nombre_places !== null ? (int) $v->nombre_places : null,
+            'nombrePortes' => $v->nombre_portes !== null ? (int) $v->nombre_portes : null,
         ];
     }
 

@@ -190,6 +190,8 @@ class VehicleController extends Controller
             $v->vehicle_type = $data['vehicle_type'] ?? null;
             $v->numero_police = $data['numero_police'] ?? null;
             $v->nombre_cylindres = $data['nombre_cylindres'] ?? null;
+            $v->nombre_places = $data['nombre_places'] ?? null;
+            $v->nombre_portes = $data['nombre_portes'] ?? null;
             $v->gamme = $data['gamme'] ?? null;
             $v->mise_en_circulation = $data['mise_en_circulation'] ?? null;
             $v->date_immatriculation = $data['date_immatriculation'] ?? null;
@@ -401,6 +403,8 @@ class VehicleController extends Controller
                 'vehicle_type',
                 'numero_police',
                 'nombre_cylindres',
+                'nombre_places',
+                'nombre_portes',
                 'gamme',
                 'mise_en_circulation',
                 'date_immatriculation',

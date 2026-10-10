@@ -53,6 +53,8 @@ class StoreVehicleRequest extends ApiFormRequest
             'vehicle_type' => ['nullable', 'string', 'max:50'],
             'numero_police' => ['nullable', 'string', 'max:100'],
             'nombre_cylindres' => ['nullable', 'integer', 'min:1', 'max:16'],
+            'nombre_places' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'nombre_portes' => ['nullable', 'integer', 'min:1', 'max:10'],
             'gamme' => ['nullable', 'string', 'max:50'],
             'mise_en_circulation' => ['nullable', 'date'],
             'date_immatriculation' => ['nullable', 'date'],

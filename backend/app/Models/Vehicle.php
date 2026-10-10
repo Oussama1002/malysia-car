@@ -85,6 +85,8 @@ class Vehicle extends Model
         'carte_grise_status',
         'immat_provisoire_expiry',
         'equipments',
+        'nombre_places',
+        'nombre_portes',
     ];
 
     protected $casts = [
