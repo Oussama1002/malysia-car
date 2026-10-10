@@ -133,6 +133,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
       text: '${DateTime.now().year}');
   final _fiscalPower = TextEditingController();
   final _cylinders = TextEditingController();
+  final _nbPlaces = TextEditingController();
+  final _nbPortes = TextEditingController();
   final _mileage = TextEditingController();
   final _numeroPolice = TextEditingController();
   final _dailyPrice = TextEditingController();
@@ -190,6 +192,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     _year.dispose();
     _fiscalPower.dispose();
     _cylinders.dispose();
+    _nbPlaces.dispose();
+    _nbPortes.dispose();
     _mileage.dispose();
     _numeroPolice.dispose();
     _dailyPrice.dispose();
@@ -355,6 +359,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         if (_gamme.isNotEmpty) 'gamme': _gamme,
         if (int.tryParse(_cylinders.text.trim()) != null)
           'nombre_cylindres': int.parse(_cylinders.text.trim()),
+        if (int.tryParse(_nbPlaces.text.trim()) != null)
+          'nombre_places': int.parse(_nbPlaces.text.trim()),
+        if (int.tryParse(_nbPortes.text.trim()) != null)
+          'nombre_portes': int.parse(_nbPortes.text.trim()),
         if (_miseEnCirculation != null)
           'mise_en_circulation': _iso(_miseEnCirculation!),
         if (_dateImmatriculation != null)
@@ -722,6 +730,21 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               keyboardType: TextInputType.number,
               decoration:
                   const InputDecoration(labelText: 'Index compteur (km)'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _twoCols(
+            TextFormField(
+              controller: _nbPlaces,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Places', hintText: 'ex: 5'),
+            ),
+            TextFormField(
+              controller: _nbPortes,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Portes', hintText: 'ex: 5'),
             ),
           ),
           const SizedBox(height: 10),
