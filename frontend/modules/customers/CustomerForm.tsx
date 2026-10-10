@@ -18,6 +18,14 @@ import { DateField } from '@/modules/shared/components/DateField';
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
   initial?: Customer | null;
+  /** Pré-remplissage léger pour les créations à chaud (ex. depuis une
+   *  demande du site public). Ignoré en mode `edit` : `initial` prime. */
+  seed?: {
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    email?: string;
+  } | null;
   error: string | null;
   submitting: boolean;
   branches: Branch[];
@@ -28,7 +36,7 @@ export const CustomerForm: React.FC<{
    * newly-created customer.
    */
   onSubmit: (payload: CustomerCreatePayload, scannedDocuments: ScannedDocument[]) => void;
-}> = ({ mode, initial, error, submitting, branches, onCancel, onSubmit }) => {
+}> = ({ mode, initial, seed, error, submitting, branches, onCancel, onSubmit }) => {
   const [scannedDocs, setScannedDocs] = useState<ScannedDocument[]>([]);
   const [type, setType] = useState<CustomerType>(initial?.customer_type ?? 'PARTICULIER');
   const [customerCode, setCustomerCode] = useState(initial?.customer_code ?? '');
@@ -39,16 +47,16 @@ export const CustomerForm: React.FC<{
 
   const [individual, setIndividual] = useState<Partial<IndividualProfile>>(
     initial?.individual_profile ?? {
-      first_name: '',
-      last_name: '',
+      first_name: mode === 'create' ? (seed?.first_name ?? '') : '',
+      last_name: mode === 'create' ? (seed?.last_name ?? '') : '',
       nationality: 'Maroc',
     },
   );
   const [company, setCompany] = useState<Partial<CompanyProfile>>(initial?.company_profile ?? { legal_name: '' });
 
   // Optional primary contact + address created with the customer
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState(mode === 'create' ? (seed?.phone ?? '') : '');
+  const [email, setEmail] = useState(mode === 'create' ? (seed?.email ?? '') : '');
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('');
 

@@ -1,6 +1,19 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/services/apiClient';
+
+/** Payload passé via `location.state` à `/reservations` pour pré-remplir la
+ *  nouvelle réservation à partir d'une demande du site. */
+export interface FromLeadNavState {
+  id: string;
+  full_name: string;
+  phone: string;
+  email?: string | null;
+  vehicle_label?: string | null;
+  pickup_at?: string | null;
+  return_at?: string | null;
+}
 
 /** Une demande laissée sur le site public de l'agence. */
 interface WebsiteLead {
@@ -105,6 +118,7 @@ type TabKey = 'leads' | 'pricing';
 
 export const WebsiteLeadsPage: React.FC = () => {
   const qc = useQueryClient();
+  const nav = useNavigate();
   const [tab, setTab] = useState<TabKey>('leads');
   const [status, setStatus] = useState<string>('');
   const [search, setSearch] = useState('');
@@ -335,9 +349,36 @@ export const WebsiteLeadsPage: React.FC = () => {
                       type="button"
                       className="df-btn df-btn--primary text-xs"
                       disabled={updateM.isPending}
-                      onClick={() => updateM.mutate({ id: lead.id, status: 'converted' })}
+                      onClick={() => {
+                        // Ouvrir le module Réservations avec les infos de la
+                        // demande pré-remplies ; le statut `converted` est posé
+                        // là-bas après la création effective. Si l'agent veut
+                        // juste marquer la demande sans créer, il peut rouvrir
+                        // la page et utiliser l'ancien raccourci (ci-dessous).
+                        const payload: FromLeadNavState = {
+                          id: lead.id,
+                          full_name: lead.full_name,
+                          phone: lead.phone,
+                          email: lead.email,
+                          vehicle_label: lead.vehicle_label,
+                          pickup_at: lead.pickup_at,
+                          return_at: lead.return_at,
+                        };
+                        nav('/reservations', { state: { fromLead: payload } });
+                      }}
                     >
                       Transformée en réservation
+                    </button>
+                  )}
+                  {lead.status !== 'converted' && (
+                    <button
+                      type="button"
+                      className="df-btn df-btn--ghost text-xs"
+                      disabled={updateM.isPending}
+                      onClick={() => updateM.mutate({ id: lead.id, status: 'converted' })}
+                      title="Marquer comme traitée sans ouvrir le module Réservations"
+                    >
+                      Marquer traitée
                     </button>
                   )}
                   {lead.status !== 'rejected' && (

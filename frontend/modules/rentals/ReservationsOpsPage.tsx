@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import type { FromLeadNavState } from '@/modules/rentals/WebsiteLeadsPage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, endpoints, getApiBase, apiClient } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
@@ -62,7 +63,12 @@ const STATUS_FR: Record<string, string> = {
 
 export const ReservationsOpsPage: React.FC = () => {
   const nav = useNavigate();
+  const location = useLocation();
   const qc = useQueryClient();
+  // Démarre renseigné quand on arrive depuis la page « Demandes du site » :
+  // on ouvre le drawer de création, pré-rempli, et à la création réussie on
+  // marque la demande comme « converted » côté backend.
+  const [fromLead, setFromLead] = useState<FromLeadNavState | null>(null);
   const [q, setQ] = useState('');
   const [showArchive, setShowArchive] = useState(false);
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
@@ -334,6 +340,19 @@ export const ReservationsOpsPage: React.FC = () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
       setForm((s) => ({ ...s, desired_start_at: '', desired_end_at: '', estimated_price: '' }));
       setNewResOpen(false);
+      // Si la création a été ouverte depuis une demande du site, on la marque
+      // comme traitée côté backend puis on invalide la liste des leads pour
+      // que la page « Demandes » reflète le nouveau statut.
+      if (fromLead) {
+        try {
+          await apiClient(`/v1/website-leads/${fromLead.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'converted' }),
+          });
+          await qc.invalidateQueries({ queryKey: ['website-leads'] });
+        } catch { /* non bloquant : la réservation est bien créée */ }
+        setFromLead(null);
+      }
     },
     onError: (e: unknown) => {
       if (e instanceof ApiError && e.body && typeof e.body === 'object') {
@@ -521,6 +540,34 @@ export const ReservationsOpsPage: React.FC = () => {
     return s;
   }, [reservationsQ.data]);
 
+  // Arrivée depuis la page « Demandes du site » (navigation state `fromLead`) :
+  // on bascule le drawer de création en mode pré-rempli, puis on vide le state
+  // pour qu'un refresh ou un back ne rouvre pas la modale par erreur.
+  useEffect(() => {
+    const seed = (location.state as { fromLead?: FromLeadNavState } | null)?.fromLead;
+    if (!seed) return;
+    setFromLead(seed);
+    const toLocal = (iso?: string | null): string => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setForm((s) => ({
+      ...s,
+      desired_start_at: toLocal(seed.pickup_at) || s.desired_start_at,
+      desired_end_at: toLocal(seed.return_at) || s.desired_end_at,
+    }));
+    setNewResOpen(true);
+    nav(location.pathname, { replace: true, state: null });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Essaie de deviner le véhicule à partir du label libre tapé par le visiteur
+  // sur le site (ex. « Dacia Logan 2022 ») une fois la flotte chargée, pour
+  // éviter à l'agent de rechercher à la main. Les lettres sans correspondance
+  // laissent simplement le champ vide — on n'écrase jamais un choix explicite.
   const vehicleOptions = useMemo(
     () =>
       (vehiclesQ.data ?? []).map((v) => {
@@ -547,6 +594,42 @@ export const ReservationsOpsPage: React.FC = () => {
       }),
     [vehiclesQ.data, reservedVehicleIds]
   );
+
+  // Auto-sélection véhicule à partir du souhait du visiteur du site : on
+  // normalise le label libre (ex. « Dacia Logan 2022 ») et on cherche la
+  // meilleure correspondance par marque+modèle dans la flotte disponible.
+  useEffect(() => {
+    if (!fromLead?.vehicle_label || form.vehicle_id) return;
+    const needle = fromLead.vehicle_label.toLowerCase();
+    const words = needle.split(/\s+/).filter((w) => w.length >= 3);
+    if (words.length === 0) return;
+    let best: { id: string; score: number } | null = null;
+    for (const v of vehicleOptions) {
+      const hay = v.label.toLowerCase();
+      const score = words.reduce((s, w) => s + (hay.includes(w) ? 1 : 0), 0);
+      if (score > 0 && (!best || score > best.score)) best = { id: v.id, score };
+    }
+    if (best) setForm((s) => ({ ...s, vehicle_id: best!.id }));
+  }, [fromLead, vehicleOptions, form.vehicle_id]);
+
+  // Auto-sélection client par téléphone : on normalise les chiffres puis on
+  // compare les 8 derniers (évite d'être piégé par +212 vs 0 préfixe).
+  useEffect(() => {
+    if (!fromLead?.phone || form.customer_id) return;
+    const digits = fromLead.phone.replace(/\D/g, '');
+    if (digits.length < 6) return;
+    const tail = digits.slice(-8);
+    const raws = (customersQ.data ?? []) as unknown as Array<{
+      id: string | number;
+      contacts?: Array<{ contact_type?: string; value?: string }>;
+    }>;
+    const match = raws.find((c) =>
+      (c.contacts ?? []).some(
+        (ct) => ct.contact_type === 'phone' && ct.value && ct.value.replace(/\D/g, '').endsWith(tail),
+      ),
+    );
+    if (match) setForm((s) => ({ ...s, customer_id: String(match.id) }));
+  }, [fromLead, customersQ.data, form.customer_id]);
 
   // Search the client and vehicle the user actually sees — matching the raw
   // customer_id/vehicle_id UUIDs meant one letter hit almost every row and two
@@ -896,8 +979,33 @@ export const ReservationsOpsPage: React.FC = () => {
       </Modal>
 
       {/* Nouvelle réservation modal */}
-      <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
+      <Modal
+        open={newResOpen}
+        title={fromLead ? 'Nouvelle réservation — depuis une demande du site' : 'Nouvelle réservation'}
+        onClose={() => { setNewResOpen(false); setFromLead(null); }}
+        widthClass="max-w-2xl"
+      >
         <div className="space-y-4">
+          {fromLead && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-900">
+              <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                Demande du site
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="font-black">{fromLead.full_name}</span>
+                <a className="font-bold text-indigo-700 hover:underline" href={`tel:${fromLead.phone}`}>{fromLead.phone}</a>
+                {fromLead.email && (
+                  <a className="text-indigo-700/80 hover:underline" href={`mailto:${fromLead.email}`}>{fromLead.email}</a>
+                )}
+                {fromLead.vehicle_label && (
+                  <span className="text-indigo-700/80">Souhait : <strong>{fromLead.vehicle_label}</strong></span>
+                )}
+              </div>
+              <div className="mt-2 text-[11px] text-indigo-700/80">
+                Dates pré-remplies depuis la demande. Choisissez le client (ou créez-le, ses infos sont déjà saisies dans le drawer) et le véhicule, puis créez la réservation — la demande sera automatiquement marquée « traitée ».
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
             <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
               if (e.target.value === '__new__') { setNewClientError(null); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
@@ -1012,7 +1120,7 @@ export const ReservationsOpsPage: React.FC = () => {
           </div>
           {createError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{createError}</div>}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => setNewResOpen(false)}>Annuler</button>
+            <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => { setNewResOpen(false); setFromLead(null); }}>Annuler</button>
             <button
               type="button"
               className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-black text-white shadow-lg disabled:opacity-50 ${form.is_draft ? 'bg-amber-600 shadow-amber-100 hover:bg-amber-700' : 'bg-indigo-600 shadow-indigo-100 hover:bg-indigo-700'}`}
@@ -1316,6 +1424,19 @@ export const ReservationsOpsPage: React.FC = () => {
           error={newClientError}
           submitting={createCustomerMut.isPending}
           branches={branchesQ.data?.data ?? []}
+          seed={fromLead ? (() => {
+            // Split naïf du nom : « Prénom NOM COMPOSÉ » → prénom = premier mot,
+            // nom = le reste. Suffisant pour pré-remplir ; l'agent peut corriger.
+            const parts = (fromLead.full_name ?? '').trim().split(/\s+/);
+            const first_name = parts.shift() ?? '';
+            const last_name = parts.join(' ');
+            return {
+              first_name,
+              last_name,
+              phone: fromLead.phone ?? '',
+              email: fromLead.email ?? '',
+            };
+          })() : null}
           onCancel={() => setNewClientDrawerOpen(false)}
           onSubmit={(payload, scans) => {
             setNewClientError(null);
