@@ -33,6 +33,40 @@ class VehicleController extends Controller
         return (int) $idStr;
     }
 
+    /**
+     * Nettoie l'array d'équipements avant persistance :
+     *  - vide / non-array → null (clear la colonne)
+     *  - sinon on dédoublonne, on garde seulement les libellés connus, et on
+     *    les range dans l'ordre de `Vehicle::EQUIPMENTS`.
+     *
+     * @param  mixed  $raw
+     * @return array<int, string>|null
+     */
+    private function canonicalizeEquipments($raw): ?array
+    {
+        if (! is_array($raw) || $raw === []) {
+            return null;
+        }
+        $known = array_flip(Vehicle::EQUIPMENTS);
+        $picked = [];
+        foreach ($raw as $label) {
+            if (! is_string($label)) {
+                continue;
+            }
+            if (isset($known[$label])) {
+                $picked[$label] = true;
+            }
+        }
+        if ($picked === []) {
+            return null;
+        }
+        // On ré-indexe dans l'ordre de la constante.
+        return array_values(array_filter(
+            Vehicle::EQUIPMENTS,
+            fn (string $l) => isset($picked[$l]),
+        ));
+    }
+
     public function index(Request $request): JsonResponse
     {
         $q = Vehicle::query()->with(['brand', 'model']);
@@ -165,6 +199,12 @@ class VehicleController extends Controller
             $v->immat_provisoire_expiry = $data['immat_provisoire_expiry'] ?? null;
             if (isset($data['chassis'])) {
                 $v->chassis_number = $data['chassis'];
+            }
+            // Équipements : on dédoublonne et on garde l'ordre canonique de
+            // la constante `Vehicle::EQUIPMENTS` pour que la fiche s'affiche
+            // toujours dans le même ordre, quelle que soit la saisie côté UI.
+            if (array_key_exists('equipments', $data)) {
+                $v->equipments = $this->canonicalizeEquipments($data['equipments']);
             }
             $v->save();
 
@@ -372,6 +412,10 @@ class VehicleController extends Controller
                 if (array_key_exists($k, $data)) {
                     $vehicle->{$k} = $data[$k];
                 }
+            }
+
+            if (array_key_exists('equipments', $data)) {
+                $vehicle->equipments = $this->canonicalizeEquipments($data['equipments']);
             }
 
             $vehicle->save();

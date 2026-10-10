@@ -84,6 +84,7 @@ class Vehicle extends Model
         'immat_online',
         'carte_grise_status',
         'immat_provisoire_expiry',
+        'equipments',
     ];
 
     protected $casts = [
@@ -103,6 +104,77 @@ class Vehicle extends Model
         'daily_rental_price' => 'decimal:2',
         'monthly_rental_price' => 'decimal:2',
         'rental_price_tiers' => 'array',
+        'equipments' => 'array',
+    ];
+
+    /**
+     * Référentiel figé des équipements d'un véhicule, dans l'ordre d'affichage
+     * du formulaire (sécurité → confort → multimédia → extérieur). Modifier
+     * cette liste met immédiatement à jour la validation côté backend et
+     * les options proposées côté web / mobile.
+     *
+     * @var string[]
+     */
+    public const EQUIPMENTS = [
+        // Sécurité active
+        'Airbags',
+        'ABS',
+        'ESP',
+        'Antipatinage',
+        "Aide au freinage d'urgence",
+        'Antidémarrage électronique',
+        'Aide au démarrage en côte',
+        'Sélecteur de mode de conduite',
+        'Détection de fatigue',
+        'Maintien dans la voie',
+        "Détecteur d'angle mort",
+        'Détecteur de sous-gonflage',
+        'Fermeture de portes auto.',
+        'Préparation ISOFIX',
+        'Phares antibrouillard',
+        "Système d'alarme",
+        // Confort
+        'Climatisation',
+        'Start & Stop',
+        'Régulateur de vitesse',
+        'Détecteur de pluie',
+        'Allumage auto. des feux',
+        'Frein à main électrique',
+        'Aide au stationnement',
+        'Volant réglable',
+        'Rétros. électriques',
+        'Rétros. rabattables électriques',
+        'Coffre électrique',
+        'Sièges électriques',
+        'Sièges élec. avec mémoire',
+        'Banquette arrière rabattable 1/3-2/3',
+        // Multimédia / assistance
+        'Écran tactile',
+        'Caméra de recul',
+        'Cockpit digital',
+        'Commandes au volant',
+        'Commandes vocales',
+        'Reconnaissance de panneaux',
+        'Affichage Tête-Haute',
+        'Système audio',
+        'Ordinateur de bord',
+        'Navigation GPS',
+        'WiFi à bord',
+        'Bluetooth',
+        'Compatibilité smartphone',
+        'Apple CarPlay® & Android Auto®',
+        'Chargeur/mobile sans fil',
+        // Extérieur / finition
+        'Jantes aluminium',
+        'Sellerie Similicuir / Tissu',
+        'Volant cuir',
+        'Follow-me home',
+        "Lumière d'ambiance",
+        'Feux de jour LED',
+        'Phares Full LED',
+        'Toit Panoramique ouvrant',
+        'Barres de toit',
+        'Vitres sur-teintées.',
     ];
 
     /**

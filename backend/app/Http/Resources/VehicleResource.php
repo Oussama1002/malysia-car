@@ -69,6 +69,10 @@ class VehicleResource extends JsonResource
             'immatOnline' => $v->immat_online,
             'carteGriseStatus' => $v->carte_grise_status,
             'immatProvisoireExpiry' => $v->immat_provisoire_expiry?->toDateString(),
+            // Liste d'équipements cochés sur la fiche véhicule. Tableau de
+            // libellés tels que listés dans `Vehicle::EQUIPMENTS` — stocké
+            // en JSON pour éviter une table de pivot sur une liste figée.
+            'equipments' => $v->equipments ?? [],
         ];
     }
 

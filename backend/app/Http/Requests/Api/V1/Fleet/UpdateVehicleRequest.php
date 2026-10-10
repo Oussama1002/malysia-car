@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1\Fleet;
 
 use App\Http\Requests\ApiFormRequest;
+use App\Models\Vehicle;
 use Illuminate\Validation\Rule;
 
 class UpdateVehicleRequest extends ApiFormRequest
@@ -74,6 +75,8 @@ class UpdateVehicleRequest extends ApiFormRequest
             'carte_grise_status' => ['sometimes', 'nullable', 'string', 'max:20'],
             'immat_provisoire_expiry' => ['sometimes', 'nullable', 'date'],
             'chassis' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'equipments' => ['sometimes', 'nullable', 'array'],
+            'equipments.*' => ['string', Rule::in(Vehicle::EQUIPMENTS)],
         ];
     }
 }

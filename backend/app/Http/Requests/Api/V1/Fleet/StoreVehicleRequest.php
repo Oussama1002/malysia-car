@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1\Fleet;
 
 use App\Http\Requests\ApiFormRequest;
+use App\Models\Vehicle;
 use Illuminate\Validation\Rule;
 
 class StoreVehicleRequest extends ApiFormRequest
@@ -60,6 +61,10 @@ class StoreVehicleRequest extends ApiFormRequest
             'carte_grise_status' => ['nullable', 'string', 'max:20'],
             'immat_provisoire_expiry' => ['nullable', 'date'],
             'chassis' => ['nullable', 'string', 'max:100'],
+            // Équipements : liste de libellés tirés de `Vehicle::EQUIPMENTS`.
+            // L'ordre et les doublons sont tolérés (nettoyés côté contrôleur).
+            'equipments' => ['nullable', 'array'],
+            'equipments.*' => ['string', Rule::in(Vehicle::EQUIPMENTS)],
         ];
     }
 }

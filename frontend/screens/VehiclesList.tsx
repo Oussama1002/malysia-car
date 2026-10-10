@@ -146,7 +146,93 @@ const emptyForm = () => ({
   photoPreviews: [] as string[],
   videoPreview: '' as string,
   photoUrl: null as string | null,
+  // Liste de libellés cochés — doit rester un sous-ensemble d'`EQUIPMENTS`.
+  equipments: [] as string[],
 });
+
+/**
+ * Référentiel des équipements d'un véhicule, dans l'ordre d'affichage (sécurité
+ * → confort → multimédia → extérieur). **Doit rester synchrone avec
+ * `Vehicle::EQUIPMENTS` côté backend** — la validation serveur refuse tout
+ * libellé hors de la liste.
+ */
+const EQUIPMENTS: ReadonlyArray<{ group: string; items: string[] }> = [
+  {
+    group: 'Sécurité active',
+    items: [
+      'Airbags',
+      'ABS',
+      'ESP',
+      'Antipatinage',
+      "Aide au freinage d'urgence",
+      'Antidémarrage électronique',
+      'Aide au démarrage en côte',
+      'Sélecteur de mode de conduite',
+      'Détection de fatigue',
+      'Maintien dans la voie',
+      "Détecteur d'angle mort",
+      'Détecteur de sous-gonflage',
+      'Fermeture de portes auto.',
+      'Préparation ISOFIX',
+      'Phares antibrouillard',
+      "Système d'alarme",
+    ],
+  },
+  {
+    group: 'Confort',
+    items: [
+      'Climatisation',
+      'Start & Stop',
+      'Régulateur de vitesse',
+      'Détecteur de pluie',
+      'Allumage auto. des feux',
+      'Frein à main électrique',
+      'Aide au stationnement',
+      'Volant réglable',
+      'Rétros. électriques',
+      'Rétros. rabattables électriques',
+      'Coffre électrique',
+      'Sièges électriques',
+      'Sièges élec. avec mémoire',
+      'Banquette arrière rabattable 1/3-2/3',
+    ],
+  },
+  {
+    group: 'Multimédia & assistance',
+    items: [
+      'Écran tactile',
+      'Caméra de recul',
+      'Cockpit digital',
+      'Commandes au volant',
+      'Commandes vocales',
+      'Reconnaissance de panneaux',
+      'Affichage Tête-Haute',
+      'Système audio',
+      'Ordinateur de bord',
+      'Navigation GPS',
+      'WiFi à bord',
+      'Bluetooth',
+      'Compatibilité smartphone',
+      'Apple CarPlay® & Android Auto®',
+      'Chargeur/mobile sans fil',
+    ],
+  },
+  {
+    group: 'Extérieur & finition',
+    items: [
+      'Jantes aluminium',
+      'Sellerie Similicuir / Tissu',
+      'Volant cuir',
+      'Follow-me home',
+      "Lumière d'ambiance",
+      'Feux de jour LED',
+      'Phares Full LED',
+      'Toit Panoramique ouvrant',
+      'Barres de toit',
+      'Vitres sur-teintées.',
+    ],
+  },
+];
 
 type FormState = ReturnType<typeof emptyForm>;
 
@@ -433,6 +519,7 @@ const VehiclesList: React.FC = () => {
       photoPreviews: v.photoUrl ? [String(v.photoUrl)] : [],
       photoUrl: v.photoUrl ?? null,
       videoPreview: '',
+      equipments: Array.isArray((v as any).equipments) ? (v as any).equipments.filter((x: unknown) => typeof x === 'string') : [],
     });
   };
 
@@ -491,6 +578,7 @@ const VehiclesList: React.FC = () => {
         carte_grise_status: formData.carteGriseStatus || undefined,
         immat_provisoire_expiry: formData.immatProvisoireExpiry || undefined,
         purchase_price: formData.montant !== '' ? Number(formData.montant) : undefined,
+        equipments: formData.equipments,
       };
       if (formData.brand_id) body.brand_id = formData.brand_id;
       if (formData.model_id) body.model_id = formData.model_id;
@@ -1534,6 +1622,64 @@ const VehiclesList: React.FC = () => {
                     <DateField className={inputCls} value={formData.vignetteExpiry}
                       onChange={(dfValue) => setFormData(fd => ({ ...fd, vignetteExpiry: dfValue }))} />
                   </div>
+                </div>
+              </div>
+
+              {/* ── Équipements ── */}
+              {/*
+                Multi-select à plat regroupé par famille (sécurité, confort,
+                multimédia, extérieur). On stocke en state les libellés tels
+                qu'ils apparaissent — le backend les valide contre la constante
+                `Vehicle::EQUIPMENTS` et refuse tout libellé étranger.
+              */}
+              <div className="space-y-6 pt-6 border-t border-slate-100">
+                <div className="flex items-end justify-between gap-4">
+                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-[0.2em]">Équipements</h3>
+                  <div className="text-xs font-semibold text-slate-500">
+                    {formData.equipments.length} sélectionné{formData.equipments.length > 1 ? 's' : ''}
+                    {formData.equipments.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(fd => ({ ...fd, equipments: [] }))}
+                        className="ml-3 text-indigo-600 hover:underline">
+                        Tout décocher
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-5">
+                  {EQUIPMENTS.map(({ group, items }) => (
+                    <div key={group} className="space-y-2">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">{group}</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-3 lg:grid-cols-4">
+                        {items.map((label) => {
+                          const checked = formData.equipments.includes(label);
+                          return (
+                            <label
+                              key={label}
+                              className={`flex items-start gap-2 rounded-xl border px-3 py-2 cursor-pointer transition
+                                ${checked
+                                  ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
+                                  : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-indigo-200'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1 accent-indigo-600"
+                                checked={checked}
+                                onChange={() => setFormData(fd => ({
+                                  ...fd,
+                                  equipments: checked
+                                    ? fd.equipments.filter(e => e !== label)
+                                    : [...fd.equipments, label],
+                                }))}
+                              />
+                              <span className="text-xs font-semibold leading-tight">{label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
