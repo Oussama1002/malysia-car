@@ -217,20 +217,199 @@
     pick.type = 'button';
     pick.className = 'car__cta';
     pick.textContent = 'Réserver →';
-    pick.addEventListener('click', function () { chooseVehicle(v.id, name); });
+    pick.addEventListener('click', function (e) {
+      // L'event stopPropagation évite que le click bubble sur la carte et
+      // réouvre la modale juste après avoir fait scroller au formulaire.
+      e.stopPropagation();
+      chooseVehicle(v.id, name);
+    });
     foot.appendChild(pick);
 
     body.appendChild(foot);
     el.appendChild(media);
     el.appendChild(body);
+
+    // Toute la carte est cliquable : ouvre la fiche détail (modale).
+    el.addEventListener('click', function () { openVehicleDetail(v); });
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openVehicleDetail(v); }
+    });
     return el;
+  }
+
+  // ── Fiche détail véhicule (modale) ─────────────────────────
+  // Les familles d'équipements doivent rester alignées avec `Vehicle::EQUIPMENTS`
+  // côté backend ; on filtre les équipements du véhicule contre cette grille
+  // pour afficher dans l'ordre et grouper visuellement.
+  var EQUIPMENT_GROUPS = [
+    { title: 'Sécurité active', items: [
+      'Airbags','ABS','ESP','Antipatinage',"Aide au freinage d'urgence",
+      'Antidémarrage électronique','Aide au démarrage en côte',
+      'Sélecteur de mode de conduite','Détection de fatigue','Maintien dans la voie',
+      "Détecteur d'angle mort",'Détecteur de sous-gonflage','Fermeture de portes auto.',
+      'Préparation ISOFIX','Phares antibrouillard',"Système d'alarme",
+    ]},
+    { title: 'Confort', items: [
+      'Climatisation','Start & Stop','Régulateur de vitesse','Détecteur de pluie',
+      'Allumage auto. des feux','Frein à main électrique','Aide au stationnement',
+      'Volant réglable','Rétros. électriques','Rétros. rabattables électriques',
+      'Coffre électrique','Sièges électriques','Sièges élec. avec mémoire',
+      'Banquette arrière rabattable 1/3-2/3',
+    ]},
+    { title: 'Multimédia & assistance', items: [
+      'Écran tactile','Caméra de recul','Cockpit digital','Commandes au volant',
+      'Commandes vocales','Reconnaissance de panneaux','Affichage Tête-Haute',
+      'Système audio','Ordinateur de bord','Navigation GPS','WiFi à bord',
+      'Bluetooth','Compatibilité smartphone','Apple CarPlay® & Android Auto®',
+      'Chargeur/mobile sans fil',
+    ]},
+    { title: 'Extérieur & finition', items: [
+      'Jantes aluminium','Sellerie Similicuir / Tissu','Volant cuir','Follow-me home',
+      "Lumière d'ambiance",'Feux de jour LED','Phares Full LED','Toit Panoramique ouvrant',
+      'Barres de toit','Vitres sur-teintées.',
+    ]},
+  ];
+
+  function ensureVehicleDetailModal() {
+    var modal = $('vehDetail');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'vehDetail';
+    modal.className = 'vehDetail';
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML =
+      '<div class="vehDetail__panel" role="dialog" aria-modal="true" aria-label="Détail du véhicule">' +
+        '<div class="vehDetail__hero" id="vehDetailHero">' +
+          '<button type="button" class="vehDetail__close" aria-label="Fermer">×</button>' +
+        '</div>' +
+        '<div class="vehDetail__body" id="vehDetailBody"></div>' +
+        '<div class="vehDetail__footer">' +
+          '<button type="button" class="vehDetail__secondary" id="vehDetailSecondary">Fermer</button>' +
+          '<button type="button" class="vehDetail__cta" id="vehDetailCta">Réserver →</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    var close = function () {
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    };
+    modal.querySelector('.vehDetail__close').addEventListener('click', close);
+    modal.querySelector('#vehDetailSecondary').addEventListener('click', close);
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.classList.contains('is-open')) close();
+    });
+    return modal;
+  }
+
+  function specTile(iconName, label, value) {
+    return '<div class="vehDetail__spec">' +
+      '<span class="vehDetail__specIcon">' + iconSvg(iconName) + '</span>' +
+      '<span class="vehDetail__specLabel">' + label + '</span>' +
+      '<span class="vehDetail__specValue">' + value + '</span>' +
+    '</div>';
+  }
+
+  function openVehicleDetail(v) {
+    var modal = ensureVehicleDetailModal();
+    var name = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
+
+    // Hero (photo ou dégradé fallback).
+    var hero = $('vehDetailHero');
+    hero.querySelectorAll('img').forEach(function (n) { n.remove(); });
+    if (v.photo_url) {
+      var img = document.createElement('img');
+      img.src = API.replace(/\/api$/, '') + v.photo_url;
+      img.alt = name;
+      img.onerror = function () { img.remove(); };
+      hero.insertBefore(img, hero.firstChild);
+    }
+
+    // Prix affiché « À partir de X » si un palier existe, sinon prix /j.
+    var dayPrice = v.price_per_day ? Number(v.price_per_day) : null;
+    var fromPrice = v.price_from_per_day ? Number(v.price_from_per_day) : null;
+    var priceHtml = '';
+    if (dayPrice && fromPrice && fromPrice < dayPrice) {
+      priceHtml = '<span class="unit">À partir de</span>' +
+        '<span class="amount">' + fromPrice.toLocaleString('fr-MA') + ' MAD</span>' +
+        '<span class="unit">/ jour</span>';
+    } else if (dayPrice) {
+      priceHtml = '<span class="amount">' + dayPrice.toLocaleString('fr-MA') + ' MAD</span>' +
+        '<span class="unit">/ jour</span>';
+    } else {
+      priceHtml = '<span class="amount">Sur devis</span>';
+    }
+
+    var specsHtml =
+      specTile('seat', 'Places', v.seats ? v.seats + '' : '—') +
+      specTile('gear', 'Transmission', label(TRANS_FR, v.transmission) || '—') +
+      specTile('fuel', 'Carburant', label(FUEL_FR, v.fuel) || '—') +
+      specTile('door', 'Portes', v.doors ? v.doors + '' : '—');
+
+    var equips = Array.isArray(v.equipments) ? v.equipments : [];
+    var equipHtml = '';
+    if (equips.length === 0) {
+      equipHtml = '<p class="vehDetail__empty">Aucun équipement renseigné pour ce véhicule.</p>';
+    } else {
+      var set = {};
+      equips.forEach(function (e) { set[e] = true; });
+      EQUIPMENT_GROUPS.forEach(function (group) {
+        var picks = group.items.filter(function (it) { return set[it]; });
+        if (picks.length === 0) return;
+        equipHtml += '<div class="vehDetail__equipGroupTitle">' + group.title + '</div>' +
+          '<div class="vehDetail__equips">' +
+            picks.map(function (p) { return '<span class="vehDetail__equip">' + p + '</span>'; }).join('') +
+          '</div>';
+      });
+      // Équipements qui ne matchent aucun groupe (nouveau libellé ajouté
+      // après la copie de la liste côté site) — on les affiche à la fin pour
+      // ne rien perdre.
+      var orphans = equips.filter(function (e) {
+        return !EQUIPMENT_GROUPS.some(function (g) { return g.items.indexOf(e) !== -1; });
+      });
+      if (orphans.length) {
+        equipHtml += '<div class="vehDetail__equipGroupTitle">Autres</div>' +
+          '<div class="vehDetail__equips">' +
+            orphans.map(function (p) { return '<span class="vehDetail__equip">' + p + '</span>'; }).join('') +
+          '</div>';
+      }
+    }
+
+    var sub = [v.year, v.categorie].filter(Boolean).join(' · ');
+    $('vehDetailBody').innerHTML =
+      '<h2 class="vehDetail__title">' + name + '</h2>' +
+      (sub ? '<p class="vehDetail__sub">' + sub + '</p>' : '') +
+      '<div class="vehDetail__price">' + priceHtml + '</div>' +
+      '<div class="vehDetail__sectionTitle">Caractéristiques principales</div>' +
+      '<div class="vehDetail__specs">' + specsHtml + '</div>' +
+      '<div class="vehDetail__sectionTitle">Équipements</div>' +
+      equipHtml;
+
+    // CTA Réserver : ferme la modale et scrolle vers le formulaire comme
+    // le bouton de la carte.
+    var cta = $('vehDetailCta');
+    cta.onclick = function () {
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      chooseVehicle(v.id, name);
+    };
+
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    modal.scrollTop = 0;
   }
 
   function iconSvg(name) {
     var paths = {
       fuel: '<path d="M3 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 11h10"/><path d="M14 7l3 3v8a2 2 0 1 0 4 0V9l-3-3"/>',
       gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
-      seat: '<path d="M4 18V9a3 3 0 0 1 3-3h2v8H4z"/><path d="M4 18h16"/><path d="M14 6h3a3 3 0 0 1 3 3v9h-6V6z"/>'
+      seat: '<path d="M4 18V9a3 3 0 0 1 3-3h2v8H4z"/><path d="M4 18h16"/><path d="M14 6h3a3 3 0 0 1 3 3v9h-6V6z"/>',
+      door: '<rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="15" cy="13" r=".9" fill="currentColor"/><path d="M9 7h6"/>'
     };
     return '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || '') + '</svg>';
   }

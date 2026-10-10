@@ -49,6 +49,12 @@ class PublicSiteController extends Controller
                     // de X MAD/j » pour inciter le visiteur sur la durée longue.
                     'price_from_per_day' => $v->minTierDailyPrice(),
                     'photo_url' => $v->photo_file_id ? '/api/v1/files/'.$v->photo_file_id : null,
+                    // Caractéristiques affichées sur la fiche détail du site :
+                    // Places, Portes, Équipements. `transmission` et `fuel`
+                    // existent déjà au-dessus.
+                    'seats' => $v->nombre_places !== null ? (int) $v->nombre_places : null,
+                    'doors' => $v->nombre_portes !== null ? (int) $v->nombre_portes : null,
+                    'equipments' => $v->equipments ?? [],
                 ])
                 ->values()
                 ->all();

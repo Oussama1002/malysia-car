@@ -1463,3 +1463,97 @@ a { color: inherit; text-decoration: none; }
   padding: 2px 24px 2px 0;
   width: 100%;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Modale « Détail véhicule » — ouverte depuis la carte flotte. Reprend la
+   palette ivoire / bordeaux du site, scrollable sur mobile, bouton Réserver
+   collé en bas pour que la CTA reste accessible même sur un long équipement.
+───────────────────────────────────────────────────────────────────────── */
+.vehDetail {
+  position: fixed; inset: 0; z-index: 100; display: none;
+  background: rgba(27, 15, 15, .62);
+  backdrop-filter: blur(4px);
+  padding: 16px; overflow-y: auto;
+}
+.vehDetail.is-open { display: flex; align-items: flex-start; justify-content: center; }
+.vehDetail__panel {
+  width: 100%; max-width: 820px; background: #fbf5e4; border-radius: 24px;
+  box-shadow: 0 32px 60px rgba(27, 15, 15, .35);
+  overflow: hidden; margin: 24px auto;
+}
+.vehDetail__hero { position: relative; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #ece2c6, #d7c89f); }
+.vehDetail__hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vehDetail__close {
+  position: absolute; top: 14px; right: 14px; width: 40px; height: 40px;
+  border: none; border-radius: 50%; background: rgba(255, 255, 255, .9);
+  color: #1b0f0f; font-size: 20px; font-weight: 900; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.vehDetail__close:hover { background: #fff; }
+.vehDetail__body { padding: 24px 24px 20px; }
+.vehDetail__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px; font-weight: 700; margin: 0 0 4px; color: #1b0f0f;
+}
+.vehDetail__sub { color: #6b4c3b; font-size: 14px; margin: 0 0 10px; }
+.vehDetail__price {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  background: #ffffff; border: 1px solid rgba(27, 15, 15, .08);
+  border-radius: 999px; padding: 6px 14px; font-weight: 700;
+}
+.vehDetail__price .amount { color: #8b2b26; font-size: 18px; }
+.vehDetail__price .unit { color: #6b4c3b; font-size: 12px; }
+.vehDetail__sectionTitle {
+  margin: 22px 0 10px; font-size: 11px; font-weight: 900;
+  letter-spacing: 2px; text-transform: uppercase; color: #8b2b26;
+}
+.vehDetail__specs {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+}
+@media (min-width: 640px) { .vehDetail__specs { grid-template-columns: repeat(4, 1fr); } }
+.vehDetail__spec {
+  background: #ffffff; border: 1px solid rgba(27, 15, 15, .08);
+  border-radius: 16px; padding: 14px 12px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+}
+.vehDetail__specIcon {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #fbf5e4; color: #8b2b26;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.vehDetail__specLabel {
+  font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase;
+  color: #6b4c3b; font-weight: 800;
+}
+.vehDetail__specValue { font-size: 14.5px; font-weight: 800; color: #1b0f0f; }
+.vehDetail__equipGroupTitle {
+  margin-top: 14px; font-size: 10.5px; letter-spacing: 1.2px;
+  text-transform: uppercase; color: #6b4c3b; font-weight: 800;
+}
+.vehDetail__equips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.vehDetail__equip {
+  background: #ffffff; border: 1px solid rgba(139, 43, 38, .18);
+  color: #1b0f0f; padding: 6px 12px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;
+}
+.vehDetail__equip::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: #8b2b26;
+}
+.vehDetail__empty { color: #6b4c3b; font-size: 13px; }
+.vehDetail__footer {
+  position: sticky; bottom: 0;
+  display: flex; gap: 10px; padding: 14px 24px 20px;
+  background: linear-gradient(180deg, rgba(251, 245, 228, 0) 0%, #fbf5e4 40%);
+}
+.vehDetail__cta {
+  flex: 1; border: none; cursor: pointer; border-radius: 999px;
+  background: #8b2b26; color: #fbf5e4; font-weight: 800; font-size: 15px;
+  padding: 14px 20px; letter-spacing: .3px;
+}
+.vehDetail__cta:hover { background: #732420; }
+.vehDetail__secondary {
+  border: 1px solid rgba(27, 15, 15, .18); background: #ffffff;
+  color: #1b0f0f; padding: 14px 18px; border-radius: 999px;
+  font-weight: 700; cursor: pointer;
+}
+.car { cursor: pointer; }
