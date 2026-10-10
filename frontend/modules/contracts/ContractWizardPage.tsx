@@ -376,6 +376,22 @@ export const ContractWizardPage: React.FC = () => {
     queryFn: () => listUsers({ per_page: 200 }),
     enabled: !!getApiBase(),
   });
+
+  // Agent assigné = par défaut l'utilisateur de la session. On attend que la
+  // liste des users soit chargée pour s'assurer que l'id correspond à une
+  // option du <select> (sinon le select rejette la valeur et retombe sur
+  // « — Choix — »). On ne touche pas si l'agent a déjà choisi autre chose,
+  // ni en mode édition (le PATCH précédent a posé la valeur).
+  useEffect(() => {
+    if (state.assignedAgent) return;
+    const sessionUserId = (session as any)?.user?.id;
+    if (sessionUserId == null) return;
+    const list = (usersQ.data?.data ?? []) as Array<{ id: string | number }>;
+    const match = list.find((u) => String(u.id) === String(sessionUserId));
+    if (match) patch('assignedAgent', String(sessionUserId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usersQ.data, (session as any)?.user?.id]);
+
   const createCustomerMut = useMutation({
     mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
       const res = await createCustomer(vars.payload);
