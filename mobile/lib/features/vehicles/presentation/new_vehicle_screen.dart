@@ -22,7 +22,26 @@ class NewVehicleScreen extends ConsumerStatefulWidget {
 
 enum _VehDoc { assurance, facture, immatProv, techControl, vignette }
 
-const _plateLetters = ['A', 'B', 'C', 'D', 'H', 'J', 'T', 'W', 'WW'];
+enum _CarteGriseStatus { enAttente, recue }
+
+// Mêmes listes que le web (frontend/screens/VehiclesList.tsx) pour que les
+// deux fiches aient strictement les mêmes options.
+const _plateLetters = <String>[
+  'A','B','C','D','E','F','G','H','J','K','L','M','N','P','Q','R','S','T','U','V','W','Y',
+];
+// 1..99 comme sur le web (web : Array.from({length:99}, i=>i+1)).
+final List<int> _plateRegions = List<int>.generate(99, (i) => i + 1);
+const _fuelOptions = <String>['Diesel', 'Essence', 'Hybride', 'Électrique', 'GPL'];
+const _gammeOptions = <String>[
+  'CLASS','SPORT','MINI','UTL','AUTO MINI','SPORT 4x4',
+  'V.Citadines','V.Berlines','V.Compactes','V. 4x4','V.Luxe',
+];
+const _categorieOptions = <String>[
+  'Particulier','Utilitaire','Commercial','Tourisme','Moto',
+];
+const _vehicleTypeOptions = <String>[
+  'Berline','SUV','Citadine','Break','Coupé','Cabriolet','Monospace','Pick-up','Van','Camion',
+];
 
 class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -37,11 +56,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   final _registrationCard = TextEditingController(); // N° carte grise
   final _year = TextEditingController(
       text: '${DateTime.now().year}');
-  final _color = TextEditingController();
-  final _fuelType = TextEditingController();
-  final _vehicleType = TextEditingController();
-  final _categorie = TextEditingController();
-  final _gamme = TextEditingController();
   final _fiscalPower = TextEditingController();
   final _cylinders = TextEditingController();
   final _mileage = TextEditingController();
@@ -49,7 +63,13 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   final _dailyPrice = TextEditingController();
   final _monthlyPrice = TextEditingController();
   final _purchasePrice = TextEditingController();
-  final _notes = TextEditingController();
+
+  // Dropdowns alignés sur le web — on garde '' = pas de choix.
+  String _fuelType = '';
+  String _vehicleType = '';
+  String _categorie = '';
+  String _gamme = '';
+  _CarteGriseStatus _carteGriseStatus = _CarteGriseStatus.enAttente;
 
   DateTime? _miseEnCirculation;
   DateTime? _dateImmatriculation;
@@ -61,6 +81,18 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
 
   String? _brandId;
   String? _modelId;
+
+  // Création à chaud d'une marque / d'un modèle, comme sur le web.
+  final _newBrandName = TextEditingController();
+  final _newModelName = TextEditingController();
+  bool _addingBrand = false;
+  bool _addingModel = false;
+  bool _creatingBrand = false;
+  bool _creatingModel = false;
+
+  // Photo principale du véhicule — uploadée sur POST /vehicles/{id}/photo
+  // après la création, comme le fait le modal web.
+  XFile? _mainPhoto;
 
   // OCR
   final Map<_VehDoc, String?> _scanPath = {};
@@ -78,11 +110,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     _vin.dispose();
     _registrationCard.dispose();
     _year.dispose();
-    _color.dispose();
-    _fuelType.dispose();
-    _vehicleType.dispose();
-    _categorie.dispose();
-    _gamme.dispose();
     _fiscalPower.dispose();
     _cylinders.dispose();
     _mileage.dispose();
@@ -90,7 +117,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     _dailyPrice.dispose();
     _monthlyPrice.dispose();
     _purchasePrice.dispose();
-    _notes.dispose();
+    _newBrandName.dispose();
+    _newModelName.dispose();
     super.dispose();
   }
 
@@ -229,24 +257,24 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         if (_modelId != null) 'model_id': _modelId,
         if (int.tryParse(_year.text.trim()) != null)
           'year': int.parse(_year.text.trim()),
-        if (_color.text.trim().isNotEmpty) 'color': _color.text.trim(),
-        if (_fuelType.text.trim().isNotEmpty)
-          'fuel_type': _fuelType.text.trim(),
+        if (_fuelType.isNotEmpty) 'fuel_type': _fuelType,
         if (int.tryParse(_fiscalPower.text.trim()) != null)
           'fiscal_power': int.parse(_fiscalPower.text.trim()),
-        if (_registrationCard.text.trim().isNotEmpty)
+        // La N° carte grise n'est envoyée que si « reçue », comme sur le web.
+        if (_carteGriseStatus == _CarteGriseStatus.recue &&
+            _registrationCard.text.trim().isNotEmpty)
           'registration_card_number': _registrationCard.text.trim(),
+        'carte_grise_status':
+            _carteGriseStatus == _CarteGriseStatus.recue ? 'recue' : 'en_attente',
         if (_insuranceExpiry != null)
           'insurance_expiry': _iso(_insuranceExpiry!),
         if (_techExpiry != null) 'tech_control_expiry': _iso(_techExpiry!),
         if (_vignetteExpiry != null) 'vignette_expiry': _iso(_vignetteExpiry!),
         if (int.tryParse(_mileage.text.trim()) != null)
           'mileage_km': int.parse(_mileage.text.trim()),
-        if (_vehicleType.text.trim().isNotEmpty)
-          'vehicle_type': _vehicleType.text.trim(),
-        if (_categorie.text.trim().isNotEmpty)
-          'categorie': _categorie.text.trim(),
-        if (_gamme.text.trim().isNotEmpty) 'gamme': _gamme.text.trim(),
+        if (_vehicleType.isNotEmpty) 'vehicle_type': _vehicleType,
+        if (_categorie.isNotEmpty) 'categorie': _categorie,
+        if (_gamme.isNotEmpty) 'gamme': _gamme,
         if (int.tryParse(_cylinders.text.trim()) != null)
           'nombre_cylindres': int.parse(_cylinders.text.trim()),
         if (_miseEnCirculation != null)
@@ -259,15 +287,31 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           'numero_police': _numeroPolice.text.trim(),
         if (_immatOnline.text.trim().isNotEmpty)
           'immat_online': _immatOnline.text.trim(),
+        if (_immatProvExpiry != null)
+          'immat_provisoire_expiry': _iso(_immatProvExpiry!),
         if (double.tryParse(_dailyPrice.text.trim()) != null)
           'daily_rental_price': double.parse(_dailyPrice.text.trim()),
         if (double.tryParse(_monthlyPrice.text.trim()) != null)
           'monthly_rental_price': double.parse(_monthlyPrice.text.trim()),
         if (double.tryParse(_purchasePrice.text.trim()) != null)
           'purchase_price': double.parse(_purchasePrice.text.trim()),
-        if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
       };
       final id = await ref.read(vehiclesRepoProvider).create(body);
+      // Upload de la photo principale si l'utilisateur en a choisi une —
+      // non bloquant : la création du véhicule reste réussie même si la photo
+      // échoue, on remonte juste un message d'erreur.
+      if (_mainPhoto != null && id.isNotEmpty) {
+        try {
+          await ref
+              .read(vehiclesRepoProvider)
+              .uploadMainPhoto(id: id, filePath: _mainPhoto!.path);
+        } catch (e) {
+          setState(() {
+            _error =
+                "Véhicule créé, mais l'upload de la photo a échoué : ${_short(e)}";
+          });
+        }
+      }
       ref.invalidate(vehiclesListProvider);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -342,6 +386,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                 _adminSection(),
                 const SizedBox(height: 12),
                 _pricingSection(),
+                const SizedBox(height: 12),
+                _photoSection(),
                 if (_error != null) ...[
                   const SizedBox(height: 10),
                   Container(
@@ -470,7 +516,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                 child: DropdownButtonFormField<int>(
                   value: _platRegion,
                   isExpanded: true,
-                  items: List.generate(90, (i) => i + 1)
+                  items: _plateRegions
                       .map((n) =>
                           DropdownMenuItem(value: n, child: Text('$n')))
                       .toList(),
@@ -495,12 +541,13 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   Widget _technicalSection() {
     final brands = ref.watch(vehicleBrandsProvider).valueOrNull ??
         const <VehicleBrandDto>[];
-    final models =
-        _brandId == null ? const <VehicleModelDto>[] : (brands
-                    .where((b) => b.id == _brandId)
-                    .firstOrNull
-                    ?.models ??
-                const []);
+    final models = _brandId == null
+        ? const <VehicleModelDto>[]
+        : (brands
+                .where((b) => b.id == _brandId)
+                .firstOrNull
+                ?.models ??
+            const []);
     return ModuleCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -508,43 +555,37 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           const Text('Fiche technique',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _brandId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Marque'),
-                  items: [
-                    const DropdownMenuItem<String>(
-                        value: null, child: Text('— Choix —')),
-                    for (final b in brands)
-                      DropdownMenuItem(value: b.id, child: Text(b.name)),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _brandId = v;
-                    _modelId = null;
-                  }),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _modelId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Modèle'),
-                  items: [
-                    const DropdownMenuItem<String>(
-                        value: null, child: Text('— Choix —')),
-                    for (final m in models)
-                      DropdownMenuItem(value: m.id, child: Text(m.name)),
-                  ],
-                  onChanged:
-                      _brandId == null ? null : (v) => setState(() => _modelId = v),
-                ),
-              ),
-            ],
-          ),
+          // Marque + bouton « + Ajouter » comme sur le web — on peut créer une
+          // marque à la volée sans quitter le formulaire.
+          _brandField(brands),
+          if (_addingBrand) ...[
+            const SizedBox(height: 8),
+            _inlineAddRow(
+              controller: _newBrandName,
+              hint: 'Nouvelle marque',
+              pending: _creatingBrand,
+              onCancel: () => setState(() {
+                _addingBrand = false;
+                _newBrandName.clear();
+              }),
+              onSubmit: _submitNewBrand,
+            ),
+          ],
+          const SizedBox(height: 10),
+          _modelField(models),
+          if (_addingModel && _brandId != null) ...[
+            const SizedBox(height: 8),
+            _inlineAddRow(
+              controller: _newModelName,
+              hint: 'Nouveau modèle',
+              pending: _creatingModel,
+              onCancel: () => setState(() {
+                _addingModel = false;
+                _newModelName.clear();
+              }),
+              onSubmit: _submitNewModel,
+            ),
+          ],
           const SizedBox(height: 10),
           _twoCols(
             TextFormField(
@@ -552,67 +593,251 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Année'),
             ),
-            TextFormField(
-              controller: _color,
-              decoration: const InputDecoration(labelText: 'Couleur'),
+            _dropdown(
+              label: 'Catégorie',
+              value: _categorie,
+              options: _categorieOptions,
+              onChanged: (v) => setState(() => _categorie = v),
             ),
           ),
           const SizedBox(height: 10),
           _twoCols(
-            TextFormField(
-              controller: _fuelType,
-              decoration: const InputDecoration(
-                  labelText: 'Carburant',
-                  hintText: 'essence, diesel, hybride…'),
+            _dropdown(
+              label: 'Type',
+              value: _vehicleType,
+              options: _vehicleTypeOptions,
+              onChanged: (v) => setState(() => _vehicleType = v),
             ),
-            TextFormField(
-              controller: _vehicleType,
-              decoration: const InputDecoration(labelText: 'Type'),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _twoCols(
-            TextFormField(
-              controller: _categorie,
-              decoration: const InputDecoration(labelText: 'Catégorie'),
-            ),
-            TextFormField(
-              controller: _gamme,
-              decoration: const InputDecoration(labelText: 'Gamme'),
+            _dropdown(
+              label: 'Carburant',
+              value: _fuelType,
+              options: _fuelOptions,
+              onChanged: (v) => setState(() => _fuelType = v),
             ),
           ),
           const SizedBox(height: 10),
           _twoCols(
+            _dropdown(
+              label: 'Gamme',
+              value: _gamme,
+              options: _gammeOptions,
+              onChanged: (v) => setState(() => _gamme = v),
+            ),
             TextFormField(
               controller: _fiscalPower,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Puissance (CV)'),
             ),
+          ),
+          const SizedBox(height: 10),
+          _twoCols(
             TextFormField(
               controller: _cylinders,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Cylindres'),
             ),
-          ),
-          const SizedBox(height: 10),
-          _twoCols(
             TextFormField(
               controller: _mileage,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Index compteur (km)'),
+              decoration:
+                  const InputDecoration(labelText: 'Index compteur (km)'),
             ),
-            _dateInput(
-              label: 'Mise en circulation',
-              value: _miseEnCirculation,
-              onPick: (d) => setState(() => _miseEnCirculation = d),
-            ),
+          ),
+          const SizedBox(height: 10),
+          _dateInput(
+            label: 'Mise en circulation',
+            value: _miseEnCirculation,
+            onPick: (d) => setState(() => _miseEnCirculation = d),
           ),
         ],
       ),
     );
   }
 
+  // ---------- helpers formulaire (marque/modèle/dropdown) ----------
+
+  Widget _brandField(List<VehicleBrandDto> brands) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: _brandId,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Marque'),
+            items: [
+              const DropdownMenuItem<String>(
+                  value: null, child: Text('— Choix —')),
+              for (final b in brands)
+                DropdownMenuItem(value: b.id, child: Text(b.name)),
+            ],
+            onChanged: (v) => setState(() {
+              _brandId = v;
+              _modelId = null;
+            }),
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: () => setState(() => _addingBrand = !_addingBrand),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF4F46E5),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+          ),
+          child: Text(_addingBrand ? 'Fermer' : '+ Ajouter',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900, fontSize: 11)),
+        ),
+      ],
+    );
+  }
+
+  Widget _modelField(List<VehicleModelDto> models) {
+    final canAdd = _brandId != null;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: _modelId,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Modèle'),
+            items: [
+              const DropdownMenuItem<String>(
+                  value: null, child: Text('— Choix —')),
+              for (final m in models)
+                DropdownMenuItem(value: m.id, child: Text(m.name)),
+            ],
+            onChanged:
+                canAdd ? (v) => setState(() => _modelId = v) : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: !canAdd
+              ? null
+              : () => setState(() => _addingModel = !_addingModel),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF4F46E5),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+          ),
+          child: Text(_addingModel ? 'Fermer' : '+ Ajouter',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900, fontSize: 11)),
+        ),
+      ],
+    );
+  }
+
+  Widget _inlineAddRow({
+    required TextEditingController controller,
+    required String hint,
+    required bool pending,
+    required VoidCallback onCancel,
+    required Future<void> Function() onSubmit,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            decoration: InputDecoration(hintText: hint, isDense: true),
+            onSubmitted: (_) => onSubmit(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: pending ? null : () => onSubmit(),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF4F46E5),
+            minimumSize: const Size(48, 44),
+          ),
+          child: pending
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('OK',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+        ),
+        IconButton(
+          onPressed: pending ? null : onCancel,
+          icon: const Icon(Icons.close, size: 18),
+          tooltip: 'Annuler',
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submitNewBrand() async {
+    final name = _newBrandName.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _creatingBrand = true);
+    try {
+      final created = await ref.read(vehiclesRepoProvider).createBrand(name);
+      ref.invalidate(vehicleBrandsProvider);
+      setState(() {
+        _brandId = created.id;
+        _modelId = null;
+        _addingBrand = false;
+        _newBrandName.clear();
+      });
+    } catch (e) {
+      setState(() => _scanNotice = 'Ajout marque impossible : ${_short(e)}');
+    } finally {
+      if (mounted) setState(() => _creatingBrand = false);
+    }
+  }
+
+  Future<void> _submitNewModel() async {
+    final name = _newModelName.text.trim();
+    final brandId = _brandId;
+    if (name.isEmpty || brandId == null) return;
+    setState(() => _creatingModel = true);
+    try {
+      final created = await ref
+          .read(vehiclesRepoProvider)
+          .createModel(brandId: brandId, name: name);
+      ref.invalidate(vehicleBrandsProvider);
+      setState(() {
+        _modelId = created.id;
+        _addingModel = false;
+        _newModelName.clear();
+      });
+    } catch (e) {
+      setState(() => _scanNotice = 'Ajout modèle impossible : ${_short(e)}');
+    } finally {
+      if (mounted) setState(() => _creatingModel = false);
+    }
+  }
+
+  Widget _dropdown({
+    required String label,
+    required String value,
+    required List<String> options,
+    required ValueChanged<String> onChanged,
+  }) {
+    // On tolère une valeur préexistante hors liste (si l'OCR a renvoyé une
+    // casse différente) pour éviter de la perdre silencieusement.
+    final hasValue = value.isNotEmpty && !options.contains(value);
+    return DropdownButtonFormField<String>(
+      value: value.isEmpty ? '' : value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label),
+      items: [
+        const DropdownMenuItem<String>(value: '', child: Text('— Choix —')),
+        for (final o in options)
+          DropdownMenuItem(value: o, child: Text(o)),
+        if (hasValue) DropdownMenuItem(value: value, child: Text(value)),
+      ],
+      onChanged: (v) => onChanged(v ?? ''),
+    );
+  }
+
   Widget _adminSection() {
+    final isCarteRecue = _carteGriseStatus == _CarteGriseStatus.recue;
     return ModuleCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,18 +845,43 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           const Text('Administratif',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
+          // Statut carte grise + N° conditionnel, comme la carte Conformité
+          // Administrative du modal web.
           _twoCols(
-            TextFormField(
-              controller: _registrationCard,
+            DropdownButtonFormField<_CarteGriseStatus>(
+              value: _carteGriseStatus,
+              isExpanded: true,
               decoration:
-                  const InputDecoration(labelText: 'N° Carte grise'),
+                  const InputDecoration(labelText: 'Statut carte grise'),
+              items: const [
+                DropdownMenuItem(
+                    value: _CarteGriseStatus.enAttente,
+                    child: Text('En attente')),
+                DropdownMenuItem(
+                    value: _CarteGriseStatus.recue, child: Text('Reçue')),
+              ],
+              onChanged: (v) => setState(() =>
+                  _carteGriseStatus = v ?? _CarteGriseStatus.enAttente),
             ),
+            isCarteRecue
+                ? TextFormField(
+                    controller: _registrationCard,
+                    decoration: const InputDecoration(
+                        labelText: 'N° Carte grise'),
+                  )
+                : TextFormField(
+                    controller: _vin,
+                    decoration:
+                        const InputDecoration(labelText: 'Châssis (VIN)'),
+                  ),
+          ),
+          if (isCarteRecue) ...[
+            const SizedBox(height: 10),
             TextFormField(
               controller: _vin,
-              decoration:
-                  const InputDecoration(labelText: 'Châssis (VIN)'),
+              decoration: const InputDecoration(labelText: 'Châssis (VIN)'),
             ),
-          ),
+          ],
           const SizedBox(height: 10),
           _twoCols(
             _dateInput(
@@ -644,6 +894,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               value: _acquisitionDate,
               onPick: (d) => setState(() => _acquisitionDate = d),
             ),
+          ),
+          const SizedBox(height: 10),
+          _dateInput(
+            label: 'Validité immat. provisoire',
+            value: _immatProvExpiry,
+            onPick: (d) => setState(() => _immatProvExpiry = d),
           ),
           const SizedBox(height: 10),
           _twoCols(
@@ -688,13 +944,15 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               controller: _dailyPrice,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Tarif / jour (MAD)'),
+              decoration:
+                  const InputDecoration(labelText: 'Tarif / jour (MAD)'),
             ),
             TextFormField(
               controller: _monthlyPrice,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Tarif / mois (MAD)'),
+              decoration:
+                  const InputDecoration(labelText: 'Tarif / mois (MAD)'),
             ),
           ),
           const SizedBox(height: 10),
@@ -702,17 +960,101 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             controller: _purchasePrice,
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: "Prix d'achat (MAD)"),
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _notes,
-            maxLines: 3,
-            decoration: const InputDecoration(labelText: 'Notes'),
+            decoration:
+                const InputDecoration(labelText: "Prix d'achat (MAD)"),
           ),
         ],
       ),
     );
+  }
+
+  // Photo principale — « Prendre une photo » (caméra) ou « Choisir » (galerie),
+  // reflet des deux boutons de la carte « Photos & Vidéo » du modal web.
+  Widget _photoSection() {
+    final preview = _mainPhoto;
+    return ModuleCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Photo du véhicule',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          const Text(
+            'Facultatif — sera envoyée après la création. Idéalement l\'avant du véhicule, en extérieur.',
+            style: TextStyle(color: Colors.black54, fontSize: 11.5),
+          ),
+          const SizedBox(height: 10),
+          if (preview != null) ...[
+            Stack(
+              alignment: Alignment.topRight,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 10,
+                    child: df_img.fileImage(preview.path, fit: BoxFit.cover),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Material(
+                    color: Colors.red,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: () => setState(() => _mainPhoto = null),
+                      customBorder: const CircleBorder(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(5),
+                        child: Icon(Icons.close,
+                            color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickMainPhoto(ImageSource.camera),
+                  icon: const Icon(Icons.photo_camera, size: 16),
+                  label: const Text('Prendre une photo'),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(40)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickMainPhoto(ImageSource.gallery),
+                  icon: const Icon(Icons.image_outlined, size: 16),
+                  label: const Text('Galerie'),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(40)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickMainPhoto(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final f = await picker.pickImage(
+          source: source, maxWidth: 1600, imageQuality: 80);
+      if (f != null) setState(() => _mainPhoto = f);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir la caméra.')),
+      );
+    }
   }
 
   Widget _dateInput({

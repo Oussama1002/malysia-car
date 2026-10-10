@@ -91,6 +91,19 @@ class VehiclesRepo {
     return map['id']?.toString() ?? '';
   }
 
+  /// POST /vehicles/{id}/photo — même endpoint que le modal web. Le champ
+  /// multipart est `photo`, pas `file`.
+  Future<void> uploadMainPhoto({
+    required String id,
+    required String filePath,
+  }) async {
+    final multipart = await MultipartFile.fromFile(filePath);
+    await _api.raw.post(
+      '/vehicles/$id/photo',
+      data: FormData.fromMap({'photo': multipart}),
+    );
+  }
+
   /// OCR : upload d'un document vehicule + extraction (poll). Renvoie les
   /// champs extraits + l'id du document pour l'attacher au vehicule.
   Future<Map<String, dynamic>> scanDocument({
