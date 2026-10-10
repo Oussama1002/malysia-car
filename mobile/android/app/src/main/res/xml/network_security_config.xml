@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Autorise exceptionnellement le HTTP en clair pour l'IP du serveur de dev.
+  À retirer dès que l'API sera derrière HTTPS avec un nom de domaine.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">79.143.180.186</domain>
+    </domain-config>
+</network-security-config>

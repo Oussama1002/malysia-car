@@ -5,6 +5,28 @@ allprojects {
     }
 }
 
+// Force tous les plugins Android (path_provider_android et compagnie) a compiler
+// en Java 11 : sans cela, chacun garde son defaut Java 8, et jlink plante en
+// essayant de construire une image JDK sous Android SDK 34. Ce bloc doit
+// imperativement etre pose AVANT project.evaluationDependsOn(":app").
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_11
+                    targetCompatibility = JavaVersion.VERSION_11
+                }
+                if (project.plugins.hasPlugin("org.jetbrains.kotlin.android")) {
+                    kotlinOptions {
+                        jvmTarget = "11"
+                    }
+                }
+            }
+        }
+    }
+}
+
 rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"

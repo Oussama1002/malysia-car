@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/auth/auth_notifier.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_mode_provider.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/home/presentation/app_shell.dart';
 
@@ -21,11 +22,14 @@ class DriveFlowApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
       title: 'DriveFlow',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeMode,
       locale: const Locale('fr'),
       supportedLocales: const [Locale('fr'), Locale('en')],
       localizationsDelegates: const [
