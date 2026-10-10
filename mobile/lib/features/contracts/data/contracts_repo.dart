@@ -30,7 +30,9 @@ class ContractsRepo {
 
   Future<ContractDetailDto> fetchDetail(String id) async {
     // Le serveur renvoie {contract: {...}, history: [...], linked_reservation_id: ...}
-    // — on va chercher la vraie fiche sous la clé `contract`.
+    // — on prend la fiche sous `contract` ET on garde l'`history` métier
+    // (changements de statut, actions clés) pour l'onglet Historique, comme
+    // sur le web qui lit cette même liste depuis la même enveloppe.
     final data = await _api.getData('/contracts/$id');
     final envelope = data is Map
         ? data.map((k, v) => MapEntry(k.toString(), v))
@@ -39,7 +41,15 @@ class ContractsRepo {
     final contractMap = rawContract is Map
         ? rawContract.map((k, v) => MapEntry(k.toString(), v))
         : <String, dynamic>{};
-    return ContractDetailDto.fromJson(contractMap);
+    final rawHistory = envelope['history'];
+    final history = rawHistory is List
+        ? rawHistory
+            .whereType<Map>()
+            .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
+            .map(ContractHistoryEntryDto.fromJson)
+            .toList()
+        : <ContractHistoryEntryDto>[];
+    return ContractDetailDto.fromJson(contractMap).withHistory(history);
   }
 
   Future<List<ContractInstallmentDto>> fetchInstallments(String id) async {
@@ -55,13 +65,20 @@ class ContractsRepo {
     }
   }
 
-  Future<List<ContractAuditEntryDto>> fetchAudit(String id) async {
+  /// Audit log complet d'une entité (contrat ici) — même source que la
+  /// `EntityAuditTimeline` du web, qui tape `/entities/{type}/{id}/audit`.
+  /// L'ancien `fetchAudit` tapait `/contracts/{id}/audit`, route qui n'existe
+  /// pas côté backend — d'où l'historique vide en permanence sur mobile.
+  Future<List<EntityAuditEntryDto>> fetchEntityAudit(String id) async {
     try {
-      final data = await _api.getData('/contracts/$id/audit');
+      final data =
+          await _api.getData('/entities/contract/$id/audit', query: {
+        'per_page': 100,
+      });
       if (data is! List) return const [];
       return data
           .whereType<Map<String, dynamic>>()
-          .map(ContractAuditEntryDto.fromJson)
+          .map(EntityAuditEntryDto.fromJson)
           .toList();
     } catch (_) {
       return const [];
@@ -185,6 +202,12 @@ final contractDetailProvider =
     clientPhone: detail.clientPhone,
     clientEmail: detail.clientEmail,
     notes: detail.notes,
+    paymentMethod: detail.paymentMethod,
+    expectedPaymentDay: detail.expectedPaymentDay,
+    paymentTerms: detail.paymentTerms,
+    bankReference: detail.bankReference,
+    chequeNumber: detail.chequeNumber,
+    history: detail.history,
   );
 });
 
@@ -192,6 +215,8 @@ final contractInstallmentsProvider =
     FutureProvider.family<List<ContractInstallmentDto>, String>(
         (ref, id) => ref.watch(contractsRepoProvider).fetchInstallments(id));
 
-final contractAuditProvider =
-    FutureProvider.family<List<ContractAuditEntryDto>, String>(
-        (ref, id) => ref.watch(contractsRepoProvider).fetchAudit(id));
+/// Audit log (actions utilisateur) — alimente la section « Audit & traçabilité »
+/// de l'onglet Historique.
+final contractEntityAuditProvider =
+    FutureProvider.family<List<EntityAuditEntryDto>, String>(
+        (ref, id) => ref.watch(contractsRepoProvider).fetchEntityAudit(id));

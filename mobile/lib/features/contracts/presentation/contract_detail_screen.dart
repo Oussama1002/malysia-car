@@ -47,7 +47,7 @@ class _ContractDetailScreenState extends ConsumerState<ContractDetailScreen>
             onPressed: () {
               ref.invalidate(contractDetailProvider(widget.id));
               ref.invalidate(contractInstallmentsProvider(widget.id));
-              ref.invalidate(contractAuditProvider(widget.id));
+              ref.invalidate(contractEntityAuditProvider(widget.id));
             },
           ),
         ],
@@ -88,7 +88,7 @@ class _ContractDetailScreenState extends ConsumerState<ContractDetailScreen>
                       _PaymentsTab(contractId: widget.id),
                       _LegalTab(contractId: widget.id),
                       _DocumentsTab(contractId: widget.id),
-                      _HistoryTab(contractId: widget.id),
+                      _HistoryTab(contractId: widget.id, detail: detail),
                       _ActionsTab(contractId: widget.id, contract: detail.contract),
                     ],
                   ),
@@ -183,6 +183,10 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
+/// Onglet « Détails » — reproduit la version web (`ContractDetailPage.tsx`) :
+/// trois cartes seulement (Période, Parties/véhicule, Paiement). Les montants
+/// financiers (mensualité, caution, premier loyer, VR, taux, km/an) sont
+/// couverts par l'onglet « Échéancier » et n'apparaissent plus ici.
 class _DetailsTab extends StatelessWidget {
   const _DetailsTab({required this.detail});
   final ContractDetailDto detail;
@@ -190,110 +194,169 @@ class _DetailsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = detail.contract;
-    final money = NumberFormat.currency(locale: 'fr', symbol: 'MAD');
     final dateFmt = DateFormat('dd/MM/yyyy', 'fr');
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        ModuleCard(
+        _SectionCard(
+          title: 'Période',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Période',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              ModuleKV(
-                  label: 'Début',
-                  value: c.startDate != null
-                      ? dateFmt.format(c.startDate!)
-                      : '—'),
-              ModuleKV(
-                  label: 'Fin',
-                  value:
-                      c.endDate != null ? dateFmt.format(c.endDate!) : '—'),
-              if (detail.durationMonths != null)
-                ModuleKV(
-                    label: 'Durée',
-                    value: '${detail.durationMonths} mois'),
+              Text(
+                '${c.startDate != null ? dateFmt.format(c.startDate!) : '—'}'
+                ' → '
+                '${c.endDate != null ? dateFmt.format(c.endDate!) : '—'}',
+                style:
+                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+              ),
+              if (detail.durationMonths != null) ...[
+                const SizedBox(height: 4),
+                Text('${detail.durationMonths} mois',
+                    style: const TextStyle(
+                        color: Colors.black54, fontSize: 12)),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 12),
-        ModuleCard(
+        _SectionCard(
+          title: 'Parties / véhicule',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Financier',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              if (c.baseAmount != null)
-                ModuleKV(
-                    label: 'Montant',
-                    value: money.format(c.baseAmount)),
-              if (detail.monthlyAmount != null)
-                ModuleKV(
-                    label: 'Mensualité',
-                    value: money.format(detail.monthlyAmount)),
-              if (detail.deposit != null)
-                ModuleKV(label: 'Caution', value: money.format(detail.deposit)),
-              if (detail.firstRent != null)
-                ModuleKV(
-                    label: 'Premier loyer',
-                    value: money.format(detail.firstRent)),
-              if (detail.residualValue != null)
-                ModuleKV(
-                    label: 'Valeur résiduelle',
-                    value: money.format(detail.residualValue)),
-              if (detail.rate != null)
-                ModuleKV(
-                    label: 'Taux',
-                    value: '${detail.rate!.toStringAsFixed(2)} %'),
-              if (detail.kmPerYear != null)
-                ModuleKV(
-                    label: 'Km / an',
-                    value: NumberFormat.decimalPattern('fr')
-                        .format(detail.kmPerYear)),
+              _LinePair(
+                label: 'Client',
+                value: c.customerName ?? '—',
+                emphasis: c.customerName != null,
+              ),
+              const SizedBox(height: 4),
+              _LinePair(
+                label: 'Véhicule',
+                value: c.vehicleLabel ?? '—',
+                emphasis: c.vehicleLabel != null,
+              ),
             ],
           ),
         ),
-        if (detail.clientPhone != null || detail.clientEmail != null) ...[
-          const SizedBox(height: 12),
-          ModuleCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Partenaires',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                if (c.customerName != null)
-                  ModuleKV(label: 'Client', value: c.customerName!),
-                if (detail.clientPhone != null)
-                  ModuleKV(label: 'Téléphone', value: detail.clientPhone!),
-                if (detail.clientEmail != null)
-                  ModuleKV(label: 'Email', value: detail.clientEmail!),
-                if (c.vehicleLabel != null)
-                  ModuleKV(label: 'Véhicule', value: c.vehicleLabel!),
-              ],
+        const SizedBox(height: 12),
+        _SectionCard(
+          title: 'Paiement',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _LinePair(
+                  label: 'Mode',
+                  value: _paymentMethodFr(detail.paymentMethod) ?? '—'),
+              const SizedBox(height: 4),
+              _LinePair(
+                  label: 'Échéance jour',
+                  value: detail.expectedPaymentDay?.toString() ?? '—'),
+              const SizedBox(height: 4),
+              _LinePair(
+                  label: 'Conditions',
+                  value: detail.paymentTerms ?? '—'),
+              const SizedBox(height: 4),
+              _LinePair(
+                  label: 'Réf. virement',
+                  value: detail.bankReference ?? '—'),
+              const SizedBox(height: 4),
+              _LinePair(
+                  label: 'N° chèque',
+                  value: detail.chequeNumber ?? '—'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+const Map<String, String> _kPaymentMethodFr = {
+  'virement': 'Virement bancaire',
+  'bank_transfer': 'Virement bancaire',
+  'cheque': 'Chèque',
+  'check': 'Chèque',
+  'espece': 'Espèce',
+  'cash': 'Espèce',
+  'carte': 'Carte bancaire',
+  'card': 'Carte bancaire',
+  'autre': 'Autre',
+  'other': 'Autre',
+};
+
+String? _paymentMethodFr(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  return _kPaymentMethodFr[raw.toLowerCase()] ?? raw;
+}
+
+/// Carte au bord fin, titre en haut en petite capitale — comme les cartes
+/// `rounded-2xl` + `text-xs uppercase tracking-widest` du web.
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.title, required this.child});
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: Colors.black45,
+              letterSpacing: 1.3,
             ),
           ),
+          const SizedBox(height: 10),
+          child,
         ],
-        if (detail.notes != null && detail.notes!.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          ModuleCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Notes',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Text(detail.notes!,
-                    style: const TextStyle(fontSize: 13)),
-              ],
+      ),
+    );
+  }
+}
+
+/// Ligne « Label: valeur » utilisée dans la carte Paiement — le label est
+/// gris, la valeur en gras, séparés par un espace flexible.
+class _LinePair extends StatelessWidget {
+  const _LinePair({
+    required this.label,
+    required this.value,
+    this.emphasis = false,
+  });
+  final String label;
+  final String value;
+  final bool emphasis;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$label  ',
+            style: const TextStyle(color: Colors.black45, fontSize: 12.5)),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontWeight: emphasis ? FontWeight.w800 : FontWeight.w700,
+              fontSize: 13,
+              color: emphasis
+                  ? const Color(0xFF3730A3)
+                  : Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
-        ],
+        ),
       ],
     );
   }
@@ -799,70 +862,245 @@ class _DocumentsTab extends ConsumerWidget {
   }
 }
 
+/// Onglet « Historique » — comme la version web, en deux sections :
+///   1. Audit & traçabilité — journal d'audit (`/entities/contract/{id}/audit`)
+///   2. Historique métier — évènements renvoyés sous `history` du GET du
+///      contrat (changements de statut, création, signature, etc.)
 class _HistoryTab extends ConsumerWidget {
-  const _HistoryTab({required this.contractId});
+  const _HistoryTab({required this.contractId, required this.detail});
   final String contractId;
+  final ContractDetailDto detail;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(contractAuditProvider(contractId));
-    final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'fr');
-    return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => ModuleErrorView(message: '$e'),
-      data: (items) {
-        if (items.isEmpty) {
-          return const ModuleEmptyView(
-            icon: Icons.history,
-            message: 'Aucun événement enregistré pour ce contrat.',
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: items.length,
-          itemBuilder: (_, i) {
-            final e = items[i];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: ModuleCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(e.action,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w800, fontSize: 14)),
-                        ),
-                        if (e.createdAt != null)
-                          Text(dateFmt.format(e.createdAt!),
-                              style: const TextStyle(
-                                  color: Colors.black45, fontSize: 11)),
-                      ],
-                    ),
-                    if (e.detail != null && e.detail!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(e.detail!,
-                          style: const TextStyle(
-                              color: Colors.black54, fontSize: 12.5)),
-                    ],
-                    if (e.actorName != null) ...[
-                      const SizedBox(height: 4),
-                      Text('Par ${e.actorName}',
-                          style: const TextStyle(
-                              color: Colors.black45, fontSize: 11)),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+    final auditAsync = ref.watch(contractEntityAuditProvider(contractId));
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _SectionCard(
+          title: 'Audit & traçabilité',
+          child: auditAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('Chargement de l\'historique…',
+                  style: TextStyle(color: Colors.black45, fontSize: 12)),
+            ),
+            error: (e, _) => Text('Erreur : $e',
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+            data: (rows) {
+              if (rows.isEmpty) {
+                return const Text(
+                    'Aucune action enregistrée pour cette entité.',
+                    style: TextStyle(color: Colors.black45, fontSize: 12));
+              }
+              return Column(
+                children: [
+                  for (final r in rows) _AuditTile(entry: r),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
+          title: 'Historique métier',
+          child: _BusinessHistoryList(history: detail.history),
+        ),
+      ],
     );
   }
 }
+
+class _AuditTile extends StatelessWidget {
+  const _AuditTile({required this.entry});
+  final EntityAuditEntryDto entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'fr');
+    final title = _auditActionFr[entry.action] ??
+        entry.actionLabel ??
+        entry.action;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: entry.legalSignificance
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFF6366F1),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
+              if (entry.occurredAt != null)
+                Text(dateFmt.format(entry.occurredAt!),
+                    style: const TextStyle(
+                        color: Colors.black45, fontSize: 10.5)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  entry.actorEmail ?? 'Système',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.black54, fontSize: 11.5),
+                ),
+              ),
+              if (entry.legalSignificance)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text('LÉGAL',
+                      style: TextStyle(
+                          color: Color(0xFF92400E),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1)),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessHistoryList extends StatelessWidget {
+  const _BusinessHistoryList({required this.history});
+  final List<ContractHistoryEntryDto> history;
+
+  @override
+  Widget build(BuildContext context) {
+    if (history.isEmpty) {
+      return const Text('Aucun évènement métier enregistré.',
+          style: TextStyle(color: Colors.black45, fontSize: 12));
+    }
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'fr');
+    return Column(
+      children: [
+        for (final h in history)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: _toneFor(h.action),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(_businessActionFr[h.action] ?? h.action,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800, fontSize: 13)),
+                    ),
+                    if (h.at != null)
+                      Text(dateFmt.format(h.at!),
+                          style: const TextStyle(
+                              color: Colors.black45, fontSize: 10.5)),
+                  ],
+                ),
+                if (h.fromStatus != null || h.toStatus != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${contractStatusFr(h.fromStatus ?? '—')} → ${contractStatusFr(h.toStatus ?? '—')}',
+                    style: const TextStyle(
+                        color: Colors.black54, fontSize: 11.5),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Color _toneFor(String action) {
+    switch (action) {
+      case 'activated':
+      case 'approved':
+      case 'signed':
+        return const Color(0xFF059669);
+      case 'terminated':
+      case 'cancelled':
+      case 'rejected':
+        return const Color(0xFFDC2626);
+      default:
+        return const Color(0xFF6366F1);
+    }
+  }
+}
+
+const Map<String, String> _auditActionFr = {
+  'created': 'Création',
+  'updated': 'Modification',
+  'deleted': 'Suppression',
+  'status_changed': 'Changement de statut',
+  'approved': 'Approbation',
+  'rejected': 'Rejet',
+  'activated': 'Activation',
+  'terminated': 'Résiliation',
+  'signed': 'Signature',
+  'sent_for_signature': 'Envoi pour signature',
+  'schedule_generated': 'Échéancier généré',
+  'pdf_generated': 'PDF généré',
+  'payment_recorded': 'Paiement enregistré',
+};
+
+const Map<String, String> _businessActionFr = {
+  'created': 'Création',
+  'updated': 'Modification',
+  'status_changed': 'Changement de statut',
+  'approved': 'Approbation',
+  'activated': 'Activation',
+  'terminated': 'Résiliation',
+  'signed': 'Signature',
+  'sent_for_signature': 'Envoi pour signature',
+  'cancelled': 'Annulation',
+  'rejected': 'Rejet',
+  'schedule_generated': 'Échéancier généré',
+  'pdf_generated': 'PDF généré',
+  'payment_recorded': 'Paiement enregistré',
+};
 
 class _ActionsTab extends ConsumerStatefulWidget {
   const _ActionsTab({required this.contractId, required this.contract});

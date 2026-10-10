@@ -18,6 +18,12 @@ class ContractDetailDto {
     this.clientPhone,
     this.clientEmail,
     this.notes,
+    this.paymentMethod,
+    this.expectedPaymentDay,
+    this.paymentTerms,
+    this.bankReference,
+    this.chequeNumber,
+    this.history = const [],
   });
 
   final ContractDto contract;
@@ -33,6 +39,14 @@ class ContractDetailDto {
   final String? clientPhone;
   final String? clientEmail;
   final String? notes;
+  // Nouveau — carte « Paiement » de la version web.
+  final String? paymentMethod;
+  final int? expectedPaymentDay;
+  final String? paymentTerms;
+  final String? bankReference;
+  final String? chequeNumber;
+  // Historique métier renvoyé par `/contracts/{id}` sous la clé `history`.
+  final List<ContractHistoryEntryDto> history;
 
   factory ContractDetailDto.fromJson(Map<String, dynamic> json) {
     // Le backend `ContractResource` renvoie camelCase (`monthlyPayment`,
@@ -61,10 +75,118 @@ class ContractDetailDto {
       signatureStatus:
           (json['signatureStatus'] ?? json['signature_status'])?.toString(),
       paymentStatus:
-          (json['paymentMethod'] ?? json['payment_status'])?.toString(),
+          (json['paymentStatus'] ?? json['payment_status'])?.toString(),
       clientPhone: json['client_phone']?.toString(),
       clientEmail: json['client_email']?.toString(),
       notes: json['notes']?.toString(),
+      paymentMethod:
+          (json['paymentMethod'] ?? json['payment_method'])?.toString(),
+      expectedPaymentDay: _int(
+          json['expectedPaymentDay'] ?? json['expected_payment_day']),
+      paymentTerms:
+          (json['paymentTerms'] ?? json['payment_terms'])?.toString(),
+      bankReference:
+          (json['bankReference'] ?? json['bank_reference'])?.toString(),
+      chequeNumber:
+          (json['chequeNumber'] ?? json['cheque_number'])?.toString(),
+    );
+  }
+
+  /// Copie en remplaçant la liste d'évènements métier (ils arrivent avec
+  /// l'enveloppe `{contract, history}` du show et sont injectés par le repo).
+  ContractDetailDto withHistory(List<ContractHistoryEntryDto> items) {
+    return ContractDetailDto(
+      contract: contract,
+      monthlyAmount: monthlyAmount,
+      deposit: deposit,
+      firstRent: firstRent,
+      residualValue: residualValue,
+      rate: rate,
+      durationMonths: durationMonths,
+      kmPerYear: kmPerYear,
+      signatureStatus: signatureStatus,
+      paymentStatus: paymentStatus,
+      clientPhone: clientPhone,
+      clientEmail: clientEmail,
+      notes: notes,
+      paymentMethod: paymentMethod,
+      expectedPaymentDay: expectedPaymentDay,
+      paymentTerms: paymentTerms,
+      bankReference: bankReference,
+      chequeNumber: chequeNumber,
+      history: items,
+    );
+  }
+}
+
+/// Évènement de l'historique métier d'un contrat (statut, actions clés) —
+/// renvoyé sous la clé `history` du GET `/contracts/{id}`.
+class ContractHistoryEntryDto {
+  const ContractHistoryEntryDto({
+    required this.id,
+    required this.action,
+    this.fromStatus,
+    this.toStatus,
+    this.at,
+  });
+
+  final String id;
+  final String action;
+  final String? fromStatus;
+  final String? toStatus;
+  final DateTime? at;
+
+  factory ContractHistoryEntryDto.fromJson(Map<String, dynamic> json) {
+    return ContractHistoryEntryDto(
+      id: (json['id'] ?? json['at'])?.toString() ?? '',
+      action: json['action']?.toString() ?? 'event',
+      fromStatus:
+          (json['from_status'] ?? json['fromStatus'])?.toString(),
+      toStatus: (json['to_status'] ?? json['toStatus'])?.toString(),
+      at: _date(json['at']) ?? _date(json['created_at']),
+    );
+  }
+}
+
+/// Entrée d'audit log — alignée sur l'`AuditLogResource` du backend. Alimente
+/// la section « Audit & traçabilité » de l'onglet Historique, comme sur la
+/// version web (composant `EntityAuditTimeline`).
+class EntityAuditEntryDto {
+  const EntityAuditEntryDto({
+    required this.id,
+    required this.action,
+    this.actionLabel,
+    this.actorEmail,
+    this.occurredAt,
+    this.ipAddress,
+    this.legalSignificance = false,
+    this.beforeData,
+    this.afterData,
+  });
+
+  final String id;
+  final String action;
+  final String? actionLabel;
+  final String? actorEmail;
+  final DateTime? occurredAt;
+  final String? ipAddress;
+  final bool legalSignificance;
+  final Map<String, dynamic>? beforeData;
+  final Map<String, dynamic>? afterData;
+
+  factory EntityAuditEntryDto.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic>? asMap(dynamic v) =>
+        v is Map ? v.map((k, vv) => MapEntry(k.toString(), vv)) : null;
+    return EntityAuditEntryDto(
+      id: json['id']?.toString() ?? '',
+      action: json['action']?.toString() ?? 'event',
+      actionLabel: json['action_label']?.toString(),
+      actorEmail: json['actor_email']?.toString(),
+      occurredAt: _date(json['occurred_at']) ?? _date(json['created_at']),
+      ipAddress: json['ip_address']?.toString(),
+      legalSignificance: json['legal_significance'] == true,
+      beforeData: asMap(json['before_data']),
+      afterData: asMap(json['after_data']),
     );
   }
 }
@@ -94,38 +216,6 @@ class ContractInstallmentDto {
       status: json['status']?.toString() ?? 'pending',
       dueDate: _date(json['due_date']),
       paidAt: _date(json['paid_at']),
-    );
-  }
-}
-
-class ContractAuditEntryDto {
-  const ContractAuditEntryDto({
-    required this.id,
-    required this.action,
-    this.actorName,
-    this.detail,
-    this.createdAt,
-  });
-
-  final String id;
-  final String action;
-  final String? actorName;
-  final String? detail;
-  final DateTime? createdAt;
-
-  factory ContractAuditEntryDto.fromJson(Map<String, dynamic> json) {
-    return ContractAuditEntryDto(
-      id: json['id']?.toString() ?? '',
-      action: json['action']?.toString() ??
-          json['action_label']?.toString() ??
-          json['action_type']?.toString() ??
-          '—',
-      actorName: json['userName']?.toString() ??
-          json['actor_name']?.toString() ??
-          json['user_name']?.toString(),
-      detail: json['detail']?.toString(),
-      createdAt:
-          _date(json['createdAt']) ?? _date(json['created_at']),
     );
   }
 }
