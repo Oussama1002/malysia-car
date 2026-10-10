@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
 import '../../customers/data/customer_dto.dart';
@@ -8,6 +9,7 @@ import '../../customers/data/customers_repo.dart';
 import '../../customers/presentation/new_customer_screen.dart';
 import '../../vehicles/data/vehicle_dto.dart';
 import '../../vehicles/data/vehicles_repo.dart';
+import '../../website_leads/data/website_leads_repo.dart';
 import '../data/reservations_repo.dart';
 import 'reservation_detail_screen.dart';
 
@@ -21,15 +23,48 @@ class NewReservationScreen extends ConsumerStatefulWidget {
     this.initialVehicleId,
     this.initialStartAt,
     this.initialEndAt,
+    this.fromLead,
   });
 
   final String? initialVehicleId;
   final String? initialStartAt;
   final String? initialEndAt;
 
+  /// Pré-remplit l'écran depuis une « Demande du site ». À la création réussie
+  /// de la réservation, le lead est marqué `converted` côté backend.
+  final NewReservationLeadSeed? fromLead;
+
   @override
   ConsumerState<NewReservationScreen> createState() =>
       _NewReservationScreenState();
+}
+
+/// Payload transporté entre `WebsiteLeadsScreen` et `NewReservationScreen`.
+class NewReservationLeadSeed {
+  const NewReservationLeadSeed({
+    required this.id,
+    required this.fullName,
+    required this.phone,
+    this.email,
+    this.vehicleLabel,
+  });
+
+  final String id;
+  final String fullName;
+  final String phone;
+  final String? email;
+  final String? vehicleLabel;
+
+  String get firstName {
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    return parts.isEmpty ? '' : parts.first;
+  }
+
+  String get lastName {
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    if (parts.length <= 1) return '';
+    return parts.sublist(1).join(' ');
+  }
 }
 
 class _NewReservationScreenState
@@ -75,6 +110,68 @@ class _NewReservationScreenState
             }
           });
           _recheckAvailability();
+        }
+      });
+    }
+    // Demande du site : si un client existant correspond au téléphone, on le
+    // présélectionne. Si une marque+modèle du souhait matche la flotte, on
+    // sélectionne aussi le véhicule.
+    final seed = widget.fromLead;
+    if (seed != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          final digits = seed.phone.replaceAll(RegExp(r'\D'), '');
+          if (digits.length >= 6) {
+            final tailLen = digits.length < 8 ? digits.length : 8;
+            final tail = digits.substring(digits.length - tailLen);
+            final list = await ref.read(customersRepoProvider).list();
+            CustomerDto? match;
+            for (final c in list) {
+              final p = (c.phone ?? '').replaceAll(RegExp(r'\D'), '');
+              if (p.isNotEmpty && p.endsWith(tail)) { match = c; break; }
+            }
+            if (match != null && mounted && _customer == null) {
+              setState(() => _customer = match);
+            }
+          }
+        } catch (_) { /* best-effort : l'agent peut toujours choisir à la main */ }
+
+        final hint = seed.vehicleLabel;
+        if (hint != null && hint.trim().isNotEmpty && widget.initialVehicleId == null) {
+          try {
+            final vs = await ref.read(vehiclesRepoProvider).list();
+            final words = hint
+                .toLowerCase()
+                .split(RegExp(r'\s+'))
+                .where((w) => w.length >= 3)
+                .toList();
+            VehicleDto? best;
+            int bestScore = 0;
+            for (final v in vs) {
+              final hay = '${v.brand ?? ''} ${v.model ?? ''} ${v.registration}'
+                  .toLowerCase();
+              final score = words.fold<int>(
+                0,
+                (s, w) => s + (hay.contains(w) ? 1 : 0),
+              );
+              if (score > bestScore) {
+                bestScore = score;
+                best = v;
+              }
+            }
+            if (best != null && mounted && _singleVehicle == null) {
+              final chosen = best;
+              setState(() {
+                _singleVehicle = chosen;
+                _vehicleIds.add(chosen.id);
+                if (chosen.pricePerDay != null && chosen.pricePerDay! > 0 &&
+                    _dailyRate.text.isEmpty) {
+                  _dailyRate.text = chosen.pricePerDay!.toStringAsFixed(0);
+                }
+              });
+              _recheckAvailability();
+            }
+          } catch (_) { /* idem */ }
         }
       });
     }
@@ -158,8 +255,16 @@ class _NewReservationScreenState
     );
     if (c == null) return;
     if (c.id == '__new__') {
+      final seed = widget.fromLead;
       final created = await Navigator.of(context).push<CustomerDto>(
-        MaterialPageRoute(builder: (_) => const NewCustomerScreen()),
+        MaterialPageRoute(
+          builder: (_) => NewCustomerScreen(
+            initialFirstName: seed?.firstName,
+            initialLastName: seed?.lastName,
+            initialPhone: seed?.phone,
+            initialEmail: seed?.email,
+          ),
+        ),
       );
       if (created != null) setState(() => _customer = created);
       return;
@@ -269,6 +374,17 @@ class _NewReservationScreenState
           await ref.read(reservationsRepoProvider).createReservation(body);
       ref.invalidate(reservationsListProvider);
       ref.invalidate(enrichedReservationsProvider);
+      // Si la création a été ouverte depuis une « Demande du site », on marque
+      // la demande comme traitée (converted). Non bloquant : la réservation
+      // est bien créée même si cette PATCH échoue.
+      final leadId = widget.fromLead?.id;
+      if (leadId != null) {
+        try {
+          await ref
+              .read(websiteLeadsRepoProvider)
+              .updateStatus(leadId, 'converted');
+        } catch (_) { /* on avale : la réservation est OK */ }
+      }
       if (!mounted) return;
       final id = created['id']?.toString();
       if (id != null) {
@@ -311,6 +427,10 @@ class _NewReservationScreenState
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (widget.fromLead != null) ...[
+                _FromLeadBanner(seed: widget.fromLead!),
+                const SizedBox(height: 12),
+              ],
               // Client + Véhicule(s)
               ModuleCard(
                 child: Column(
@@ -320,9 +440,15 @@ class _NewReservationScreenState
                       label: 'Client',
                       trailing: TextButton(
                         onPressed: () async {
+                          final seed = widget.fromLead;
                           final created = await Navigator.of(context)
                               .push<CustomerDto>(MaterialPageRoute(
-                            builder: (_) => const NewCustomerScreen(),
+                            builder: (_) => NewCustomerScreen(
+                              initialFirstName: seed?.firstName,
+                              initialLastName: seed?.lastName,
+                              initialPhone: seed?.phone,
+                              initialEmail: seed?.email,
+                            ),
                           ));
                           if (created != null) setState(() => _customer = created);
                         },
@@ -1018,6 +1144,76 @@ class _VehiclePickerSheetState extends ConsumerState<_VehiclePickerSheet> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bandeau en haut de l'écran de création quand on arrive depuis la page
+/// « Demandes du site » : rappelle les infos du visiteur pour que l'agent n'ait
+/// pas à faire des allers-retours.
+class _FromLeadBanner extends StatelessWidget {
+  const _FromLeadBanner({required this.seed});
+  final NewReservationLeadSeed seed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF2FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFC7D2FE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'DEMANDE DU SITE',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF4338CA),
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(seed.fullName,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+          const SizedBox(height: 2),
+          Wrap(
+            spacing: 10,
+            runSpacing: 2,
+            children: [
+              InkWell(
+                onTap: () => launchUrl(Uri.parse('tel:${seed.phone}')),
+                child: Text(seed.phone,
+                    style: const TextStyle(
+                      color: Color(0xFF4338CA),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    )),
+              ),
+              if (seed.email != null && seed.email!.isNotEmpty)
+                InkWell(
+                  onTap: () =>
+                      launchUrl(Uri.parse('mailto:${seed.email}')),
+                  child: Text(seed.email!,
+                      style: const TextStyle(
+                          color: Colors.black54, fontSize: 12.5)),
+                ),
+              if (seed.vehicleLabel != null && seed.vehicleLabel!.isNotEmpty)
+                Text('Souhait : ${seed.vehicleLabel}',
+                    style: const TextStyle(
+                        color: Colors.black54, fontSize: 12.5)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Dates pré-remplies. Vérifiez le client (créé automatiquement avec ses infos si vous choisissez « + Nouveau ») et le véhicule, puis créez la réservation — la demande sera marquée « traitée ».',
+            style: TextStyle(fontSize: 11.5, color: Color(0xFF3730A3), height: 1.35),
+          ),
+        ],
       ),
     );
   }

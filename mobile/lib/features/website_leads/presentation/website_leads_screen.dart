@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/widgets/module_scaffold.dart';
+import '../../reservations/presentation/new_reservation_screen.dart';
 import '../data/website_lead_dto.dart';
 import '../data/website_leads_repo.dart';
 
@@ -620,7 +621,26 @@ class _ActionButtons extends StatelessWidget {
     if (lead.status != 'converted') {
       buttons.add(_PrimaryAction(
         label: 'Transformée en réservation',
-        onTap: () => onUpdate(lead.id, 'converted'),
+        onTap: () {
+          // Ouvre l'écran « Nouvelle réservation » pré-rempli avec les infos
+          // de la demande. Le statut `converted` est posé automatiquement à la
+          // création réussie côté NewReservationScreen.
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => NewReservationScreen(
+                initialStartAt: lead.pickupAt?.toIso8601String(),
+                initialEndAt: lead.returnAt?.toIso8601String(),
+                fromLead: NewReservationLeadSeed(
+                  id: lead.id,
+                  fullName: lead.fullName,
+                  phone: lead.phone,
+                  email: lead.email,
+                  vehicleLabel: lead.vehicleLabel,
+                ),
+              ),
+            ),
+          );
+        },
       ));
     }
     if (lead.status != 'rejected') {

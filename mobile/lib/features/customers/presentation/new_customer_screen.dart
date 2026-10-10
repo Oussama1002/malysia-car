@@ -14,7 +14,21 @@ import 'customer_detail_screen.dart';
 /// (frontend/modules/customers/CustomerForm.tsx) : toggle Particulier /
 /// Entreprise, scanners OCR CIN + Permis, coordonnees facultatives.
 class NewCustomerScreen extends ConsumerStatefulWidget {
-  const NewCustomerScreen({super.key});
+  const NewCustomerScreen({
+    super.key,
+    this.initialFirstName,
+    this.initialLastName,
+    this.initialPhone,
+    this.initialEmail,
+  });
+
+  /// Préremplissages optionnels — utilisés quand on arrive depuis la page
+  /// « Demandes du site » pour créer le client sans ressaisir ce que le
+  /// visiteur a déjà tapé sur la landing publique.
+  final String? initialFirstName;
+  final String? initialLastName;
+  final String? initialPhone;
+  final String? initialEmail;
 
   @override
   ConsumerState<NewCustomerScreen> createState() => _NewCustomerScreenState();
@@ -69,6 +83,25 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
 
   bool _submitting = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // Préremplissage à partir d'une demande du site : on ne touche qu'aux
+    // champs vraiment vides pour ne pas écraser une saisie en cours.
+    if (widget.initialFirstName != null && _firstName.text.isEmpty) {
+      _firstName.text = widget.initialFirstName!;
+    }
+    if (widget.initialLastName != null && _lastName.text.isEmpty) {
+      _lastName.text = widget.initialLastName!;
+    }
+    if (widget.initialPhone != null && _phone.text.isEmpty) {
+      _phone.text = widget.initialPhone!;
+    }
+    if (widget.initialEmail != null && _email.text.isEmpty) {
+      _email.text = widget.initialEmail!;
+    }
+  }
 
   @override
   void dispose() {
