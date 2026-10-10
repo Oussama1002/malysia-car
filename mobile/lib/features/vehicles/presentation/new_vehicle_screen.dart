@@ -43,6 +43,81 @@ const _vehicleTypeOptions = <String>[
   'Berline','SUV','Citadine','Break','Coupé','Cabriolet','Monospace','Pick-up','Van','Camion',
 ];
 
+/// Référentiel des équipements d'un véhicule, groupé par famille — doit rester
+/// aligné sur `Vehicle::EQUIPMENTS` côté backend (la validation serveur refuse
+/// tout libellé hors de la constante).
+class _EquipmentGroup {
+  const _EquipmentGroup(this.title, this.items);
+  final String title;
+  final List<String> items;
+}
+
+const _equipmentsGroups = <_EquipmentGroup>[
+  _EquipmentGroup('Sécurité active', [
+    'Airbags',
+    'ABS',
+    'ESP',
+    'Antipatinage',
+    "Aide au freinage d'urgence",
+    'Antidémarrage électronique',
+    'Aide au démarrage en côte',
+    'Sélecteur de mode de conduite',
+    'Détection de fatigue',
+    'Maintien dans la voie',
+    "Détecteur d'angle mort",
+    'Détecteur de sous-gonflage',
+    'Fermeture de portes auto.',
+    'Préparation ISOFIX',
+    'Phares antibrouillard',
+    "Système d'alarme",
+  ]),
+  _EquipmentGroup('Confort', [
+    'Climatisation',
+    'Start & Stop',
+    'Régulateur de vitesse',
+    'Détecteur de pluie',
+    'Allumage auto. des feux',
+    'Frein à main électrique',
+    'Aide au stationnement',
+    'Volant réglable',
+    'Rétros. électriques',
+    'Rétros. rabattables électriques',
+    'Coffre électrique',
+    'Sièges électriques',
+    'Sièges élec. avec mémoire',
+    'Banquette arrière rabattable 1/3-2/3',
+  ]),
+  _EquipmentGroup('Multimédia & assistance', [
+    'Écran tactile',
+    'Caméra de recul',
+    'Cockpit digital',
+    'Commandes au volant',
+    'Commandes vocales',
+    'Reconnaissance de panneaux',
+    'Affichage Tête-Haute',
+    'Système audio',
+    'Ordinateur de bord',
+    'Navigation GPS',
+    'WiFi à bord',
+    'Bluetooth',
+    'Compatibilité smartphone',
+    'Apple CarPlay® & Android Auto®',
+    'Chargeur/mobile sans fil',
+  ]),
+  _EquipmentGroup('Extérieur & finition', [
+    'Jantes aluminium',
+    'Sellerie Similicuir / Tissu',
+    'Volant cuir',
+    'Follow-me home',
+    "Lumière d'ambiance",
+    'Feux de jour LED',
+    'Phares Full LED',
+    'Toit Panoramique ouvrant',
+    'Barres de toit',
+    'Vitres sur-teintées.',
+  ]),
+];
+
 class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   final _formKey = GlobalKey<FormState>();
 
@@ -93,6 +168,9 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   // Photo principale du véhicule — uploadée sur POST /vehicles/{id}/photo
   // après la création, comme le fait le modal web.
   XFile? _mainPhoto;
+
+  // Équipements cochés — sous-ensemble des libellés de `_equipmentsGroups`.
+  final Set<String> _equipments = <String>{};
 
   // OCR
   final Map<_VehDoc, String?> _scanPath = {};
@@ -295,6 +373,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           'monthly_rental_price': double.parse(_monthlyPrice.text.trim()),
         if (double.tryParse(_purchasePrice.text.trim()) != null)
           'purchase_price': double.parse(_purchasePrice.text.trim()),
+        if (_equipments.isNotEmpty) 'equipments': _equipments.toList(),
       };
       final id = await ref.read(vehiclesRepoProvider).create(body);
       // Upload de la photo principale si l'utilisateur en a choisi une —
@@ -386,6 +465,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                 _adminSection(),
                 const SizedBox(height: 12),
                 _pricingSection(),
+                const SizedBox(height: 12),
+                _equipmentsSection(),
                 const SizedBox(height: 12),
                 _photoSection(),
                 if (_error != null) ...[
@@ -968,6 +1049,71 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     );
   }
 
+  // Équipements — multi-sélection groupée par famille, comme le web.
+  Widget _equipmentsSection() {
+    return ModuleCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Équipements',
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+              ),
+              Text(
+                '${_equipments.length} coché${_equipments.length > 1 ? 's' : ''}',
+                style:
+                    const TextStyle(color: Colors.black54, fontSize: 11.5),
+              ),
+              if (_equipments.isNotEmpty)
+                TextButton(
+                  onPressed: () => setState(_equipments.clear),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF4F46E5),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                  ),
+                  child: const Text('Tout décocher',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 11)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (int i = 0; i < _equipmentsGroups.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            Text(
+              _equipmentsGroups[i].title.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Colors.black45,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final label in _equipmentsGroups[i].items)
+                  _EquipmentChip(
+                    label: label,
+                    selected: _equipments.contains(label),
+                    onToggle: () => setState(() {
+                      if (!_equipments.add(label)) _equipments.remove(label);
+                    }),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // Photo principale — « Prendre une photo » (caméra) ou « Choisir » (galerie),
   // reflet des deux boutons de la carte « Photos & Vidéo » du modal web.
   Widget _photoSection() {
@@ -1216,6 +1362,64 @@ class _ScanSlot extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Puce « équipement » — tap pour cocher/décocher. Même aspect visuel que les
+/// cases cochables de la version web (bord indigo + fond pâle quand actif).
+class _EquipmentChip extends StatelessWidget {
+  const _EquipmentChip({
+    required this.label,
+    required this.selected,
+    required this.onToggle,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onToggle,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFEEF2FF)
+              : Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF818CF8)
+                : Theme.of(context).dividerColor,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              selected ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 16,
+              color: selected
+                  ? const Color(0xFF4F46E5)
+                  : Colors.black45,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: selected
+                    ? const Color(0xFF3730A3)
+                    : Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
