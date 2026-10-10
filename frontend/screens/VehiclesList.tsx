@@ -1659,6 +1659,19 @@ const VehiclesList: React.FC = () => {
                   <h3 className="text-xs font-black text-amber-500 uppercase tracking-[0.2em]">Équipements</h3>
                   <div className="text-xs font-semibold text-slate-500">
                     {formData.equipments.length} sélectionné{formData.equipments.length > 1 ? 's' : ''}
+                    <button
+                      type="button"
+                      onClick={() => setFormData(fd => ({
+                        ...fd,
+                        // Déduplique via Set au cas où l'état en aurait déjà
+                        // (import, retour arrière, …).
+                        equipments: Array.from(new Set(
+                          EQUIPMENTS.flatMap(g => g.items),
+                        )),
+                      }))}
+                      className="ml-3 text-indigo-600 hover:underline">
+                      Tout sélectionner
+                    </button>
                     {formData.equipments.length > 0 && (
                       <button
                         type="button"
@@ -1670,9 +1683,27 @@ const VehiclesList: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-5">
-                  {EQUIPMENTS.map(({ group, items }) => (
+                  {EQUIPMENTS.map(({ group, items }) => {
+                    const allChecked = items.every(it => formData.equipments.includes(it));
+                    return (
                     <div key={group} className="space-y-2">
-                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">{group}</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">{group}</div>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(fd => {
+                            if (allChecked) {
+                              return { ...fd, equipments: fd.equipments.filter(e => !items.includes(e)) };
+                            }
+                            return {
+                              ...fd,
+                              equipments: Array.from(new Set([...fd.equipments, ...items])),
+                            };
+                          })}
+                          className="text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:underline">
+                          {allChecked ? 'Tout décocher' : 'Tout sélectionner'}
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-3 lg:grid-cols-4">
                         {items.map((label) => {
                           const checked = formData.equipments.includes(label);
@@ -1701,7 +1732,8 @@ const VehiclesList: React.FC = () => {
                         })}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
