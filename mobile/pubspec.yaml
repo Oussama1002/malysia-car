@@ -27,7 +27,7 @@ dependencies:
   shared_preferences: ^2.3.3
 
   # Formatage FR-MA pour les montants et les dates.
-  intl: ^0.19.0
+  intl: ^0.20.3
 
   # Prise de photo (justificatif d'entretien, etat des lieux).
   image_picker: ^1.1.2
