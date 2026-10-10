@@ -1090,32 +1090,90 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                 style:
                     const TextStyle(color: Colors.black54, fontSize: 11.5),
               ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Boutons globaux : « Tout sélectionner » coche tous les libellés
+          // des 4 familles (via le Set, pas de doublon). « Tout décocher »
+          // vide la sélection — seulement visible quand il y a de la matière.
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: () => setState(() {
+                  for (final g in _equipmentsGroups) {
+                    _equipments.addAll(g.items);
+                  }
+                }),
+                icon: const Icon(Icons.done_all, size: 14),
+                label: const Text('Tout sélectionner'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF4F46E5),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 30),
+                  textStyle: const TextStyle(
+                      fontWeight: FontWeight.w900, fontSize: 11),
+                ),
+              ),
               if (_equipments.isNotEmpty)
-                TextButton(
+                TextButton.icon(
                   onPressed: () => setState(_equipments.clear),
+                  icon: const Icon(Icons.remove_done, size: 14),
+                  label: const Text('Tout décocher'),
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF4F46E5),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: const Size(0, 32),
+                    minimumSize: const Size(0, 30),
+                    textStyle: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 11),
                   ),
-                  child: const Text('Tout décocher',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 11)),
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           for (int i = 0; i < _equipmentsGroups.length; i++) ...[
             if (i > 0) const SizedBox(height: 10),
-            Text(
-              _equipmentsGroups[i].title.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                color: Colors.black45,
-                letterSpacing: 1.1,
-              ),
-            ),
+            // Titre de famille + bouton local « Tout sélectionner / décocher »
+            // qui bascule uniquement les libellés de ce groupe.
+            Builder(builder: (_) {
+              final items = _equipmentsGroups[i].items;
+              final allChecked = items.every(_equipments.contains);
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _equipmentsGroups[i].title.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black45,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      if (allChecked) {
+                        _equipments.removeAll(items);
+                      } else {
+                        _equipments.addAll(items);
+                      }
+                    }),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF4F46E5),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      minimumSize: const Size(0, 28),
+                    ),
+                    child: Text(
+                      allChecked ? 'Tout décocher' : 'Tout sélectionner',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 10,
+                          letterSpacing: 0.5),
+                    ),
+                  ),
+                ],
+              );
+            }),
             const SizedBox(height: 6),
             Wrap(
               spacing: 6,
