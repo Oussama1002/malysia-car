@@ -43,7 +43,7 @@ class AppTheme {
       cardColor: surface,
       dialogBackgroundColor: surface,
       dividerColor: Colors.white.withOpacity(0.08),
-      cardTheme: const CardTheme(color: surface, elevation: 0),
+      cardTheme: const CardThemeData(color: surface, elevation: 0),
       bottomSheetTheme: const BottomSheetThemeData(backgroundColor: surface),
       drawerTheme: const DrawerThemeData(backgroundColor: surfaceAlt),
       inputDecorationTheme: InputDecorationTheme(
