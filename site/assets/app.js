@@ -603,6 +603,7 @@
           note.className = 'formNote';
           note.textContent = name + ' — complétez vos dates, on vous rappelle.';
         }
+        updatePriceTip();
       }
     } catch (_) {}
   }
@@ -913,6 +914,8 @@
 
   // Vehicles are stored globally so flotte.html can reuse them.
   var ALL_VEHICLES = [];
+  var TIER_SCHEMA = [];
+  var VEHICLES_BY_ID = {};
 
   function loadFleet() {
     var grid = $('fleetGrid');
@@ -924,6 +927,13 @@
       .then(function (payload) {
         var list = (payload && payload.data) || [];
         ALL_VEHICLES = list;
+        var meta = (payload && payload.meta) || {};
+        if (meta.tier_schema) {
+          TIER_SCHEMA = Object.keys(meta.tier_schema).map(function (k) {
+            return { key: k, min: meta.tier_schema[k].min_days, max: meta.tier_schema[k].max_days, label: meta.tier_schema[k].label };
+          });
+        }
+        list.forEach(function (v) { VEHICLES_BY_ID[v.id] = v; });
         grid.innerHTML = '';
         if (!list.length) {
           note.textContent = 'La flotte est en cours de mise à jour — appelez-nous, nous vous dirons ce qui est disponible.';
@@ -1160,6 +1170,83 @@
     });
   }
 
+  function updatePriceTip() {
+    var tip = $('priceTip');
+    if (!tip) return;
+    var form = $('quoteForm');
+    if (!form) return;
+    var vid = form.elements.vehicle_id ? form.elements.vehicle_id.value : '';
+    var pickup = form.elements.pickup_at ? form.elements.pickup_at.value : '';
+    var ret = form.elements.return_at ? form.elements.return_at.value : '';
+    if (!vid) { tip.hidden = true; return; }
+    var v = VEHICLES_BY_ID[vid];
+    if (!v) { tip.hidden = true; return; }
+    var tiers = v.rental_price_tiers;
+    var hasTiers = tiers && Object.keys(tiers).some(function (k) { return tiers[k] && Number(tiers[k]) > 0; });
+    var days = 0;
+    if (pickup && ret) {
+      var d1 = new Date(pickup), d2 = new Date(ret);
+      days = Math.round((d2 - d1) / 86400000);
+      if (days < 1) days = 1;
+    }
+    var pricePerDay = null;
+    var tierLabel = '';
+    if (hasTiers && days > 0) {
+      for (var i = 0; i < TIER_SCHEMA.length; i++) {
+        var t = TIER_SCHEMA[i];
+        if (days >= t.min && (t.max === null || days <= t.max)) {
+          pricePerDay = tiers[t.key] ? Number(tiers[t.key]) : null;
+          tierLabel = t.label;
+          break;
+        }
+      }
+    }
+    if (pricePerDay && pricePerDay > 0 && days > 0) {
+      var total = pricePerDay * days;
+      tip.innerHTML =
+        '<strong>' + pricePerDay.toLocaleString('fr-MA') + ' MAD/jour</strong>' +
+        ' × ' + days + ' jour' + (days > 1 ? 's' : '') +
+        ' = <strong>' + total.toLocaleString('fr-MA') + ' MAD</strong>' +
+        '<span class="priceTip__label"> · Tarif ' + tierLabel + '</span>';
+      tip.hidden = false;
+    } else if (v.price_per_day && days > 0) {
+      var dp = Number(v.price_per_day);
+      var tot = dp * days;
+      tip.innerHTML =
+        '<strong>' + dp.toLocaleString('fr-MA') + ' MAD/jour</strong>' +
+        ' × ' + days + ' jour' + (days > 1 ? 's' : '') +
+        ' = <strong>' + tot.toLocaleString('fr-MA') + ' MAD</strong>';
+      tip.hidden = false;
+    } else if (v.price_per_day || hasTiers) {
+      var basePrice = hasTiers
+        ? (v.price_from_per_day || v.price_per_day)
+        : v.price_per_day;
+      if (basePrice) {
+        tip.innerHTML = (hasTiers ? 'À partir de ' : '') +
+          '<strong>' + Number(basePrice).toLocaleString('fr-MA') + ' MAD/jour</strong>' +
+          (hasTiers ? '<span class="priceTip__label"> · Le tarif s\'adapte à la durée de location</span>' : '');
+        tip.hidden = false;
+      } else {
+        tip.hidden = true;
+      }
+    } else {
+      tip.hidden = true;
+    }
+  }
+
+  function wirePriceTip() {
+    var form = $('quoteForm');
+    if (!form) return;
+    var fields = ['quotePickup', 'quoteReturn', 'vehicleSelect'];
+    fields.forEach(function (id) {
+      var el = $(id);
+      if (el) {
+        el.addEventListener('change', updatePriceTip);
+        el.addEventListener('input', updatePriceTip);
+      }
+    });
+  }
+
   function prefillFromSession() {
     try {
       var vid = sessionStorage.getItem('mc_vehicle_id');
@@ -1193,6 +1280,7 @@
   wireDateFields();
   wireAgencies();
   wireFleetFilters();
+  wirePriceTip();
   loadFleet();
   loadCatalog();
   loadAgencies();

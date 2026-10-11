@@ -39,6 +39,7 @@ class PublicSiteController extends Controller
                     'photo_url' => $v->photo_file_id ? '/api/v1/files/'.$v->photo_file_id : null,
                     'seats' => $v->nombre_places !== null ? (int) $v->nombre_places : null,
                     'doors' => $v->nombre_portes !== null ? (int) $v->nombre_portes : null,
+                    'rental_price_tiers' => $v->rental_price_tiers,
                     'equipments' => $v->equipments ?? [],
                 ])
                 ->values()
@@ -47,7 +48,9 @@ class PublicSiteController extends Controller
 
         $this->alertMissingPrices($vehicles, $notifications);
 
-        return ApiResponse::success($vehicles);
+        return ApiResponse::success($vehicles, [
+            'tier_schema' => Vehicle::RENTAL_PRICE_TIERS,
+        ]);
     }
 
     private function alertMissingPrices(array $vehicles, NotificationService $notifications): void
