@@ -8,6 +8,7 @@ import {
 } from '@/services/accountingApi';
 import { ApiError } from '@/services/apiError';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 interface LineInput {
   account_code: string;
@@ -98,7 +99,7 @@ export const JournalEntryForm: React.FC = () => {
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-slate-500">Date *</label>
-                <input type="date" className="df-input mt-1" value={header.entry_date} onChange={(e) => setHeader({ ...header, entry_date: e.target.value })} required />
+                <DateField className="df-input mt-1" value={header.entry_date} onChange={(v) => setHeader({ ...header, entry_date: v })} required />
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs font-bold uppercase text-slate-500">Description *</label>

@@ -52,6 +52,7 @@ export const endpoints = {
     validate: (id: string) => `/v1/document-reader/documents/${id}/validate`,
     link: (id: string) => `/v1/document-reader/documents/${id}/link`,
     preview: (id: string) => `/v1/document-reader/documents/${id}/preview`,
+    thumbnail: (id: string) => `/v1/document-reader/documents/${id}/thumbnail`,
     remove: (id: string) => `/v1/document-reader/documents/${id}`,
   },
   credit: {
@@ -65,10 +66,6 @@ export const endpoints = {
   contractTemplates: {
     list: '/v1/contract-templates',
     one: (id: number | string) => `/v1/contract-templates/${id}`,
-  },
-  finance: {
-    schedule: '/v1/finance/schedule',
-    payments: '/v1/finance/payments',
   },
   arrears: {
     cases: '/v1/arrears/cases',
@@ -100,6 +97,11 @@ export const endpoints = {
     retry: (id: string) => `/v1/notifications/${id}/retry`,
     destroy: (id: string) => `/v1/notifications/${id}`,
   },
+  payments: {
+    list: '/v1/payments',
+    one: (id: number | string) => `/v1/payments/${id}`,
+    receipt: (id: number | string) => `/v1/payments/${id}/receipt`,
+  },
   reservations: {
     list: '/v1/reservations',
     one: (id: number | string) => `/v1/reservations/${id}`,
@@ -107,7 +109,9 @@ export const endpoints = {
     confirm: (id: number | string) => `/v1/reservations/${id}/confirm`,
     validate: (id: number | string) => `/v1/reservations/${id}/validate`,
     cancel: (id: number | string) => `/v1/reservations/${id}/cancel`,
+    changeStatus: (id: number | string) => `/v1/reservations/${id}/change-status`,
     createMission: (id: number | string) => `/v1/reservations/${id}/create-mission`,
+    agentAvailability: '/v1/reservations/agent-availability',
     handoverPickup: (id: number | string) => `/v1/reservations/${id}/handover-pickup`,
     requestExtension: (id: number | string) => `/v1/reservations/${id}/request-extension`,
     handoverReturn: (id: number | string) => `/v1/reservations/${id}/handover-return`,

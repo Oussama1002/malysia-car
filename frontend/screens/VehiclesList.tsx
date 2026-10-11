@@ -1,11 +1,15 @@
 ﻿
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/mockApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { queryKeys } from '@/services/queryKeys';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { Vehicle, VehicleStatus } from '../types';
 import { VehicleDocumentScanner } from '@/modules/fleet/VehicleDocumentScanner';
+import { DateField } from '@/modules/shared/components/DateField';
+import { BrandLogo } from '@/modules/shared/components/BrandLogo';
 
 interface VehicleModelOption { id: string; name: string; }
 interface VehicleBrandOption { id: string; name: string; models: VehicleModelOption[]; }
@@ -16,6 +20,45 @@ const FUEL_OPTIONS = ['Diesel', 'Essence', 'Hybride', 'Électrique', 'GPL'];
 const GAMME_OPTIONS = ['CLASS', 'SPORT', 'MINI', 'UTL', 'AUTO MINI', 'SPORT 4x4', 'V.Citadines', 'V.Berlines', 'V.Compactes', 'V. 4x4', 'V.Luxe'];
 const CATEGORIE_OPTIONS = ['Particulier', 'Utilitaire', 'Commercial', 'Tourisme', 'Moto'];
 const VEHICLE_TYPE_OPTIONS = ['Berline', 'SUV', 'Citadine', 'Break', 'Coupé', 'Cabriolet', 'Monospace', 'Pick-up', 'Van', 'Camion'];
+
+// Levenshtein edit distance — used to fuzzy-match noisy OCR values (e.g.
+// "reauldvyt") to the closest known dropdown option ("Renault").
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let cur = new Array<number>(n + 1);
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[n];
+}
+
+// Pick the option whose name is closest to `value` (exact → substring → fuzzy).
+// Returns undefined if nothing is within the edit-distance threshold.
+function closestOption<T extends { name: string }>(value: string, options: T[]): T | undefined {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const v = norm(value);
+  if (!v) return undefined;
+  const exact = options.find(o => norm(o.name) === v);
+  if (exact) return exact;
+  const sub = options.find(o => norm(o.name).includes(v) || v.includes(norm(o.name)));
+  if (sub) return sub;
+  let best: T | undefined; let bestRatio = 0.4;
+  for (const o of options) {
+    const name = norm(o.name);
+    if (Math.abs(name.length - v.length) > Math.max(2, Math.ceil(name.length * 0.5))) continue;
+    const ratio = levenshtein(v, name) / Math.max(name.length, 1);
+    if (ratio < bestRatio) { bestRatio = ratio; best = o; }
+  }
+  return best;
+}
 
 const DocPhotoUpload: React.FC<{
   preview: string | null;
@@ -68,11 +111,13 @@ const emptyForm = () => ({
   platRegion: 1,
   registration: '',
   registrationCard: '',
+  insuranceStart: '',
   insuranceExpiry: '',
   techControlExpiry: '',
   vignetteExpiry: '',
   status: VehicleStatus.AVAILABLE,
   pricePerDay: 0,
+  insuranceDeductible: '' as string | number,
   cv: '' as string | number,
   mileageKm: '' as string | number,
   fuel: 'Diesel',
@@ -80,6 +125,8 @@ const emptyForm = () => ({
   vehicleType: '',
   numeroPolice: '',
   nombreCylindres: '' as string | number,
+  nombrePlaces: '' as string | number,
+  nombrePortes: '' as string | number,
   gamme: '',
   acquisitionDate: '',
   miseEnCirculation: '',
@@ -101,7 +148,93 @@ const emptyForm = () => ({
   photoPreviews: [] as string[],
   videoPreview: '' as string,
   photoUrl: null as string | null,
+  // Liste de libellés cochés — doit rester un sous-ensemble d'`EQUIPMENTS`.
+  equipments: [] as string[],
 });
+
+/**
+ * Référentiel des équipements d'un véhicule, dans l'ordre d'affichage (sécurité
+ * → confort → multimédia → extérieur). **Doit rester synchrone avec
+ * `Vehicle::EQUIPMENTS` côté backend** — la validation serveur refuse tout
+ * libellé hors de la liste.
+ */
+const EQUIPMENTS: ReadonlyArray<{ group: string; items: string[] }> = [
+  {
+    group: 'Sécurité active',
+    items: [
+      'Airbags',
+      'ABS',
+      'ESP',
+      'Antipatinage',
+      "Aide au freinage d'urgence",
+      'Antidémarrage électronique',
+      'Aide au démarrage en côte',
+      'Sélecteur de mode de conduite',
+      'Détection de fatigue',
+      'Maintien dans la voie',
+      "Détecteur d'angle mort",
+      'Détecteur de sous-gonflage',
+      'Fermeture de portes auto.',
+      'Préparation ISOFIX',
+      'Phares antibrouillard',
+      "Système d'alarme",
+    ],
+  },
+  {
+    group: 'Confort',
+    items: [
+      'Climatisation',
+      'Start & Stop',
+      'Régulateur de vitesse',
+      'Détecteur de pluie',
+      'Allumage auto. des feux',
+      'Frein à main électrique',
+      'Aide au stationnement',
+      'Volant réglable',
+      'Rétros. électriques',
+      'Rétros. rabattables électriques',
+      'Coffre électrique',
+      'Sièges électriques',
+      'Sièges élec. avec mémoire',
+      'Banquette arrière rabattable 1/3-2/3',
+    ],
+  },
+  {
+    group: 'Multimédia & assistance',
+    items: [
+      'Écran tactile',
+      'Caméra de recul',
+      'Cockpit digital',
+      'Commandes au volant',
+      'Commandes vocales',
+      'Reconnaissance de panneaux',
+      'Affichage Tête-Haute',
+      'Système audio',
+      'Ordinateur de bord',
+      'Navigation GPS',
+      'WiFi à bord',
+      'Bluetooth',
+      'Compatibilité smartphone',
+      'Apple CarPlay® & Android Auto®',
+      'Chargeur/mobile sans fil',
+    ],
+  },
+  {
+    group: 'Extérieur & finition',
+    items: [
+      'Jantes aluminium',
+      'Sellerie Similicuir / Tissu',
+      'Volant cuir',
+      'Follow-me home',
+      "Lumière d'ambiance",
+      'Feux de jour LED',
+      'Phares Full LED',
+      'Toit Panoramique ouvrant',
+      'Barres de toit',
+      'Vitres sur-teintées.',
+    ],
+  },
+];
 
 type FormState = ReturnType<typeof emptyForm>;
 
@@ -120,6 +253,7 @@ const VehiclesList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm());
+  const carteGriseRef = useRef<HTMLDivElement>(null);
   // ── View mode (cards / table / analysis) ────────────────────────────────
   // The 'analysis' mode merges the former /fleet/analysis page into this
   // screen so the sidebar stays short and the dirigeant has one place for
@@ -179,6 +313,54 @@ const VehiclesList: React.FC = () => {
   const videoCameraRef = useRef<HTMLInputElement>(null);
   const selectedPhotoFiles = useRef<File[]>([]);
 
+  // Vehicles with an active reservation should display as "Réservé", not
+  // "Dispo" — matched by reservation.vehicle_id when status is in the pre-
+  // handover / active window. Uses react-query so cancelling / deleting a
+  // reservation from anywhere else refreshes the flag automatically.
+  const ACTIVE_RESERVATION_STATUSES = useMemo(
+    () => new Set(['draft', 'reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested']),
+    [],
+  );
+  const reservationsQ = useQuery({
+    queryKey: queryKeys.reservations,
+    queryFn: async () => (await apiClient<{ data: any[] }>('/v1/reservations?per_page=200')).data ?? [],
+    enabled: !!getApiBase(),
+    staleTime: 30_000,
+  });
+  // Contracts feed the "En location" state — a vehicle bound to a live
+  // contract shouldn't read as Disponible.
+  const contractsForFleetQ = useQuery({
+    queryKey: ['contracts', 'all', 'for-fleet'],
+    queryFn: async () => (await apiClient<{ data: any[] }>('/v1/contracts?per_page=200')).data ?? [],
+    enabled: !!getApiBase(),
+    staleTime: 30_000,
+  });
+  const rentedVehicleIds = useMemo(() => {
+    const DEAD = new Set(['cancelled', 'terminated', 'rejected', 'expired', 'draft']);
+    const s = new Set<string>();
+    for (const c of (contractsForFleetQ.data ?? [])) {
+      const st = String(c.status ?? '').toLowerCase();
+      const vid = c.vehicleId ?? c.vehicle_id;
+      if (vid && !DEAD.has(st)) s.add(String(vid));
+    }
+    return s;
+  }, [contractsForFleetQ.data]);
+  const reservedVehicleIds = useMemo(() => {
+    const now = Date.now();
+    const LIVE = new Set(['handed_over', 'active', 'extension_requested']); // physical hold regardless of dates
+    const s = new Set<string>();
+    for (const r of (reservationsQ.data ?? [])) {
+      const st = String(r.status ?? '').toLowerCase();
+      if (!r.vehicle_id) continue;
+      if (LIVE.has(st)) { s.add(String(r.vehicle_id)); continue; }
+      if (!ACTIVE_RESERVATION_STATUSES.has(st)) continue;
+      // Pre-handover: only counts if the reservation window is not already past
+      const endMs = r.desired_end_at ? new Date(r.desired_end_at).getTime() : 0;
+      if (endMs >= now) s.add(String(r.vehicle_id));
+    }
+    return s;
+  }, [reservationsQ.data, ACTIVE_RESERVATION_STATUSES]);
+
   useEffect(() => {
     fetchVehicles();
     if (getApiBase()) {
@@ -206,9 +388,15 @@ const VehiclesList: React.FC = () => {
   const fetchVehicles = async () => {
     if (getApiBase()) {
       try {
-        const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200');
+        const [vehiclesRes, subRentalsRes] = await Promise.all([
+          apiClient<{ data: any[] }>('/v1/vehicles?per_page=200'),
+          // Sub-rental (sous-location) vehicles should surface on the fleet list
+          // too. Failing quietly if the endpoint is unavailable keeps the
+          // owned-fleet view working for users without the sub_rental module.
+          apiClient<{ data: any[] }>('/v1/sub-rentals?per_page=200').catch(() => ({ data: [] })),
+        ]);
         setLoadError(null);
-        setVehicles(res.data.map((v: any): Vehicle => ({
+        const owned: Vehicle[] = vehiclesRes.data.map((v: any): Vehicle => ({
           id: v.id,
           brand_id: v.brand_id ?? null,
           model_id: v.model_id ?? null,
@@ -222,9 +410,64 @@ const VehiclesList: React.FC = () => {
           vignetteExpiry: v.vignetteExpiry ?? '',
           status: (v.status ?? 'AVAILABLE') as VehicleStatus,
           pricePerDay: v.pricePerDay ?? 0,
+          insuranceDeductible: (v as any).insuranceDeductible ?? '',
           photoUrl: v.photoUrl ?? null,
           ...(v as any),
-        })));
+        }));
+
+        // Only surface sub-rentals that don't shadow an owned vehicle (matched
+        // on registration) and that aren't fully wound down.
+        const ownedPlates = new Set(owned.map((v) => String(v.registration ?? '').toUpperCase().trim()).filter(Boolean));
+        const DEAD_SL = new Set(['closed', 'cancelled', 'returned']);
+        const ownedIds = new Set(owned.map((v) => String(v.id)));
+        const subRentals: Vehicle[] = (subRentalsRes.data ?? [])
+          .filter((sr: any) => !DEAD_SL.has(String(sr.status ?? '').toLowerCase()))
+          .map((sr: any): Vehicle | null => {
+            // Sub-rentals now materialise a Vehicle row on create — if that row
+            // is already in the owned list, just tag it as SL and drop the
+            // duplicate row from the merge.
+            if (sr.vehicle_id && ownedIds.has(String(sr.vehicle_id))) {
+              const target = owned.find((v) => String(v.id) === String(sr.vehicle_id));
+              if (target) {
+                (target as any)._sub_rental = true;
+                (target as any)._sub_rental_id = sr.id;
+                (target as any)._sub_rental_status = sr.status;
+                (target as any)._supplier = sr.supplier_agency?.name ?? '';
+                (target as any)._end_date = sr.end_date;
+              }
+              return null;
+            }
+            const ext = sr.external_vehicle_identity ?? {};
+            const reg = String(ext.registration_number ?? sr.vehicle?.registration ?? '').toUpperCase().trim();
+            if (reg && ownedPlates.has(reg)) return null; // sub-rental linked to an owned vehicle
+            const brand = ext.brand_name ?? (sr.vehicle as any)?.brand ?? '';
+            const model = ext.model_name ?? (sr.vehicle as any)?.model ?? '';
+            return {
+              id: `sr:${sr.id}`,
+              brand_id: null,
+              model_id: null,
+              brand,
+              model,
+              year: ext.year ?? new Date().getFullYear(),
+              registration: reg,
+              registrationCard: '',
+              insuranceExpiry: '',
+              techControlExpiry: '',
+              vignetteExpiry: '',
+              status: 'AVAILABLE' as VehicleStatus,
+              pricePerDay: Number(sr.daily_cost ?? 0),
+              photoUrl: null,
+              // Marker used by displayStatusFor and card render to show the SL chip.
+              _sub_rental: true,
+              _sub_rental_status: sr.status,
+              _sub_rental_id: sr.id,
+              _supplier: sr.supplier_agency?.name ?? '',
+              _end_date: sr.end_date,
+            } as any;
+          })
+          .filter((v: any): v is Vehicle => v !== null);
+
+        setVehicles([...owned, ...subRentals]);
         return;
       } catch (err: any) {
         setVehicles([]);
@@ -237,44 +480,75 @@ const VehiclesList: React.FC = () => {
     setVehicles(data);
   };
 
-  const handleOpenModal = (v?: Vehicle) => {
-    if (v) {
-      setEditingVehicle(v);
-      const matchedBrand = brands.find(b => b.name === v.brand);
-      const matchedModel = matchedBrand?.models.find(m => m.name === v.model);
-      const plate = parsePlate(v.registration);
-      setFormData({
-        ...emptyForm(),
-        ...v,
-        brand_id: v.brand_id ?? matchedBrand?.id ?? null,
-        model_id: v.model_id ?? matchedModel?.id ?? null,
-        platNum: plate.platNum,
-        platLetter: plate.platLetter,
-        platRegion: plate.platRegion,
-        cv: (v as any).cv ?? '',
-        mileageKm: (v as any).mileageKm ?? '',
-        fuel: (v as any).fuel ?? 'Diesel',
-        vehicleType: (v as any).vehicleType ?? '',
-        numeroPolice: (v as any).numeroPolice ?? '',
-        nombreCylindres: (v as any).nombreCylindres ?? '',
-        gamme: (v as any).gamme ?? '',
-        acquisitionDate: (v as any).acquisitionDate ?? '',
-        miseEnCirculation: (v as any).miseEnCirculation ?? '',
-        dateImmatriculation: (v as any).dateImmatriculation ?? '',
-        categorie: (v as any).categorie ?? '',
-        chassis: (v as any).chassisNumber ?? '',
-        immatOnline: (v as any).immatOnline ?? '',
-        montant: (v as any).purchaseCostMad ?? '',
-        docPhotos: emptyForm().docPhotos,
-        photoPreviews: [],
-        videoPreview: '',
-      });
-    } else {
+  const fillForm = (v: any) => {
+    const matchedBrand = brands.find(b => b.name === v.brand);
+    const matchedModel = matchedBrand?.models.find(m => m.name === v.model);
+    const plate = parsePlate(v.registration);
+    setFormData({
+      ...emptyForm(),
+      ...v,
+      brand_id: v.brand_id ?? matchedBrand?.id ?? null,
+      model_id: v.model_id ?? matchedModel?.id ?? null,
+      platNum: plate.platNum,
+      platLetter: plate.platLetter,
+      platRegion: plate.platRegion,
+      cv: v.cv ?? '',
+      mileageKm: v.mileageKm ?? '',
+      fuel: v.fuel ?? 'Diesel',
+      pricePerDay: v.pricePerDay ?? 0,
+      insuranceDeductible: v.insuranceDeductible ?? '',
+      registrationCard: v.registrationCard ?? '',
+      insuranceStart: v.insuranceStart ?? '',
+      insuranceExpiry: v.insuranceExpiry ?? '',
+      techControlExpiry: v.techControlExpiry ?? '',
+      vignetteExpiry: v.vignetteExpiry ?? '',
+      vehicleType: v.vehicleType ?? '',
+      numeroPolice: v.numeroPolice ?? '',
+      nombreCylindres: v.nombreCylindres ?? '',
+      nombrePlaces: (v as any).nombrePlaces ?? '',
+      nombrePortes: (v as any).nombrePortes ?? '',
+      gamme: v.gamme ?? '',
+      acquisitionDate: v.acquisitionDate ?? '',
+      miseEnCirculation: v.miseEnCirculation ?? '',
+      dateImmatriculation: v.dateImmatriculation ?? '',
+      categorie: v.categorie ?? '',
+      chassis: v.chassisNumber ?? '',
+      immatOnline: v.immatOnline ?? '',
+      carteGriseStatus: v.carteGriseStatus === 'recue' ? 'recue' : 'en_attente',
+      immatProvisoireExpiry: v.immatProvisoireExpiry ?? '',
+      montant: v.purchaseCostMad ?? '',
+      docPhotos: emptyForm().docPhotos,
+      // La photo déjà en base doit rester visible : sans elle l'agent croit
+      // qu'il n'y en a pas et en reverse une autre.
+      photoPreviews: v.photoUrl ? [String(v.photoUrl)] : [],
+      photoUrl: v.photoUrl ?? null,
+      videoPreview: '',
+      equipments: Array.isArray((v as any).equipments) ? (v as any).equipments.filter((x: unknown) => typeof x === 'string') : [],
+    });
+  };
+
+  const handleOpenModal = async (v?: Vehicle) => {
+    selectedPhotoFiles.current = [];
+    if (!v) {
       setEditingVehicle(null);
       setFormData(emptyForm());
+      setIsModalOpen(true);
+      return;
     }
-    selectedPhotoFiles.current = [];
+    setEditingVehicle(v);
+    fillForm(v);
     setIsModalOpen(true);
+    // La liste ne porte qu'une partie de la fiche : on recharge le véhicule
+    // complet pour que l'édition parte de toutes ses données.
+    if (getApiBase()) {
+      try {
+        const res = await apiClient<{ data: any }>(`/v1/vehicles/${v.id}`);
+        const full = (res.data as any)?.vehicle ?? res.data;
+        if (full) fillForm({ ...v, ...full });
+      } catch {
+        // La fiche partielle reste éditable.
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -288,14 +562,18 @@ const VehiclesList: React.FC = () => {
         fiscal_power: formData.cv !== '' ? Number(formData.cv) : undefined,
         mileage_km: formData.mileageKm !== '' ? Number(formData.mileageKm) : undefined,
         registration_card_number: formData.registrationCard || undefined,
+        insurance_start: formData.insuranceStart || undefined,
         insurance_expiry: formData.insuranceExpiry || undefined,
         tech_control_expiry: formData.techControlExpiry || undefined,
         vignette_expiry: formData.vignetteExpiry || undefined,
         daily_rental_price: formData.pricePerDay || undefined,
+        insurance_deductible: formData.insuranceDeductible !== '' ? Number(formData.insuranceDeductible) : undefined,
         status: formData.status,
         vehicle_type: formData.vehicleType || undefined,
         numero_police: formData.numeroPolice || undefined,
         nombre_cylindres: formData.nombreCylindres !== '' ? Number(formData.nombreCylindres) : undefined,
+        nombre_places: formData.nombrePlaces !== '' ? Number(formData.nombrePlaces) : undefined,
+        nombre_portes: formData.nombrePortes !== '' ? Number(formData.nombrePortes) : undefined,
         gamme: formData.gamme || undefined,
         acquisition_date: formData.acquisitionDate || undefined,
         mise_en_circulation: formData.miseEnCirculation || undefined,
@@ -303,7 +581,10 @@ const VehiclesList: React.FC = () => {
         categorie: formData.categorie || undefined,
         chassis: formData.chassis || undefined,
         immat_online: formData.immatOnline || undefined,
+        carte_grise_status: formData.carteGriseStatus || undefined,
+        immat_provisoire_expiry: formData.immatProvisoireExpiry || undefined,
         purchase_price: formData.montant !== '' ? Number(formData.montant) : undefined,
+        equipments: formData.equipments,
       };
       if (formData.brand_id) body.brand_id = formData.brand_id;
       if (formData.model_id) body.model_id = formData.model_id;
@@ -505,15 +786,63 @@ const VehiclesList: React.FC = () => {
   const inputCls = 'w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold';
   const selectCls = inputCls;
   const labelCls = 'text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1';
+  /**
+   * Effective display status — an AVAILABLE vehicle that carries an active
+   * reservation should read as "Réservé", not "Disponible".
+   */
+  const ficheUrlFor = (v: any): string =>
+    v?._sub_rental && v?._sub_rental_id ? `/fleet/sub-rentals/${v._sub_rental_id}` : `/fleet/${v.id}`;
+
+  const displayStatusFor = (v: any): { code: string; label: string; tone: string } => {
+    const raw = String(v?.status ?? '').toUpperCase();
+    // Sub-rented (SL) vehicles carry their own violet "SL" chip on the card;
+    // the top-right badge should surface the actual operational state
+    // (Disponible / Réservé / En location / …), same as owned vehicles.
+    if (raw === 'AVAILABLE' && v?.id && rentedVehicleIds.has(String(v.id))) {
+      return { code: 'RENTED', label: 'En location', tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+    }
+    if (raw === 'AVAILABLE' && v?.id && reservedVehicleIds.has(String(v.id))) {
+      return { code: 'RESERVED', label: 'Réservé', tone: 'bg-amber-100 text-amber-700 border-amber-200' };
+    }
+    if (raw === 'AVAILABLE')   return { code: 'AVAILABLE',   label: 'Disponible',  tone: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+    if (raw === 'RENTED')      return { code: 'RENTED',      label: 'En location', tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+    if (raw === 'MAINTENANCE') return { code: 'MAINTENANCE', label: 'Maintenance', tone: 'bg-orange-100 text-orange-700 border-orange-200' };
+    if (raw === 'IN_REPAIR')   return { code: 'IN_REPAIR',   label: 'Réparation',  tone: 'bg-rose-100 text-rose-700 border-rose-200' };
+    if (raw === 'BLOCKED' || raw === 'UNAVAILABLE') return { code: raw, label: 'Indisponible', tone: 'bg-slate-100 text-slate-700 border-slate-200' };
+    return { code: raw || 'UNKNOWN', label: v?.status || 'Inconnu', tone: 'bg-slate-100 text-slate-700 border-slate-200' };
+  };
+
   const totalVehicles = vehicles.length;
+  const isSL = (v: any) => {
+    const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
+    return !!v._sub_rental || ownership === 'sub_rented' || ownership === 'sub_rental';
+  };
   const availableVehicles = vehicles.filter((v: any) => {
+    if (isSL(v)) return false;
     const status = String(v.status ?? '').toUpperCase();
     const availability = String(v.availability_status ?? '').toLowerCase();
-    return status === 'AVAILABLE' || availability === 'available';
+    const isAvail = status === 'AVAILABLE' || availability === 'available';
+    return isAvail
+      && !reservedVehicleIds.has(String(v.id))
+      && !rentedVehicleIds.has(String(v.id));
+  }).length;
+  const reservedVehicles = vehicles.filter((v: any) => {
+    if (isSL(v)) return false;
+    const status = String(v.status ?? '').toUpperCase();
+    return status === 'AVAILABLE'
+      && reservedVehicleIds.has(String(v.id))
+      && !rentedVehicleIds.has(String(v.id));
+  }).length;
+  const subRentalVehicles = vehicles.filter((v: any) => {
+    const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
+    return !!v._sub_rental || ownership === 'sub_rented' || ownership === 'sub_rental';
   }).length;
   const rentedVehicles = vehicles.filter((v: any) => {
+    if (isSL(v)) return false;
     const status = String(v.status ?? '').toUpperCase();
-    return status === 'RENTED' || status === 'UNDER_LOA' || status === 'UNDER_CREDIT';
+    if (status === 'RENTED' || status === 'UNDER_LOA' || status === 'UNDER_CREDIT') return true;
+    // Derived — an AVAILABLE vehicle bound to a live contract counts as rented.
+    return status === 'AVAILABLE' && rentedVehicleIds.has(String(v.id));
   }).length;
   const maintenanceVehicles = vehicles.filter((v: any) => {
     const status = String(v.status ?? '').toUpperCase();
@@ -542,65 +871,66 @@ const VehiclesList: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-10">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
+      {/* Header — title row */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Parc Automobile</h1>
           <p className="text-slate-500 font-medium">Suivi temps réel de la flotte et conformité.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <input type="text" placeholder="Rechercher (Immat, Modèle...)"
-              className="pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl w-full md:w-64 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium text-sm"
-              value={search} onChange={e => setSearch(e.target.value)} />
-            <svg className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          </div>
-          {/*
-            Conformité véhicules entry-point.
-            Moved out of the sidebar (AppLayout.tsx); the Flotte module owns
-            its sub-navigation in one place. Indigo filled style matches the
-            page's primary action language so the button is discoverable for
-            users who used to reach this page via the sidebar.
-          */}
+        <div className="flex items-center gap-2">
+          {/* Secondary utility actions — outline style, less visual weight */}
           <Link
             to="/fleet/compliance"
             title="Tableau de conformité véhicules (assurance, visite technique, vignette)"
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 whitespace-nowrap"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-indigo-50 transition-all whitespace-nowrap"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
             Conformité
           </Link>
-
-          {/* PDF download */}
-          <button onClick={downloadParcPDF}
-            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 whitespace-nowrap">
+          <button
+            type="button"
+            onClick={downloadParcPDF}
+            title="Exporter la liste des véhicules en PDF"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-rose-200 text-rose-700 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-rose-50 transition-all whitespace-nowrap"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            PDF
+            Exporter PDF
           </button>
-
-          {/* View toggle — cards / table / analyse (rentabilité par véhicule) */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl">
-            <button onClick={() => switchView('cards')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'cards' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              title="Vue cartes">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-            </button>
-            <button onClick={() => switchView('table')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              title="Vue liste">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-            </button>
-            <button onClick={() => switchView('analysis')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'analysis' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              title="Analyse de parc (rentabilité, coûts, marge par véhicule)">
-              {/* bar-chart icon */}
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6m6 13V11M3 19v-4m18 4h.01M3 5h.01M3 19h18" /></svg>
-            </button>
-          </div>
-          <button onClick={() => handleOpenModal()}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2 whitespace-nowrap">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+          {/* Primary action — filled, prominent */}
+          <button
+            type="button"
+            onClick={() => handleOpenModal()}
+            className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
             Ajouter
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar — search + view toggle */}
+      <div className="flex flex-wrap items-center gap-3 -mt-4">
+        <div className="relative group flex-1 min-w-[260px] max-w-md">
+          <input type="text" placeholder="Rechercher (Immat, Modèle...)"
+            className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl w-full focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium text-sm"
+            value={search} onChange={e => setSearch(e.target.value)} />
+          <svg className="w-4 h-4 absolute left-4 top-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
+          <button onClick={() => switchView('cards')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'cards' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Vue cartes">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+          </button>
+          <button onClick={() => switchView('table')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Vue liste">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+          </button>
+          <button onClick={() => switchView('analysis')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'analysis' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Analyse de parc (rentabilité, coûts, marge par véhicule)">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6m6 13V11M3 19v-4m18 4h.01M3 5h.01M3 19h18" /></svg>
           </button>
         </div>
       </div>
@@ -616,6 +946,8 @@ const VehiclesList: React.FC = () => {
         {[
           ['Total', totalVehicles],
           ['Disponibles', availableVehicles],
+          ['Réservés', reservedVehicles],
+          ['Sous-location', subRentalVehicles],
           ['En location', rentedVehicles],
           ['Maintenance', maintenanceVehicles],
           ['Réparation', repairVehicles],
@@ -651,6 +983,7 @@ const VehiclesList: React.FC = () => {
                     : <div className="w-full h-full flex items-center justify-center text-slate-400"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 14v4h3m13-4v4h-3M4 14l1.8-5.2A2 2 0 0 1 7.7 7.4h8.6a2 2 0 0 1 1.9 1.4L20 14M4 14h16" /></svg></div>
                   }
                 </div>
+                <BrandLogo brand={v.brand} size={26} />
                 <div>
                   <p className="text-xs font-black text-slate-800">{v.brand} {v.model}</p>
                   <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">{v.registration}</p>
@@ -680,20 +1013,40 @@ const VehiclesList: React.FC = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100">
-                {['Immatriculation', 'Immat. provisoire / WW', 'Marque', 'Modèle', 'Mise en circulation', 'Puissance (CV)', 'Carburant', 'Statut', ''].map(h => (
+                {['Photo', 'Immatriculation', 'Immat. provisoire / WW', 'Marque', 'Modèle', 'Mise en circulation', 'Puissance (CV)', 'Carburant', 'Statut', ''].map(h => (
                   <th key={h} className="px-5 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filteredVehicles.length === 0 && (
-                <tr><td colSpan={9} className="px-5 py-10 text-center text-slate-400 font-medium">Aucun véhicule</td></tr>
+                <tr><td colSpan={10} className="px-5 py-10 text-center text-slate-400 font-medium">Aucun véhicule</td></tr>
               )}
               {filteredVehicles.map((v, idx) => (
                 <tr key={v.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/40'}`}>
-                  <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">{v.registration}</td>
+                  <td className="px-5 py-3">
+                    {/* Photo principale, à défaut le logo de la marque. */}
+                    {(v as any).photoUrl ? (
+                      <img src={(v as any).photoUrl} alt="" loading="lazy" className="h-10 w-14 rounded-lg object-cover" />
+                    ) : (
+                      <BrandLogo brand={v.brand} size={30} />
+                    )}
+                  </td>
+                  <td className="px-5 py-3 font-mono font-black text-slate-800 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span>{v.registration || '—'}</span>
+                      {((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
+                        <span title="Sous-location" className="bg-violet-600 text-white px-1.5 py-0.5 rounded text-[9px] font-black tracking-wider">SL</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{(v as any).immatOnline || '—'}</td>
-                  <td className="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">{v.brand || '—'}</td>
+                  <td className="px-5 py-3 font-semibold text-slate-800 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-2">
+                      <BrandLogo brand={v.brand} size={22} />
+                      {v.brand || '—'}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{v.model || '—'}</td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">
                     {(v as any).miseEnCirculation ? new Date((v as any).miseEnCirculation).toLocaleDateString('fr-MA') : '—'}
@@ -701,17 +1054,24 @@ const VehiclesList: React.FC = () => {
                   <td className="px-5 py-3 text-slate-600 text-center whitespace-nowrap">{(v as any).cv ?? '—'}</td>
                   <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{(v as any).fuel || '—'}</td>
                   <td className="px-5 py-3 whitespace-nowrap">
-                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border ${getStatusColor(v.status)}`}>
-                      {v.status === 'AVAILABLE' ? 'Disponible' : v.status === 'RENTED' ? 'Louée' : 'Maintenance'}
-                    </span>
+                    {(() => {
+                      const ds = displayStatusFor(v);
+                      return (
+                        <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border ${ds.tone}`}>
+                          {ds.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <Link to={`/fleet/${v.id}`} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">Fiche</Link>
-                      <button onClick={() => handleOpenModal(v)} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">Éditer</button>
-                      <button onClick={() => handleDelete(v.id)} className="p-1.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
+                      <Link to={ficheUrlFor(v)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">Fiche</Link>
+                      {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && <button onClick={() => handleOpenModal(v)} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-all">Éditer</button>}
+                      {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
+                        <button onClick={() => handleDelete(v.id)} className="p-1.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -832,23 +1192,37 @@ const VehiclesList: React.FC = () => {
                   </div>
               }
               <div className="absolute top-6 right-6">
-                <span className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border shadow-lg ${getStatusColor(v.status)}`}>
-                  {v.status === 'AVAILABLE' ? 'Disponible' : v.status === 'RENTED' ? 'Louée' : 'Maintenance'}
-                </span>
+                {(() => {
+                  const ds = displayStatusFor(v);
+                  return (
+                    <span className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border shadow-lg ${ds.tone}`}>
+                      {ds.label}
+                    </span>
+                  );
+                })()}
               </div>
-              <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/50 shadow-lg">
-                <p className="text-xs font-black text-slate-900 tracking-tighter font-mono">{v.registration}</p>
+              <div className="absolute bottom-6 left-6 flex items-center gap-2">
+                <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/50 shadow-lg">
+                  <p className="text-xs font-black text-slate-900 tracking-tighter font-mono">{v.registration || '—'}</p>
+                </div>
+                {((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
+                  <span
+                    title={(v as any)._supplier ? `Sous-location · ${(v as any)._supplier}` : 'Véhicule en sous-location'}
+                    className="bg-violet-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest shadow-lg"
+                  >
+                    SL
+                  </span>
+                )}
               </div>
             </div>
             <div className="p-8 space-y-6 flex-1 flex flex-col">
               <div className="flex justify-between items-start">
-                <div>
+                <div className="flex items-center gap-3">
+                  <BrandLogo brand={v.brand} size={40} />
+                  <div>
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">{v.brand} {v.model}</h3>
                   <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">{v.year} · {(v as any).fuel ?? ''}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-black text-indigo-600 leading-none">{v.pricePerDay} DH</p>
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">/ jour</p>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -867,11 +1241,13 @@ const VehiclesList: React.FC = () => {
                 ))}
               </div>
               <div className="pt-6 border-t border-slate-100 mt-auto flex gap-3">
-                <Link to={`/fleet/${v.id}`} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all text-center">Voir fiche</Link>
-                <button onClick={() => handleOpenModal(v)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Éditer</button>
-                <button onClick={() => handleDelete(v.id)} className="w-14 py-4 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
+                <Link to={ficheUrlFor(v)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all text-center">Voir fiche</Link>
+                {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && <button onClick={() => handleOpenModal(v)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Éditer</button>}
+                {!((v as any)._sub_rental || String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase() === 'sub_rented') && (
+                  <button onClick={() => handleDelete(v.id)} className="w-14 py-4 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -896,18 +1272,41 @@ const VehiclesList: React.FC = () => {
 
               {/* ── OCR Scanner ── */}
               <VehicleDocumentScanner
-                onPrefill={(data) => setFormData(fd => ({
-                  ...fd,
-                  ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
-                  ...(data.insuranceExpiry  ? { insuranceExpiry: data.insuranceExpiry }   : {}),
-                  ...(data.chassis          ? { chassis: data.chassis }                   : {}),
-                  ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
-                  ...(data.montant          ? { montant: data.montant }                   : {}),
-                  ...(data.immatProvisoire  ? { immatProvisoire: data.immatProvisoire }   : {}),
-                  ...(data.immatProvisoireExpiry  ? { immatProvisoireExpiry: data.immatProvisoireExpiry }   : {}),
-                  ...(data.techControlExpiry     ? { techControlExpiry: data.techControlExpiry }           : {}),
-                  ...(data.vignetteExpiry        ? { vignetteExpiry: data.vignetteExpiry }                 : {}),
-                }))}
+                carteGriseRecue={formData.carteGriseStatus === 'recue'}
+                carteGriseRef={carteGriseRef}
+                onPrefill={(data) => setFormData(fd => {
+                  const plate = data.registration ? parsePlate(data.registration.replace(/\s+/g, '').toUpperCase()) : null;
+                  // Match OCR brand/model text against the DB dropdown lists
+                  // (exact → substring → fuzzy) so the <select>s (bound to
+                  // brand_id/model_id) populate even from noisy OCR text.
+                  const cgBrand = data.cgMarque ? closestOption<VehicleBrandOption>(data.cgMarque, brands) : undefined;
+                  const cgModel = (cgBrand && data.cgModele) ? closestOption<VehicleModelOption>(data.cgModele, cgBrand.models) : undefined;
+                  return {
+                    ...fd,
+                    ...(data.numeroPolice     ? { numeroPolice: data.numeroPolice }         : {}),
+                    ...(data.insuranceStart  ? { insuranceStart: data.insuranceStart }     : {}),
+                    ...(data.insuranceExpiry  ? { insuranceExpiry: data.insuranceExpiry }   : {}),
+                    ...(data.chassis          ? { chassis: data.chassis }                   : {}),
+                    ...(data.acquisitionDate  ? { acquisitionDate: data.acquisitionDate }   : {}),
+                    ...(data.montant          ? { montant: data.montant }                   : {}),
+                    ...(data.immatProvisoire  ? { immatOnline: data.immatProvisoire, immatProvisoire: data.immatProvisoire } : {}),
+                    ...(data.immatProvisoireExpiry  ? { immatProvisoireExpiry: data.immatProvisoireExpiry }   : {}),
+                    ...(data.techControlExpiry     ? { techControlExpiry: data.techControlExpiry }           : {}),
+                    ...(data.vignetteExpiry        ? { vignetteExpiry: data.vignetteExpiry }                 : {}),
+                    ...(plate                      ? { platNum: plate.platNum, platLetter: plate.platLetter, platRegion: plate.platRegion } : {}),
+                    ...(data.fuelType              ? { fuel: data.fuelType }                                : {}),
+                    ...(data.miseEnCirculation     ? { miseEnCirculation: data.miseEnCirculation, year: parseInt(data.miseEnCirculation.slice(0, 4)) || fd.year } : {}),
+                    ...(data.fiscalPower           ? { cv: data.fiscalPower }                               : {}),
+                    // Carte Grise fields — set both the text and the matched dropdown IDs
+                    ...(data.cgMarque             ? { brand: data.cgMarque }                              : {}),
+                    ...(cgBrand                   ? { brand_id: cgBrand.id }                              : {}),
+                    ...(data.cgModele             ? { model: data.cgModele }                              : {}),
+                    ...(cgModel                   ? { model_id: cgModel.id }                              : {}),
+                    ...(data.cgChassis            ? { chassis: data.cgChassis }                           : {}),
+                    ...(data.cgFuelType           ? { fuel: data.cgFuelType }                             : {}),
+                    ...(data.cgFiscalPower        ? { cv: data.cgFiscalPower }                            : {}),
+                  };
+                })}
               />
 
               {/* ── Fiche Technique ── */}
@@ -1093,6 +1492,22 @@ const VehiclesList: React.FC = () => {
                       onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
                   </div>
 
+                  {/* Nombre de places */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Places</label>
+                    <input type="number" min="1" max="60" className={inputCls} placeholder="ex: 5"
+                      value={formData.nombrePlaces}
+                      onChange={e => setFormData(fd => ({ ...fd, nombrePlaces: e.target.value }))} />
+                  </div>
+
+                  {/* Nombre de portes */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Portes</label>
+                    <input type="number" min="1" max="10" className={inputCls} placeholder="ex: 5"
+                      value={formData.nombrePortes}
+                      onChange={e => setFormData(fd => ({ ...fd, nombrePortes: e.target.value }))} />
+                  </div>
+
                   {/* Index conteur / Km */}
                   <div className="space-y-2">
                     <label className={labelCls}>Index conteur (Km)</label>
@@ -1104,8 +1519,8 @@ const VehiclesList: React.FC = () => {
                   {/* Mise en circulation */}
                   <div className="space-y-2">
                     <label className={labelCls}>Mise en circulation</label>
-                    <input type="date" className={inputCls} value={formData.miseEnCirculation}
-                      onChange={e => setFormData(fd => ({ ...fd, miseEnCirculation: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.miseEnCirculation}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, miseEnCirculation: dfValue }))} />
                   </div>
 
                   {/* Row 5 — Admin dates + amount ────────────────────────── */}
@@ -1113,15 +1528,15 @@ const VehiclesList: React.FC = () => {
                   {/* Date immatriculation */}
                   <div className="space-y-2">
                     <label className={labelCls}>Date immatriculation</label>
-                    <input type="date" className={inputCls} value={formData.dateImmatriculation}
-                      onChange={e => setFormData(fd => ({ ...fd, dateImmatriculation: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.dateImmatriculation}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, dateImmatriculation: dfValue }))} />
                   </div>
 
                   {/* Date d'acquisition */}
                   <div className="space-y-2">
                     <label className={labelCls}>Date d'acquisition</label>
-                    <input type="date" className={inputCls} value={formData.acquisitionDate}
-                      onChange={e => setFormData(fd => ({ ...fd, acquisitionDate: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.acquisitionDate}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, acquisitionDate: dfValue }))} />
                   </div>
 
                   {/* Montant removed per user request */}
@@ -1167,8 +1582,8 @@ const VehiclesList: React.FC = () => {
 
                   <div className="space-y-2">
                     <label className={labelCls}>Validité immat. provisoire</label>
-                    <input type="date" className={inputCls} value={formData.immatProvisoireExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, immatProvisoireExpiry: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.immatProvisoireExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, immatProvisoireExpiry: dfValue }))} />
                   </div>
 
                 </div>
@@ -1182,36 +1597,143 @@ const VehiclesList: React.FC = () => {
                   <div className="space-y-2">
                     <label className={labelCls}>Statut Carte Grise</label>
                     <select className={selectCls} value={formData.carteGriseStatus}
-                      onChange={e => setFormData(fd => ({ ...fd, carteGriseStatus: e.target.value as 'en_attente' | 'recue' }))}>
+                      onChange={e => {
+                        const val = e.target.value as 'en_attente' | 'recue';
+                        setFormData(fd => ({ ...fd, carteGriseStatus: val }));
+                        if (val === 'recue') {
+                          setTimeout(() => carteGriseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+                        }
+                      }}>
                       <option value="en_attente">En attente</option>
                       <option value="recue">Reçue</option>
                     </select>
-                    {formData.carteGriseStatus === 'recue' && (
-                      <DocPhotoUpload
-                        preview={formData.docPhotos.carteGrise}
-                        onFile={f => handleDocPhoto('carteGrise', f)}
-                        onClear={() => setFormData(fd => ({ ...fd, docPhotos: { ...fd.docPhotos, carteGrise: null } }))}
-                      />
-                    )}
                   </div>
-                  {/* Assurance */}
+                  {/* Assurance — période de garantie */}
                   <div className="space-y-2">
-                    <label className={labelCls}>Exp. Assurance</label>
-                    <input type="date" required className={inputCls} value={formData.insuranceExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, insuranceExpiry: e.target.value }))} />
+                    <label className={labelCls}>Assurance du</label>
+                    <DateField className={inputCls} value={formData.insuranceStart}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, insuranceStart: dfValue }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className={labelCls}>Assurance au</label>
+                    <DateField required className={inputCls} value={formData.insuranceExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, insuranceExpiry: dfValue }))} />
+                  </div>
+                  {/* Franchise — reprise par défaut sur les contrats de ce véhicule */}
+                  <div className="space-y-2">
+                    <label className={labelCls}>Franchise d'assurance (MAD)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className={inputCls}
+                      placeholder="Ex : 5000"
+                      value={formData.insuranceDeductible}
+                      onChange={(e) => setFormData(fd => ({ ...fd, insuranceDeductible: e.target.value }))}
+                    />
                   </div>
                   {/* Visite Tech */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Visite Tech.</label>
-                    <input type="date" required className={inputCls} value={formData.techControlExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, techControlExpiry: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.techControlExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, techControlExpiry: dfValue }))} />
                   </div>
                   {/* Vignette */}
                   <div className="space-y-2">
                     <label className={labelCls}>Exp. Vignette</label>
-                    <input type="date" required className={inputCls} value={formData.vignetteExpiry}
-                      onChange={e => setFormData(fd => ({ ...fd, vignetteExpiry: e.target.value }))} />
+                    <DateField className={inputCls} value={formData.vignetteExpiry}
+                      onChange={(dfValue) => setFormData(fd => ({ ...fd, vignetteExpiry: dfValue }))} />
                   </div>
+                </div>
+              </div>
+
+              {/* ── Équipements ── */}
+              {/*
+                Multi-select à plat regroupé par famille (sécurité, confort,
+                multimédia, extérieur). On stocke en state les libellés tels
+                qu'ils apparaissent — le backend les valide contre la constante
+                `Vehicle::EQUIPMENTS` et refuse tout libellé étranger.
+              */}
+              <div className="space-y-6 pt-6 border-t border-slate-100">
+                <div className="flex items-end justify-between gap-4">
+                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-[0.2em]">Équipements</h3>
+                  <div className="text-xs font-semibold text-slate-500">
+                    {formData.equipments.length} sélectionné{formData.equipments.length > 1 ? 's' : ''}
+                    <button
+                      type="button"
+                      onClick={() => setFormData(fd => ({
+                        ...fd,
+                        // Déduplique via Set au cas où l'état en aurait déjà
+                        // (import, retour arrière, …).
+                        equipments: Array.from(new Set(
+                          EQUIPMENTS.flatMap(g => g.items),
+                        )),
+                      }))}
+                      className="ml-3 text-indigo-600 hover:underline">
+                      Tout sélectionner
+                    </button>
+                    {formData.equipments.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(fd => ({ ...fd, equipments: [] }))}
+                        className="ml-3 text-indigo-600 hover:underline">
+                        Tout décocher
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-5">
+                  {EQUIPMENTS.map(({ group, items }) => {
+                    const allChecked = items.every(it => formData.equipments.includes(it));
+                    return (
+                    <div key={group} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">{group}</div>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(fd => {
+                            if (allChecked) {
+                              return { ...fd, equipments: fd.equipments.filter(e => !items.includes(e)) };
+                            }
+                            return {
+                              ...fd,
+                              equipments: Array.from(new Set([...fd.equipments, ...items])),
+                            };
+                          })}
+                          className="text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:underline">
+                          {allChecked ? 'Tout décocher' : 'Tout sélectionner'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-3 lg:grid-cols-4">
+                        {items.map((label) => {
+                          const checked = formData.equipments.includes(label);
+                          return (
+                            <label
+                              key={label}
+                              className={`flex items-start gap-2 rounded-xl border px-3 py-2 cursor-pointer transition
+                                ${checked
+                                  ? 'border-indigo-400 bg-indigo-50 text-indigo-900'
+                                  : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-indigo-200'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1 accent-indigo-600"
+                                checked={checked}
+                                onChange={() => setFormData(fd => ({
+                                  ...fd,
+                                  equipments: checked
+                                    ? fd.equipments.filter(e => e !== label)
+                                    : [...fd.equipments, label],
+                                }))}
+                              />
+                              <span className="text-xs font-semibold leading-tight">{label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    );
+                  })}
                 </div>
               </div>
 

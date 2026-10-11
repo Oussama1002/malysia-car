@@ -12,7 +12,7 @@ interface OcrProviderInterface
 {
     /**
      * @param  string  $absolutePath  Absolute path to a PDF / JPG / JPEG / PNG on the local disk.
-     * @param  array{lang?: string}  $options
+     * @param  array{lang?: string, doc_type?: string}  $options
      */
     public function extract(string $absolutePath, array $options = []): OcrResult;
 

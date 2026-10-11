@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
@@ -9,44 +9,10 @@ import { Icon } from '@/modules/shared/components/Icon';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
+import { DateField } from '@/modules/shared/components/DateField';
+import { BrandLogo } from '@/modules/shared/components/BrandLogo';
 import { Modal } from '@/modules/shared/components/Modal';
-import { documentReaderApi } from '@/services/documentReaderApi';
-
-// ─── Traductions ─────────────────────────────────────────────────────────────
-
-const STATUS_FR: Record<string, string> = {
-  good: 'Bon état', excellent: 'Excellent', fair: 'Correct', poor: 'Mauvais', damaged: 'Endommagé',
-  needs_repair: 'À réparer', new: 'Neuf', used: 'Usé',
-};
-const AVAILABILITY_FR: Record<string, string> = {
-  available: 'Disponible', in_use: 'En utilisation', maintenance: 'En maintenance',
-  repair: 'En réparation', unavailable: 'Indisponible', reserved: 'Réservé',
-  immobilized: 'Immobilisé', immobilised: 'Immobilisé', blocked: 'Bloqué', accident: 'Accident',
-};
-const MOVEMENT_STATUS_FR: Record<string, string> = {
-  entry: 'Check-in', exit: 'Check-out', return: 'Retour',
-  transfer: 'Transfert', immobilization: 'Immobilisé', release: 'Disponible',
-};
-const MOVEMENT_STATUS_STYLE: Record<string, string> = {
-  entry: 'bg-emerald-100 text-emerald-700',
-  exit: 'bg-amber-100 text-amber-700',
-  return: 'bg-blue-100 text-blue-700',
-  transfer: 'bg-purple-100 text-purple-700',
-  immobilization: 'bg-red-100 text-red-700',
-  release: 'bg-emerald-100 text-emerald-700',
-};
-const OWNERSHIP_FR: Record<string, string> = {
-  owned: 'Propriété', leased: 'Leasing', rented: 'Loué', sub_rented: 'Sous-location',
-  financed: 'Financé', company: 'Société',
-};
-const TRANSMISSION_FR: Record<string, string> = {
-  automatic: 'Automatique', manual: 'Manuelle', semi_automatic: 'Semi-automatique',
-};
-
-function tr(val: string | null | undefined, map: Record<string, string>): string | null {
-  if (!val) return null;
-  return map[val.toLowerCase().trim()] ?? val;
-}
+import { ProofUploader } from '@/modules/shared/components/ProofUploader';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,6 +154,72 @@ const REPAIR_LABELS: Record<string, string> = {
   OTHER: 'Autre',
 };
 
+/** Valeurs stockées en anglais qu'un agent ne doit jamais voir telles quelles. */
+const TRANSMISSION_FR: Record<string, string> = {
+  manual: 'Manuelle',
+  automatic: 'Automatique',
+  semi_automatic: 'Semi-automatique',
+  cvt: 'CVT',
+};
+
+const FUEL_FR: Record<string, string> = {
+  diesel: 'Diesel',
+  gasoline: 'Essence',
+  petrol: 'Essence',
+  essence: 'Essence',
+  hybrid: 'Hybride',
+  electric: 'Électrique',
+  lpg: 'GPL',
+};
+
+const PHYSICAL_STATUS_FR: Record<string, string> = {
+  good: 'Bon état',
+  new: 'Neuf',
+  fair: 'État moyen',
+  poor: 'Mauvais état',
+  damaged: 'Endommagé',
+  under_repair: 'En réparation',
+  scrapped: 'Rebut',
+};
+
+const AVAILABILITY_FR: Record<string, string> = {
+  available: 'Disponible',
+  reserved: 'Réservé',
+  rented: 'En location',
+  in_use: 'En service',
+  maintenance: 'En maintenance',
+  unavailable: 'Indisponible',
+  for_sale: 'En vente',
+  sold: 'Vendu',
+};
+
+const OWNERSHIP_FR: Record<string, string> = {
+  owned: "Propriété de l'agence",
+  sub_rented: 'Sous-location',
+  sub_rental: 'Sous-location',
+  leased: 'Leasing',
+  financed: 'Financé (crédit)',
+  managed: 'Gestion pour compte de tiers',
+};
+
+const MOVEMENT_FR: Record<string, string> = {
+  entry: 'Entrée',
+  exit: 'Sortie',
+  return: 'Retour',
+  transfer: 'Transfert',
+  immobilization: 'Immobilisation',
+  release: 'Remise en service',
+  checkout: 'Départ',
+  checkin: 'Retour',
+};
+
+/** Traduit une valeur brute ; garde la valeur d'origine si elle est inconnue. */
+function fr(map: Record<string, string>, value: unknown): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  return map[raw.toLowerCase()] ?? raw;
+}
+
 function planStatusBadge(status: MaintenancePlan['status']) {
   if (status === 'overdue') return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">● En retard</span>;
   if (status === 'due_soon') return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">● Bientôt dû</span>;
@@ -253,7 +285,6 @@ export const FleetVehicleDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [tab, setTab] = useState('overview');
-  const [movementModalOpen, setMovementModalOpen] = useState(false);
 
   // Modals / forms
   const [showPlanForm, setShowPlanForm] = useState(false);
@@ -335,6 +366,67 @@ export const FleetVehicleDetailPage: React.FC = () => {
   });
 
   const veh = vehicleQ.data?.vehicle as Record<string, any> | undefined;
+
+  // Reservations + contracts feed the effective status (Réservé / En location
+  // / Sous-location) — the raw v.status stays AVAILABLE even when the vehicle
+  // is bound to a live reservation or contract, which mislead users.
+  const reservationsForVehicleQ = useQuery({
+    queryKey: ['reservations', 'for-vehicle', id],
+    queryFn: async () => (await apiClient<{ data: any[] }>(`/v1/reservations?per_page=100&vehicle_id=${id}`)).data ?? [],
+    enabled: !!id && !!getApiBase(),
+    staleTime: 30_000,
+  });
+  const contractsForVehicleQ = useQuery({
+    queryKey: ['contracts', 'for-vehicle', id],
+    queryFn: async () => (await apiClient<{ data: any[] }>(`/v1/contracts?per_page=100&vehicle_id=${id}`)).data ?? [],
+    enabled: !!id && !!getApiBase(),
+    staleTime: 30_000,
+  });
+
+  const hasActiveReservation = (reservationsForVehicleQ.data ?? []).some((r: any) => {
+    const s = String(r.status ?? '').toLowerCase();
+    if (['handed_over','active','extension_requested'].includes(s)) return true; // physical hold, dates irrelevant
+    if (!['draft','reserved','confirmed','pickup_scheduled'].includes(s)) return false;
+    const endMs = r.desired_end_at ? new Date(r.desired_end_at).getTime() : 0;
+    return endMs >= Date.now();
+  });
+  const hasActiveContract = (contractsForVehicleQ.data ?? []).some((c: any) => {
+    const s = String(c.status ?? '').toLowerCase();
+    return !['cancelled','terminated','rejected','expired','draft'].includes(s);
+  });
+  const veh_ownership = String(veh?.ownership_status ?? veh?.ownershipStatus ?? '').toLowerCase();
+  const isSL = veh_ownership === 'sub_rented' || veh_ownership === 'sub_rental';
+
+  // Effective display status. RENTED/MAINTENANCE/etc from the DB always win.
+  const effectiveStatus = (() => {
+    const raw = String(veh?.status ?? '').toUpperCase();
+    if (raw !== 'AVAILABLE') return raw;
+    if (hasActiveContract)   return 'RENTED';       // finance / lease contract
+    if (hasActiveReservation) return 'RESERVED';     // reservation window
+    return 'AVAILABLE';
+  })();
+  const statusLabelFR: Record<string, string> = {
+    AVAILABLE:   'Disponible',
+    RENTED:      'En location',
+    RESERVED:    'Réservé',
+    MAINTENANCE: 'Maintenance',
+    IN_REPAIR:   'Réparation',
+    BLOCKED:     'Bloqué',
+    UNAVAILABLE: 'Indisponible',
+    SOLD:        'Vendu',
+    SCRAPPED:    'Rebut',
+  };
+  const statusColorFR: Record<string, string> = {
+    AVAILABLE:   'bg-emerald-100 text-emerald-700',
+    RENTED:      'bg-indigo-100 text-indigo-700',
+    RESERVED:    'bg-amber-100 text-amber-700',
+    MAINTENANCE: 'bg-orange-100 text-orange-700',
+    IN_REPAIR:   'bg-rose-100 text-rose-700',
+    BLOCKED:     'bg-red-100 text-red-700',
+    UNAVAILABLE: 'bg-slate-100 text-slate-600',
+    SOLD:        'bg-slate-100 text-slate-600',
+    SCRAPPED:    'bg-slate-100 text-slate-600',
+  };
   const maintenanceAlertsQ = useQuery({
     queryKey: ['fleet', 'maintenance', 'alerts', 'vehicle', id],
     queryFn: () => maintenanceApi.alerts(),
@@ -342,14 +434,31 @@ export const FleetVehicleDetailPage: React.FC = () => {
     refetchInterval: 60000,
   });
   const maintenanceVehicleAlerts = (maintenanceAlertsQ.data?.data?.alerts ?? []).filter((a) => a.vehicle?.id === id);
-  const complianceVehicleAlerts = (vehicleQ.data?.complianceAlerts ?? []).map((a) => ({
-    id: a.id,
-    title: a.title,
-    source: 'compliance' as const,
-  }));
-  const vehicleAlerts = [
-    ...maintenanceVehicleAlerts.map((a) => ({ id: a.id, title: a.title, source: 'maintenance' as const })),
-    ...complianceVehicleAlerts,
+  const complianceVehicleAlerts: any[] = (vehicleQ.data?.complianceAlerts ?? []);
+  const vehicleAlerts: Array<{
+    id: string;
+    source: 'maintenance' | 'compliance';
+    title: string;
+    description?: string | null;
+    severity?: string | null;
+    triggeredAt?: string | null;
+  }> = [
+    ...maintenanceVehicleAlerts.map((a) => ({
+      id: a.id,
+      source: 'maintenance' as const,
+      title: a.title,
+      description: a.description,
+      severity: a.severity,
+      triggeredAt: a.triggeredAt,
+    })),
+    ...complianceVehicleAlerts.map((a: any) => ({
+      id: a.id,
+      source: 'compliance' as const,
+      title: a.title ?? 'Alerte conformité',
+      description: a.description ?? a.message ?? null,
+      severity: a.severity ?? null,
+      triggeredAt: a.triggered_at ?? a.triggeredAt ?? a.created_at ?? null,
+    })),
   ];
   const invalidate = (keys: string[]) => qc.invalidateQueries({ queryKey: ['vehicle', id, ...keys] });
   const invalidateVehicle = () => qc.invalidateQueries({ queryKey: ['vehicle', id] });
@@ -375,13 +484,22 @@ export const FleetVehicleDetailPage: React.FC = () => {
       <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <Link to="/fleet" className="text-xs font-semibold text-[color:var(--df-brand-600)]">← Flotte</Link>
-          <h1 className="mt-1 text-2xl font-black text-[color:var(--df-text)]">
+          <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-black text-[color:var(--df-text)]">
+            <BrandLogo brand={veh.brand} size={34} />
             {veh.brand} {veh.model} <span className="text-lg font-normal text-[color:var(--df-text-muted)]">{veh.year}</span>
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[color:var(--df-text-muted)]">
             <span className="font-mono">{veh.registration}</span>
+            {isSL && (
+              <>
+                <span>•</span>
+                <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-black tracking-wider text-white">SL</span>
+              </>
+            )}
             <span>•</span>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${statusColor[veh.status] ?? 'bg-slate-100 text-slate-600'}`}>{veh.status}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${statusColorFR[effectiveStatus] ?? 'bg-slate-100 text-slate-600'}`}>
+              {statusLabelFR[effectiveStatus] ?? effectiveStatus}
+            </span>
             {veh.mileageKm && <><span>•</span><span>{veh.mileageKm.toLocaleString('fr-MA')} km</span></>}
           </div>
         </div>
@@ -399,11 +517,47 @@ export const FleetVehicleDetailPage: React.FC = () => {
       )}
       {vehicleAlerts.length > 0 && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <div className="mb-1 text-sm font-bold text-red-800">Alertes automatiques</div>
-          <ul className="space-y-1 text-xs text-red-700">
-            {vehicleAlerts.slice(0, 5).map((alert) => (
-              <li key={`${alert.source}-${alert.id}`}>• {alert.title}</li>
-            ))}
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-black text-red-800">Alertes automatiques</div>
+            <span className="text-[10px] font-bold text-red-600">{vehicleAlerts.length} alerte{vehicleAlerts.length > 1 ? 's' : ''}</span>
+          </div>
+          <ul className="space-y-2">
+            {vehicleAlerts.slice(0, 6).map((alert) => {
+              const sev = String(alert.severity ?? '').toLowerCase();
+              const sevTone =
+                sev === 'critical' ? 'bg-red-600 text-white'
+                : sev === 'high'   ? 'bg-red-100 text-red-800 border border-red-300'
+                : sev === 'normal' ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                : 'bg-slate-100 text-slate-700 border border-slate-200';
+              const sevLabel =
+                sev === 'critical' ? 'Critique'
+                : sev === 'high'   ? 'Élevée'
+                : sev === 'normal' ? 'Normale'
+                : sev === 'low'    ? 'Faible'
+                : '—';
+              const when = alert.triggeredAt
+                ? new Date(alert.triggeredAt).toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : null;
+              return (
+                <li key={`${alert.source}-${alert.id}`} className="rounded-lg border border-red-200 bg-white px-3 py-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-black text-red-900">{alert.title}</div>
+                      {alert.description && (
+                        <div className="mt-0.5 text-[11px] text-slate-700">{alert.description}</div>
+                      )}
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${sevTone}`}>
+                      {sevLabel}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] font-semibold text-slate-500">
+                    <span className="uppercase tracking-wider">{alert.source === 'maintenance' ? 'Maintenance' : 'Conformité'}</span>
+                    {when && <span>Déclenchée le {when}</span>}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -437,67 +591,106 @@ export const FleetVehicleDetailPage: React.FC = () => {
               <Field label="Immatriculation" value={<span className="font-mono">{veh.registration}</span>} />
               <Field label="VIN" value={<span className="font-mono text-xs">{veh.vin}</span>} />
               <Field label="Châssis" value={veh.chassisNumber} />
-              <Field label="Transmission" value={tr(veh.transmission, TRANSMISSION_FR)} />
-              <Field label="Statut physique" value={tr(veh.physicalStatus, STATUS_FR)} />
-              <Field label="Disponibilité" value={tr(veh.availabilityStatus, AVAILABILITY_FR)} />
-              <Field label="Propriété" value={tr(veh.ownershipStatus, OWNERSHIP_FR)} />
+              <Field label="Transmission" value={fr(TRANSMISSION_FR, veh.transmission)} />
+              <Field label="Statut physique" value={fr(PHYSICAL_STATUS_FR, veh.physicalStatus)} />
+              <Field label="Disponibilité" value={fr(AVAILABILITY_FR, veh.availabilityStatus)} />
+              <Field label="Propriété" value={fr(OWNERSHIP_FR, veh.ownershipStatus)} />
               <Field label="Emplacement" value={veh.currentLocation} />
               <Field label="Motif indispo." value={veh.unavailabilityReason} />
             </div>
           </SectionCard>
           <SectionCard title="Contexte location">
-            <div className="space-y-2 text-sm">
-              <Field label="Client (lié)" value={(vehicleQ.data?.current as any)?.customer?.full_name ?? (vehicleQ.data?.current as any)?.customer?.legal_name ?? (vehicleQ.data?.current as any)?.customer?.name ?? null} />
-              <Field label="Contrat courant" value={(vehicleQ.data?.current as any)?.contract?.contract_number ?? null} />
-              <Field label="Réservation courante" value={(vehicleQ.data?.current as any)?.reservation?.reservation_number ?? null} />
-            </div>
+            {(() => {
+              const cur = (vehicleQ.data?.current ?? {}) as any;
+              const cust = cur.customer ?? {};
+              const clientName =
+                cust.display_name
+                ?? cust.legal_name
+                ?? [cust?.individual_profile?.first_name, cust?.individual_profile?.last_name].filter(Boolean).join(' ').trim()
+                ?? cust?.company_profile?.trade_name
+                ?? cust?.company_profile?.legal_name
+                ?? cust.name
+                ?? cust.customer_code
+                ?? null;
+              const contractRef = cur.contract?.contract_number ?? cur.contract?.reference ?? null;
+              const contractId = cur.contract?.id ?? null;
+              const rsvRef = cur.reservation?.reservation_number ?? null;
+              const rsvId = cur.reservation?.id ?? null;
+              const rsvStatusFR: Record<string, string> = {
+                draft: 'Brouillon', reserved: 'Réservée', confirmed: 'Confirmée',
+                pickup_scheduled: 'Remise planifiée', handed_over: 'Remise', active: 'En cours',
+                extension_requested: 'Prolongation demandée', returned: 'Retournée', cancelled: 'Annulée',
+                closed: 'Clôturée', completed: 'Terminée',
+              };
+              return (
+                <div className="space-y-2 text-sm">
+                  <Field label="Client (lié)" value={clientName ? (
+                    <span>{clientName}{cust.customer_code ? <span className="ms-2 font-mono text-xs text-slate-500">{cust.customer_code}</span> : null}</span>
+                  ) : null} />
+                  <Field label="Contrat courant" value={contractRef ? (
+                    contractId ? <Link to={`/contracts/${contractId}`} className="font-mono font-bold text-indigo-600 hover:underline">{contractRef}</Link> : <span className="font-mono">{contractRef}</span>
+                  ) : null} />
+                  <Field label="Réservation courante" value={rsvRef ? (
+                    <span className="flex items-center gap-2">
+                      {rsvId
+                        ? <Link to={`/reservations/${rsvId}`} className="font-mono font-bold text-indigo-600 hover:underline">{rsvRef}</Link>
+                        : <span className="font-mono">{rsvRef}</span>}
+                      {cur.reservation?.status && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-800">
+                          {rsvStatusFR[String(cur.reservation.status).toLowerCase()] ?? cur.reservation.status}
+                        </span>
+                      )}
+                    </span>
+                  ) : null} />
+                </div>
+              );
+            })()}
           </SectionCard>
         </div>
       )}
 
       {tab === 'movements' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div />
-            <button
-              className="df-btn df-btn--primary df-btn--sm"
-              onClick={() => setMovementModalOpen(true)}
-            >
-              + Enregistrer un mouvement
-            </button>
-          </div>
           <SectionCard title="Historique des mouvements">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="df-table w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
-                    <th className="px-4 py-2">Date</th>
-                    <th className="px-4 py-2">Statut</th>
-                    <th className="px-4 py-2 text-right">Km</th>
-                    <th className="px-4 py-2 text-right">Carburant %</th>
-                    <th className="px-4 py-2">Notes</th>
-                    <th className="px-4 py-2">Photo</th>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Km</th>
+                    <th>Carburant %</th>
+                    <th>Notes</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {(vehicleQ.data?.movements ?? []).length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-4 text-center text-slate-400">Aucun mouvement enregistré.</td></tr>
+                    <tr><td colSpan={5} className="text-[color:var(--df-text-muted)]">Aucun mouvement enregistré.</td></tr>
                   )}
                   {(vehicleQ.data?.movements ?? []).map((m: Record<string, unknown>) => (
-                    <tr key={String(m.id)} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5 whitespace-nowrap">{m.performed_at ? formatDate(String(m.performed_at)) : '—'}</td>
-                      <td className="px-4 py-2.5"><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${MOVEMENT_STATUS_STYLE[String(m.movement_type)] ?? 'bg-slate-100 text-slate-600'}`}>{MOVEMENT_STATUS_FR[String(m.movement_type)] ?? String(m.movement_type ?? '')}</span></td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{m.odometer_km != null ? Number(m.odometer_km).toLocaleString('fr-MA') : '—'}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{m.fuel_level != null ? `${m.fuel_level}%` : '—'}</td>
-                      <td className="px-4 py-2.5 max-w-xs truncate">{String(m.condition_notes ?? '')}</td>
-                      <td className="px-4 py-2.5">{m.report_file_id ? <a href={`${getApiBase()}/v1/files/${m.report_file_id}/download`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline text-xs">Voir</a> : '—'}</td>
+                    <tr key={String(m.id)}>
+                      <td>{m.performed_at ? formatDate(String(m.performed_at)) : '—'}</td>
+                      <td className="font-semibold">{fr(MOVEMENT_FR, m.movement_type) ?? '—'}</td>
+                      <td>{m.odometer_km != null ? String(m.odometer_km) : '—'}</td>
+                      <td>{m.fuel_level != null ? String(m.fuel_level) : '—'}</td>
+                      <td className="max-w-xs truncate">{String(m.condition_notes ?? '')}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </SectionCard>
-          <MovementForms vehicleId={id!} open={movementModalOpen} onClose={() => setMovementModalOpen(false)} onDone={() => invalidateVehicle()} />
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+            <div className="flex items-start gap-3">
+              <span className="text-lg leading-none">📡</span>
+              <div>
+                <div className="font-black">Mouvements automatiques</div>
+                <div className="mt-0.5 text-xs text-indigo-700/90">
+                  Les mouvements (départs, arrêts, kilométrage, carburant) sont enregistrés automatiquement à partir du boîtier GPS du véhicule. Aucune saisie manuelle n'est nécessaire.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -508,7 +701,7 @@ export const FleetVehicleDetailPage: React.FC = () => {
               <Field label="Immatriculation" value={<span className="font-mono">{veh.registration}</span>} />
               <Field label="N° Carte Grise" value={veh.registrationCard} />
               <Field label="VIN" value={<span className="font-mono text-xs">{veh.vin}</span>} />
-              <Field label="Carburant" value={veh.fuel} />
+              <Field label="Carburant" value={fr(FUEL_FR, veh.fuel)} />
               <Field label="Puissance fiscale" value={veh.cv ? `${veh.cv} CV` : null} />
               <Field label="Kilométrage" value={veh.mileageKm ? `${veh.mileageKm.toLocaleString('fr-MA')} km` : null} />
             </div>
@@ -590,8 +783,13 @@ export const FleetVehicleDetailPage: React.FC = () => {
             </div>
           </SectionCard>
 
-          {/* Add Plan modal */}
-          <Modal open={showPlanForm} title="Nouveau plan d'entretien" onClose={() => setShowPlanForm(false)} widthClass="max-w-lg">
+          {/* Add Plan form — en popup, la page est déjà longue */}
+          <Modal
+            open={showPlanForm}
+            title="Nouveau plan d'entretien"
+            onClose={() => setShowPlanForm(false)}
+            widthClass="max-w-xl"
+          >
             <MaintenancePlanForm
               vehicleId={id!}
               onSaved={() => { setShowPlanForm(false); invalidate(['maintenance-plans']); }}
@@ -603,20 +801,26 @@ export const FleetVehicleDetailPage: React.FC = () => {
           <SectionCard
             title="Enregistrer un entretien"
             action={
-              <button className="df-btn df-btn--subtle df-btn--sm" onClick={() => setShowMaintForm(!showMaintForm)}>
-                {showMaintForm ? 'Fermer' : <><Icon name="plus" size={14} /> Enregistrer</>}
+              <button className="df-btn df-btn--subtle df-btn--sm" onClick={() => setShowMaintForm(true)}>
+                <Icon name="plus" size={14} /> Enregistrer
               </button>
             }
           >
-            {showMaintForm && (
-              <MaintenanceEventForm
-                vehicleId={id!}
-                onSaved={() => { setShowMaintForm(false); invalidate(['maintenance-plans']); }}
-                onCancel={() => setShowMaintForm(false)}
-              />
-            )}
-            {!showMaintForm && <p className="text-sm text-[color:var(--df-text-muted)]">Cliquez sur "Enregistrer" pour saisir un entretien effectué.</p>}
+            <p className="text-sm text-[color:var(--df-text-muted)]">Cliquez sur « Enregistrer » pour saisir un entretien effectué.</p>
           </SectionCard>
+
+          <Modal
+            open={showMaintForm}
+            title="Enregistrer un entretien"
+            onClose={() => setShowMaintForm(false)}
+            widthClass="max-w-xl"
+          >
+            <MaintenanceEventForm
+              vehicleId={id!}
+              onSaved={() => { setShowMaintForm(false); invalidate(['maintenance-plans']); }}
+              onCancel={() => setShowMaintForm(false)}
+            />
+          </Modal>
         </div>
       )}
 
@@ -1038,11 +1242,11 @@ function InsurancePolicyForm({
       </div>
       <div>
         <label className="df-label">Debut *</label>
-        <input className="df-input" type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} />
+        <DateField className="df-input" value={form.start_date} onChange={(dfValue) => setForm((f) => ({ ...f, start_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Fin *</label>
-        <input className="df-input" type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} />
+        <DateField className="df-input" value={form.end_date} onChange={(dfValue) => setForm((f) => ({ ...f, end_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Prime (MAD)</label>
@@ -1148,11 +1352,11 @@ function TechnicalInspectionForm({
     <div className="grid grid-cols-2 gap-3">
       <div>
         <label className="df-label">Date controle *</label>
-        <input className="df-input" type="date" value={form.inspection_date} onChange={(e) => setForm((f) => ({ ...f, inspection_date: e.target.value }))} />
+        <DateField className="df-input" value={form.inspection_date} onChange={(dfValue) => setForm((f) => ({ ...f, inspection_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Date expiration *</label>
-        <input className="df-input" type="date" value={form.expiry_date} onChange={(e) => setForm((f) => ({ ...f, expiry_date: e.target.value }))} />
+        <DateField className="df-input" value={form.expiry_date} onChange={(dfValue) => setForm((f) => ({ ...f, expiry_date: dfValue }))} />
       </div>
       <div className="col-span-2">
         <label className="df-label">Centre</label>
@@ -1168,7 +1372,7 @@ function TechnicalInspectionForm({
       </div>
       <div>
         <label className="df-label">Prochaine echeance</label>
-        <input className="df-input" type="date" value={form.next_due_date} onChange={(e) => setForm((f) => ({ ...f, next_due_date: e.target.value }))} />
+        <DateField className="df-input" value={form.next_due_date} onChange={(dfValue) => setForm((f) => ({ ...f, next_due_date: dfValue }))} />
       </div>
       <div className="col-span-2">
         <label className="df-label">Defauts (une ligne par defaut)</label>
@@ -1214,7 +1418,7 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
   };
 
   return (
-    <div className="space-y-4">
+    <div>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="df-label">Type d'entretien</label>
@@ -1232,7 +1436,7 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
         </div>
         <div>
           <label className="df-label">Dernier fait le</label>
-          <input className="df-input" type="date" value={form.last_done_at} onChange={e => setForm(f => ({ ...f, last_done_at: e.target.value }))} />
+          <DateField className="df-input" value={form.last_done_at} onChange={(dfValue) => setForm(f => ({ ...f, last_done_at: dfValue }))} />
         </div>
         <div>
           <label className="df-label">Notes</label>
@@ -1240,16 +1444,16 @@ function MaintenancePlanForm({ vehicleId, onSaved, onCancel }: { vehicleId: stri
         </div>
       </div>
       {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
-      <div className="flex justify-end gap-2">
-        <button className="df-btn df-btn--ghost" onClick={onCancel}>Annuler</button>
-        <button className="df-btn df-btn--primary" disabled={saving} onClick={submit}>{saving ? 'Enregistrement…' : 'Créer le plan'}</button>
+      <div className="mt-3 flex gap-2">
+        <button className="df-btn df-btn--primary df-btn--sm" disabled={saving} onClick={submit}>{saving ? 'Enregistrement…' : 'Créer le plan'}</button>
+        <button className="df-btn df-btn--ghost df-btn--sm" onClick={onCancel}>Annuler</button>
       </div>
     </div>
   );
 }
 
 function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: string; onSaved: () => void; onCancel: () => void }) {
-  const [form, setForm] = useState({ type: 'OIL_CHANGE', title: '', performed_at: '', odometer_km: '', vendor: '', cost_mad: '' });
+  const [form, setForm] = useState({ type: 'OIL_CHANGE', title: '', performed_at: '', odometer_km: '', vendor: '', cost_mad: '', proof_document_id: '' });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1266,6 +1470,7 @@ function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: str
           odometer_km: form.odometer_km ? Number(form.odometer_km) : null,
           vendor: form.vendor || null,
           cost_mad: form.cost_mad ? Number(form.cost_mad) : null,
+          proof_document_id: form.proof_document_id || null,
         }),
       });
       onSaved();
@@ -1286,7 +1491,7 @@ function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: str
       </div>
       <div>
         <label className="df-label">Date d'exécution</label>
-        <input className="df-input" type="date" value={form.performed_at} onChange={e => setForm(f => ({ ...f, performed_at: e.target.value }))} />
+        <DateField className="df-input" value={form.performed_at} onChange={(dfValue) => setForm(f => ({ ...f, performed_at: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Kilométrage</label>
@@ -1299,6 +1504,14 @@ function MaintenanceEventForm({ vehicleId, onSaved, onCancel }: { vehicleId: str
       <div>
         <label className="df-label">Coût (MAD)</label>
         <input className="df-input" type="number" placeholder="0.00" value={form.cost_mad} onChange={e => setForm(f => ({ ...f, cost_mad: e.target.value }))} />
+      </div>
+      <div className="col-span-2">
+        <ProofUploader
+          label="Facture de l'entretien (photo, PDF)"
+          documentId={form.proof_document_id || null}
+          onUploaded={(id) => setForm(f => ({ ...f, proof_document_id: id }))}
+          onCleared={() => setForm(f => ({ ...f, proof_document_id: '' }))}
+        />
       </div>
       {err && <p className="col-span-2 text-xs text-red-600">{err}</p>}
       <div className="col-span-2 flex gap-2">
@@ -1363,7 +1576,7 @@ function RepairForm({ vehicleId, onSaved, onCancel }: { vehicleId: string; onSav
       </div>
       <div>
         <label className="df-label">Date de début</label>
-        <input className="df-input" type="date" value={form.started_at} onChange={e => setForm(f => ({ ...f, started_at: e.target.value }))} />
+        <DateField className="df-input" value={form.started_at} onChange={(dfValue) => setForm(f => ({ ...f, started_at: dfValue }))} />
       </div>
       {err && <p className="col-span-2 text-xs text-red-600">{err}</p>}
       <div className="col-span-2 flex gap-2">
@@ -1450,7 +1663,7 @@ function AccidentForm({ vehicleId, onSaved, onCancel }: { vehicleId: string; onS
     <div className="grid grid-cols-2 gap-3">
       <div>
         <label className="df-label">Date de l'accident *</label>
-        <input className="df-input" type="date" value={form.accident_date} onChange={e => setForm(f => ({ ...f, accident_date: e.target.value }))} />
+        <DateField className="df-input" value={form.accident_date} onChange={(dfValue) => setForm(f => ({ ...f, accident_date: dfValue }))} />
       </div>
       <div>
         <label className="df-label">Gravité</label>
@@ -1609,19 +1822,12 @@ function AccidentCard({ accident, vehicleId, onUpdated }: { accident: Accident; 
   );
 }
 
-function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string; open: boolean; onClose: () => void; onDone: () => void }): React.ReactElement | null {
+function MovementForms({ vehicleId, onDone }: { vehicleId: string; onDone: () => void }): React.ReactElement {
   const [odometer, setOdometer] = useState('');
   const [fuel, setFuel] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [scanMsg, setScanMsg] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const cameraRef = useRef<HTMLInputElement | null>(null);
-
-  if (!open) return null;
 
   const post = async (type: 'entry' | 'exit' | 'return') => {
     setBusy(true);
@@ -1635,9 +1841,7 @@ function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string
           condition_notes: notes || undefined,
         }),
       });
-      setOdometer(''); setFuel(''); setNotes(''); setPreviewUrl(null); setScanMsg(null);
       onDone();
-      onClose();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Erreur');
     } finally {
@@ -1645,89 +1849,28 @@ function MovementForms({ vehicleId, open, onClose, onDone }: { vehicleId: string
     }
   };
 
-  const handleDashboardPhoto = async (file: File) => {
-    setScanning(true);
-    setScanMsg(null);
-    setPreviewUrl(URL.createObjectURL(file));
-    try {
-      const uploaded = await documentReaderApi.upload(file, 'other');
-      await documentReaderApi.extract(uploaded.data.id, 'other');
-      const done = await documentReaderApi.pollUntilDone(uploaded.data.id);
-      if (done.data.status === 'failed') {
-        setScanMsg('Échec OCR — réessayez avec une photo plus nette.');
-        return;
-      }
-      const fields = (done.data.extraction?.extracted_data ?? {}) as Record<string, unknown>;
-      const km = fields.odometer ?? fields.mileage ?? fields.km ?? fields.odometer_km ?? fields.compteur ?? fields.kilometers ?? fields.total_km;
-      const fuelVal = fields.fuel ?? fields.fuel_level ?? fields.carburant ?? fields.fuel_percentage ?? fields.essence;
-      if (km != null) setOdometer(String(km).replace(/[^\d]/g, ''));
-      if (fuelVal != null) setFuel(String(fuelVal).replace(/[^\d]/g, ''));
-      setScanMsg(km || fuelVal ? 'Données extraites avec succès.' : 'Aucune donnée détectée — saisissez manuellement.');
-    } catch (e) {
-      setScanMsg(e instanceof Error ? e.message : 'Erreur OCR');
-    } finally {
-      setScanning(false);
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-black text-slate-900">Enregistrer un mouvement</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+    <div className="df-card df-card--elev p-4 space-y-3">
+      <div className="text-sm font-bold">Enregistrer un mouvement</div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div>
+          <label className="df-label">Km compteur</label>
+          <input className="df-input" value={odometer} onChange={(e) => setOdometer(e.target.value)} />
         </div>
-
-        {/* Dashboard photo scanner */}
-        <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-2">
-          <div className="text-[10px] font-black uppercase tracking-wider text-indigo-700">Photo tableau de bord</div>
-          <p className="text-[11px] text-slate-500">Prenez ou importez une photo du tableau de bord pour extraire automatiquement le kilométrage et le carburant.</p>
-          <div className="flex items-center gap-2">
-            <button type="button" disabled={scanning} onClick={() => fileRef.current?.click()}
-              className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5 5 5M12 4v12" /></svg>
-              Importer
-            </button>
-            <button type="button" disabled={scanning} onClick={() => cameraRef.current?.click()}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50 flex items-center gap-1.5">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
-              Caméra
-            </button>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleDashboardPhoto(f); e.target.value = ''; }} />
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleDashboardPhoto(f); e.target.value = ''; }} />
-          </div>
-          {scanning && (
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600">
-              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
-              Extraction en cours…
-            </div>
-          )}
-          {scanMsg && <div className={`text-[11px] font-semibold ${scanMsg.includes('succès') ? 'text-emerald-600' : 'text-amber-600'}`}>{scanMsg}</div>}
-          {previewUrl && <img src={previewUrl} alt="Dashboard" className="mt-2 max-h-32 rounded-lg border border-slate-200 object-contain" />}
+        <div>
+          <label className="df-label">Carburant %</label>
+          <input className="df-input" value={fuel} onChange={(e) => setFuel(e.target.value)} />
         </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="df-label">Km compteur</label>
-            <input className="df-input" placeholder="Ex: 45230" value={odometer} onChange={(e) => setOdometer(e.target.value)} />
-          </div>
-          <div>
-            <label className="df-label">Carburant %</label>
-            <input className="df-input" placeholder="Ex: 75" value={fuel} onChange={(e) => setFuel(e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="df-label">Notes / état</label>
-            <input className="df-input" placeholder="Observations…" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
+        <div className="sm:col-span-3">
+          <label className="df-label">Notes / état</label>
+          <input className="df-input" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy || scanning} onClick={() => void post('entry')}>Check-in</button>
-          <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy || scanning} onClick={() => void post('exit')}>Check-out</button>
-          <button type="button" className="df-btn df-btn--primary df-btn--sm" disabled={busy || scanning} onClick={() => void post('return')}>Retour</button>
-        </div>
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('entry')}>Entrée</button>
+        <button type="button" className="df-btn df-btn--subtle df-btn--sm" disabled={busy} onClick={() => void post('exit')}>Sortie</button>
+        <button type="button" className="df-btn df-btn--primary df-btn--sm" disabled={busy} onClick={() => void post('return')}>Retour</button>
       </div>
     </div>
   );

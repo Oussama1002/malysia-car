@@ -16,6 +16,7 @@ import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const InvoiceDetailPage: React.FC = () => {
   const { id = '' } = useParams();
@@ -104,7 +105,7 @@ export const InvoiceDetailPage: React.FC = () => {
                 Encaisser
               </button>
             )}
-            <GeneratePdfButton kind="invoice" entityId={String(i.id)} className="df-btn df-btn--subtle" />
+            <GeneratePdfButton kind="invoice" entityId={String(i.id)} className="df-btn df-btn--dark" />
           </div>
         </div>
       </div>
@@ -249,11 +250,10 @@ const QuickPayForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date</label>
-        <input
-          type="date"
+        <DateField
           className="df-input mt-1"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={setDate}
           required
         />
       </div>

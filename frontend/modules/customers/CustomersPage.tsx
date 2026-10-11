@@ -195,17 +195,77 @@ export const CustomersPage: React.FC = () => {
           {
             key: 'name',
             header: 'Client',
-            render: (r) => (
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900">{r.display_name}</span>
-                  {r.is_blacklisted && <StatusBadge label="Blacklist" tone="danger" />}
+            render: (r) => {
+              const ip: any = r.individual_profile;
+              const cp: any = r.company_profile;
+              const initials = (r.display_name ?? '?')
+                .split(' ').filter(Boolean).slice(0, 2)
+                .map((w) => w[0]?.toUpperCase()).join('') || '?';
+              return (
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-black text-white ${r.customer_type === 'ENTREPRISE' ? 'bg-indigo-600' : 'bg-slate-500'}`}>
+                    {initials}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-bold text-slate-900">{r.display_name}</span>
+                      {r.is_blacklisted && <StatusBadge label="Blacklist" tone="danger" />}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-500">
+                      <span className="font-mono font-bold">{r.customer_code}</span>
+                      <span>·</span>
+                      <span>{r.customer_type === 'PARTICULIER' ? 'Particulier' : 'Entreprise'}</span>
+                    </div>
+                    {ip?.cin_number && (
+                      <div className="text-[10px] text-slate-400">CIN <span className="font-mono">{ip.cin_number}</span></div>
+                    )}
+                    {cp?.ice_number && (
+                      <div className="text-[10px] text-slate-400">ICE <span className="font-mono">{cp.ice_number}</span></div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500">
-                  {r.customer_code} · {r.customer_type === 'PARTICULIER' ? 'Particulier' : 'Entreprise'}
+              );
+            },
+          },
+          {
+            key: 'contact',
+            header: 'Contact',
+            render: (r) => {
+              const contacts = (r.contacts ?? []) as any[];
+              const phone = contacts.find((c) => c.contact_type === 'mobile' || c.contact_type === 'phone');
+              const email = contacts.find((c) => c.contact_type === 'email');
+              if (!phone && !email) return <span className="text-xs text-slate-300">—</span>;
+              return (
+                <div className="space-y-0.5 text-xs">
+                  {phone && (
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                      <span className="text-slate-400">📞</span>
+                      <span className="font-mono">{phone.value}</span>
+                    </div>
+                  )}
+                  {email && (
+                    <div className="flex items-center gap-1.5 text-slate-500">
+                      <span className="text-slate-400">✉</span>
+                      <span className="truncate max-w-[180px]">{email.value}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ),
+              );
+            },
+          },
+          {
+            key: 'city',
+            header: 'Ville',
+            render: (r) => {
+              const primary = (r.addresses ?? []).find((a: any) => a.is_primary) ?? (r.addresses ?? [])[0];
+              if (!primary) return <span className="text-xs text-slate-300">—</span>;
+              return (
+                <div className="text-xs">
+                  <div className="font-semibold text-slate-700">{primary.city ?? '—'}</div>
+                  {primary.country && <div className="text-[10px] text-slate-400">{primary.country}</div>}
+                </div>
+              );
+            },
           },
           {
             key: 'kyc',
@@ -230,10 +290,20 @@ export const CustomersPage: React.FC = () => {
               ),
           },
           {
+            key: 'created',
+            header: 'Créé le',
+            render: (r) => {
+              if (!r.created_at) return <span className="text-xs text-slate-300">—</span>;
+              const d = new Date(r.created_at);
+              if (isNaN(d.getTime())) return <span className="text-xs text-slate-300">—</span>;
+              return <span className="text-xs font-semibold text-slate-600">{d.toLocaleDateString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>;
+            },
+          },
+          {
             key: 'actions',
             header: '',
             render: (r) => (
-              <Link className="text-sm font-black text-indigo-600" to={`/customers/${r.id}`}>
+              <Link className="text-sm font-black text-indigo-600 hover:underline" to={`/customers/${r.id}`}>
                 Dossier →
               </Link>
             ),

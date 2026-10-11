@@ -1,5 +1,4 @@
 import { apiClient, endpoints, getApiBase } from '@/services/apiClient';
-import { formatEntityCode, formatReservationCode } from '@/services/entityCode';
 
 type ApiListResponse<T> = { data: T[]; meta?: unknown; links?: unknown };
 
@@ -12,7 +11,6 @@ export type ReservationDto = {
   reservation_number: string;
   customer_id: string;
   vehicle_id: string;
-  candidate_vehicle_ids?: string[] | null;
   reservation_type: string;
   status: string;
   desired_start_at: string;
@@ -53,10 +51,10 @@ export const opsApi = {
     const res = await apiClient<ApiListResponse<MissionDto>>(endpoints.missions.list);
     return res.data.map((m) => ({
       id: m.id,
-      title: m.title ?? `${m.mission_type} ${formatEntityCode('M', m.id)}`,
+      title: m.title ?? `${m.mission_type} #${m.id.slice(0, 6)}`,
       status: m.status === 'planned' ? 'PENDING' : m.status === 'in_progress' ? 'IN_PROGRESS' : m.status === 'completed' ? 'DONE' : 'PENDING',
       scheduledAt: m.scheduled_start_at ?? new Date().toISOString(),
-      clientName: m.reservation_id ? `Réservation ${formatReservationCode(m.reservation_id)}` : 'Client',
+      clientName: m.reservation_id ? `Reservation ${m.reservation_id.slice(0, 6)}` : 'Client',
       address: m.destination_address ?? m.origin_address ?? '',
     }));
   },
@@ -75,40 +73,25 @@ export const opsApi = {
   async createReservation(input: {
     customer_id: string;
     vehicle_id: string;
-    vehicle_ids?: string[];
     reservation_type: string;
     desired_start_at: string;
     desired_end_at: string;
     pickup_address?: string;
     delivery_address?: string;
     estimated_price?: number;
-    daily_rate?: number;
-    deposit_amount?: number;
-    allowed_km_per_day?: number;
     is_draft?: boolean;
   }): Promise<ReservationDto> {
     const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.create, { method: 'POST', body: JSON.stringify(input) });
     return res.data;
   },
 
-  async createMission(reservationId: string, input: {
-    mission_type: string;
-    assigned_user_id?: string | null;
-    scheduled_start_at?: string;
-    scheduled_end_at?: string;
-    origin_address?: string;
-    destination_address?: string;
-    pickup_address?: string;
-    dropoff_address?: string;
-    priority?: string;
-    estimated_duration_minutes?: number;
-    client_id?: string;
-    contract_id?: string;
-    client_instructions?: string;
-    notes?: string;
-    status?: string;
-  }): Promise<MissionDto> {
+  async createMission(reservationId: string, input: { mission_type: string; assigned_user_id?: string | null; scheduled_start_at?: string; scheduled_end_at?: string; origin_address?: string; destination_address?: string; notes?: string; create_return_mission?: boolean; return_assigned_user_id?: string | null; return_scheduled_at?: string; return_notes?: string }): Promise<MissionDto> {
     const res = await apiClient<{ data: MissionDto }>(endpoints.reservations.createMission(reservationId), { method: 'POST', body: JSON.stringify(input) });
+    return res.data;
+  },
+
+  async agentAvailability(agentId: string, scheduledAt: string, excludeReservationId?: string): Promise<{ agent_id: string; date: string; conflicts: { id: string; mission_type: string; status: string; scheduled_start_at: string; reservation?: { id: string; reservation_number: string } }[]; available: boolean }> {
+    const res = await apiClient<{ data: { agent_id: string; date: string; conflicts: { id: string; mission_type: string; status: string; scheduled_start_at: string; reservation?: { id: string; reservation_number: string } }[]; available: boolean } }>(endpoints.reservations.agentAvailability, { method: 'POST', body: JSON.stringify({ agent_id: agentId, scheduled_at: scheduledAt, exclude_reservation_id: excludeReservationId }) });
     return res.data;
   },
 
@@ -135,16 +118,21 @@ export const opsApi = {
     return res.data;
   },
 
-  async validateReservation(id: string, vehicleId?: string): Promise<ReservationDto> {
-    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.validate(id), {
+  async validateReservation(id: string): Promise<ReservationDto> {
+    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.validate(id), { method: 'POST', body: JSON.stringify({}) });
+    return res.data;
+  },
+
+  async cancelReservation(id: string, reason?: string): Promise<ReservationDto> {
+    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.cancel(id), {
       method: 'POST',
-      body: JSON.stringify(vehicleId ? { vehicle_id: vehicleId } : {}),
+      body: JSON.stringify(reason ? { reason } : {}),
     });
     return res.data;
   },
 
-  async cancelReservation(id: string): Promise<ReservationDto> {
-    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.cancel(id), { method: 'POST', body: JSON.stringify({}) });
+  async changeReservationStatus(id: string, status: string): Promise<ReservationDto> {
+    const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.changeStatus(id), { method: 'POST', body: JSON.stringify({ status }) });
     return res.data;
   },
 
@@ -154,6 +142,37 @@ export const opsApi = {
 
   async handoverPickup(id: string, payload: Record<string, unknown>): Promise<any> {
     const res = await apiClient<{ data: any }>(endpoints.reservations.handoverPickup(id), { method: 'POST', body: JSON.stringify(payload) });
+    return res.data;
+  },
+
+  /* ── Franchise d'assurance — garantie, jamais un encaissement ── */
+
+  async deposits(reservationId: string): Promise<any[]> {
+    const res = await apiClient<{ data: any[] }>(`/v1/reservations/${reservationId}/deposits`);
+    return res.data ?? [];
+  },
+
+  async createDeposit(reservationId: string, payload: Record<string, unknown>): Promise<any> {
+    const res = await apiClient<{ data: any }>(`/v1/reservations/${reservationId}/deposits`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res.data;
+  },
+
+  async releaseDeposit(depositId: string, notes?: string): Promise<any> {
+    const res = await apiClient<{ data: any }>(`/v1/deposits/${depositId}/release`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
+    return res.data;
+  },
+
+  async retainDeposit(depositId: string, notes: string): Promise<any> {
+    const res = await apiClient<{ data: any }>(`/v1/deposits/${depositId}/retain`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    });
     return res.data;
   },
 
@@ -211,20 +230,7 @@ export const opsApi = {
     return res.data;
   },
 
-  async swapEligibleVehicles(params: { reservation_id?: string; contract_id?: string }): Promise<any> {
-    const qs = new URLSearchParams();
-    if (params.reservation_id) qs.set('reservation_id', params.reservation_id);
-    if (params.contract_id) qs.set('contract_id', params.contract_id);
-    const res = await apiClient<{ data: any }>(`${endpoints.vehicleSwaps.eligibleVehicles}?${qs}`);
-    return res.data;
-  },
-
-  async swapFinancialImpact(params: { reservation_id?: string; contract_id?: string; new_vehicle_id: string }): Promise<any> {
-    const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.financialImpact, { method: 'POST', body: JSON.stringify(params) });
-    return res.data;
-  },
-
-  async instantVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string; new_rate?: number; note?: string; create_missions?: boolean; old_vehicle_recovered?: boolean; financial_action?: string }): Promise<any> {
+  async instantVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string }): Promise<any> {
     const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.instant, { method: 'POST', body: JSON.stringify(payload) });
     return res.data;
   },

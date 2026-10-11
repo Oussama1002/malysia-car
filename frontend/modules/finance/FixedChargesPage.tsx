@@ -4,6 +4,7 @@ import { apiClient, getApiBase } from '@/services/apiClient';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { SearchFilterBar } from '@/modules/shared/components/SearchFilterBar';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
+import { DateField } from '@/modules/shared/components/DateField';
 
 // ── Types ──────────────────────────────────────────────────────────
 type Expense = {
@@ -33,7 +34,7 @@ type DashboardData = {
   upcoming_count: number;
   by_category: Record<string, number>;
   by_type: Record<string, number>;
-  top_vehicles: Array<{ vehicle_id: string; total: number }>;
+  top_vehicles: Array<{ vehicle_id: string; total: number; brand?: string | null; model?: string | null; registration?: string | null }>;
   monthly_trend: Record<string, number>;
 };
 
@@ -49,13 +50,14 @@ type Supplier = {
 
 // ── Constants ──────────────────────────────────────────────────────
 const CATEGORIES = [
-  'carburant', 'entretien', 'réparations', 'assurance', 'pneus', 'nettoyage',
+  'carburant', 'entretien', 'réparations', 'sous-location', 'assurance', 'pneus', 'nettoyage',
   'amendes', 'péages', 'salaires', 'loyer', 'SaaS', 'marketing',
   'logistique', 'taxes', 'crédit véhicule', 'autres',
 ];
 
 const CATEGORY_FR: Record<string, string> = {
   carburant: 'Carburant', entretien: 'Entretien', 'réparations': 'Réparations',
+  'sous-location': 'Sous-location',
   assurance: 'Assurance', pneus: 'Pneus', nettoyage: 'Nettoyage',
   amendes: 'Amendes', 'péages': 'Péages', salaires: 'Salaires',
   loyer: 'Loyer', SaaS: 'SaaS', marketing: 'Marketing',
@@ -211,8 +213,13 @@ export const FixedChargesPage: React.FC = () => {
               <h3 className="mb-3 mt-6 text-xs font-black uppercase tracking-widest text-slate-400">Top véhicules les plus coûteux</h3>
               <div className="space-y-2">
                 {d.top_vehicles.map((v, i) => {
+                  // Le serveur nomme le véhicule ; la liste locale ne servait
+                  // que de repli et ne portait pas les mêmes clés.
                   const veh = (vehiclesQ.data ?? []).find((x: any) => x.id === v.vehicle_id);
-                  const name = veh ? `${veh.brand?.name ?? veh.brand_name ?? ''} ${veh.model?.model_name ?? veh.model?.name ?? veh.model_name ?? ''} · ${veh.registration_number ?? ''}` : v.vehicle_id.slice(0, 8);
+                  const name =
+                    [[v.brand, v.model].filter(Boolean).join(' '), v.registration].filter(Boolean).join(' · ')
+                    || [[veh?.brand, veh?.model].filter(Boolean).join(' '), veh?.registration].filter(Boolean).join(' · ')
+                    || 'Véhicule supprimé';
                   return (
                     <div key={v.vehicle_id} className="flex items-center justify-between text-sm">
                       <span className="text-slate-600">{i + 1}. {name}</span>
@@ -500,7 +507,7 @@ const CreateExpenseModal: React.FC<{
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Date *</label>
-            <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.expense_date} onChange={(e) => set('expense_date', e.target.value)} />
+            <DateField className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.expense_date} onChange={(dfValue) => set('expense_date', dfValue)} />
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Catégorie *</label>
@@ -563,7 +570,7 @@ const CreateExpenseModal: React.FC<{
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Échéance</label>
-            <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} />
+            <DateField className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.due_date} onChange={(dfValue) => set('due_date', dfValue)} />
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Référence / N° facture</label>

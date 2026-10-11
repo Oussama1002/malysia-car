@@ -6,6 +6,10 @@ export type ReaderDocumentType =
   | 'driving_license'
   | 'vehicle_registration'
   | 'rental_contract'
+  | 'cheque'
+  | 'insurance'
+  | 'payment_attestation'
+  | 'autorisation_circulation'
   | 'other';
 
 export type ReaderDocumentStatus = 'pending' | 'processing' | 'extracted' | 'validated' | 'failed';
@@ -99,6 +103,25 @@ export const documentReaderApi = {
   },
 
   /**
+   * Vignette du document, en image même pour un PDF (le serveur en rend la
+   * première page). L'URL est protégée par le jeton, donc on récupère le blob
+   * plutôt que de la poser dans un <img src>.
+   */
+  async thumbnailObjectUrl(id: string): Promise<string | null> {
+    try {
+      const raw = localStorage.getItem('df_session');
+      const token = raw ? (JSON.parse(raw) as { token?: string }).token : undefined;
+      const res = await fetch(`${getApiBase()}${endpoints.documentReader.thumbnail(id)}`, {
+        headers: { Accept: 'image/*', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!res.ok) return null;
+      return URL.createObjectURL(await res.blob());
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * Poll GET /documents/{id} every `intervalMs` until the document reaches a
    * terminal status (extracted | validated | failed) or `timeoutMs` elapses.
    *
@@ -108,17 +131,22 @@ export const documentReaderApi = {
    */
   async pollUntilDone(
     id: string,
-    { intervalMs = 3_000, timeoutMs = 300_000 } = {},
+    { intervalMs = 1_000, timeoutMs = 300_000 } = {},
   ): Promise<{ data: ReaderDocument }> {
     const deadline = Date.now() + timeoutMs;
+    const started = Date.now();
     while (Date.now() < deadline) {
       const res = await documentReaderApi.get(id);
       const { status } = res.data;
       if (status === 'extracted' || status === 'validated' || status === 'failed') {
         return res;
       }
-      // Still processing — wait before next poll.
-      await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
+      // On interroge à la seconde au début — l'OCR d'une carte tient souvent en
+      // quelques secondes et un pas de 3 s en ajoutait autant pour rien — puis
+      // on espace pour ne pas marteler le serveur sur un document lourd.
+      const elapsed = Date.now() - started;
+      const wait = elapsed < 20_000 ? intervalMs : 3_000;
+      await new Promise<void>((resolve) => setTimeout(resolve, wait));
     }
     throw new Error('OCR trop long — réessayez plus tard ou utilisez une image de meilleure qualité.');
   },

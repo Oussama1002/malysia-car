@@ -78,7 +78,7 @@ class DocumentReaderController extends Controller
 
         $maxKb = (int) config('document_reader.upload.max_size_kb', 15 * 1024);
         $data = $request->validate([
-            'file' => ['required', 'file', 'max:'.$maxKb, 'mimes:pdf,jpg,jpeg,png'],
+            'file' => ['required', 'file', 'max:'.$maxKb, 'mimes:pdf,jpg,jpeg,png,webp,gif,bmp,tif,tiff,heic,heif'],
             'document_type' => ['nullable', 'string', 'in:'.implode(',', ReaderDocument::TYPES)],
         ]);
 
@@ -249,6 +249,110 @@ class DocumentReaderController extends Controller
             'Content-Type' => $doc->mime_type ?: 'application/octet-stream',
             'Content-Disposition' => 'inline; filename="'.$doc->file_name.'"',
         ]);
+    }
+
+    /**
+     * Une vignette du document, toujours en image — y compris pour un PDF, dont
+     * on rend la première page. L'agent doit voir la pièce qu'il vient de
+     * déposer, pas le nom de son fichier.
+     */
+    public function thumbnail(Request $request, string $id): StreamedResponse|JsonResponse
+    {
+        $doc = $this->find($request, $id);
+        $disk = Storage::disk(config('filesystems.default', 'local'));
+        if (! $disk->exists($doc->file_path)) {
+            return ApiResponse::error('Fichier introuvable sur le disque.', 404);
+        }
+
+        $isPdf = str_contains((string) $doc->mime_type, 'pdf')
+            || strtolower(pathinfo($doc->file_name, PATHINFO_EXTENSION)) === 'pdf';
+
+        if (! $isPdf) {
+            return response()->streamDownload(function () use ($disk, $doc) {
+                $stream = $disk->readStream($doc->file_path);
+                if (is_resource($stream)) {
+                    fpassthru($stream);
+                    fclose($stream);
+                }
+            }, $doc->file_name, [
+                'Content-Type' => $doc->mime_type ?: 'image/jpeg',
+                'Content-Disposition' => 'inline; filename="'.$doc->file_name.'"',
+            ]);
+        }
+
+        // Le suffixe change avec le rendu : les vignettes d'une seule page
+        // déjà en cache ne doivent pas masquer le document complet.
+        $cachePath = 'reader-thumbnails/'.$doc->id.'-full.png';
+        if (! $disk->exists($cachePath)) {
+            $png = $this->renderPdfThumbnail($disk->path($doc->file_path));
+            if ($png === null) {
+                return ApiResponse::error('Aperçu indisponible pour ce PDF.', 415);
+            }
+            $disk->put($cachePath, file_get_contents($png));
+            @unlink($png);
+        }
+
+        return response()->streamDownload(function () use ($disk, $cachePath) {
+            $stream = $disk->readStream($cachePath);
+            if (is_resource($stream)) {
+                fpassthru($stream);
+                fclose($stream);
+            }
+        }, $doc->id.'.png', [
+            'Content-Type' => 'image/png',
+            'Content-Disposition' => 'inline; filename="'.$doc->id.'.png"',
+        ]);
+    }
+
+    /**
+     * Le document entier en une image : une CIN scannée est un PDF recto/verso,
+     * et n'en montrer que la première page revenait à cacher la moitié de la
+     * pièce. Les pages sont empilées l'une sous l'autre. Null si poppler manque.
+     */
+    private function renderPdfThumbnail(string $absolutePath): ?string
+    {
+        $prefix = sys_get_temp_dir().DIRECTORY_SEPARATOR.'df_thumb_'.bin2hex(random_bytes(6));
+        try {
+            $process = new \Symfony\Component\Process\Process([
+                (string) config('document_reader.tesseract.pdftoppm_bin', 'pdftoppm'),
+                '-png', '-f', '1', '-l', '4', '-scale-to', '900',
+                $absolutePath,
+                $prefix,
+            ]);
+            $process->setTimeout(60);
+            $process->mustRun();
+        } catch (Throwable) {
+            return null;
+        }
+
+        $pages = glob($prefix.'*.png') ?: [];
+        sort($pages);
+        if ($pages === []) {
+            return null;
+        }
+        if (count($pages) === 1) {
+            return $pages[0];
+        }
+
+        $merged = $prefix.'-all.png';
+        try {
+            $append = new \Symfony\Component\Process\Process(array_merge(
+                [(string) config('document_reader.tesseract.convert_bin', 'convert')],
+                $pages,
+                ['-append', $merged],
+            ));
+            $append->setTimeout(60);
+            $append->mustRun();
+        } catch (Throwable) {
+            // Sans ImageMagick on montre au moins le recto.
+            return $pages[0];
+        }
+
+        foreach ($pages as $page) {
+            @unlink($page);
+        }
+
+        return is_file($merged) ? $merged : $pages[0];
     }
 
     public function destroy(Request $request, string $id): JsonResponse

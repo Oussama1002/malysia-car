@@ -11,6 +11,7 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { useUIPrefs } from '@/providers/UIPreferencesProvider';
 import type { FleetVehicleDto, GpsAlertDto } from '@/services/dtos';
 import { gpsApi } from '@/services/gpsApi';
+import { opsApi } from '@/services/opsApi';
 
 // Leaflet default icon fix
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,7 +38,7 @@ function fakeCoords(id: number | string): [number, number] {
 
 const STATUS_META: Record<string, { label: string; color: string; tone: 'success' | 'warning' | 'info' | 'danger' | 'neutral' | 'brand' }> = {
   AVAILABLE: { label: 'Disponible', color: '#10b981', tone: 'success' },
-  RESERVED: { label: 'Réservé', color: '#5b5bf4', tone: 'brand' },
+  RESERVED: { label: 'Réservé', color: '#f59e0b', tone: 'warning' },
   RENTED: { label: 'En location', color: '#22d3ee', tone: 'info' },
   UNDER_LOA: { label: 'LOA active', color: '#22d3ee', tone: 'info' },
   UNDER_CREDIT: { label: 'Crédit auto', color: '#22d3ee', tone: 'info' },
@@ -46,6 +47,22 @@ const STATUS_META: Record<string, { label: string; color: string; tone: 'success
   BLOCKED: { label: 'Bloqué', color: '#ef4444', tone: 'danger' },
   SOLD: { label: 'Vendu', color: '#64748b', tone: 'neutral' },
 };
+
+const ACTIVE_RESERVATION_STATUSES = new Set([
+  'draft', 'reserved', 'confirmed', 'pickup_scheduled',
+  'handed_over', 'active', 'extension_requested',
+]);
+
+function effectiveStatusFor(v: any, reservedIds: Set<string>): string {
+  const raw = String(v?.status ?? '').toUpperCase();
+  if (raw === 'AVAILABLE' && reservedIds.has(String(v?.id))) return 'RESERVED';
+  return raw || 'AVAILABLE';
+}
+
+function isSubRental(v: any): boolean {
+  const ownership = String(v?.ownership_status ?? v?.ownershipStatus ?? '').toLowerCase();
+  return ownership === 'sub_rented' || ownership === 'sub_rental';
+}
 
 const FILTER_GROUPS: { key: string; label: string; match: string[] }[] = [
   { key: 'all', label: 'Tous', match: [] },
@@ -125,6 +142,28 @@ export const GpsDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const vehicles = useQuery({ queryKey: queryKeys.fleet.all, queryFn: async () => gpsApi.fleetVehicles() });
   const alerts = useQuery({ queryKey: queryKeys.gps.alerts, queryFn: async () => gpsApi.alerts() });
+  const reservationsQ = useQuery({
+    queryKey: [...queryKeys.reservations, 'gps'],
+    queryFn: async () => opsApi.reservations(),
+    staleTime: 60_000,
+  });
+
+  const reservedVehicleIds = useMemo(() => {
+    const now = Date.now();
+    const LIVE = new Set(['handed_over', 'active', 'extension_requested']);
+    const s = new Set<string>();
+    for (const r of ((reservationsQ.data ?? []) as any[])) {
+      const st = String(r.status ?? '').toLowerCase();
+      if (!r.vehicle_id) continue;
+      if (LIVE.has(st)) { s.add(String(r.vehicle_id)); continue; }
+      if (!ACTIVE_RESERVATION_STATUSES.has(st)) continue;
+      const endMs = r.desired_end_at ? new Date(r.desired_end_at).getTime() : 0;
+      if (endMs >= now) s.add(String(r.vehicle_id));
+    }
+    return s;
+  }, [reservationsQ.data]);
+
+  const statusOf = (v: any) => effectiveStatusFor(v, reservedVehicleIds);
   const geofencesQ = useQuery({ queryKey: [...queryKeys.gps.geofences], queryFn: async () => gpsApi.geofences() });
   const geofences = geofencesQ.data ?? [];
 
@@ -136,7 +175,7 @@ export const GpsDashboardPage: React.FC = () => {
   const all = vehicles.data ?? [];
   const filtered = useMemo(() => {
     const grp = FILTER_GROUPS.find((g) => g.key === filter);
-    const base = !grp || grp.match.length === 0 ? all : all.filter((v) => grp.match.includes(v.status));
+    const base = !grp || grp.match.length === 0 ? all : all.filter((v) => grp.match.includes(statusOf(v)));
     if (!query.trim()) return base;
     const q = query.toLowerCase();
     return base.filter(
@@ -235,7 +274,7 @@ export const GpsDashboardPage: React.FC = () => {
                 <MapController focus={focus} />
                 {filtered.map((v) => {
                   const pos = fakeCoords(v.id);
-                  const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+                  const meta = STATUS_META[statusOf(v)] ?? STATUS_META.AVAILABLE;
                   const isSelected = selectedId === v.id;
                   return (
                     <Marker
@@ -269,6 +308,7 @@ export const GpsDashboardPage: React.FC = () => {
                   vehicle={selected}
                   onClose={() => setSelectedId(null)}
                   onNavigate={navigate}
+                  reservedIds={reservedVehicleIds}
                 />
               </div>
             )}
@@ -317,7 +357,7 @@ export const GpsDashboardPage: React.FC = () => {
             </div>
             <div className="max-h-[380px] overflow-y-auto px-2 pb-2">
               {filtered.map((v) => {
-                const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+                const meta = STATUS_META[statusOf(v)] ?? STATUS_META.AVAILABLE;
                 const isSel = selectedId === v.id;
                 return (
                   <button
@@ -335,7 +375,17 @@ export const GpsDashboardPage: React.FC = () => {
                       <Icon name="car" size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-bold">{v.brand} {v.model}</div>
+                      <div className="flex items-center gap-1.5">
+                        {isSubRental(v) && (
+                          <span
+                            title="Véhicule en sous-location"
+                            className="rounded bg-violet-600 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-white"
+                          >
+                            SL
+                          </span>
+                        )}
+                        <div className="truncate text-[13px] font-bold">{v.brand} {v.model}</div>
+                      </div>
                       <div className="truncate font-mono text-[11px] text-[color:var(--df-text-muted)]">{v.registration}</div>
                     </div>
                     <StatusChip label={meta.label} tone={meta.tone} />
@@ -377,8 +427,9 @@ const VehicleInfoCard: React.FC<{
   vehicle: FleetVehicleDto;
   onClose: () => void;
   onNavigate: ReturnType<typeof useNavigate>;
-}> = ({ vehicle: v, onClose, onNavigate }) => {
-  const meta = STATUS_META[v.status] ?? STATUS_META.AVAILABLE;
+  reservedIds?: Set<string>;
+}> = ({ vehicle: v, onClose, onNavigate, reservedIds }) => {
+  const meta = STATUS_META[effectiveStatusFor(v, reservedIds ?? new Set())] ?? STATUS_META.AVAILABLE;
   const gps = fakeGpsData(v.id, v.status);
 
   const fuelColor = gps.fuel >= 50 ? '#10b981' : gps.fuel >= 25 ? '#f59e0b' : '#ef4444';
@@ -423,7 +474,12 @@ const VehicleInfoCard: React.FC<{
       <div className="px-3 pb-3 pt-2.5 space-y-2.5">
         {/* Vehicle title */}
         <div>
-          <div className="text-[15px] font-black text-slate-900">{v.brand} {v.model} {v.version ?? ''}</div>
+          <div className="flex items-center gap-1.5">
+            {isSubRental(v) && (
+              <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-white">SL</span>
+            )}
+            <div className="text-[15px] font-black text-slate-900">{v.brand} {v.model} {v.version ?? ''}</div>
+          </div>
           <div className="font-mono text-[11px] font-bold text-slate-500">{v.registration}</div>
         </div>
 
@@ -521,17 +577,6 @@ const VehicleInfoCard: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
             Voir trajet
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Fonctionnalité à venir"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-[11px] font-bold text-slate-400 cursor-not-allowed"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
-              <rect x="5" y="11" width="14" height="10" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 018 0v4" />
-            </svg>
-            Immobiliser
           </button>
           <button
             type="button"

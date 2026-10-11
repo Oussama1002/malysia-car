@@ -4,8 +4,8 @@ const fmtMad = (v: number) =>
   `${v.toLocaleString('fr-MA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} MAD`;
 
 const RESERVATION_TYPE_FR: Record<string, string> = {
-  SHORT_RENTAL: 'Location courte durée',
-  short_rental: 'Location courte durée',
+  SHORT_RENTAL: 'LCD',
+  short_rental: 'LCD',
   LONG_RENTAL: 'Location longue durée',
   long_rental: 'Location longue durée',
   LLD: 'LLD',

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { subRentalApi, type SubRentalContract, type SubRentalStatus } from '@/services/subRentalApi';
 import { getApiBase } from '@/services/apiClient';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { SubRentalCreatePage } from './SubRentalCreatePage';
 
 type Filter = '' | 'active' | 'draft' | 'due_soon' | 'overdue' | 'returned' | 'closed';
 
@@ -34,6 +36,9 @@ function KpiCard({ label, value, color }: { label: string; value: string | numbe
 export const SubRentalsPage: React.FC = () => {
   const apiReady = !!getApiBase();
   const [filter, setFilter] = useState<Filter>('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const navigate = useNavigate();
+  const qc = useQueryClient();
 
   const dashQ = useQuery({
     queryKey: ['sub-rentals', 'dashboard'],
@@ -91,12 +96,13 @@ export const SubRentalsPage: React.FC = () => {
           >
             Agences fournisseurs
           </Link>
-          <Link
-            to="/fleet/sub-rentals/new"
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             + Nouveau contrat
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -117,6 +123,16 @@ export const SubRentalsPage: React.FC = () => {
             color={dashboard.total_margin >= 0 ? 'border-green-200 bg-green-50 text-green-900' : 'border-red-200 bg-red-50 text-red-900'}
           />
         </div>
+      )}
+
+      {/* De quoi lire la marge : une marge négative n'est pas une erreur si
+          les locations ne couvrent pas encore le coût fournisseur. */}
+      {dashboard && dashboard.total_supplier_cost !== undefined && (
+        <p className="-mt-2 text-xs text-slate-500">
+          Contrats actifs : locations client {Number(dashboard.total_revenue ?? 0).toLocaleString('fr-MA')} MAD
+          {' '}(dont {Number(dashboard.total_collected ?? 0).toLocaleString('fr-MA')} MAD encaissés)
+          {' '}− coût fournisseur {Number(dashboard.total_supplier_cost).toLocaleString('fr-MA')} MAD.
+        </p>
       )}
 
       {/* Filters */}
@@ -168,9 +184,21 @@ export const SubRentalsPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-slate-700">{c.supplier_agency?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600">
-                      {(c.vehicle as any)?.registration_number ??
-                        c.external_vehicle_identity?.registration_number ??
-                        '—'}
+                      {(() => {
+                        const v = c.vehicle as any;
+                        const ext = c.external_vehicle_identity ?? {};
+                        const brand = v?.brand?.name ?? v?.brand_name ?? v?.brand ?? ext.brand_name ?? '';
+                        const model = v?.model?.model_name ?? v?.model?.name ?? v?.model_name ?? v?.model ?? ext.model_name ?? '';
+                        const plate = v?.registration_number ?? ext.registration_number ?? '';
+                        const name = [brand, model].filter(Boolean).join(' ').trim();
+                        if (!name && !plate) return '—';
+                        return (
+                          <div className="leading-tight">
+                            {name && <div className="font-semibold text-slate-800">{name}</div>}
+                            {plate && <div className="font-mono text-[11px] text-slate-500">{plate}</div>}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
@@ -215,6 +243,25 @@ export const SubRentalsPage: React.FC = () => {
           </table>
         )}
       </div>
+
+      {/* Nouveau contrat — drawer */}
+      <DrawerPanel
+        open={createOpen}
+        title="Nouveau contrat de sous-location"
+        onClose={() => setCreateOpen(false)}
+      >
+        {createOpen && (
+          <SubRentalCreatePage
+            embedded
+            onCancel={() => setCreateOpen(false)}
+            onCreated={(id) => {
+              setCreateOpen(false);
+              qc.invalidateQueries({ queryKey: ['sub-rentals'] });
+              navigate(`/fleet/sub-rentals/${id}`);
+            }}
+          />
+        )}
+      </DrawerPanel>
     </div>
   );
 };

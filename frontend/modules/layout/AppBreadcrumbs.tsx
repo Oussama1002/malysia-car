@@ -28,6 +28,22 @@ const NAV_KEYS: Record<string, string> = {
   branches: 'shell.branches',
   roles: 'shell.roles',
   'sub-rentals': 'nav.subRentals',
+  parameters: 'shell.configuration',
+};
+
+/**
+ * Query-string driven breadcrumb overrides. When the URL is
+ * /settings/parameters?tab=contracts we want the last crumb to read
+ * "Contrats" instead of the raw path segment "parameters".
+ */
+const PARAM_TAB_LABEL: Record<string, string> = {
+  reservations:   'Réservations',
+  contracts:      'Contrats',
+  invoicing:      'Facturation',
+  payments:       'Paiements',
+  notifications:  'Notifications',
+  branding:       'Entreprise',
+  gps:            'GPS',
 };
 
 /** Prefix shown in the breadcrumb for each parent resource segment */
@@ -68,7 +84,7 @@ function shortId(seg: string, parentSeg: string): string {
  */
 export const AppBreadcrumbs: React.FC = () => {
   const { t } = useTranslation();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   if (pathname === '/' || pathname === '/login') {
     return null;
   }
@@ -87,7 +103,16 @@ export const AppBreadcrumbs: React.FC = () => {
       items.push({ to: acc, label: shortId(seg, parentSeg), isId: true });
     } else {
       const k = NAV_KEYS[seg] ?? `shell.segment.${seg}`;
-      items.push({ to: acc, label: String(t(k, { defaultValue: seg })), isId: false });
+      // Special case: on /settings/parameters?tab=X, replace the raw
+      // "parameters" segment with the tab's French label.
+      const isParamsSeg = seg === 'parameters' && segments[i - 1] === 'settings';
+      if (isParamsSeg) {
+        const tab = new URLSearchParams(search).get('tab') ?? '';
+        const label = PARAM_TAB_LABEL[tab] ?? String(t(k, { defaultValue: seg }));
+        items.push({ to: acc, label, isId: false });
+      } else {
+        items.push({ to: acc, label: String(t(k, { defaultValue: seg })), isId: false });
+      }
     }
   }
 

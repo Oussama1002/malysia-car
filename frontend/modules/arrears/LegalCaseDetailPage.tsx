@@ -14,7 +14,7 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
-import { formatClientCode } from '@/services/entityCode';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const STATUS_LABEL: Record<LegalCase['status'], string> = {
   open: 'Ouvert',
@@ -99,7 +99,7 @@ export const LegalCaseDetailPage: React.FC = () => {
         <div>
           <Link to="/arrears/legal" className="text-xs font-bold text-indigo-600">← Dossiers juridiques</Link>
           <h1 className="text-2xl font-black text-slate-900">{legalCase.case_number}</h1>
-          <p className="text-slate-500">{legalCase.customer?.full_name ?? formatClientCode(legalCase.customer_id)}</p>
+          <p className="text-slate-500">{legalCase.customer?.full_name ?? legalCase.customer_id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <StatusBadge label={STATUS_LABEL[legalCase.status]} tone={STATUS_TONE[legalCase.status]} />
@@ -284,7 +284,7 @@ const RepossessionForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date d'ordre *</label>
-        <input type="date" className="df-input mt-1" value={form.ordered_at} onChange={(e) => setForm({ ...form, ordered_at: e.target.value })} required />
+        <DateField className="df-input mt-1" value={form.ordered_at} onChange={(v) => setForm({ ...form, ordered_at: v })} required />
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Agent de recouvrement</label>

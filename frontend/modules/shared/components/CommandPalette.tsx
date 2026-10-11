@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Icon, type IconName } from './Icon';
 import { isExperimentalEnabled } from '@/config/runtimeFlags';
+import { buildPaletteEntries, matchesQuery } from './paletteCatalogue';
 
 export interface PaletteCommand {
   id: string;
@@ -15,20 +17,6 @@ export interface PaletteCommand {
   onRun?: () => void;
 }
 
-const DEFAULT_CMDS: PaletteCommand[] = [
-  { id: 'go-dash', group: 'Navigation', label: 'Tableau de bord direction', icon: 'home', to: '/dashboard', shortcut: 'G D' },
-  { id: 'go-fleet', group: 'Navigation', label: 'Flotte', icon: 'car', to: '/fleet', shortcut: 'G F' },
-  { id: 'go-gps', group: 'Navigation', label: 'GPS & géolocalisation', icon: 'map', to: '/gps', shortcut: 'G L' },
-  { id: 'go-customers', group: 'Navigation', label: 'Clients', icon: 'users', to: '/customers' },
-  { id: 'go-contracts', group: 'Navigation', label: 'Contrats', icon: 'doc', to: '/contracts' },
-  { id: 'go-credit', group: 'Navigation', label: 'Analyse crédit', icon: 'credit', to: '/credit' },
-  { id: 'go-finance', group: 'Navigation', label: 'Finance & fiscalité', icon: 'coin', to: '/finance' },
-  { id: 'go-arrears', group: 'Navigation', label: 'Impayés & contentieux', icon: 'alert', to: '/arrears' },
-  { id: 'go-vo', group: 'Navigation', label: 'Véhicules d\u2019occasion', icon: 'marketplace', to: '/used-cars' },
-  { id: 'go-ai', group: 'Navigation', label: 'Assistant IA', icon: 'sparkles', to: '/ai' },
-  { id: 'new-contract', group: 'Actions', label: 'Nouveau contrat', icon: 'plus', to: '/contracts/new', shortcut: 'N C' },
-  { id: 'new-customer', group: 'Actions', label: 'Nouveau client', icon: 'plus', to: '/customers' },
-];
 
 interface Props {
   open: boolean;
@@ -36,22 +24,25 @@ interface Props {
   commands?: PaletteCommand[];
 }
 
-export const CommandPalette: React.FC<Props> = ({ open, onClose, commands = DEFAULT_CMDS }) => {
+export const CommandPalette: React.FC<Props> = ({ open, onClose, commands }) => {
+  const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
 
+  // Toutes les pages du menu, les onglets de Paramètres et les actions —
+  // construits à la volée pour qu'un nouveau module soit trouvable sans
+  // l'ajouter ici.
   const effectiveCommands = useMemo(
-    () => commands.filter((cmd) => (isExperimentalEnabled() ? true : cmd.to !== '/ai')),
-    [commands],
+    () => (commands ?? buildPaletteEntries(t)).filter((cmd) => (isExperimentalEnabled() ? true : cmd.to !== '/ai')),
+    [commands, t],
   );
 
-  const filtered = useMemo(() => {
-    if (!q.trim()) return effectiveCommands;
-    const t = q.toLowerCase();
-    return effectiveCommands.filter((c) => c.label.toLowerCase().includes(t) || c.group.toLowerCase().includes(t));
-  }, [q, effectiveCommands]);
+  const filtered = useMemo(
+    () => effectiveCommands.filter((c) => matchesQuery(c, q)),
+    [q, effectiveCommands],
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<string, PaletteCommand[]>();
@@ -109,7 +100,7 @@ export const CommandPalette: React.FC<Props> = ({ open, onClose, commands = DEFA
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher un contrat, véhicule, client, action…"
+            placeholder="Rechercher une page, un réglage, une action — ex : TVA, franchise, chèque…"
             className="df-cmd__input !pl-12"
           />
         </div>
@@ -133,7 +124,12 @@ export const CommandPalette: React.FC<Props> = ({ open, onClose, commands = DEFA
                     onClick={() => run(it)}
                   >
                     {it.icon && <Icon name={it.icon} size={16} className="text-[color:var(--df-brand-500)]" />}
-                    <span className="flex-1 truncate">{it.label}</span>
+                    <span className="flex-1 truncate">
+                      {it.label}
+                      {it.hint && (
+                        <span className="ms-2 text-[11px] font-normal text-[color:var(--df-text-faint)]">{it.hint}</span>
+                      )}
+                    </span>
                     {it.shortcut && <span className="df-cmd__kbd">{it.shortcut}</span>}
                   </div>
                 );

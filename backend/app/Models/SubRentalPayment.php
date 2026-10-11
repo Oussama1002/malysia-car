@@ -20,6 +20,9 @@ class SubRentalPayment extends Model
         'payment_method',
         'payment_date',
         'reference',
+        'check_number',
+        'check_bank',
+        'check_date',
         'notes',
         'accounting_entry_id',
         'created_by',
@@ -28,6 +31,7 @@ class SubRentalPayment extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'payment_date' => 'date',
+        'check_date' => 'date',
     ];
 
     protected static function booted(): void

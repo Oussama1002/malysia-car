@@ -3,6 +3,7 @@
 namespace App\Services\DocumentReader;
 
 use App\Models\ReaderDocument;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Regex / heuristic parser for the 5 document types supported in the MVP.
@@ -20,9 +21,31 @@ class DocumentParser
     public function parse(string $rawText, ?string $hintedType = null): array
     {
         $normalized = $this->normalize($rawText);
+        $detectedType = $this->detectType($normalized);
         $type = $hintedType && in_array($hintedType, ReaderDocument::TYPES, true)
             ? $hintedType
-            : $this->detectType($normalized);
+            : $detectedType;
+
+        Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'detected' => $detectedType, 'text_length' => mb_strlen($normalized)]);
+
+        // If a specific type was expected but the document looks like something else, flag it
+        $typeMismatch = null;
+        if ($hintedType && $detectedType !== ReaderDocument::TYPE_OTHER && $detectedType !== $hintedType) {
+            $typeLabels = [
+                ReaderDocument::TYPE_INSURANCE => 'une assurance',
+                ReaderDocument::TYPE_PAYMENT_ATTESTATION => 'une attestation de paiement',
+                ReaderDocument::TYPE_VEHICLE_REGISTRATION => 'une carte grise',
+                ReaderDocument::TYPE_CHEQUE => 'un chèque',
+                ReaderDocument::TYPE_CIN => 'une CIN',
+                ReaderDocument::TYPE_PASSPORT => 'un passeport',
+                ReaderDocument::TYPE_DRIVING_LICENSE => 'un permis de conduire',
+                ReaderDocument::TYPE_RENTAL_CONTRACT => 'un contrat de location',
+                ReaderDocument::TYPE_AUTORISATION_CIRCULATION => 'une autorisation de circulation',
+            ];
+            $expectedLabel = $typeLabels[$hintedType] ?? $hintedType;
+            $actualLabel = $typeLabels[$detectedType] ?? $detectedType;
+            $typeMismatch = "Ce document semble être {$actualLabel}, pas {$expectedLabel}.";
+        }
 
         $fields = match ($type) {
             ReaderDocument::TYPE_CIN => $this->parseCin($normalized),
@@ -30,12 +53,16 @@ class DocumentParser
             ReaderDocument::TYPE_DRIVING_LICENSE => $this->parseDrivingLicense($normalized),
             ReaderDocument::TYPE_VEHICLE_REGISTRATION => $this->parseCarteGrise($normalized),
             ReaderDocument::TYPE_CHEQUE => $this->parseCheque($normalized),
+            ReaderDocument::TYPE_INSURANCE => $this->parseInsurance($normalized),
+            ReaderDocument::TYPE_PAYMENT_ATTESTATION => $this->parsePaymentAttestation($normalized),
+            ReaderDocument::TYPE_AUTORISATION_CIRCULATION => $this->parseAutorisationCirculation($normalized),
             default => [],
         };
 
         return [
             'type' => $type,
             'fields' => $fields,
+            'type_mismatch' => $typeMismatch,
             'hints' => [
                 'lines' => substr_count($normalized, "\n") + 1,
                 'chars' => mb_strlen($normalized),
@@ -47,9 +74,56 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Carte grise / vehicle registration
-        if (preg_match('/CARTE\s*GRISE|CERTIFICAT\s+D[\'’]?IMMATRICULATION|VEHICLE\s+REGISTRATION/u', $upper)) {
+        // Autorisation de circulation — distinctive title (allow OCR noise in
+        // the middle word: "circulation"/"drcutation"). Checked before the carte
+        // grise heuristic since it shares vehicle vocabulary.
+        if (preg_match('/AUTORISATION\s+DE\s+C[Ii]?RC[UO]?[Ll]?[Aa]?T[Ii][O0]N|AUTORISATION\s+VALABLE/u', $upper)) {
+            return ReaderDocument::TYPE_AUTORISATION_CIRCULATION;
+        }
+        // Carte grise / vehicle registration — explicit title
+        if (preg_match('/CARTE\s*GRISE|CERTIFICAT\s+D\'?IMMATRICULATION|VEHICLE\s+REGISTRATION/u', $upper)) {
             return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
+        }
+        // Carte grise fallback: heavily garbled OCR loses the title but keeps
+        // vehicle-specific fields. "ROYAUME DU MAROC" also appears on a CIN, so
+        // require 2+ vehicle-only tokens to beat the CIN check below.
+        //
+        // BUT other vehicle-related documents (insurance, vignette payment,
+        // cheque) also mention the plate/chassis/carburant, so this heuristic
+        // must NOT fire when the doc carries a clear signal for one of those —
+        // otherwise a genuine assurance gets misread as a carte grise. Those
+        // explicit checks below own their documents; this fallback is only for a
+        // carte grise whose own title was garbled.
+        $hasNonVehicleSignal = preg_match(
+            '/ASSURANCE|INSURANCE|COMPAGNIE|N°?\s*POLICE|P[ÉE]RIODE\s+DE\s+GARANTIE|GARANTIE\s+(?:DU|AU)'
+            .'|ATTESTATION\s+DE\s+PAI|PAI[EÉ]?MENT|TAXE|VIGNETTE|IMP[ÔO]T|QUITTANCE|MONTANT'
+            .'|DIRECTION\s+G[ÉE]N[ÉE]RALE|TR[ÉE]SORERIE|TIMBRE|CH[ÈE]QUE|BANQUE'
+            .'|AUTORISATION|MINIST[ÈE]RE\s+DU\s+TRANSPORT/u',
+            $upper
+        );
+        if (! $hasNonVehicleSignal) {
+            $vehicleSignals = 0;
+            foreach ([
+                'MMATRICULATION',   // (i)mmatriculation
+                'CARBURANT',
+                'CHASSIS', 'DUHASSIS',
+                'CYLINDRE',
+                'PUISSANCE',
+                'NOMBRE DE PLACE',
+                'MISE EN CIRCULATION',
+                'LOU[ÉE] SANS CHAUFFEUR',
+            ] as $sig) {
+                if (preg_match('/' . $sig . '/u', $upper)) {
+                    $vehicleSignals++;
+                }
+            }
+            // VF/VIN prefix is a strong single signal
+            if (preg_match('/\bV[F0O]1[A-Z0-9]{6,}/u', $upper)) {
+                $vehicleSignals += 2;
+            }
+            if ($vehicleSignals >= 2) {
+                return ReaderDocument::TYPE_VEHICLE_REGISTRATION;
+            }
         }
         // Driving license
         if (preg_match('/PERMIS\s+DE\s+CONDUIRE|DRIVING\s+LIC[EÉ]NCE|DRIVER\s+LICENSE/u', $upper)) {
@@ -59,9 +133,15 @@ class DocumentParser
         if (preg_match('/PASSPORT|PASSEPORT|REPUBLIQUE.*MAROC.*PASS/u', $upper)) {
             return ReaderDocument::TYPE_PASSPORT;
         }
-        // Moroccan CIN
-        if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D[\'’]?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
-            return ReaderDocument::TYPE_CIN;
+        // Payment attestation (vignette / taxe spéciale annuelle). Checked before
+        // the generic CIN "ROYAUME DU MAROC" rule below, which every Moroccan
+        // government document shares.
+        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|QUITTANCE|VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|TAXE\s+ANNUELLE|DIRECTION\s+G[ÉE]N[ÉE]RALE\s+DES\s+IMP[ÔO]TS|TR[ÉE]SORERIE\s+G[ÉE]N[ÉE]RALE|\bTSAV\b|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE/u', $upper)) {
+            return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
+        }
+        // Insurance / assurance
+        if (preg_match('/ASSURANCE|INSURANCE|POLICE\s+D\'?ASSURANCE|N°?\s*POLICE|ATTESTATION\s+D\'?ASSURANCE|COMPAGNIE\s+D\'?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE/u', $upper)) {
+            return ReaderDocument::TYPE_INSURANCE;
         }
         // Cheque / bank check
         if (preg_match('/CH[ÈE]QUE|CHEQUE|PAYEZ\s+CONTRE|ORDER\s+OF|PAY\s+TO\s+THE|BANQUE|BANK.*CHECK/u', $upper)) {
@@ -70,6 +150,12 @@ class DocumentParser
         // Rental contract
         if (preg_match('/CONTRAT\s+DE\s+LOCATION|RENTAL\s+AGREEMENT|CONTRAT\s+LOCATION/u', $upper)) {
             return ReaderDocument::TYPE_RENTAL_CONTRACT;
+        }
+        // Moroccan CIN — LAST resort. "ROYAUME DU MAROC" alone is too generic
+        // (it's on carte grise, attestation de paiement, autorisation…), so this
+        // runs only after every specific document type has had its chance.
+        if (preg_match('/CARTE\s+NATIONALE|CARTE\s+D\'?IDENTIT|ROYAUME\s+DU\s+MAROC|CIN\b/u', $upper)) {
+            return ReaderDocument::TYPE_CIN;
         }
 
         return ReaderDocument::TYPE_OTHER;
@@ -108,7 +194,7 @@ class DocumentParser
             'Date\s+of\s+birth',
             'Born\s+on',
         ]);
-        $expiryDate = $this->extractDate($text, ['Valable\s+jusqu', 'Date\s+d[\'’]expiration', 'Expiry', 'Expir']);
+        $expiryDate = $this->extractDate($text, ['Valable\s+jusqu', 'Date\s+d\'expiration', 'Expiry', 'Expir']);
         $classified = $this->classifyDatesByYear($text);
         $birthDate = $birthDate ?? $classified['birth'];
         $expiryDate = $expiryDate ?? $classified['expiry'];
@@ -122,7 +208,7 @@ class DocumentParser
             'date_of_birth' => $birthDate,
             'nationality' => $this->labelValue($text, ['Nationalit[ée]', 'Nationality'], '[A-Za-z\s\-]+')
                 ?: ($this->containsAny($text, ['MAROC', 'MOROCCAN']) ? 'Maroc' : null),
-            'address' => $this->labelValue($text, ['Adresse', 'Address'], '.+'),
+            'address' => $this->extractAddress($text),
             'issue_date' => $this->extractDate($text, ['Date\s+de\s+d[ée]livrance', 'Issued', 'D[ée]livr[ée]\s+le'])
                 ?? $classified['issue'],
             'expiry_date' => $expiryDate,
@@ -151,9 +237,10 @@ class DocumentParser
                 'Birth',
             ]),
             'nationality' => $mrz['nationality'] ?? $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+'),
-            'address' => null,
+            // Certains passeports impriment le domicile : on le prend quand il y est.
+            'address' => $this->extractAddress($text),
             'issue_date' => $this->extractDate($text, ['Date\s+of\s+issue', 'Date\s+de\s+d[ée]livrance']),
-            'expiry_date' => $this->extractDate($text, ['Date\s+of\s+expiry', 'Date\s+d[\'’]expiration', 'Expiry']),
+            'expiry_date' => $this->extractDate($text, ['Date\s+of\s+expiry', 'Date\s+d\'expiration', 'Expiry']),
         ];
     }
 
@@ -210,7 +297,22 @@ class DocumentParser
             'Expiry',
             'Expir',
             '4b\s*\.',
-        ]) ?? $classified['expiry'];
+        ]);
+        // The expiry (Fin de validité) is always AFTER the délivrance date. On a
+        // Moroccan permis the recto shows "délivré … Le 27/08/2020" and the verso
+        // shows "Fin de validité 15/09/2030" — OCR frequently grabs the earlier
+        // délivrance date as the expiry. If the matched expiry isn't strictly
+        // after the issue date, discard it and prefer the future-dated result.
+        if ($expiry && $issue && $expiry <= $issue) {
+            $expiry = null;
+        }
+        if (! $expiry) {
+            $expiry = $classified['expiry'];   // classifier only returns a future date
+        }
+        // Never let the expiry equal the issue date, whatever the source.
+        if ($expiry && $issue && $expiry === $issue) {
+            $expiry = null;
+        }
 
         // Birth-year sanity vs issue date. Driving age in Morocco is 18 — at
         // minimum 16 with provisional categories — so a birth year less than
@@ -258,12 +360,19 @@ class DocumentParser
             ?? $this->longestMatch('/\b[A-Z]{1,2}\d{5,8}\b/u', $text)
             ?? $this->longestMatch('/\b[A-Z]{1,2}\d{3,8}\b/u', $text);
 
+        // Nationality: a Moroccan permis is headed "ROYAUME DU MAROC".
+        $nationality = null;
+        if (preg_match('/ROYAUME\s+DU\s+MAROC|\bMAROC\b|MOROCCO/iu', $text)) {
+            $nationality = 'Maroc';
+        }
+
         return [
             'license_number' => $licenseNumber,
             'first_name' => $names['first_name'] ?? null,
             'last_name' => $names['last_name'] ?? null,
             'full_name' => $names['full_name'] ?? null,
             'national_id_number' => $cin,
+            'nationality' => $nationality,
             'date_of_birth' => $birth,
             'categories' => $categories,
             'issue_date' => $issue,
@@ -274,21 +383,276 @@ class DocumentParser
     /** @return array<string, mixed> */
     private function parseCarteGrise(string $text): array
     {
-        return [
-            'registration_number' => $this->labelValue($text, ['Immatriculation', 'N°\s*d[\'’]?immatriculation', 'Registration'], '[A-Z0-9\-\s]{4,20}')
-                ?? $this->firstMatch('/\b(\d{1,6}\s*[-|]\s*[A-Z]{1,3}\s*[-|]\s*\d{1,3})\b/u', $text),
-            'vin_number' => $this->firstMatch('/\b([A-HJ-NPR-Z0-9]{17})\b/u', $text)
-                ?? $this->labelValue($text, ['VIN', 'Ch[aâ]ssis', 'N°\s*ch[aâ]ssis'], '[A-Z0-9]{6,20}'),
-            'brand' => $this->labelValue($text, ['Marque', 'Make', 'Brand'], '[A-Za-z\-]+'),
-            'model' => $this->labelValue($text, ['Mod[èe]le', 'Model', 'Type'], '[A-Za-z0-9\-\s]+'),
-            'fuel_type' => $this->labelValue($text, ['Carburant', 'Energie', 'Fuel'], '[A-Za-z]+'),
-            'first_registration_date' => $this->extractDate($text, [
-                'Date\s+de\s+1[èe]?re?\s+mise\s+en\s+circulation',
-                'Premi[èe]re\s+mise\s+en\s+circulation',
-                'First\s+registration',
-            ]),
-            'owner_name' => $this->labelValue($text, ['Propri[ée]taire', 'Nom\s+du\s+propri[ée]taire', 'Owner'], '.+'),
+        $upper = mb_strtoupper($text);
+        // Collapse the text into a single line for window-based searches
+        $flat = preg_replace('/[\r\n]+/', ' ', $text);
+        $flatUpper = mb_strtoupper($flat);
+
+        // --- Brand: known brands list, both word-boundary and substring ---
+        $brand = null;
+        $knownBrands = [
+            'RENAULT', 'DACIA', 'PEUGEOT', 'CITROEN', 'CITROËN', 'FIAT',
+            'VOLKSWAGEN', 'HYUNDAI', 'KIA', 'TOYOTA', 'NISSAN', 'FORD',
+            'OPEL', 'BMW', 'MERCEDES', 'AUDI', 'SEAT', 'SKODA', 'SUZUKI',
+            'MITSUBISHI', 'HONDA', 'CHEVROLET', 'MG', 'BYD', 'CUPRA',
+            'JEEP', 'LAND ROVER', 'RANGE ROVER', 'VOLVO', 'MAZDA',
+            'MINI', 'PORSCHE', 'ALFA ROMEO', 'JAGUAR', 'ISUZU',
+            'SSANGYONG', 'CHERY', 'GEELY', 'HAVAL', 'GREAT WALL',
+            'DFSK', 'CHANGAN', 'JAC', 'FOTON', 'IVECO', 'MAN',
         ];
+        // Try word boundary first (strict)
+        foreach ($knownBrands as $b) {
+            if (preg_match('/\b' . preg_quote($b, '/') . '\b/u', $flatUpper)) {
+                $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
+                break;
+            }
+        }
+        // Fallback: substring (for noisy OCR where word boundaries break)
+        if (! $brand) {
+            foreach ($knownBrands as $b) {
+                if (mb_strlen($b) >= 4 && str_contains($flatUpper, $b)) {
+                    $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
+                    break;
+                }
+            }
+        }
+        // Fallback: fuzzy — closest known brand to any token (handles heavy OCR
+        // garbling like "SRENAUET"/"reauldvyt" → Renault). Only brands 4+ chars
+        // so short codes (MG, JAC) can't false-match noise.
+        if (! $brand) {
+            $longBrands = array_values(array_filter($knownBrands, fn ($b) => mb_strlen($b) >= 4));
+            $match = $this->fuzzyBestMatch($flatUpper, $longBrands, 0.34);
+            if ($match !== null) {
+                $brand = mb_convert_case(mb_strtolower($match), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+
+        // --- Model: brand-specific models first, then generic fallback ---
+        $model = null;
+        $brandModels = [
+            'RENAULT' => ['CLIO', 'MEGANE', 'SCENIC', 'KANGOO', 'CAPTUR', 'KADJAR', 'KOLEOS', 'TALISMAN', 'TWINGO', 'ZOE', 'MASTER', 'TRAFIC', 'EXPRESS', 'ARKANA'],
+            'DACIA'   => ['SANDERO', 'DUSTER', 'LOGAN', 'SPRING', 'JOGGER', 'STEPWAY'],
+            'PEUGEOT' => ['PARTNER', 'RIFTER', 'EXPERT', '208', '308', '2008', '3008', '5008', '508'],
+            'CITROEN' => ['C3', 'C4', 'C5', 'AIRCROSS', 'JUMPY', 'BERLINGO'],
+            'VOLKSWAGEN' => ['POLO', 'GOLF', 'PASSAT', 'TIGUAN', 'TOUAREG', 'CADDY', 'TRANSPORTER'],
+            'HYUNDAI' => ['TUCSON', 'ACCENT', 'I10', 'I20', 'I30', 'ELANTRA', 'SANTA FE', 'CRETA'],
+            'KIA'     => ['PICANTO', 'RIO', 'CERATO', 'SPORTAGE', 'SORENTO', 'STONIC'],
+            'TOYOTA'  => ['COROLLA', 'YARIS', 'RAV4', 'HILUX', 'LAND CRUISER', 'FORTUNER'],
+            'NISSAN'  => ['MICRA', 'JUKE', 'QASHQAI', 'X-TRAIL', 'NAVARA', 'PATROL'],
+            'FORD'    => ['FIESTA', 'FOCUS', 'KUGA', 'PUMA', 'RANGER', 'TRANSIT'],
+            'OPEL'    => ['CORSA', 'ASTRA', 'CROSSLAND', 'GRANDLAND', 'MOKKA'],
+            'SEAT'    => ['IBIZA', 'LEON', 'ARONA', 'ATECA', 'TARRACO'],
+            'SKODA'   => ['FABIA', 'OCTAVIA', 'KAMIQ', 'KAROQ', 'KODIAQ'],
+            'SUZUKI'  => ['SWIFT', 'VITARA', 'JIMNY', 'S-CROSS'],
+            'HONDA'   => ['CIVIC', 'JAZZ', 'HR-V', 'CR-V'],
+            'FIAT'    => ['PANDA', 'TIPO', '500', 'DOBLO', 'DUCATO', 'FIORINO'],
+            'BMW'     => ['SERIE 1', 'SERIE 3', 'SERIE 5', 'X1', 'X3', 'X5'],
+            'MERCEDES' => ['CLASSE A', 'CLASSE C', 'CLASSE E', 'GLA', 'GLC', 'GLE', 'SPRINTER', 'VITO'],
+            'AUDI'    => ['A1', 'A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7'],
+        ];
+        // OCR-variant map: garbled text => correct model name
+        $ocrModelVariants = [
+            'CL[I1l][OoEe0]' => 'Clio',
+            'M[EÉeé]G[A4]N[EÉeé]' => 'Megane',
+            'SC[EÉeé]N[I1l]C' => 'Scenic',
+            'K[A4]NG[O0]{2}' => 'Kangoo',
+            'C[A4]PTUR' => 'Captur',
+            'K[A4]DJ[A4]R' => 'Kadjar',
+            'S[A4]ND[EÉeé]R[O0]' => 'Sandero',
+            'DUST[EÉeé]R' => 'Duster',
+            'L[O0]G[A4]N' => 'Logan',
+        ];
+        $brandKey = $brand ? mb_strtoupper($brand) : null;
+
+        // Strategy 1: OCR-variant regex patterns (handles garbled text like "cLie" → Clio)
+        foreach ($ocrModelVariants as $pattern => $modelName) {
+            if (preg_match('/' . $pattern . '/iu', $flatUpper)) {
+                $model = $modelName;
+                break;
+            }
+        }
+        // Strategy 2: brand-specific exact substring match
+        if (! $model && $brandKey && isset($brandModels[$brandKey])) {
+            foreach ($brandModels[$brandKey] as $km) {
+                if (str_contains($flatUpper, $km)) {
+                    $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
+                    break;
+                }
+            }
+        }
+        // Strategy 3: all brand models, 4+ char names only
+        if (! $model) {
+            foreach ($brandModels as $models) {
+                foreach ($models as $km) {
+                    if (mb_strlen($km) >= 4 && str_contains($flatUpper, $km)) {
+                        $model = mb_convert_case(mb_strtolower($km), MB_CASE_TITLE, 'UTF-8');
+                        break 2;
+                    }
+                }
+            }
+        }
+        // Strategy 4: fuzzy — closest known model to any token. Prefer the
+        // detected brand's models, then all 4+ char models. Handles garbling
+        // like "cLie"/"CLIQ" → Clio.
+        if (! $model) {
+            $modelPool = ($brandKey && isset($brandModels[$brandKey]))
+                ? $brandModels[$brandKey]
+                : array_merge(...array_values($brandModels));
+            $modelPool = array_values(array_filter($modelPool, fn ($m) => mb_strlen($m) >= 4));
+            $match = $this->fuzzyBestMatch($flatUpper, $modelPool, 0.34);
+            if ($match !== null) {
+                $model = mb_convert_case(mb_strtolower($match), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+        // Strategy 5: label-based (last resort — raw word after "Modèle")
+        if (! $model && preg_match('/Mod[èeé]le\s+(\S+)/iu', $flat, $mm)) {
+            $candidate = trim($mm[1]);
+            if (mb_strlen($candidate) >= 2 && preg_match('/[A-Za-z]/u', $candidate)) {
+                $model = mb_convert_case(mb_strtolower($candidate), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+
+        // --- Brand from model: a detected model is far more specific than a
+        // keyword brand match (a 2-char "MG" easily matches OCR noise). If the
+        // model belongs to a known brand, that brand wins. Fixes "Clio" being
+        // paired with a stray "Mg" instead of Renault.
+        if ($model) {
+            $modelUpper = mb_strtoupper($model);
+            foreach ($brandModels as $bName => $models) {
+                foreach ($models as $km) {
+                    if ($km === $modelUpper) {
+                        $brand = mb_convert_case(mb_strtolower($bName), MB_CASE_TITLE, 'UTF-8');
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        // --- Fuel type: known types + fuzzy fallback for garbled OCR ---
+        $fuelType = null;
+        $fuelKeywords = [
+            'ESSENCE' => 'Essence', 'EESANCE' => 'Essence', 'ESSANCE' => 'Essence',
+            'ESENCE' => 'Essence', 'ESSENC' => 'Essence', 'ESSONCE' => 'Essence',
+            'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GAZOLE' => 'Diesel', 'GASOLE' => 'Diesel',
+            'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL',
+        ];
+        foreach ($fuelKeywords as $key => $val) {
+            if (str_contains($flatUpper, $key)) {
+                $fuelType = $val;
+                break;
+            }
+        }
+        // Label-based fallback: read the word after the "carburant" label (OCR
+        // may render it "darburant"/"garburant") and classify by its first
+        // letters. Handles heavy garbling like "Essarice" → Essence.
+        if (! $fuelType && preg_match('/[a-z]arburant[^A-Za-z]+([A-Za-z]{3,})/iu', $flat, $cm)) {
+            $w = mb_strtoupper($cm[1]);
+            if (preg_match('/^E[ES]/u', $w)) {          // Essence / Essarice / Eesance
+                $fuelType = 'Essence';
+            } elseif (preg_match('/^(GA|GO|DI)/u', $w)) { // Gasoil / Gazole / Diesel
+                $fuelType = 'Diesel';
+            } elseif (preg_match('/^(HY|EL|GP)/u', $w)) { // Hybride / Électrique / GPL
+                $fuelType = ['HY' => 'Hybride', 'EL' => 'Électrique', 'GP' => 'GPL'][mb_substr($w, 0, 2)] ?? null;
+            }
+        }
+        // Fuzzy fallbacks anywhere in the text.
+        if (! $fuelType && preg_match('/E[EAS5][ES5][AEO0]?N?[CR][IE1]?CE|ESSAR/u', $flatUpper)) {
+            $fuelType = 'Essence';
+        }
+        if (! $fuelType && preg_match('/G[A4][SZ5][O0][IL1]|D[I1]E[SZ5]E[LI1]/u', $flatUpper)) {
+            $fuelType = 'Diesel';
+        }
+        // Fuzzy: closest known fuel word to any token.
+        if (! $fuelType) {
+            $fuelCanon = [
+                'ESSENCE' => 'Essence', 'DIESEL' => 'Diesel', 'GASOIL' => 'Diesel',
+                'GAZOLE' => 'Diesel', 'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique',
+            ];
+            $match = $this->fuzzyBestMatch($flatUpper, array_keys($fuelCanon), 0.34);
+            if ($match !== null) {
+                $fuelType = $fuelCanon[$match];
+            }
+        }
+
+        // --- Fiscal power ---
+        // Moroccan car fiscal power (CV) is realistically 3-40. We only accept a
+        // 1-2 digit value found IMMEDIATELY after the label (within ~15 chars) and
+        // in a sane range. This avoids grabbing unrelated numbers like the MRZ line
+        // ("740000001") when OCR renders the real digit as a symbol (e.g. "6" → "@").
+        $fiscalPower = null;
+        $isSane = static fn (string $n): bool => (int) $n >= 1 && (int) $n <= 60;
+        // Strategy 1: "N CV" / "N ch" pattern anywhere (very specific, high confidence)
+        if (preg_match('/\b(\d{1,2})\s*(?:CV|ch)\b/iu', $flat, $cvM) && $isSane($cvM[1])) {
+            $fiscalPower = $cvM[1];
+        }
+        // Strategy 2: a digit right after "fiscale" (or garbled variants), short window
+        if (! $fiscalPower && preg_match('/(?:fi[sc]{1,2}a[li]e|fiscale)[^0-9A-Za-z]{0,15}(\d{1,2})\b/iu', $flat, $fm) && $isSane($fm[1])) {
+            $fiscalPower = $fm[1];
+        }
+
+        // --- Expiry date ---
+        $expiryDate = null;
+        // Strategy 1: search near "validité" variants in original multiline text
+        $expiryDate = $this->extractDate($text, [
+            '[FfIi]in?\s+de\s+va[lh][io]dit[ée]',
+            'Fin\s+de\s+validit[ée]',
+            'va[lh]dit[ée]',
+            'validit',
+        ]);
+        // Strategy 2: direct regex — "vahdité" or "validité" followed by date within 30 chars
+        if (! $expiryDate && preg_match('/va[lh][io]?dit[ée]?\s+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/iu', $flat, $vdm)) {
+            $expiryDate = $this->canonicalizeDate($vdm[1]);
+        }
+        // Strategy 3: any date with year 2030+ is likely the expiry
+        if (! $expiryDate) {
+            preg_match_all('/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/', $flat, $dateMatches, PREG_SET_ORDER);
+            foreach ($dateMatches as $dm) {
+                $year = (int) $dm[3];
+                if ($year >= 2030) {
+                    $expiryDate = sprintf('%04d-%02d-%02d', $year, (int) $dm[2], (int) $dm[1]);
+                    break;
+                }
+            }
+        }
+
+        // --- VIN / chassis ---
+        $vin = null;
+        // Strategy 1: exact Renault prefix VF1 + 14 chars.
+        if (preg_match('/\b(VF1[A-Z0-9]{14})\b/u', $flatUpper, $vinM)) {
+            $vin = $vinM[1];
+        }
+        // Strategy 2: label-based extraction (near "chassis"/"VIN").
+        if (! $vin) {
+            $vin = $this->labelValue($flat, ['VIN', '[Cc]h[aâ]ssis', 'N°?\s*(?:du\s+)?[Cc]h[aâ]ssis'], '[A-Z0-9]{17}');
+        }
+        // Strategy 3: any 17-char alphanumeric sequence.
+        if (! $vin) {
+            $vin = $this->firstMatch('/\b([A-Z0-9]{17})\b/u', $flatUpper);
+        }
+        // Best-effort cleanup on a 17-char VIN:
+        if ($vin && mb_strlen($vin) === 17) {
+            // Correct the world-manufacturer prefix from the known brand — OCR
+            // routinely misreads it (e.g. Renault "VF1" read as "VFA"). Only the
+            // first 3 chars, and only when they already look close.
+            $wmi = ['Renault' => 'VF1', 'Dacia' => 'UU1', 'Peugeot' => 'VF3', 'Citroën' => 'VF7', 'Citroen' => 'VF7'];
+            if ($brand && isset($wmi[$brand]) && mb_substr($vin, 0, 2) === mb_substr($wmi[$brand], 0, 2)) {
+                $vin = $wmi[$brand].mb_substr($vin, 3);
+            }
+            // VINs never contain I, O or Q — OCR usually means 1, 0, 0 there.
+            $vin = strtr($vin, ['I' => '1', 'O' => '0', 'Q' => '0']);
+        }
+
+        $result = [
+            'vin_number' => $vin,
+            'brand' => $brand,
+            'model' => $model,
+            'fuel_type' => $fuelType,
+            'fiscal_power' => $fiscalPower ? (int) $fiscalPower : null,
+            'expiry_date' => $expiryDate,
+        ];
+        Log::info('DocumentParser.parseCarteGrise', $result);
+        Log::info('DocumentParser.parseCarteGrise.rawText', ['text' => mb_substr($text, 0, 2000)]);
+        return $result;
     }
 
     /** @return array<string, mixed> */
@@ -296,62 +660,119 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
-        // Check number — usually 7-digit number printed at the bottom (MICR line)
-        // or labelled "N° du chèque", "Chèque N°", etc.
-        $checkNumber = $this->labelValue($text, [
+        // Check number — Moroccan cheques print "Chèque : série AXA N° 283359"
+        // (6 digits), and again in the MICR line. Try the label, then the
+        // "série … N° <digits>" shape, then a standalone 6-8 digit run.
+        // The account number sits right next to the cheque number and has the
+        // same shape, so blank out the "COMPTE …" run before looking.
+        // OCR glues the label to what follows ("Compten 1532 N 300400015"), so
+        // match the stem, not the whole word.
+        $withoutAccount = preg_replace('/\b(?:COMPTE|ACCOUNT|RIB)\w*[\s:.N°]*[\d\s]{6,40}/iu', ' ', $text) ?? $text;
+        // The account and the MICR line survive as long grouped digit runs
+        // ("3295076 2110 326 00"): drop those too, label or no label.
+        $withoutAccount = preg_replace('/(?<!\d)\d{4,}(?:[ .]\d{2,})+(?!\d)/u', ' ', $withoutAccount) ?? $withoutAccount;
+        $withoutAccount = preg_replace('/(?<!\d)\d{9,}(?!\d)/u', ' ', $withoutAccount) ?? $withoutAccount;
+
+        $checkNumber = $this->labelValue($withoutAccount, [
             'N°\s*(?:du\s*)?ch[èe]que',
             'Ch[èe]que\s*N°',
             'Check\s*No',
             'Cheque\s*No',
-        ], '\d{5,10}')
-            ?? $this->firstMatch('/\b(\d{7})\b/u', $text);
+        ], '(?<!\d)\d{5,10}')
+            // "Chèque Série 0AC N° 9316305" — the série token varies, and OCR
+            // drops or garbles it, so allow a short gap rather than one token.
+            ?? $this->firstMatch('/ch[èe]que[\s\S]{0,40}?N[°o]?\s*[:.]*\s*(?<!\d)(\d{6,8})(?!\d)/iu', $withoutAccount)
+            ?? $this->firstMatch('/s[ée]rie[\s\S]{0,20}?N[°o]?\s*[:.]*\s*(?<!\d)(\d{5,8})(?!\d)/iu', $withoutAccount)
+            ?? $this->firstMatch('/\bN[°o]\s*[:.]*\s*(?<!\d)(\d{6,8})(?!\d)/u', $withoutAccount)
+            ?? $this->repeatedNumber($withoutAccount, $text)
+            ?? $this->firstMatch('/(?<!\d)(\d{6,7})(?!\d)/u', $withoutAccount);
 
-        // Bank name — look for known Moroccan banks or a "Banque" label
-        $bank = $this->labelValue($text, [
-            'Banque',
-            'Bank',
-            'Établissement',
-        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\']+');
+        // Bank name — check the known Moroccan banks FIRST (a bare "Bank" label
+        // otherwise matches the "…wafa bank" suffix and captures noise).
+        $bank = null;
+        $moroccanBanks = [
+            'ATTIJARIWAFA', 'AWB', 'BMCE', 'BANK OF AFRICA', 'BOA',
+            'BANQUE POPULAIRE', 'BMCI', 'SOCIETE GENERALE',
+            'SGMB', 'CIH BANK', 'CIH', 'CREDIT DU MAROC', 'CDM',
+            'CREDIT AGRICOLE', 'CAM', 'AL BARID BANK', 'CFG BANK',
+            'BANK AL MAGHRIB', 'ARAB BANK', 'CITIBANK',
+            'UMNIA BANK', 'AL AKHDAR BANK', 'BTI BANK',
+        ];
+        // Whole-word match: a bare substring lets "CAMSCANNER" hit "CAM".
+        foreach ($moroccanBanks as $bk) {
+            if (preg_match('/\b'.preg_quote($bk, '/').'\b/u', $upper)) {
+                $bank = $bk;
+                break;
+            }
+        }
+        // A cheque prints the bank as a logo, so OCR rarely returns the full
+        // name in one piece ("AL BARID BANK" → "ALBARID", "AL BARIO"). Match on
+        // the one distinctive word of each name instead.
+        $keywords = [
+            'BARID' => 'AL BARID BANK',
+            'ATTIJARI' => 'ATTIJARIWAFA',
+            'WAFA' => 'ATTIJARIWAFA',
+            'POPULAIRE' => 'BANQUE POPULAIRE',
+            'CHAABI' => 'BANQUE POPULAIRE',
+            'AFRICA' => 'BANK OF AFRICA',
+            'GENERALE' => 'SOCIETE GENERALE',
+            'AKHDAR' => 'AL AKHDAR BANK',
+            'UMNIA' => 'UMNIA BANK',
+            'MAGHRIB' => 'BANK AL MAGHRIB',
+        ];
         if (! $bank) {
-            // Try to detect known Moroccan bank names
-            $moroccanBanks = [
-                'ATTIJARIWAFA', 'AWB', 'BMCE', 'BANK OF AFRICA', 'BOA',
-                'BANQUE POPULAIRE', 'BP', 'BMCI', 'SOCIETE GENERALE',
-                'SGMB', 'CIH', 'CIH BANK', 'CREDIT DU MAROC', 'CDM',
-                'CREDIT AGRICOLE', 'CAM', 'AL BARID BANK', 'CFG BANK',
-                'BANK AL MAGHRIB', 'BAM', 'ARAB BANK', 'CITIBANK',
-                'UMNIA BANK', 'AL AKHDAR BANK', 'BTI BANK',
-            ];
-            foreach ($moroccanBanks as $bk) {
-                if (str_contains($upper, $bk)) {
-                    $bank = $bk;
+            foreach ($keywords as $needle => $name) {
+                // Substring, not whole word: OCR glues the logo into "ALBARID".
+                if (str_contains($upper, $needle)) {
+                    $bank = $name;
                     break;
                 }
             }
+        }
+        // Still nothing: let the fuzzy matcher absorb garbled characters.
+        if (! $bank) {
+            $match = $this->fuzzyBestMatch($upper, array_keys($keywords));
+            $bank = $match ? $keywords[$match] : null;
+        }
+        if (! $bank) {
+            $bank = $this->labelValue($text, ['Banque', 'Établissement'], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\']+');
         }
 
         // Amount — look for numeric amount with decimals (Moroccan cheques show amount in digits)
         $amount = null;
-        // Try labelled amount first
-        $amountStr = $this->labelValue($text, [
-            'Montant',
-            'Amount',
-            'Somme\s+de',
-            'MAD',
-            'DH',
-        ], '[\d\s\.,]+');
+        // The digits box: "DH ‡5500,00‡" — tolerate the handwritten guards and
+        // a "/" read in place of the decimal comma.
+        $money = '(?:DH|DHS|MAD|DIRHAMS?)';
+        $digits = '(\d+(?:[ .]\d{3})*(?:[,.\/]\d{2})?)(?!\d)';
+        // Digits before the currency first ("5 500,00 dirhams"), then after it
+        // ("DH ‡5500,00‡"). The gap may not contain letters, or "dirhams le
+        // 22/09/2026" reads as 22,09.
+        if (preg_match('/(?<!\d)'.$digits.'\s*'.$money.'\b/iu', $text, $am)
+            || preg_match('/\b'.$money.'\b[^\da-zA-Z\n\r]{0,6}'.$digits.'/iu', $text, $am)) {
+            $amount = $this->parseAmount(str_replace('/', ',', $am[1]));
+        }
+        // Labelled amount. No MAD/DH here: labelValue has no word boundary, so
+        // "MAD" matched inside "MADEMOISELLE" and took the branch phone number
+        // below it as the amount. Those two are handled above, anchored. The
+        // value must look like an amount, not any run of digits and spaces.
+        $amountStr = $amount ? null : $this->labelValue($text, [
+            '\bMontant\b',
+            '\bAmount\b',
+            '\bSomme\s+de\b',
+        ], '(?<!\d)\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2})?(?!\d)');
         if ($amountStr) {
             $amount = $this->parseAmount($amountStr);
         }
-        // Fallback: find a large number with decimals (likely the amount)
-        if (! $amount && preg_match_all('/(\d{1,3}(?:[\s\.,]\d{3})*(?:[,\.]\d{2}))\b/u', $text, $am)) {
-            foreach ($am[1] as $candidate) {
-                $parsed = $this->parseAmount($candidate);
-                if ($parsed && $parsed > 100) { // Cheques are usually > 100 MAD
-                    $amount = $parsed;
-                    break;
-                }
-            }
+        // No loose "any number with decimals" fallback here: on a cheque the
+        // only other numbers are the account and the MICR line, and those gave
+        // us 326 MAD out of "…2110 326 00". The amount must be anchored by
+        // DH/MAD, a Montant label, or the words below — otherwise leave it to
+        // the user, who is typing it anyway when it is handwritten.
+        // Fallback: parse the amount written in words ("Sept Mille Dirhams" →
+        // 7000). Cheques always spell the amount out, and on noisy scans the
+        // digits ("#7000,00#") garble worse than the words.
+        if (! $amount) {
+            $amount = $this->parseFrenchAmountWords($text);
         }
 
         // Date — cheques have a date (usually DD/MM/YYYY)
@@ -370,10 +791,551 @@ class DocumentParser
 
         return [
             'check_number' => $checkNumber,
-            'bank' => $bank ? mb_convert_case(mb_strtolower($bank), MB_CASE_TITLE, 'UTF-8') : null,
+            'bank' => $this->bankDisplayName($bank),
             'amount' => $amount,
             'check_date' => $checkDate,
         ];
+    }
+
+    /**
+     * A cheque prints its number twice — in the corner and again in the MICR
+     * line at the bottom — while OCR noise appears once. Prefer a candidate the
+     * page repeats.
+     */
+    private function repeatedNumber(string $haystack, string $fullText): ?string
+    {
+        if (! preg_match_all('/(?<!\d)(\d{6,8})(?!\d)/u', $haystack, $m)) {
+            return null;
+        }
+
+        foreach (array_unique($m[1]) as $candidate) {
+            if (substr_count($fullText, $candidate) > 1) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Banks trade under their acronym, so title-casing turns "CIH" into "Cih".
+     * Map the ones we detect to how they actually write their name.
+     */
+    private function bankDisplayName(?string $bank): ?string
+    {
+        if (! $bank) {
+            return null;
+        }
+
+        $names = [
+            'AL BARID BANK' => 'Al Barid Bank',
+            'ATTIJARIWAFA' => 'Attijariwafa Bank',
+            'AWB' => 'Attijariwafa Bank',
+            'BANQUE POPULAIRE' => 'Banque Populaire',
+            'BMCE' => 'Bank of Africa',
+            'BANK OF AFRICA' => 'Bank of Africa',
+            'BOA' => 'Bank of Africa',
+            'BMCI' => 'BMCI',
+            'SOCIETE GENERALE' => 'Société Générale',
+            'SGMB' => 'Société Générale',
+            'CIH BANK' => 'CIH Bank',
+            'CIH' => 'CIH Bank',
+            'CREDIT DU MAROC' => 'Crédit du Maroc',
+            'CDM' => 'Crédit du Maroc',
+            'CREDIT AGRICOLE' => 'Crédit Agricole',
+            'CAM' => 'Crédit Agricole',
+            'CFG BANK' => 'CFG Bank',
+            'BANK AL MAGHRIB' => 'Bank Al-Maghrib',
+            'ARAB BANK' => 'Arab Bank',
+            'CITIBANK' => 'Citibank',
+            'UMNIA BANK' => 'Umnia Bank',
+            'AL AKHDAR BANK' => 'Al Akhdar Bank',
+            'BTI BANK' => 'BTI Bank',
+        ];
+
+        return $names[mb_strtoupper(trim($bank))]
+            ?? mb_convert_case(mb_strtolower($bank), MB_CASE_TITLE, 'UTF-8');
+    }
+
+    /**
+     * Parse a French amount written in words, as on a cheque ("Sept Mille
+     * Dirhams" → 7000). Best-effort: tolerates OCR truncation of "mille"→"m"
+     * and stops at "dirham". Returns null when no number words are found.
+     */
+    private function parseFrenchAmountWords(string $text): ?float
+    {
+        // Strip accents, lowercase, keep only letters/spaces/hyphens.
+        $t = mb_strtolower($text, 'UTF-8');
+        $t = strtr($t, ['é' => 'e', 'è' => 'e', 'ê' => 'e', 'à' => 'a', 'â' => 'a', 'î' => 'i', 'ô' => 'o', 'û' => 'u', 'ç' => 'c']);
+        // Limit to the amount line: from "payez" up to "ordre"/"compte"/"dirham"
+        // (whichever comes first). This excludes the account-holder name below
+        // (e.g. "M ELHADI") so a stray "M" can't be misread as "mille".
+        if (preg_match('/pa[iy]e[sz]?[^a-z]*(.*?)(?:dirham|ordre|compte)/su', $t, $m)) {
+            $t = $m[1];
+        }
+        $tokens = preg_split('/[^a-z]+/u', $t, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $units = [
+            'zero' => 0, 'un' => 1, 'une' => 1, 'deux' => 2, 'trois' => 3, 'quatre' => 4,
+            'cinq' => 5, 'six' => 6, 'sept' => 7, 'huit' => 8, 'neuf' => 9, 'dix' => 10,
+            'onze' => 11, 'douze' => 12, 'treize' => 13, 'quatorze' => 14, 'quinze' => 15,
+            'seize' => 16, 'vingt' => 20, 'trente' => 30, 'quarante' => 40, 'cinquante' => 50,
+            'soixante' => 60, 'cent' => 100, 'cents' => 100,
+        ];
+
+        $total = 0;
+        $current = 0;
+        $found = false;
+        foreach ($tokens as $tok) {
+            if (isset($units[$tok])) {
+                $val = $units[$tok];
+                if ($val === 100) {
+                    $current = ($current === 0 ? 1 : $current) * 100;
+                } else {
+                    $current += $val;
+                }
+                $found = true;
+            } elseif ($tok === 'mille' || $tok === 'mil') {
+                $total += ($current === 0 ? 1 : $current) * 1000;
+                $current = 0;
+                $found = true;
+            } elseif ($tok === 'm' && $current > 0) {
+                // OCR-truncated "mille" — only when a number precedes it.
+                $total += $current * 1000;
+                $current = 0;
+                $found = true;
+            } elseif ($tok === 'million' || $tok === 'millions') {
+                $total += ($current === 0 ? 1 : $current) * 1000000;
+                $current = 0;
+                $found = true;
+            }
+        }
+        $total += $current;
+
+        return ($found && $total > 0) ? (float) $total : null;
+    }
+
+    /** @return array<string, mixed> */
+    private function parseInsurance(string $text): array
+    {
+        $upper = mb_strtoupper($text);
+
+        // Moroccan insurance policy numbers look like AO1120240260041 or
+        // FL112023C-153426 (2-3 letters + digits + optional letter/dash suffix).
+        //
+        // Priority 1: the "Numéro de police" label (allow OCR garbling of the
+        // label). This is the reliable anchor and, crucially, it distinguishes
+        // the real policy number from the "NUMÉRO D'ORDRE" (which starts with
+        // digits, e.g. "05 D 186203815", and must NOT be used).
+        $policyNumber = null;
+        if (preg_match('/Num[ée]?ro?\s*(?:de\s+)?police[^A-Za-z0-9]{0,18}([A-Z]{2,3}\d[A-Z0-9\-.]{5,28})/iu', $text, $pm)) {
+            $policyNumber = rtrim($pm[1], '.-');
+        }
+        // Priority 2: the Moroccan policy format anywhere (2 letters + digit + …).
+        // The numéro d'ordre starts with digits so this won't grab it.
+        if (! $policyNumber) {
+            $policyNumber = $this->firstMatch('/\b([A-Z]{2}\d[A-Z0-9\-]{9,28})\b/u', $text);
+        }
+        // Priority 3: other policy-number labels.
+        if (! $policyNumber) {
+            $policyNumber = $this->labelValue($text, [
+                'Police\s*N°?',
+                'Policy\s*N[o°]',
+                'Contract\s*N[o°]',
+                'N°?\s*Contrat',
+            ], '[A-Z]{2}[A-Z0-9\-]{6,30}');
+        }
+        if ($policyNumber && ! preg_match('/\d/', $policyNumber)) {
+            $policyNumber = null;
+        }
+
+        // Insurance company
+        $company = $this->labelValue($text, [
+            'Compagnie',
+            'Assureur',
+            'Soci[ée]t[ée]\s+d\'?assurance',
+            'Insurance\s+Company',
+            'Insurer',
+        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-\'\.]+');
+        if (! $company) {
+            $moroccanInsurers = [
+                'WAFA ASSURANCE', 'SAHAM', 'ATLANTA', 'AXA', 'RMA',
+                'MAMDA', 'MCMA', 'ZURICH', 'ALLIANZ', 'SANAD',
+                'LA MAROCAINE VIE', 'MAROC ASSISTANCE', 'SANLAM',
+                'CAT', 'CNIA', 'MATU', 'MUTUELLE', 'ISAAF',
+            ];
+            foreach ($moroccanInsurers as $ins) {
+                if (str_contains($upper, $ins)) {
+                    $company = $ins;
+                    break;
+                }
+            }
+        }
+
+        // Guarantee period: "Période de garantie du DD/MM/YYYY au DD/MM/YYYY"
+        // or "du ... à ..." / "du ... au ..."
+        $guaranteeStart = null;
+        $guaranteeEnd = null;
+
+        $datePattern = '(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})';
+        // "du DD/MM/YYYY au DD/MM/YYYY" or "du DD/MM/YYYY à DD/MM/YYYY"
+        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture)[^\n]*?du\s*'.$datePattern.'\s*(?:au|[àa])\s*'.$datePattern.'/iu', $text, $m)) {
+            $guaranteeStart = $this->canonicalizeDate($m[1]);
+            $guaranteeEnd = $this->canonicalizeDate($m[2]);
+        }
+        // Fallback: "du DD/MM/YYYY au DD/MM/YYYY" anywhere
+        if (! $guaranteeStart && preg_match('/du\s*'.$datePattern.'\s*(?:au|[àa])\s*'.$datePattern.'/iu', $text, $m)) {
+            $guaranteeStart = $this->canonicalizeDate($m[1]);
+            $guaranteeEnd = $this->canonicalizeDate($m[2]);
+        }
+        // Fallback: labeled start/end dates
+        if (! $guaranteeStart) {
+            $guaranteeStart = $this->extractDate($text, [
+                'Date\s+d\'?effet',
+                'Date\s+de\s+d[ée]but',
+                'Effet\s+du',
+                'Start\s+date',
+                'D[ée]but',
+            ]);
+        }
+        if (! $guaranteeEnd) {
+            $guaranteeEnd = $this->extractDate($text, [
+                'Date\s+d\'?[ée]ch[ée]ance',
+                'Date\s+d\'?expiration',
+                'Date\s+de\s+fin',
+                'Expir',
+                'Fin\s+de\s+garantie',
+                'Ech[ée]ance',
+                'End\s+date',
+                'Valable\s+jusqu',
+            ]);
+        }
+        // Fallback: parse the PERIODE DE GARANTIE table with French month
+        // names. Moroccan attestations use a Jour|Mois|Année table where
+        // months are French words (Janvier, Décembre, …) that Tesseract
+        // often garbles — we match common OCR variants too.
+        if (! $guaranteeStart || ! $guaranteeEnd) {
+            $periode = $this->extractPeriodeDeGarantie($text);
+            $guaranteeStart = $guaranteeStart ?? $periode['start'];
+            $guaranteeEnd = $guaranteeEnd ?? $periode['end'];
+        }
+        // Last resort: only use classified future dates as guarantee end.
+        if (! $guaranteeEnd) {
+            $classified = $this->classifyDatesByYear($text);
+            $guaranteeEnd = $classified['expiry'];
+        }
+
+        // Registration / Immatriculation. On insurance attestations the vehicle
+        // is usually on a WW provisional plate. OCR garbles the second "W"
+        // (WM/WN/WA/WH…) and can insert a stray letter ("WMY497707"), so match
+        // that shape and normalise to "WW<digits>". No generic label-based
+        // fallback here — it grabbed arbitrary OCR noise ("dena") and produced a
+        // bogus provisional number.
+        $registration = null;
+        if (preg_match('/\bW[WMNAHVY][A-Z]?\s*[-.]?\s*(\d{4,7})\b/iu', $text, $wm)) {
+            $registration = 'WW'.$wm[1];
+        }
+        if (! $registration) {
+            $registration = $this->firstMatch('/\b(\d{1,6}\s*[-|.·:]\s*[A-Z]{1,3}\s*[-|.·:]\s*\d{1,3})\b/u', $text);
+        }
+
+        $result = [
+            'policy_number'    => $policyNumber ? trim($policyNumber) : null,
+            'insurance_company' => $company ? mb_convert_case(mb_strtolower(trim($company)), MB_CASE_TITLE, 'UTF-8') : null,
+            'guarantee_start'  => $guaranteeStart,
+            'guarantee_end'    => $guaranteeEnd,
+            'expiry_date'      => $guaranteeEnd,
+            'registration_number' => $registration ? trim($registration) : null,
+        ];
+        Log::info('DocumentParser.parseInsurance', $result);
+        return $result;
+    }
+
+    /** @return array<string, mixed> */
+    private function parsePaymentAttestation(string $text): array
+    {
+        // Registration: Moroccan plates look like "90948 - T - 6" but OCR
+        // often splits the last digit onto the next line. Search a 200-char
+        // window after the "immatriculation" label, collapsing whitespace
+        // (including newlines) to reassemble the plate.
+        $registration = null;
+        if (preg_match('/(?:immatriculation|N°?\s*d\'?immatriculation|Immat\.?)/iu', $text, $lm, PREG_OFFSET_CAPTURE)) {
+            $window = substr($text, $lm[0][1], 200);
+            $flat = preg_replace('/[\r\n\t]+/', ' ', $window) ?? $window;
+            if (preg_match('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $flat, $pm)) {
+                $registration = $pm[1] . '-' . mb_strtoupper($pm[2]) . '-' . $pm[3];
+            }
+        }
+        if (! $registration) {
+            $registration = $this->firstMatch('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $text);
+            if ($registration && preg_match('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $text, $pm)) {
+                $registration = $pm[1] . '-' . mb_strtoupper($pm[2]) . '-' . $pm[3];
+            }
+        }
+        if (! $registration) {
+            $registration = $this->firstMatch('/\b(WW[\s\-]?\d{3,6}[\s\-]?[A-Z]?)\b/iu', $text);
+        }
+
+        // Fuel type: "Carburant", "Type de carburant", "Energie"
+        $fuelType = $this->labelValue($text, [
+            'Type\s+de\s+carburant',
+            'Carburant',
+            '[ÉE]nergie',
+            'Fuel\s+type',
+        ], '[A-Za-zÀ-ÖØ-öø-ÿ\s\-]+');
+        if ($fuelType) {
+            $fuelUpper = mb_strtoupper(trim($fuelType));
+            $fuelMap = [
+                'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel', 'GO' => 'Diesel',
+                'ESSENCE' => 'Essence', 'SUPER' => 'Essence', 'SP' => 'Essence',
+                'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL',
+            ];
+            foreach ($fuelMap as $key => $val) {
+                if (str_contains($fuelUpper, $key)) {
+                    $fuelType = $val;
+                    break;
+                }
+            }
+        }
+
+        // Mise en circulation: "Mise en circulation", "Date 1ère mise en circulation"
+        $miseEnCirculation = $this->extractDate($text, [
+            'Mise\s+en\s+circulation',
+            'Date\s+(?:de\s+)?(?:1[èe]?re?\s+)?mise\s+en\s+circulation',
+            'Premi[èe]re\s+mise\s+en\s+circulation',
+            '1[èe]?re?\s+circulation',
+            'First\s+registration',
+        ]);
+
+        // Puissance fiscale: "Puissance fiscale", "CV fiscaux", "P.F."
+        $fiscalPower = $this->labelValue($text, [
+            'Puissance\s+fiscale',
+            'P\.?\s*F\.?',
+            'CV\s+fiscaux',
+            'Fiscal\s+power',
+            'Chevaux\s+fiscaux',
+        ], '\d{1,3}');
+        if (! $fiscalPower) {
+            // Try to find "X CV" pattern near fiscal/puissance context
+            if (preg_match('/(?:puissance|fiscale?|P\.?\s*F\.?)[^\n]*?(\d{1,3})\s*(?:CV|ch)/iu', $text, $m)) {
+                $fiscalPower = $m[1];
+            }
+        }
+
+        $result = [
+            'registration_number'    => $registration ? trim($registration) : null,
+            'fuel_type'              => $fuelType ? trim($fuelType) : null,
+            'first_registration_date' => $miseEnCirculation,
+            'fiscal_power'           => $fiscalPower ? (int) $fiscalPower : null,
+        ];
+        Log::info('DocumentParser.parsePaymentAttestation', $result);
+        return $result;
+    }
+
+    /**
+     * Parse a Moroccan "Autorisation de circulation" (transport ministry permit
+     * for rental vehicles). Clean, well-structured document, so label-based
+     * extraction works well.
+     *
+     * @return array<string, mixed>
+     */
+    private function parseAutorisationCirculation(string $text): array
+    {
+        $flat = preg_replace('/[\r\n\t]+/', ' ', $text) ?? $text;
+        $flatUpper = mb_strtoupper($flat);
+
+        // Registration: "N° d'immatriculation : 90948-T-6"
+        $registration = null;
+        if (preg_match('/immatriculation[^0-9]{0,20}(\d{1,6})\s*[-–—|.·:]\s*([A-Z]{1,3})\s*[-–—|.·:]\s*(\d{1,3})/iu', $flat, $pm)) {
+            $registration = $pm[1].'-'.mb_strtoupper($pm[2]).'-'.$pm[3];
+        }
+        if (! $registration && preg_match('/(\d{1,6})\s*[-–—|.·:]\s*([A-Z])\s*[-–—|.·:]\s*(\d{1,3})/u', $flat, $pm)) {
+            $registration = $pm[1].'-'.mb_strtoupper($pm[2]).'-'.$pm[3];
+        }
+
+        // WW / provisional number: "N° WW : 497707 WW"
+        $wwNumber = null;
+        if (preg_match('/(\d{4,7})\s*WW\b/iu', $flat, $wm)) {
+            $wwNumber = 'WW'.$wm[1];
+        } elseif (preg_match('/\bWW\s*[:\-]?\s*(\d{4,7})/iu', $flat, $wm)) {
+            $wwNumber = 'WW'.$wm[1];
+        }
+
+        // Brand: known brands + fuzzy fallback.
+        $knownBrands = [
+            'RENAULT', 'DACIA', 'PEUGEOT', 'CITROEN', 'CITROËN', 'FIAT', 'VOLKSWAGEN',
+            'HYUNDAI', 'KIA', 'TOYOTA', 'NISSAN', 'FORD', 'OPEL', 'BMW', 'MERCEDES',
+            'AUDI', 'SEAT', 'SKODA', 'SUZUKI', 'HONDA', 'MITSUBISHI', 'CHEVROLET', 'MG',
+        ];
+        $brand = null;
+        foreach ($knownBrands as $b) {
+            if (mb_strlen($b) >= 4 && str_contains($flatUpper, $b)) {
+                $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
+                break;
+            }
+        }
+        if (! $brand) {
+            $longBrands = array_values(array_filter($knownBrands, fn ($b) => mb_strlen($b) >= 4));
+            $match = $this->fuzzyBestMatch($flatUpper, $longBrands, 0.34);
+            if ($match !== null) {
+                $brand = mb_convert_case(mb_strtolower($match), MB_CASE_TITLE, 'UTF-8');
+            }
+        }
+
+        // Fuel type.
+        $fuelType = null;
+        foreach (['ESSENCE' => 'Essence', 'GASOIL' => 'Diesel', 'DIESEL' => 'Diesel',
+            'GAZOLE' => 'Diesel', 'HYBRIDE' => 'Hybride', 'ELECTRIQUE' => 'Électrique', 'GPL' => 'GPL'] as $k => $v) {
+            if (str_contains($flatUpper, $k)) {
+                $fuelType = $v;
+                break;
+            }
+        }
+
+        // Mise en circulation date.
+        $miseEnCirculation = $this->extractDate($text, [
+            'Date\s+(?:de\s+)?mise\s+en\s+circulation',
+            'Mise\s+en\s+circulation',
+            'Premi[èe]re\s+mise\s+en\s+circulation',
+        ]);
+
+        // Authorization expiry: "Autorisation valable jusqu'au 24/01/2030".
+        // OCR badly garbles this line ("valable jusqu'au" → "velabictacgusy"),
+        // so try clean labels first, then fuzzy variants of "valable"/"autoris".
+        $expiryDate = $this->extractDate($text, [
+            'valable\s+jusqu\'?au',
+            'Autorisation\s+valable',
+            'jusqu\'?au',
+            'Autoris[a-zô]+\s+v[eéa]l[a-z]+',   // "Autorisotion velab..."
+            'v[eéa]l[a-z]{2,}b[a-z]*',           // "velabictacgusy"
+        ]);
+        // Fuzzy fallback: a date sitting right after a garbled "valab/velab" token.
+        if (! $expiryDate && preg_match('/v[eéa]l[a-z]*b[a-z]*[^0-9]{0,15}(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4})/iu', $flat, $em)) {
+            $expiryDate = $this->canonicalizeDate($em[1]);
+        }
+
+        $result = [
+            'registration_number'     => $registration,
+            'ww_number'               => $wwNumber,
+            'brand'                   => $brand,
+            'fuel_type'               => $fuelType,
+            'first_registration_date' => $miseEnCirculation,
+            'authorization_expiry'    => $expiryDate,
+        ];
+        Log::info('DocumentParser.parseAutorisationCirculation', $result);
+        return $result;
+    }
+
+    /**
+     * Parse the PERIODE DE GARANTIE table found on Moroccan insurance attestations.
+     * The table has columns Jour | Mois (French name) | Année, with DU (start)
+     * and AU (end) rows. OCR often garbles month names and years, so we match
+     * common variants and infer missing years from the issuance date.
+     *
+     * @return array{start: ?string, end: ?string}
+     */
+    private function extractPeriodeDeGarantie(string $text): array
+    {
+        $result = ['start' => null, 'end' => null];
+
+        if (! preg_match('/PERIODE/iu', $text, $pm, PREG_OFFSET_CAPTURE)) {
+            return $result;
+        }
+
+        $after = mb_substr($text, $pm[0][1]);
+        $chunk = mb_substr($after, 0, 600);
+
+        $frenchMonths = [
+            'janvier' => 1, 'janv' => 1,
+            'f[ée]vrier' => 2, 'fevrier' => 2,
+            'mars' => 3,
+            'avril' => 4,
+            'mai' => 5,
+            'juin' => 6,
+            'juillet' => 7, 'juil' => 7,
+            'ao[uû]t' => 8, 'aout' => 8,
+            'septembre' => 9, 'sept' => 9,
+            'octobre' => 10,
+            'novembre' => 11,
+            'd[ée][cv]embre' => 12, 'decembre' => 12, 'd[ée]vembre' => 12,
+        ];
+
+        $monthPositions = [];
+        $seenNums = [];
+        foreach ($frenchMonths as $pattern => $num) {
+            if (in_array($num, $seenNums, true)) {
+                continue;
+            }
+            if (preg_match('/'.$pattern.'/iu', $chunk, $mm, PREG_OFFSET_CAPTURE)) {
+                $monthPositions[] = ['month' => $num, 'pos' => $mm[0][1]];
+                $seenNums[] = $num;
+            }
+        }
+        usort($monthPositions, fn ($a, $b) => $a['pos'] <=> $b['pos']);
+
+        if (empty($monthPositions)) {
+            return $result;
+        }
+
+        $contextYear = null;
+        $contextMonth = null;
+        if (preg_match('/\b(\d{1,2})[\/\-.]\s*(\d{1,2})[\/\-.]\s*(20[12]\d)\b/', $text, $ym)) {
+            $contextYear = (int) $ym[3];
+            $contextMonth = (int) $ym[2];
+        }
+
+        $allDays = [];
+        if (preg_match_all('/\b(\d{1,2})\b/', $chunk, $dm, PREG_OFFSET_CAPTURE)) {
+            foreach ($dm[1] as $pair) {
+                $di = (int) $pair[0];
+                if ($di >= 1 && $di <= 31) {
+                    $allDays[] = ['day' => $di, 'pos' => (int) $pair[1]];
+                }
+            }
+        }
+
+        $findDayOnSameLine = function (int $monthPos) use ($chunk, $allDays): ?int {
+            $lineStart = (int) strrpos(substr($chunk, 0, $monthPos), "\n");
+            $lineEnd = strpos($chunk, "\n", $monthPos) ?: mb_strlen($chunk);
+            $best = null;
+            foreach ($allDays as $dd) {
+                if ($dd['pos'] >= $lineStart && $dd['pos'] < $lineEnd && $dd['pos'] < $monthPos) {
+                    $best = $dd['day'];
+                }
+            }
+            return $best;
+        };
+
+        $year = $contextYear ?? (int) date('Y');
+
+        if (count($monthPositions) >= 2) {
+            $startMonth = $monthPositions[0]['month'];
+            $endMonth = $monthPositions[1]['month'];
+            $startDay = $findDayOnSameLine($monthPositions[0]['pos']) ?? 1;
+            $endDay = $findDayOnSameLine($monthPositions[1]['pos'])
+                ?? (int) date('t', mktime(0, 0, 0, $endMonth, 1, $year));
+            $result['start'] = sprintf('%04d-%02d-%02d', $year, $startMonth, $startDay);
+            $result['end'] = sprintf('%04d-%02d-%02d', $year, $endMonth, $endDay);
+        } else {
+            $foundMonth = $monthPositions[0]['month'];
+            $endDay = $findDayOnSameLine($monthPositions[0]['pos'])
+                ?? (int) date('t', mktime(0, 0, 0, $foundMonth, 1, $year));
+            $result['end'] = sprintf('%04d-%02d-%02d', $year, $foundMonth, $endDay);
+
+            $monthLineStart = (int) strrpos(mb_substr($chunk, 0, $monthPositions[0]['pos']), "\n");
+            $startDay = null;
+            foreach ($allDays as $dd) {
+                if ($dd['pos'] < $monthLineStart) {
+                    $startDay = $dd['day'];
+                    break;
+                }
+            }
+            if ($startDay && $contextMonth) {
+                $result['start'] = sprintf('%04d-%02d-%02d', $year, $contextMonth, $startDay);
+            }
+        }
+
+        return $result;
     }
 
     private function parseAmount(string $raw): ?float
@@ -394,6 +1356,55 @@ class DocumentParser
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
+
+    /**
+     * Find the candidate closest to any word in $text using Levenshtein distance.
+     *
+     * OCR garbles known words unpredictably ("RENAULT" → "SRENAUET", "reauldvyt";
+     * "CLIO" → "cLie"). Exact/substring matching misses these, but the garbled
+     * token is still the *nearest* option by edit distance. We tokenise the text,
+     * compare every token (and adjacent token pairs, since OCR often splits or
+     * glues words) against each candidate, and return the best candidate whose
+     * normalised distance (edits ÷ candidate length) is within $maxRatio.
+     *
+     * @param  list<string>  $candidates  UPPERCASE option values to match against.
+     */
+    private function fuzzyBestMatch(string $text, array $candidates, float $maxRatio = 0.34): ?string
+    {
+        $tokens = preg_split('/[^A-Z0-9]+/u', mb_strtoupper($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($tokens === []) {
+            return null;
+        }
+        // Also consider adjacent pairs joined, to survive OCR word splits.
+        $pairs = [];
+        for ($i = 0, $n = count($tokens); $i < $n - 1; $i++) {
+            $pairs[] = $tokens[$i].$tokens[$i + 1];
+        }
+        $all = array_merge($tokens, $pairs);
+
+        $best = null;
+        $bestRatio = $maxRatio;
+        foreach ($candidates as $cand) {
+            $len = mb_strlen($cand);
+            if ($len < 3) {
+                continue;
+            }
+            foreach ($all as $tok) {
+                // Skip tokens whose length is wildly off — can't be a near match.
+                if (abs(mb_strlen($tok) - $len) > max(2, (int) ceil($len * 0.5))) {
+                    continue;
+                }
+                $dist = levenshtein($tok, $cand);
+                $ratio = $dist / $len;
+                if ($ratio < $bestRatio) {
+                    $bestRatio = $ratio;
+                    $best = $cand;
+                }
+            }
+        }
+
+        return $best;
+    }
 
     private function normalize(string $text): string
     {
@@ -455,6 +1466,115 @@ class DocumentParser
      * line below; this matches that layout. The label is also allowed to be
      * followed by a slash + Arabic gloss (`Nom / لقب`, `Né(e) le /…`).
      */
+    /**
+     * L'adresse de la CIN tient rarement sur une ligne : le libellé « Adresse »
+     * est suivi d'une à trois lignes, souvent doublées en arabe, et l'OCR y
+     * laisse de larges blancs. On prend la suite du libellé puis les lignes
+     * suivantes tant qu'elles ressemblent encore à une adresse.
+     */
+    private function extractAddress(string $text): ?string
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $start = null;
+        $firstPart = '';
+
+        foreach ($lines as $i => $line) {
+            if (preg_match('/\b(?:ADRESSE|ADDRESS)\b[^\p{L}\d]*(?P<rest>.*)$/iu', $line, $m)) {
+                $start = $i;
+                $firstPart = $this->addressLine($m['rest']);
+                break;
+            }
+        }
+
+        if ($start === null) {
+            // Beaucoup de CIN impriment le domicile sans le mot « Adresse » :
+            // on reconnaît alors la ligne à son vocabulaire (RUE, LOT, HAY…).
+            return $this->addressWithoutLabel($lines);
+        }
+
+        $parts = $firstPart !== '' ? [$firstPart] : [];
+        for ($i = $start + 1; $i < count($lines) && count($parts) < 3; $i++) {
+            $candidate = $this->addressLine($lines[$i]);
+            if ($candidate === '') {
+                // Une ligne vide après un début d'adresse clôt le bloc.
+                if ($parts !== []) {
+                    break;
+                }
+
+                continue;
+            }
+            // Un autre libellé de la carte, ou la MRZ, ferme le bloc.
+            if (preg_match('/<</u', $lines[$i])
+                || preg_match('/\b(?:CIN|C\.?N\.?I\.?E?|VALABLE|EXPIR|N[ÉE]E?\s+LE|DATE|SEXE|NATIONALIT|FILS|FILLE|ROYAUME)\b/iu', $candidate)) {
+                break;
+            }
+            $parts[] = $candidate;
+        }
+
+        $address = trim(implode(' ', $parts));
+
+        return $address !== '' && mb_strlen($address) >= 4 ? $address : null;
+    }
+
+    /** Les mots qui trahissent une adresse marocaine, même sans libellé. */
+    private const ADDRESS_WORDS = [
+        'RUE', 'AV', 'AVENUE', 'BD', 'BLVD', 'BOULEVARD', 'LOT', 'LOTISSEMENT',
+        'HAY', 'DOUAR', 'IMM', 'IMMEUBLE', 'APPT', 'APT', 'RES', 'RESIDENCE',
+        'QUARTIER', 'QRT', 'CITE', 'ZONE', 'SECTEUR', 'BLOC', 'ETAGE', 'ETG', 'KM',
+        'DERB', 'MASSIRA', 'RIAD', 'OULED',
+        // Une adresse marocaine s'écrit aussi en transcription de l'arabe.
+        'ZANKA', 'ZNIQA', 'CHARIA', 'CHAREH', 'SHARIA', 'ANGLE', 'VILLA',
+        'OPERATION', 'TARIK', 'SIDI', 'MERS', 'DIOUR', 'SAKAN', 'AIN',
+        'BENI', 'OUED', 'TABRIQUET', 'NAHDA', 'SALAM', 'FATH', 'INARA',
+    ];
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function addressWithoutLabel(array $lines): ?string
+    {
+        $pattern = '/\b(?:'.implode('|', self::ADDRESS_WORDS).')\b/iu';
+
+        foreach ($lines as $i => $line) {
+            $candidate = $this->addressLine($line);
+            if ($candidate === '' || mb_strlen($candidate) < 6) {
+                continue;
+            }
+            // Une ligne de libellés, une MRZ ou une date n'est pas une adresse.
+            if (preg_match('/<</u', $line)
+                || preg_match('/\b(?:VALABLE|EXPIR|NATIONALIT|ROYAUME|CARTE|IDENTIT|N[ÉE]E?\s+LE)\b/iu', $candidate)) {
+                continue;
+            }
+            if (! preg_match($pattern, $candidate)) {
+                continue;
+            }
+
+            $parts = [$candidate];
+            // La suite de l'adresse tient souvent sur la ligne d'après (ville).
+            $next = $this->addressLine($lines[$i + 1] ?? '');
+            if ($next !== ''
+                && mb_strlen($next) >= 4
+                && ! preg_match('/<</u', $lines[$i + 1] ?? '')
+                && ! preg_match('/\b(?:VALABLE|EXPIR|NATIONALIT|ROYAUME|CARTE|IDENTIT|N[ÉE]E?\s+LE|\d{2}[\/.\-]\d{2}[\/.\-]\d{4})\b/iu', $next)) {
+                $parts[] = $next;
+            }
+
+            return trim(implode(' ', $parts));
+        }
+
+        return null;
+    }
+
+    /** Nettoie une ligne d'adresse : arabe, blancs multiples, ponctuation isolée. */
+    private function addressLine(string $line): string
+    {
+        $line = preg_replace('/[\x{0600}-\x{06FF}\x{FB50}-\x{FEFF}]+/u', ' ', $line) ?? $line;
+        $line = preg_replace('/\s+/u', ' ', $line) ?? $line;
+        $line = trim($line, " \t:-—.,");
+
+        return preg_match('/\p{L}/u', $line) ? trim($line) : '';
+    }
+
     private function labelValue(string $text, array $labels, string $valuePattern): ?string
     {
         foreach ($labels as $label) {
@@ -492,7 +1612,9 @@ class DocumentParser
         // YMD year restricted to 19xx-21xx so OCR noise like "7706" (Tesseract
         // glued the spurious "77" onto a real date) can't satisfy the YMD slot
         // and starve the real DMY date that follows.
-        $datePattern = '(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|(?:19|20|21)\d{2}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
+        // `(?<!\d)` stops the greedy label gap from eating the day's first digit
+        // ("le 22/09/2026" read as 2/09/2026).
+        $datePattern = '(?<!\d)(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|(?:19|20|21)\d{2}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
         // Use `#` as the delimiter (not `/`) so a label containing a literal
         // slash — e.g. "Date et / Lieu de naissance" on the Moroccan permis —
         // can't terminate the regex early and trigger

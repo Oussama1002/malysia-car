@@ -21,10 +21,18 @@ class MaintenanceAlertService
         ?int $repairId = null,
         ?int $documentId = null,
     ): MaintenanceAlert {
+        // Dedupe by the specific concern (plan / repair / document) when
+        // provided — otherwise fall back to (vehicle, alert_type). Without the
+        // plan_id in the key, a vehicle with several due plans (Vidange +
+        // Freins) would only ever fire ONE notification since they share the
+        // same alert_type of maintenance_due_soon.
         $existing = MaintenanceAlert::query()
             ->where('vehicle_id', $vehicle->id)
             ->where('alert_type', $type)
             ->where('status', 'open')
+            ->when($planId !== null, fn ($q) => $q->where('plan_id', $planId))
+            ->when($repairId !== null, fn ($q) => $q->where('repair_id', $repairId))
+            ->when($documentId !== null, fn ($q) => $q->where('document_id', $documentId))
             ->first();
         if ($existing) {
             return $existing;

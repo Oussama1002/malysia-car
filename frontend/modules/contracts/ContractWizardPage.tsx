@@ -1,9 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
+import { companySettingsApi } from '@/services/companySettingsApi';
+import { ContractPaperPreview } from '@/modules/contracts/ContractPaperPreview';
+import { ChequeDuplicateWarning } from '@/modules/shared/components/ChequeDuplicateWarning';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
+
+/** Fleet row plus the live usage flags the vehicles endpoint resolves. */
+type WizardVehicle = FleetVehicleDto & {
+  hasActiveReservation?: boolean;
+  hasActiveContract?: boolean;
+  insuranceDeductible?: number;
+};
+
+/** Véhicule pris en sous-location : la valeur varie selon l'origine des données. */
+function isSubRental(ownership?: string | null): boolean {
+  const value = String(ownership ?? '').toLowerCase();
+
+  return value === 'sub_rented' || value === 'sub_rental';
+}
+
+/** French availability of a vehicle, reservations and contracts included. */
+function vehicleAvailability(v: WizardVehicle): { label: string; free: boolean } {
+  const status = String(v.status).toUpperCase();
+  if (status === 'MAINTENANCE') return { label: 'En maintenance', free: false };
+  if (status === 'IN_REPAIR') return { label: 'En réparation', free: false };
+  if (status === 'RENTED' || v.hasActiveContract) return { label: 'Loué', free: false };
+  if (v.hasActiveReservation) return { label: 'Réservé', free: false };
+  if (status === 'AVAILABLE') return { label: 'Disponible', free: true };
+  return { label: status || '—', free: false };
+}
 import { Icon, type IconName } from '@/modules/shared/components/Icon';
 import { StatusChip } from '@/modules/shared/components/StatusChip';
 import { UploadZone } from '@/modules/shared/components/UploadZone';
@@ -17,12 +45,13 @@ import { useAuthSession } from '@/modules/auth/AuthContext';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
 import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
-import { getSettings, listBranches, listUsers, type AdminUser } from '@/services/adminApi';
+import { listBranches, listUsers } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
+import { DateField } from '@/modules/shared/components/DateField';
 
-type StepKey = 'client' | 'assignment' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
+type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
 
 interface PaymentEntry {
   id: string;
@@ -30,6 +59,8 @@ interface PaymentEntry {
   amount: number | '';
   reference: string;
   chequeNumber: string;
+  chequeBank?: string;
+  chequeDate?: string;
 }
 
 interface Step {
@@ -40,13 +71,12 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { key: 'client', title: 'Client', hint: 'Locataire 1 & 2', icon: 'users' },
-  { key: 'assignment', title: 'Agent', hint: 'Commercial', icon: 'users' },
+  { key: 'client', title: 'Client', hint: 'Identité & conformité', icon: 'users' },
   { key: 'vehicle', title: 'Véhicule', hint: 'Choix de l\u2019actif', icon: 'car' },
-  { key: 'type', title: 'Type', hint: 'LLD / LOA / VO', icon: 'doc' },
-  { key: 'terms', title: 'Conditions', hint: 'Loyer & durée', icon: 'coin' },
-  { key: 'annex', title: 'Annexes', hint: 'Justificatifs', icon: 'upload' },
-  { key: 'review', title: 'Validation', hint: 'Signature', icon: 'sign' },
+  { key: 'type', title: 'Type', hint: 'LLD / LOA / Crédit / VO', icon: 'doc' },
+  { key: 'terms', title: 'Conditions', hint: 'Durée, loyer, garanties', icon: 'coin' },
+  { key: 'annex', title: 'Annexes', hint: 'Pièces & justificatifs', icon: 'upload' },
+  { key: 'review', title: 'Validation', hint: 'Relecture & signature', icon: 'sign' },
 ];
 
 const CONTRACT_TYPES: {
@@ -91,8 +121,8 @@ const CONTRACT_TYPES: {
   },
   {
     value: 'LOCATION_COURTE',
-    label: 'Location Courte Durée',
-    sub: 'Location journalière / hebdomadaire',
+    label: 'LCD',
+    sub: 'Location Courte Durée — journalière / hebdomadaire',
     icon: 'play',
     legal: 'DOC · Caution obligatoire',
   },
@@ -100,15 +130,18 @@ const CONTRACT_TYPES: {
 
 interface WizardState {
   clientId: string | number | null;
-  secondaryClientId: string | number | null;
-  secondaryClientSearch: string;
-  assignedAgentId: string | null;
   vehicleId: string | number | null;
+  sourceReservationId: string | null;
   type: ContractType;
   durationMonths: number;
+  durationExtraDays: number;
   monthlyRentMad: number;
   kmInclMonth: number;
   securityDepositMad: number;
+  depositMethod: 'cash' | 'cheque' | 'bank_transfer' | 'card' | 'other' | '';
+  depositChequeNumber: string;
+  depositChequeBank: string;
+  depositChequeDate: string;
   residualValuePct: number;
   notes: string;
   payments: PaymentEntry[];
@@ -122,15 +155,18 @@ interface WizardState {
 
 const INITIAL: WizardState = {
   clientId: null,
-  secondaryClientId: null,
-  secondaryClientSearch: '',
-  assignedAgentId: null,
   vehicleId: null,
+  sourceReservationId: null,
   type: 'LLD',
   durationMonths: 0,
+  durationExtraDays: 0,
   monthlyRentMad: 0,
   kmInclMonth: 0,
   securityDepositMad: 0,
+  depositMethod: '',
+  depositChequeNumber: '',
+  depositChequeBank: '',
+  depositChequeDate: '',
   residualValuePct: 38,
   notes: '',
   payments: [{ id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
@@ -142,50 +178,7 @@ const INITIAL: WizardState = {
   assignedAgent: '',
 };
 
-const FIELD_LABELS_FR: Record<string, string> = {
-  customer_id: 'Client',
-  vehicle_id: 'Véhicule',
-  contract_type: 'Type de contrat',
-  duration_months: 'Durée',
-  start_date: 'Date de début',
-  end_date: 'Date de fin',
-  monthly_payment: 'Mensualité',
-  base_amount: 'Montant de base',
-  deposit_amount: 'Caution',
-  allowed_km: 'Km inclus',
-  payment_method: 'Mode de paiement',
-  notes: 'Notes',
-  status: 'Statut',
-};
-
-function translateValidationMsg(msg: string): string {
-  return msg
-    .replace(/The (.+?) field is required\.?/i, 'Le champ $1 est obligatoire.')
-    .replace(/The (.+?) field must not be greater than (\d+)\.?/i, 'Le champ $1 ne doit pas dépasser $2.')
-    .replace(/The (.+?) field must be at least (\d+)\.?/i, 'Le champ $1 doit être au minimum $2.')
-    .replace(/The (.+?) field must be a valid date\.?/i, 'Le champ $1 doit être une date valide.')
-    .replace(/The (.+?) field must be an integer\.?/i, 'Le champ $1 doit être un nombre entier.')
-    .replace(/The (.+?) field must be a number\.?/i, 'Le champ $1 doit être un nombre.')
-    .replace(/The (.+?) field must be a string\.?/i, 'Le champ $1 doit être du texte.')
-    .replace(/The (.+?) field is invalid\.?/i, 'Le champ $1 est invalide.')
-    .replace(/The (.+?) must be a valid UUID\.?/i, '$1 est invalide.');
-}
-
-function extractValidationErrors(e: unknown): string | null {
-  if (!(e instanceof ApiError) || !e.body) return null;
-  const body = e.body as { errors?: Record<string, string[]> };
-  if (!body.errors || typeof body.errors !== 'object') return null;
-  const lines: string[] = [];
-  for (const [field, msgs] of Object.entries(body.errors)) {
-    const label = FIELD_LABELS_FR[field] ?? field.replace(/_/g, ' ');
-    for (const m of msgs) lines.push(`• ${label} : ${translateValidationMsg(m)}`);
-  }
-  return lines.length > 0 ? lines.join('\n') : null;
-}
-
 function friendlyError(e: unknown, fallback: string): string {
-  const validation = extractValidationErrors(e);
-  if (validation) return validation;
   const raw = e instanceof Error ? e.message : String(e ?? '');
   if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
     return 'Ressource introuvable sur le serveur. Veuillez réessayer.';
@@ -193,21 +186,67 @@ function friendlyError(e: unknown, fallback: string): string {
   return raw || fallback;
 }
 
-/** Calculate the number of days between two ISO date strings. */
-function daysBetween(start: string, end: string): number {
+/** Calculate the number of full months between two ISO date strings. */
+function monthsBetween(start: string, end: string): number {
+  return durationBetween(start, end).months;
+}
+
+/**
+ * Full breakdown of a date range: how many completed months plus the
+ * leftover days (0–30). "2 mois et 5 jours" is more accurate than the
+ * blanket "2 mois" the old helper produced for anything under 90 days.
+ */
+interface WizardChequeScan {
+  check_number?: string;
+  bank?: string;
+  check_date?: string;
+  amount?: number;
+  existing_payment?: { payment_number: string; amount?: number; payment_date?: string | null } | null;
+}
+/** Send a cheque image/PDF to the OCR endpoint and return extracted fields. */
+async function scanCheque(file: File): Promise<WizardChequeScan> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await apiClient<{ data?: WizardChequeScan }>('/v1/cheque-ocr', {
+    method: 'POST',
+    body: fd,
+  });
+  return res.data ?? {};
+}
+
+function durationBetween(start: string, end: string): { months: number; days: number } {
   const s = new Date(start);
   const e = new Date(end);
-  return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000));
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return { months: 0, days: 0 };
+  let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  // Anchor the "months" count on the same day-of-month
+  const anchor = new Date(s);
+  anchor.setMonth(anchor.getMonth() + months);
+  if (anchor > e) {
+    months -= 1;
+    anchor.setMonth(anchor.getMonth() - 1);
+  }
+  const days = Math.max(0, Math.round((e.getTime() - anchor.getTime()) / 86_400_000));
+  return { months: Math.max(0, months), days };
 }
 
 export const ContractWizardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { id: editId } = useParams<{ id?: string }>();
-  const isEditMode = !!editId;
   const [searchParams] = useSearchParams();
   const { session } = useAuthSession();
   const [stepIdx, setStepIdx] = useState(0);
+  // Highest step the wizard has ever reached — lets the user click back and
+  // forward between already-visited steps from the stepper header without
+  // having to hit "Suivant" repeatedly.
+  const [maxStepIdx, setMaxStepIdx] = useState(0);
   const [state, setState] = useState<WizardState>(INITIAL);
+  const [scanningPayment, setScanningPayment] = useState<string | null>(null);
+  const [scanningFranchise, setScanningFranchise] = useState(false);
+  const [franchiseScanError, setFranchiseScanError] = useState<string | null>(null);
+  // Un chèque déjà encaissé ailleurs bloque l'enregistrement du contrat.
+  const [chequeDuplicates, setChequeDuplicates] = useState<Record<string, string | null>>({});
+  const hasUsedCheque = Object.values(chequeDuplicates).some(Boolean);
+  const [scanError, setScanError] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftBusy, setDraftBusy] = useState(false);
@@ -219,9 +258,11 @@ export const ContractWizardPage: React.FC = () => {
   const [newClientError, setNewClientError] = useState<string | null>(null);
   const [prefillBanner, setPrefillBanner] = useState<string | null>(null);
   const [prefillLoading, setPrefillLoading] = useState(false);
+  // Names carried straight from the reservation so the client/vehicle show
+  // instantly, before the full lists finish loading.
+  const [prefillClientName, setPrefillClientName] = useState<string | null>(null);
+  const [prefillVehicleName, setPrefillVehicleName] = useState<string | null>(null);
   const prefillDoneRef = useRef(false);
-  const editLoadedRef = useRef(false);
-  const [editLoading, setEditLoading] = useState(isEditMode);
   const step = STEPS[stepIdx];
 
   // Pre-fill wizard from a reservation when ?from_reservation=UUID is present
@@ -234,14 +275,18 @@ export const ContractWizardPage: React.FC = () => {
       try {
         const res = await apiClient<{ data: { reservation: any } }>(`/v1/reservations/${reservationId}`);
         const r = res.data?.reservation ?? res.data ?? res;
+        // The reservation detail carries the resolved names — show them right away.
+        setPrefillClientName((res.data as any)?.customer_name ?? null);
+        setPrefillVehicleName((res.data as any)?.vehicle_name ?? null);
         const startDate: string | null = r.desired_start_at
           ? String(r.desired_start_at).slice(0, 10)
           : null;
         const endDate: string | null = r.desired_end_at
           ? String(r.desired_end_at).slice(0, 10)
           : null;
-        const rawDays =
-          startDate && endDate ? daysBetween(startDate, endDate) : 0;
+        const dur = startDate && endDate ? durationBetween(startDate, endDate) : { months: 0, days: 0 };
+        const durationMonths = dur.months;
+        const durationExtraDays = dur.days;
         // Normalise payment method to wizard options
         const methodMap: Record<string, string> = {
           virement: 'virement',
@@ -268,18 +313,18 @@ export const ContractWizardPage: React.FC = () => {
           VENTE_VO:     'VENTE_VO',
         };
         const contractType: ContractType = typeMap[r.reservation_type ?? ''] ?? 'LOCATION_COURTE';
-        const isShort = contractType === 'LOCATION_COURTE';
-        const durationValue = isShort ? rawDays : Math.max(1, Math.round(rawDays / 30));
 
         setState((prev) => ({
           ...prev,
           clientId: r.customer_id ?? null,
           vehicleId: r.vehicle_id ?? null,
+          sourceReservationId: reservationId,
           type: contractType,
           startDate,
           endDate,
-          durationMonths: durationValue,
-          monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationValue)) : prev.monthlyRentMad,
+          durationMonths,
+          durationExtraDays,
+          monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths)) : prev.monthlyRentMad,
           securityDepositMad: r.deposit_amount ? Number(r.deposit_amount) : prev.securityDepositMad,
           payments: [{ id: String(Date.now()), method: paymentMethod, amount: '', reference: '', chequeNumber: '' }],
         }));
@@ -288,105 +333,13 @@ export const ContractWizardPage: React.FC = () => {
         const rsvNumber: string = r.reservation_number ?? `RSV-${String(reservationId).slice(0, 8).toUpperCase()}`;
         setPrefillBanner(rsvNumber);
 
-        // Advance to type step (assignment remains optional for now).
-        setStepIdx(3);
+        // Advance past client (0) and vehicle (1) steps to type (2) — both are already set
+        setStepIdx(2);
       } catch (e) {
         // Non-blocking: just log, don't block the wizard
         console.warn('[ContractWizard] Pre-fill from reservation failed:', e);
       } finally {
         setPrefillLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Pre-fill wizard from existing contract when editing
-  useEffect(() => {
-    if (!isEditMode || !editId || editLoadedRef.current) return;
-    editLoadedRef.current = true;
-    setEditLoading(true);
-    (async () => {
-      try {
-        const res = await contractsApi.get(editId);
-        const c = res.contract;
-        const typeMap: Record<string, ContractType> = {
-          LLD: 'LLD', LOA: 'LOA', CREDIT_AUTO: 'CREDIT_AUTO',
-          VENTE_VO: 'VENTE_VO', LOCATION_COURTE: 'LOCATION_COURTE',
-        };
-        const contractType: ContractType = typeMap[c.type ?? ''] ?? 'LLD';
-        const isShort = contractType === 'LOCATION_COURTE';
-        const duration = c.durationMonths ?? 0;
-        const monthly = (c as any).monthlyPayment ?? 0;
-        const allowedKm = (c as any).allowedKm ?? 0;
-        const kmPerUnit = duration > 0 ? Math.round(allowedKm / duration) : 0;
-
-        const methodMap: Record<string, string> = {
-          virement: 'virement', bank_transfer: 'virement', cheque: 'cheque',
-          espece: 'espece', cash: 'espece', carte: 'carte', card: 'carte',
-        };
-        const rawMethod = String((c as any).paymentMethod ?? '').toLowerCase();
-        const paymentMethod = methodMap[rawMethod] ?? 'virement';
-
-        // Parse notes to extract agent and secondary driver info
-        const rawNotes = c.notes ?? '';
-        const notesLines = rawNotes.split('\n');
-        let secondDriverSearch = '';
-        const cleanNotes: string[] = [];
-        for (const line of notesLines) {
-          if (/Agent\s+assign/i.test(line)) continue;
-          const driverMatch = line.match(/^Conducteur:\s*(.+)$/);
-          if (driverMatch) { secondDriverSearch = driverMatch[1]; continue; }
-          cleanNotes.push(line);
-        }
-
-        // Resolve agent from notes by matching email or name against users list
-        let resolvedAgentId: string | null = null;
-        try {
-          const usersRes = await listUsers({ status: 'active', per_page: 200 });
-          const allUsers = usersRes.data ?? [];
-          for (const u of allUsers) {
-            if (u.email && rawNotes.includes(u.email)) { resolvedAgentId = String(u.id); break; }
-          }
-          if (!resolvedAgentId) {
-            for (const u of allUsers) {
-              if (u.name && rawNotes.includes(u.name)) { resolvedAgentId = String(u.id); break; }
-            }
-          }
-        } catch { /* non-blocking */ }
-
-        setState({
-          clientId: c.customerId ?? null,
-          secondaryClientId: null,
-          secondaryClientSearch: secondDriverSearch,
-          assignedAgentId: resolvedAgentId,
-          vehicleId: c.vehicleId ?? null,
-          type: contractType,
-          durationMonths: duration,
-          monthlyRentMad: monthly,
-          kmInclMonth: kmPerUnit,
-          securityDepositMad: (c as any).depositAmount ?? 0,
-          residualValuePct: (c as any).buyoutOptionAmount ?? 38,
-          notes: cleanNotes.filter(Boolean).join('\n'),
-          payments: [{
-            id: String(Date.now()),
-            method: paymentMethod,
-            amount: '',
-            reference: (c as any).bankReference ?? '',
-            chequeNumber: (c as any).chequeNumber ?? '',
-          }],
-          paymentTerms: (c as any).paymentTerms ?? '',
-          expectedPaymentDay: (c as any).expectedPaymentDay ?? 5,
-          startDate: c.startDate ? String(c.startDate).slice(0, 10) : null,
-          endDate: (c as any).endDate ? String((c as any).endDate).slice(0, 10) : null,
-          secondDriverName: '',
-          assignedAgent: '',
-        });
-        setDraftContractId(String(c.id));
-      } catch (e) {
-        console.warn('[ContractWizard] Edit pre-fill failed:', e);
-        setSaveError(friendlyError(e, 'Impossible de charger le contrat.'));
-      } finally {
-        setEditLoading(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -417,36 +370,28 @@ export const ContractWizardPage: React.FC = () => {
   }, [stepIdx]);
 
   const qc = useQueryClient();
-  const contractSettingsQ = useQuery({
-    queryKey: ['settings', 'contracts'],
-    queryFn: () => getSettings('contracts'),
+  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
+  const usersQ = useQuery({
+    queryKey: ['admin', 'users', 'agents'],
+    queryFn: () => listUsers({ per_page: 200 }),
     enabled: !!getApiBase(),
   });
 
+  // Agent assigné = par défaut l'utilisateur de la session. On attend que la
+  // liste des users soit chargée pour s'assurer que l'id correspond à une
+  // option du <select> (sinon le select rejette la valeur et retombe sur
+  // « — Choix — »). On ne touche pas si l'agent a déjà choisi autre chose,
+  // ni en mode édition (le PATCH précédent a posé la valeur).
   useEffect(() => {
-    const s = contractSettingsQ.data?.data?.settings;
-    if (!s) return;
-    setState((prev) => {
-      const isShort = prev.type === 'LOCATION_COURTE';
-      const kmDefault = isShort
-        ? Number(s.default_km_per_day || 0)
-        : Number(s.default_km_per_month || 0);
-      const depositDefault = Number(s.default_deposit_mad || 0);
-      const paymentDayDefault = Number(s.default_payment_day || 0);
-      const paymentTermsDefault = String(s.default_payment_terms || '');
-      return {
-        ...prev,
-        kmInclMonth: prev.kmInclMonth || kmDefault,
-        securityDepositMad: prev.securityDepositMad || depositDefault,
-        expectedPaymentDay: prev.expectedPaymentDay === 5 || !prev.expectedPaymentDay
-          ? (paymentDayDefault || prev.expectedPaymentDay)
-          : prev.expectedPaymentDay,
-        paymentTerms: prev.paymentTerms || paymentTermsDefault,
-      };
-    });
-  }, [contractSettingsQ.data]);
+    if (state.assignedAgent) return;
+    const sessionUserId = (session as any)?.user?.id;
+    if (sessionUserId == null) return;
+    const list = (usersQ.data?.data ?? []) as Array<{ id: string | number }>;
+    const match = list.find((u) => String(u.id) === String(sessionUserId));
+    if (match) patch('assignedAgent', String(sessionUserId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usersQ.data, (session as any)?.user?.id]);
 
-  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
   const createCustomerMut = useMutation({
     mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
       const res = await createCustomer(vars.payload);
@@ -462,23 +407,40 @@ export const ContractWizardPage: React.FC = () => {
     onSuccess: async (res) => {
       setNewClientError(null);
       setNewClientDrawerOpen(false);
-      await qc.invalidateQueries({ queryKey: ['wizard', 'customers'] });
+      await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
       patch('clientId', String(res.data.id));
     },
     onError: (e) => setNewClientError(e instanceof ApiError ? e.message : 'Erreur de création du client'),
   });
 
+  // Valeurs par défaut de Paramètres : km inclus, franchise, TVA.
+  const settingsQ = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => (await companySettingsApi.get()).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const clients = useQuery({
-    queryKey: ['wizard', 'customers'],
+    // Own key: the reservations and payments pages cache the raw API rows
+    // under queryKeys.customers.all, and reading c.name off those left every
+    // option as a bare "(Particulier)" until a refresh reordered the fetches.
+    queryKey: [...queryKeys.customers.all, 'wizard'],
     queryFn: async (): Promise<CustomerDto[]> => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard clients.');
       }
-      const res = await apiClient<{ data: any[] }>('/v1/customers?per_page=500');
+      const res = await apiClient<{ data: any[] }>('/v1/customers?per_page=200');
       return res.data.map((c): CustomerDto => ({
         id: c.id,
         kind: c.customer_type === 'ENTREPRISE' ? 'ENTREPRISE' : 'PARTICULIER',
-        name: c.display_name ?? c.customer_code ?? c.id,
+        // display_name comes back empty on records whose profile carries the
+        // name, so fall back through the profiles before showing a code.
+        name: c.display_name?.trim()
+          || [c.individual_profile?.first_name, c.individual_profile?.last_name].filter(Boolean).join(' ').trim()
+          || c.company_profile?.trade_name
+          || c.company_profile?.legal_name
+          || c.customer_code
+          || c.id,
         email: c.individual_profile?.email ?? '',
         phone: c.individual_profile?.phone ?? '',
         complianceStatus:
@@ -494,48 +456,70 @@ export const ContractWizardPage: React.FC = () => {
         licenseExpiry: c.individual_profile?.driving_license_expiry,
       }));
     },
-    staleTime: 5 * 60_000,
   });
 
   const vehicles = useQuery({
-    queryKey: ['wizard', 'vehicles'],
-    queryFn: async (): Promise<FleetVehicleDto[]> => {
+    // Own key, like the clients query above: the fleet key holds a different
+    // shape on the reservations and GPS pages.
+    queryKey: [...queryKeys.fleet.all, 'wizard'],
+    queryFn: async (): Promise<WizardVehicle[]> => {
       if (!getApiBase()) {
         throw new Error('Backend API is required for contract wizard vehicles.');
       }
-      const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=500');
-      return res.data.map((v): FleetVehicleDto => ({
+      const res = await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200');
+      return res.data.map((v): WizardVehicle => ({
         id: v.id,
-        registration: v.registration ?? v.registration_number ?? '',
+        registration: v.registration_number ?? v.registration ?? '',
         brand: v.brand ?? v.brand_name ?? '',
         model: v.model ?? v.model_name ?? '',
-        year: v.year ?? v.year_of_manufacture ?? 0,
+        year: v.year_of_manufacture ?? v.year ?? 0,
         status: v.status ?? 'AVAILABLE',
-        fuel: v.fuel ?? v.fuel_type,
-        mileageKm: v.mileageKm ?? v.mileage_current ?? v.mileage_km,
-        currentValueMad: v.currentValueMad ?? v.book_value ?? v.current_value_mad,
-        pricePerDay: v.pricePerDay ?? v.daily_rental_price ?? v.price_per_day,
-        insuranceExpiry: v.insuranceExpiry ?? v.insurance_expiry,
-        techControlExpiry: v.techControlExpiry ?? v.tech_control_expiry,
-        vignetteExpiry: v.vignetteExpiry ?? v.vignette_expiry,
+        fuel: v.fuel_type ?? v.fuel,
+        mileageKm: v.mileage_current ?? v.mileage_km,
+        currentValueMad: v.book_value ?? v.current_value_mad,
+        pricePerDay: v.daily_rental_price ?? v.price_per_day,
+        insuranceExpiry: v.insurance_expiry,
+        techControlExpiry: v.tech_control_expiry,
+        vignetteExpiry: v.vignette_expiry,
+        // L'API renvoie ownershipStatus ; lire ownership_status donnait
+        // toujours undefined, donc aucun véhicule n'était marqué SL.
         ownershipStatus: v.ownershipStatus ?? v.ownership_status,
+        insuranceDeductible: v.insuranceDeductible ?? v.insurance_deductible ?? undefined,
+        // The list endpoint resolves live usage: a vehicle can sit at status
+        // AVAILABLE in the fleet table while a reservation or contract holds it.
+        hasActiveReservation: !!v.hasActiveReservation,
+        hasActiveContract: !!v.hasActiveContract,
       }));
     },
-    staleTime: 5 * 60_000,
   });
 
-  const agents = useQuery({
-    queryKey: ['admin', 'users', 'contract-assignees'],
-    queryFn: async (): Promise<AdminUser[]> => {
-      try {
-        const res = await listUsers({ status: 'active', per_page: 200 });
-        return res.data ?? [];
-      } catch {
-        // Non-admin profiles may not have access to users listing.
-        return [];
-      }
-    },
-  });
+  // Pré-remplit une seule fois, et seulement si l'utilisateur n'a rien saisi.
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    const s = settingsQ.data;
+    if (!s || defaultsApplied.current) return;
+    defaultsApplied.current = true;
+    setState((prev) => ({
+      ...prev,
+      kmInclMonth: prev.kmInclMonth || Number(s.contracts?.default_km_per_month ?? 0),
+      securityDepositMad: prev.securityDepositMad || Number(s.contracts?.default_deposit_mad ?? 0),
+    }));
+  }, [settingsQ.data]);
+
+  // La franchise du véhicule choisi prime sur la valeur par défaut de la
+  // société : un 4x4 et une citadine n'ont pas la même franchise.
+  const vehicleFranchiseFor = useRef<string | null>(null);
+  useEffect(() => {
+    const id = state.vehicleId ? String(state.vehicleId) : null;
+    if (!id || vehicleFranchiseFor.current === id) return;
+    const picked = (vehicles.data ?? []).find((v) => String(v.id) === id);
+    if (!picked) return;
+    vehicleFranchiseFor.current = id;
+    const franchise = Number(picked.insuranceDeductible ?? 0);
+    if (franchise > 0) {
+      setState((prev) => ({ ...prev, securityDepositMad: franchise }));
+    }
+  }, [state.vehicleId, vehicles.data]);
 
   const customerDocs = useQuery({
     queryKey: ['customer-docs', state.clientId],
@@ -555,18 +539,23 @@ export const ContractWizardPage: React.FC = () => {
   );
 
   const selectedClient = clients.data?.find((c) => String(c.id) === String(state.clientId));
-  const selectedSecondaryClient = clients.data?.find((c) => String(c.id) === String(state.secondaryClientId));
-  const selectedAgent = agents.data?.find((u) => String(u.id) === String(state.assignedAgentId));
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
 
-  const isShortRental = state.type === 'LOCATION_COURTE';
-  const totalAmount = state.monthlyRentMad * state.durationMonths;
+  // When the rental is less than a month long, treat monthlyRentMad as a
+  // daily rate — the UI relabels the field "Loyer journalier" accordingly and
+  // the total engagement is rent × days instead of rent × months.
+  const isDailyRent = state.durationMonths === 0 && state.durationExtraDays > 0;
+  const totalAmount = Math.round(
+    isDailyRent
+      ? state.monthlyRentMad * state.durationExtraDays
+      : state.monthlyRentMad * (state.durationMonths + state.durationExtraDays / 30),
+  );
 
   const canNext = useMemo(() => {
     if (step.key === 'client') return !!state.clientId;
-    if (step.key === 'assignment') return true;
     if (step.key === 'vehicle') return !!state.vehicleId;
+    if (step.key === 'terms') return state.kmInclMonth > 0;
     return true;
   }, [step, state]);
 
@@ -589,23 +578,69 @@ export const ContractWizardPage: React.FC = () => {
     setState((s) => ({ ...s, payments: s.payments.map((p) => p.id === id ? { ...p, [key]: value } : p) }));
   }
 
+  async function handleChequeScan(paymentId: string, file: File): Promise<void> {
+    setScanningPayment(paymentId);
+    setScanError((e) => { const { [paymentId]: _, ...rest } = e; return rest; });
+    try {
+      const data = await scanCheque(file);
+      // Refuse the prefill and warn the user when this cheque already backs
+      // a live payment.
+      if (data.existing_payment) {
+        setScanError((prev) => ({
+          ...prev,
+          [paymentId]: `Ce chèque a déjà été utilisé pour le paiement ${data.existing_payment!.payment_number}. Un même chèque ne peut pas être payé deux fois.`,
+        }));
+        return;
+      }
+      setState((s) => ({
+        ...s,
+        payments: s.payments.map((p) => p.id === paymentId ? {
+          ...p,
+          chequeNumber: data.check_number ?? p.chequeNumber,
+          chequeBank:   data.bank ?? p.chequeBank,
+          chequeDate:   data.check_date ?? p.chequeDate,
+          amount:       data.amount != null ? Number(data.amount) : p.amount,
+        } : p),
+      }));
+    } catch (e) {
+      setScanError((prev) => ({ ...prev, [paymentId]: e instanceof Error ? e.message : 'Erreur OCR' }));
+    } finally {
+      setScanningPayment(null);
+    }
+  }
+
+  async function handleFranchiseChequeScan(file: File): Promise<void> {
+    setScanningFranchise(true);
+    setFranchiseScanError(null);
+    try {
+      const data = await scanCheque(file);
+      if (data.existing_payment) {
+        setFranchiseScanError(
+          `Ce chèque a déjà été utilisé pour le paiement ${data.existing_payment.payment_number}. Un même chèque ne peut pas être payé deux fois.`,
+        );
+        return;
+      }
+      setState((s) => ({
+        ...s,
+        depositChequeNumber: data.check_number ?? s.depositChequeNumber,
+        depositChequeBank:   data.bank ?? s.depositChequeBank,
+        depositChequeDate:   data.check_date ?? s.depositChequeDate,
+        securityDepositMad:  data.amount != null ? Number(data.amount) : s.securityDepositMad,
+      }));
+    } catch (e) {
+      setFranchiseScanError(e instanceof Error ? e.message : 'Erreur OCR');
+    } finally {
+      setScanningFranchise(false);
+    }
+  }
+
   function buildCreatePayload(status?: 'draft' | 'pending_approval') {
     const primary = state.payments[0];
-    const assignmentNotes = [
-      state.assignedAgentId && selectedAgent
-        ? `Agent assigné: ${selectedAgent.name} (${selectedAgent.email})`
-        : null,
-      state.secondaryClientId && selectedSecondaryClient
-        ? `Conducteur: ${selectedSecondaryClient.name}`
-        : state.secondaryClientSearch
-          ? `Conducteur: ${state.secondaryClientSearch}`
-          : null,
-    ].filter(Boolean).join('\n');
-    const mergedNotes = [assignmentNotes, state.notes].filter(Boolean).join('\n');
     return {
       type: state.type,
       clientId: state.clientId ?? '',
       vehicleId: state.vehicleId ?? undefined,
+      reservationId: state.sourceReservationId ?? undefined,
       amountMad: totalAmount,
       startDate: state.startDate ?? new Date().toISOString().slice(0, 10),
       endDate: state.endDate ?? undefined,
@@ -613,15 +648,18 @@ export const ContractWizardPage: React.FC = () => {
       monthlyPayment: state.monthlyRentMad,
       allowedKm: state.kmInclMonth * state.durationMonths,
       depositAmount: state.securityDepositMad,
-      notes: mergedNotes,
+      depositMethod: state.depositMethod || undefined,
+      depositCheckNumber: state.depositMethod === 'cheque' ? state.depositChequeNumber || undefined : undefined,
+      depositCheckBank: state.depositMethod === 'cheque' ? state.depositChequeBank || undefined : undefined,
+      depositCheckDate: state.depositMethod === 'cheque' ? state.depositChequeDate || undefined : undefined,
+      notes: state.notes,
       paymentMethod: primary?.method ?? 'virement',
       paymentTerms: state.paymentTerms || undefined,
-      bankReference: state.payments.map((p) => p.reference).filter(Boolean).join(', ') || undefined,
+      bankReference: state.payments.map((p) => p.reference || p.chequeBank).filter(Boolean).join(', ') || undefined,
       chequeNumber: state.payments.map((p) => p.chequeNumber).filter(Boolean).join(', ') || undefined,
+      chequeBank: state.payments.map((p) => p.chequeBank).filter(Boolean).join(', ') || undefined,
+      chequeDate: state.payments.map((p) => p.chequeDate).filter(Boolean).join(', ') || undefined,
       expectedPaymentDay: state.expectedPaymentDay === '' ? undefined : Number(state.expectedPaymentDay),
-      paymentEntries: state.payments
-        .filter((p) => p.amount && Number(p.amount) > 0)
-        .map((p) => ({ method: p.method, amount: Number(p.amount), reference: p.reference || undefined, cheque_number: p.chequeNumber || undefined })),
       status,
     } as any;
   }
@@ -674,54 +712,57 @@ export const ContractWizardPage: React.FC = () => {
   async function submit(): Promise<void> {
     setSaving(true);
     setSaveError(null);
-    let resultId: string | null = null;
+    let createdId: string | null = null;
     try {
-      if (isEditMode && editId) {
-        const updated = await contractsApi.update(editId, buildCreatePayload());
-        resultId = String(updated.id);
-      } else if (draftContractId) {
-        const updated = await contractsApi.update(draftContractId, buildCreatePayload());
-        resultId = draftContractId;
+      // Reuse the draft created by the step-6 auto-save (or "Sauver brouillon")
+      // when it exists — otherwise the "Sauvegarder & télécharger PDF" click
+      // would insert a duplicate contract row alongside the draft.
+      const contractId = await ensureDraftContract();
+      createdId = contractId;
 
-        try {
-          await contractsApi.generateSchedule(resultId, {
-            start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
-            months: state.durationMonths,
-            monthly_amount: state.monthlyRentMad,
-            tax_rate: 0,
-          });
-        } catch { /* Non-blocking */ }
-
-        try {
-          const generatedDoc = await documentsApi.generateContractPdf(resultId);
-          await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${updated.contract_number ?? resultId.slice(0, 8)}.pdf`);
-        } catch (pdfErr) {
-          console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
-        }
-      } else {
-        const created = await contractsApi.create(buildCreatePayload('draft'));
-        resultId = String(created.id);
-
-        try {
-          await contractsApi.generateSchedule(created.id, {
-            start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
-            months: state.durationMonths,
-            monthly_amount: state.monthlyRentMad,
-            tax_rate: 0,
-          });
-        } catch { /* Non-blocking */ }
-
-        try {
-          const generatedDoc = await documentsApi.generateContractPdf(String(created.id));
-          await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${created.contract_number ?? resultId.slice(0, 8)}.pdf`);
-        } catch (pdfErr) {
-          console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
-        }
+      // Un contrat finalisé n'est plus un brouillon : il est rattaché à une
+      // réservation et engage le véhicule. L'activation vérifie côté serveur le
+      // mode de règlement et la disponibilité du véhicule.
+      try {
+        await contractsApi.activate(contractId);
+      } catch (activationError) {
+        const reason = activationError instanceof Error ? activationError.message : '';
+        setSaveError(
+          'Le contrat est enregistré mais reste en brouillon : '
+            + (reason || 'activation refusée par le serveur.'),
+        );
+        navigate(`/contracts/${contractId}`);
+        return;
       }
 
-      navigate(`/contracts/${resultId}`);
+      // Generate payment schedule
+      try {
+        await contractsApi.generateSchedule(contractId, {
+          start_date: state.startDate ?? new Date().toISOString().slice(0, 10),
+          months: state.durationMonths,
+          monthly_amount: state.monthlyRentMad,
+          tax_rate: Number(settingsQ.data?.invoicing?.default_tva_pct ?? 20) / 100,
+        });
+      } catch {
+        // Non-blocking — schedule can be generated later
+      }
+
+      // Generate and download PDF
+      try {
+        const generatedDoc = await documentsApi.generateContractPdf(contractId);
+        await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${contractId.slice(0, 8)}.pdf`);
+      } catch (pdfErr) {
+        console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
+      }
+
+      navigate(`/contracts/${createdId}`);
     } catch (e) {
-      setSaveError(friendlyError(e, isEditMode ? 'Erreur lors de la mise à jour du contrat.' : 'Erreur inconnue lors de la création du contrat.'));
+      const raw = e instanceof Error ? e.message : '';
+      if (raw.includes('No query results for model') || raw.includes('ModelNotFoundException')) {
+        setSaveError('Le contrat a été créé mais une ressource associée est introuvable sur le serveur. Vérifiez la fiche contrat.');
+      } else {
+        setSaveError(raw || 'Erreur inconnue lors de la création du contrat.');
+      }
     } finally {
       setSaving(false);
     }
@@ -761,32 +802,16 @@ export const ContractWizardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Edit loading */}
-      {editLoading && (
-        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-          </svg>
-          Chargement du contrat…
-        </div>
-      )}
-
       {/* Header */}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="df-crumb">
             <Link to="/contracts" className="text-[color:var(--df-text-muted)] hover:text-[color:var(--df-text)]">Contrats</Link>
             <span className="df-crumb__sep"><Icon name="chevron-right" size={12} /></span>
-            {isEditMode && editId && (
-              <>
-                <Link to={`/contracts/${editId}`} className="text-[color:var(--df-text-muted)] hover:text-[color:var(--df-text)]">Détail</Link>
-                <span className="df-crumb__sep"><Icon name="chevron-right" size={12} /></span>
-              </>
-            )}
-            <span className="df-crumb__current">{isEditMode ? 'Modifier' : 'Nouveau'}</span>
+            <span className="df-crumb__current">Nouveau</span>
           </div>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">{isEditMode ? 'Modifier le contrat' : 'Nouveau contrat'}</h1>
-          <p className="text-[color:var(--df-text-muted)]">{isEditMode ? 'Modifiez les informations du contrat et sauvegardez.' : 'Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).'}</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight">Nouveau contrat</h1>
+          <p className="text-[color:var(--df-text-muted)]">Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Auto-save indicator — visible on step 6 */}
@@ -822,30 +847,30 @@ export const ContractWizardPage: React.FC = () => {
       </header>
 
       {/* Stepper */}
-      <div className="df-card px-4 py-5 md:px-6">
+      <div className="df-card p-5">
         <div className="df-stepper">
           {STEPS.map((s, i) => {
             const done = i < stepIdx;
             const active = i === stepIdx;
+            const reachable = i <= maxStepIdx;
             return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => i <= stepIdx && setStepIdx(i)}
-                className={`df-step ${done ? 'df-step--done' : ''} ${active ? 'df-step--active' : ''}`}
-                style={{ cursor: i <= stepIdx ? 'pointer' : 'default', background: 'transparent', border: 0 }}
-              >
-                {i < STEPS.length - 1 && (
-                  <span className={`df-step__rail ${done ? 'df-step__rail--done' : active ? 'df-step__rail--active' : ''}`} />
-                )}
-                <span className="df-step__bullet">
-                  {done ? <Icon name="check" size={14} /> : i + 1}
-                </span>
-                <span className="df-step__text">
-                  <span className="df-step__label">{s.title}</span>
-                  <span className="df-step__hint">{s.hint}</span>
-                </span>
-              </button>
+              <React.Fragment key={s.key}>
+                <button
+                  type="button"
+                  onClick={() => reachable && setStepIdx(i)}
+                  className={`df-step ${done ? 'df-step--done' : ''} ${active ? 'df-step--active' : ''}`}
+                  style={{ cursor: reachable ? 'pointer' : 'default', background: 'transparent', border: 0 }}
+                >
+                  <span className="df-step__bullet">
+                    {done ? <Icon name="check" size={12} /> : i + 1}
+                  </span>
+                  <span className="hidden md:block">
+                    <span className="df-step__label">{s.title}</span>
+                    <span className="block text-[10px] font-semibold text-[color:var(--df-text-faint)]">{s.hint}</span>
+                  </span>
+                </button>
+                {i < STEPS.length - 1 && <span className={`df-step__rail ${done ? 'df-step__rail--done' : ''}`} />}
+              </React.Fragment>
             );
           })}
         </div>
@@ -864,7 +889,7 @@ export const ContractWizardPage: React.FC = () => {
 
           <div className="df-card__body space-y-5">
             {saveError && (
-              <div className="whitespace-pre-line rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
                 {saveError}
               </div>
             )}
@@ -876,7 +901,7 @@ export const ContractWizardPage: React.FC = () => {
             {step.key === 'client' && (
               <>
                 <div>
-                  <label className="df-label">Client locataire 1</label>
+                  <label className="df-label">Rechercher un client</label>
                   <div className="flex items-stretch gap-2">
                     <select
                       className="df-input flex-1"
@@ -902,15 +927,13 @@ export const ContractWizardPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                <ClientAutocomplete
-                  label="Conducteur additionnel (optionnel)"
-                  placeholder="Tapez un nom…"
-                  value={state.secondaryClientSearch}
-                  clients={(clients.data ?? []).filter((c) => String(c.id) !== String(state.clientId))}
-                  onChange={(search, id) => {
-                    setState((s) => ({ ...s, secondaryClientSearch: search, secondaryClientId: id, secondDriverName: id ? '' : search }));
-                  }}
-                />
+
+                {!selectedClient && prefillClientName && (
+                  <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
+                    <h4 className="text-[15px] font-bold">{prefillClientName}</h4>
+                    <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)]">Chargement des détails du client…</div>
+                  </div>
+                )}
 
                 {selectedClient && (
                   <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
@@ -944,38 +967,6 @@ export const ContractWizardPage: React.FC = () => {
               </>
             )}
 
-            {step.key === 'assignment' && (
-              <>
-                <div>
-                  <label className="df-label">Agent assigné</label>
-                  <select
-                    className="df-input"
-                    value={state.assignedAgentId ?? ''}
-                    onChange={(e) => patch('assignedAgentId', e.target.value || null)}
-                  >
-                    <option value="">— Non assigné —</option>
-                    {(agents.data ?? []).map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} · {u.role}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {selectedAgent && (
-                  <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">Agent assigné</div>
-                        <div className="text-[15px] font-bold">{selectedAgent.name}</div>
-                        <div className="text-[12px] text-[color:var(--df-text-muted)]">{selectedAgent.email}</div>
-                      </div>
-                      <StatusChip label={selectedAgent.role} tone="info" />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
             {step.key === 'vehicle' && (
               <>
                 <div>
@@ -986,28 +977,41 @@ export const ContractWizardPage: React.FC = () => {
                     onChange={(e) => patch('vehicleId', e.target.value || null)}
                   >
                     <option value="">— Sélectionner —</option>
-                    {(vehicles.data ?? [])
-                      .filter((v) => String(v.status).toUpperCase() === 'AVAILABLE' || (isEditMode && String(v.id) === String(state.vehicleId)))
-                      .map((v) => {
-                        // Build the human label. Fall back to "Véhicule" when
-                        // both brand and model are empty so the option never
-                        // collapses to just the registration.
-                        const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
-                        const label = brandModel || 'Véhicule';
-                        const isSL = v.ownershipStatus === 'sub_rented';
-                        return (
-                          <option key={v.id} value={v.id}>
-                            {isSL ? '[SL] ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''}
-                          </option>
-                        );
-                      })}
+                    {(vehicles.data ?? []).map((v) => {
+                      // Build the human label. Fall back to "Véhicule" when
+                      // both brand and model are empty so the option never
+                      // collapses to just the registration.
+                      const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
+                      const label = brandModel || 'Véhicule';
+                      const isSL = isSubRental(v.ownershipStatus);
+                      const { label: statusFr, free } = vehicleAvailability(v);
+                      return (
+                        <option
+                          key={v.id}
+                          value={v.id}
+                          // A contract created from a reservation arrives with
+                          // that reservation's vehicle, which is reserved by
+                          // definition — never lock the current choice out.
+                          disabled={!free && state.vehicleId !== v.id}
+                        >
+                          {isSL ? '🟣 SL · ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''} — {statusFr}
+                        </option>
+                      );
+                    })}
                   </select>
-                  {selectedVehicle?.ownershipStatus === 'sub_rented' && (
+                  {isSubRental(selectedVehicle?.ownershipStatus) && (
                     <p className="mt-1 text-[11px] font-semibold text-amber-700">
                       ⚠️ Véhicule en sous-location (SL) — vérifiez les conditions de re-location.
                     </p>
                   )}
                 </div>
+
+                {!selectedVehicle && prefillVehicleName && (
+                  <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
+                    <div className="text-[15px] font-bold">{prefillVehicleName}</div>
+                    <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)]">Chargement des détails du véhicule…</div>
+                  </div>
+                )}
 
                 {selectedVehicle && (
                   <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
@@ -1026,7 +1030,6 @@ export const ContractWizardPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    <AIHint text="Véhicule éligible LLD & LOA. IA prédit un risque d'usure faible sur 36 mois." tone="success" />
                   </div>
                 )}
               </>
@@ -1040,16 +1043,7 @@ export const ContractWizardPage: React.FC = () => {
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => {
-                        patch('type', t.value);
-                        const s = contractSettingsQ.data?.data?.settings;
-                        if (s) {
-                          const km = t.value === 'LOCATION_COURTE'
-                            ? Number(s.default_km_per_day || 0)
-                            : Number(s.default_km_per_month || 0);
-                          if (km) patch('kmInclMonth', km);
-                        }
-                      }}
+                      onClick={() => patch('type', t.value)}
                       className={`group relative flex text-start gap-3 rounded-2xl border p-4 transition ${
                         active
                           ? 'border-[color:var(--df-brand-500)] bg-[color:var(--df-brand-50)] dark:bg-[color:var(--df-brand-100)] shadow-[var(--df-ring)]'
@@ -1093,25 +1087,100 @@ export const ContractWizardPage: React.FC = () => {
                 {/* Date & heure de création (auto, non modifiable) */}
                 <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Field label="Date & heure de création">
-                    <input
-                      type="datetime-local"
+                    <DateField
+                      withTime
                       className="df-input bg-slate-50 text-slate-500"
-                      value={(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
+                      value={new Date().toISOString().slice(0, 16)}
+                      onChange={() => {}}
                       disabled
                     />
                   </Field>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label={isShortRental ? 'Durée (jours)' : 'Durée (mois)'}>
+                  {/* Date de début / fin — surfaced when the wizard was NOT
+                      pre-filled from a reservation, so the user can enter the
+                      window directly and the Durée is derived from it. When
+                      the contract comes from a reservation these are already
+                      set from the reservation window (see prefill effect). */}
+                  <Field label="Date de début">
                     <input
-                      type="number"
+                      type="date"
                       className="df-input"
-                      value={state.durationMonths}
-                      onChange={(e) => patch('durationMonths', Number(e.target.value))}
+                      value={state.startDate ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value || null;
+                        setState((s) => {
+                          const next = { ...s, startDate: v };
+                          if (v && s.endDate) {
+                            const dur = durationBetween(v, s.endDate);
+                            next.durationMonths = dur.months;
+                            next.durationExtraDays = dur.days;
+                          }
+                          return next;
+                        });
+                      }}
                     />
                   </Field>
-                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isShortRental ? 'Prix par jour' : 'Loyer mensuel'} (MAD)`}>
+                  <Field label="Date de fin">
+                    <input
+                      type="date"
+                      className="df-input"
+                      value={state.endDate ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value || null;
+                        setState((s) => {
+                          const next = { ...s, endDate: v };
+                          if (v && s.startDate) {
+                            const dur = durationBetween(s.startDate, v);
+                            next.durationMonths = dur.months;
+                            next.durationExtraDays = dur.days;
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </Field>
+                  <Field label="Durée (calculée)">
+                    <div className="flex items-stretch gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            disabled
+                            className="df-input bg-slate-50 cursor-not-allowed"
+                            value={state.durationMonths}
+                            readOnly
+                          />
+                          <span className="text-xs font-bold text-slate-500">mois</span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={30}
+                            disabled
+                            className="df-input bg-slate-50 cursor-not-allowed"
+                            value={state.durationExtraDays}
+                            readOnly
+                          />
+                          <span className="text-xs font-bold text-slate-500">jours</span>
+                        </div>
+                      </div>
+                    </div>
+                    {(state.durationMonths > 0 || state.durationExtraDays > 0) && (
+                      <div className="mt-1 text-[11px] font-semibold text-slate-500">
+                        Total :{' '}
+                        {state.durationMonths > 0 && <>{state.durationMonths} mois</>}
+                        {state.durationMonths > 0 && state.durationExtraDays > 0 && <> et </>}
+                        {state.durationExtraDays > 0 && <>{state.durationExtraDays} jour{state.durationExtraDays > 1 ? 's' : ''}</>}
+                      </div>
+                    )}
+                  </Field>
+                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer journalier' : 'Loyer mensuel'} (MAD)`}>
                     <input
                       type="number"
                       className="df-input"
@@ -1119,15 +1188,22 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('monthlyRentMad', Number(e.target.value))}
                     />
                   </Field>
-                  <Field label={isShortRental ? 'Kilométrage journalier inclus' : 'Kilométrage mensuel inclus'}>
+                  <Field label="Kilométrage mensuel inclus *">
                     <input
                       type="number"
+                      min={1}
+                      required
                       className="df-input"
-                      value={state.kmInclMonth}
-                      onChange={(e) => patch('kmInclMonth', Number(e.target.value))}
+                      value={state.kmInclMonth || ''}
+                      onChange={(e) => patch('kmInclMonth', Math.max(0, Number(e.target.value)))}
                     />
+                    {!state.kmInclMonth && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
+                      </div>
+                    )}
                   </Field>
-                  <Field label="Caution / garantie (MAD)">
+                  <Field label="Franchise d'assurance (MAD)">
                     <input
                       type="number"
                       className="df-input"
@@ -1135,6 +1211,93 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('securityDepositMad', Number(e.target.value))}
                     />
                   </Field>
+                  {state.securityDepositMad > 0 && (
+                    <Field label="Franchise encaissée par">
+                      <select
+                        className="df-input"
+                        value={state.depositMethod}
+                        onChange={(e) => patch('depositMethod', e.target.value as WizardState['depositMethod'])}
+                      >
+                        <option value="">— Pas encore encaissée —</option>
+                        <option value="cash">Espèces</option>
+                        <option value="cheque">Chèque</option>
+                        <option value="bank_transfer">Virement</option>
+                        <option value="card">Carte</option>
+                        <option value="other">Autre</option>
+                      </select>
+                    </Field>
+                  )}
+                  {state.securityDepositMad > 0 && state.depositMethod === 'cheque' && (
+                    <>
+                      <Field label="N° chèque franchise">
+                        <input
+                          className="df-input"
+                          value={state.depositChequeNumber}
+                          onChange={(e) => patch('depositChequeNumber', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Banque">
+                        <input
+                          className="df-input"
+                          placeholder="Ex : CIH Bank"
+                          value={state.depositChequeBank}
+                          onChange={(e) => patch('depositChequeBank', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Date du chèque">
+                        <DateField
+                          className="df-input"
+                          value={state.depositChequeDate}
+                          onChange={(v) => patch('depositChequeDate', v)}
+                        />
+                      </Field>
+                      <div className="md:col-span-2">
+                        <ChequeDuplicateWarning
+                          number={state.depositChequeNumber}
+                          bank={state.depositChequeBank}
+                          onResult={(message) =>
+                            setChequeDuplicates((prev) =>
+                              prev.__franchise === message ? prev : { ...prev, __franchise: message },
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-black text-indigo-900">Scanner le chèque de franchise</div>
+                            <div className="text-[11px] text-indigo-700/80">Extraction automatique du n°, banque, date et montant.</div>
+                          </div>
+                          <label
+                            htmlFor="franchise-cheque-scan"
+                            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition ${
+                              scanningFranchise
+                                ? 'bg-indigo-400 text-white cursor-wait'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                            }`}
+                          >
+                            <Icon name="scan" size={12} />
+                            {scanningFranchise ? 'Analyse…' : 'Importer / Photo'}
+                          </label>
+                          <input
+                            id="franchise-cheque-scan"
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            disabled={scanningFranchise}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFranchiseChequeScan(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </div>
+                        {franchiseScanError && (
+                          <div className="mt-1 text-[11px] font-semibold text-rose-700">⚠ {franchiseScanError}</div>
+                        )}
+                      </div>
+                    </>
+                  )}
                   {state.type === 'LOA' && (
                     <Field label="Valeur résiduelle (%)">
                       <input
@@ -1188,9 +1351,62 @@ export const ContractWizardPage: React.FC = () => {
                           </Field>
                         )}
                         {p.method === 'cheque' && (
-                          <Field label="N° chèque">
-                            <input className="df-input" value={p.chequeNumber} onChange={(e) => updatePayment(p.id, 'chequeNumber', e.target.value)} />
-                          </Field>
+                          <>
+                            <Field label="N° chèque">
+                              <input className="df-input" value={p.chequeNumber} onChange={(e) => updatePayment(p.id, 'chequeNumber', e.target.value)} />
+                            </Field>
+                            <Field label="Banque">
+                              <input className="df-input" placeholder="Ex : Attijariwafa" value={p.chequeBank ?? ''} onChange={(e) => updatePayment(p.id, 'chequeBank', e.target.value)} />
+                            </Field>
+                            <Field label="Date chèque">
+                              <DateField className="df-input" value={p.chequeDate ?? ''} onChange={(dfValue) => updatePayment(p.id, 'chequeDate', dfValue)} />
+                            </Field>
+                            <div className="md:col-span-2">
+                              <ChequeDuplicateWarning
+                                number={p.chequeNumber}
+                                bank={p.chequeBank}
+                                onResult={(message) =>
+                                  setChequeDuplicates((prev) =>
+                                    prev[p.id] === message ? prev : { ...prev, [p.id]: message },
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2.5">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-black text-indigo-900">Scanner le chèque</div>
+                                  <div className="text-[11px] text-indigo-700/80">Extraction automatique du n°, banque, date et montant.</div>
+                                </div>
+                                <label
+                                  htmlFor={`cheque-scan-${p.id}`}
+                                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition ${
+                                    scanningPayment === p.id
+                                      ? 'bg-indigo-400 text-white cursor-wait'
+                                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                  }`}
+                                >
+                                  <Icon name="scan" size={12} />
+                                  {scanningPayment === p.id ? 'Analyse…' : 'Importer / Photo'}
+                                </label>
+                                <input
+                                  id={`cheque-scan-${p.id}`}
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  className="hidden"
+                                  disabled={scanningPayment === p.id}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleChequeScan(p.id, file);
+                                    e.target.value = '';
+                                  }}
+                                />
+                              </div>
+                              {scanError[p.id] && (
+                                <div className="mt-1 text-[11px] font-semibold text-rose-700">⚠ {scanError[p.id]}</div>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1211,10 +1427,37 @@ export const ContractWizardPage: React.FC = () => {
                     </Field>
                   </div>
                 </div>
-                <AIHint
-                  tone="brand"
-                  text={`Suggestion IA: pour ce profil client et véhicule, le loyer optimal est ${formatCurrencyMad(4280)}/mois. Conforme Bank Al-Maghrib.`}
-                />
+                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Client locataire 2 (optionnel)">
+                    <input
+                      className="df-input"
+                      placeholder="Nom complet du 2e conducteur"
+                      value={state.secondDriverName}
+                      onChange={(e) => patch('secondDriverName', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Agent assigné">
+                    <select
+                      className="df-input"
+                      value={state.assignedAgent}
+                      onChange={(e) => patch('assignedAgent', e.target.value)}
+                    >
+                      <option value="">— Non assigné —</option>
+                      {(usersQ.data?.data ?? [])
+                        .filter((u) => u.status === 'active')
+                        .map((u) => {
+                          const label = u.name?.trim()
+                            || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
+                            || u.email;
+                          return (
+                            <option key={u.id} value={label}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                    </select>
+                  </Field>
+                </div>
               </>
             )}
 
@@ -1233,12 +1476,6 @@ export const ContractWizardPage: React.FC = () => {
                   <UploadZone label="Justificatif de revenus / attestation CNSS" />
                   {state.type === 'CREDIT_AUTO' && <UploadZone label="Bilans financiers (3 derniers exercices)" />}
                 </div>
-                {state.payments.some((p) => p.method === 'cheque') && (
-                  <div className="mt-5 space-y-3">
-                    <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Chèque</div>
-                    <UploadZone label="Photo / scan du chèque" hint="JPG, PNG ou PDF — recto du chèque" />
-                  </div>
-                )}
                 <div className="mt-5 space-y-3">
                   <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Photos véhicule avant livraison</div>
                   <div className="grid grid-cols-2 gap-3">
@@ -1254,7 +1491,38 @@ export const ContractWizardPage: React.FC = () => {
             )}
 
             {step.key === 'review' && (
-              <LegalPreview state={state} client={selectedClient?.name ?? '—'} vehicle={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
+              <ContractPaperPreview
+                values={{
+                  contract_number: 'attribué à l’enregistrement',
+                  customer_last_name: selectedClient?.name,
+                  customer_cin: selectedClient?.idNumber,
+                  customer_license: selectedClient?.licenseNumber,
+                  customer_address: selectedClient?.address,
+                  customer_phone: selectedClient?.phone,
+                  driver_last_name: state.secondDriverName,
+                  vehicle_brand: selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}`.trim() : null,
+                  vehicle_plate: selectedVehicle?.registration,
+                  start_date: state.startDate ? formatDate(state.startDate) : null,
+                  end_date: state.endDate ? formatDate(state.endDate) : null,
+                  fuel: selectedVehicle?.fuel,
+                  days: state.durationMonths * 30 + state.durationExtraDays || null,
+                  unit_price:
+                    state.durationMonths * 30 + state.durationExtraDays > 0
+                      ? formatCurrencyMad(totalAmount / (state.durationMonths * 30 + state.durationExtraDays))
+                      : null,
+                  total_ttc: formatCurrencyMad(totalAmount),
+                  payment_method: state.depositMethod
+                    ? ({ cash: 'Espèces', cheque: 'Chèque', bank_transfer: 'Virement', card: 'Carte', other: 'Autre' } as Record<string, string>)[state.depositMethod]
+                    : state.paymentTerms,
+                }}
+                papers={{
+                  insurance: !!selectedVehicle?.insuranceExpiry && new Date(selectedVehicle.insuranceExpiry).getTime() >= Date.now(),
+                  registration: !!selectedVehicle?.registration,
+                  circulation: !!selectedVehicle?.registration,
+                  vignette: !!selectedVehicle?.vignetteExpiry && new Date(selectedVehicle.vignetteExpiry).getTime() >= Date.now(),
+                  inspection: !!selectedVehicle?.techControlExpiry && new Date(selectedVehicle.techControlExpiry).getTime() >= Date.now(),
+                }}
+              />
             )}
           </div>
 
@@ -1267,22 +1535,28 @@ export const ContractWizardPage: React.FC = () => {
               <Icon name="chevron-left" size={14} /> Précédent
             </button>
             <div className="flex items-center gap-2">
-              <button className="df-btn df-btn--subtle df-btn--sm" disabled={draftBusy} onClick={() => void handleSaveDraft()}>
+              <button className="df-btn df-btn--subtle df-btn--sm" disabled={draftBusy || hasUsedCheque} onClick={() => void handleSaveDraft()}>
                 <Icon name="download" size={14} /> {draftBusy ? 'Traitement…' : 'Sauver brouillon'}
               </button>
               {stepIdx === STEPS.length - 1 ? (
                 <button
                   className="df-btn df-btn--primary"
-                  disabled={saving || !state.clientId || !state.vehicleId}
+                  disabled={saving || !state.clientId || !state.vehicleId || state.kmInclMonth <= 0 || hasUsedCheque}
                   onClick={() => void submit()}
                 >
-                  <Icon name="download" size={14} /> {saving ? (isEditMode ? 'Mise à jour…' : 'Création…') : (isEditMode ? 'Sauvegarder les modifications' : 'Sauvegarder & télécharger PDF')}
+                  <Icon name="download" size={14} /> {saving ? 'Création…' : 'Sauvegarder & télécharger PDF'}
                 </button>
               ) : (
                 <button
                   className="df-btn df-btn--primary df-btn--sm"
                   disabled={!canNext}
-                  onClick={() => setStepIdx((s) => Math.min(STEPS.length - 1, s + 1))}
+                  onClick={() =>
+                    setStepIdx((s) => {
+                      const next = Math.min(STEPS.length - 1, s + 1);
+                      setMaxStepIdx((m) => Math.max(m, next));
+                      return next;
+                    })
+                  }
                 >
                   Suivant <Icon name="chevron-right" size={14} />
                 </button>
@@ -1306,14 +1580,23 @@ export const ContractWizardPage: React.FC = () => {
             </div>
             <div className="divide-y divide-[color:var(--df-border)]">
               <SummaryRow label="Client" value={selectedClient?.name ?? '—'} />
-              <SummaryRow label="Conducteur" value={(selectedSecondaryClient?.name ?? state.secondaryClientSearch) || '—'} />
-              <SummaryRow label="Agent assigné" value={selectedAgent?.name ?? '—'} />
               <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
               <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
-              <SummaryRow label="Durée" value={isShortRental ? `${state.durationMonths} jour${state.durationMonths > 1 ? 's' : ''}` : `${state.durationMonths} mois`} />
-              <SummaryRow label={isShortRental ? 'Prix / jour' : 'Mensualité'} value={formatCurrencyMad(state.monthlyRentMad)} highlight />
-              <SummaryRow label={isShortRental ? 'Km inclus / jour' : 'Km inclus / mois'} value={state.kmInclMonth.toLocaleString('fr-MA')} />
-              <SummaryRow label="Caution" value={formatCurrencyMad(state.securityDepositMad)} />
+              <SummaryRow
+                label="Durée"
+                value={
+                  state.durationExtraDays > 0
+                    ? `${state.durationMonths} mois et ${state.durationExtraDays} jour${state.durationExtraDays > 1 ? 's' : ''}`
+                    : `${state.durationMonths} mois`
+                }
+              />
+              <SummaryRow
+                label={isDailyRent ? 'Loyer journalier' : 'Mensualité'}
+                value={formatCurrencyMad(state.monthlyRentMad)}
+                highlight
+              />
+              <SummaryRow label="Km inclus / mois" value={state.kmInclMonth.toLocaleString('fr-MA')} />
+              <SummaryRow label="Franchise d'assurance" value={formatCurrencyMad(state.securityDepositMad)} />
               {state.type === 'LOA' && <SummaryRow label="Valeur résiduelle" value={`${state.residualValuePct}%`} />}
               <div className="px-4 py-3">
                 <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">Total engagement</div>
@@ -1329,13 +1612,11 @@ export const ContractWizardPage: React.FC = () => {
             <div className="df-card__hint">Checklist conformité</div>
             <ul className="mt-3 space-y-2 text-[12.5px]">
               <CheckRow done={!!selectedClient} label="Client sélectionné" />
-              <CheckRow done={!state.secondaryClientId || !!selectedSecondaryClient} label="Conducteur renseigné" />
-              <CheckRow done={!state.assignedAgentId || !!selectedAgent} label="Agent assigné" />
               <CheckRow done={!!selectedVehicle} label="Véhicule sélectionné" />
-              <CheckRow done={stepIdx >= 3} label="Type de contrat défini" />
-              <CheckRow done={stepIdx >= 4} label="Conditions financières" />
-              <CheckRow done={stepIdx >= 5} label="Pièces jointes" />
-              <CheckRow done={stepIdx === 6} label="Prêt à signer" />
+              <CheckRow done={stepIdx >= 2} label="Type de contrat défini" />
+              <CheckRow done={stepIdx >= 3} label="Conditions financières" />
+              <CheckRow done={stepIdx >= 4} label="Pièces jointes" />
+              <CheckRow done={stepIdx === 5} label="Prêt à signer" />
             </ul>
           </div>
         </aside>
@@ -1369,67 +1650,6 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
     {children}
   </div>
 );
-
-const ClientAutocomplete: React.FC<{
-  label: string;
-  placeholder?: string;
-  value: string;
-  clients: CustomerDto[];
-  onChange: (search: string, selectedId: string | null) => void;
-}> = ({ label, placeholder, value, clients, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const filtered = value.trim()
-    ? clients.filter((c) => c.name.toLowerCase().includes(value.toLowerCase()))
-    : [];
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative">
-      <label className="df-label">{label}</label>
-      <input
-        type="text"
-        className="df-input"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value, null);
-          setOpen(true);
-        }}
-        onFocus={() => { if (value.trim()) setOpen(true); }}
-      />
-      {open && filtered.length > 0 && (
-        <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-elev)] shadow-lg">
-          {filtered.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-start text-sm hover:bg-[color:var(--df-surface-sunk)]"
-                onClick={() => {
-                  onChange(c.name, String(c.id));
-                  setOpen(false);
-                }}
-              >
-                <span className="font-semibold">{c.name}</span>
-                <span className="text-[11px] text-[color:var(--df-text-muted)]">
-                  {c.kind === 'ENTREPRISE' ? 'Entreprise' : 'Particulier'}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
 
 const InfoBit: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div>
@@ -1497,64 +1717,4 @@ const ExistingDocRow: React.FC<{ doc: DocumentCenterItem; label: string }> = ({ 
   </div>
 );
 
-const LegalPreview: React.FC<{ state: WizardState; client: string; vehicle: string }> = ({ state, client, vehicle }) => {
-  const t = CONTRACT_TYPES.find((x) => x.value === state.type);
-  const isShortRental = state.type === 'LOCATION_COURTE';
-  const today = formatDate(new Date());
-  return (
-    <div className="rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-5">
-      <div className="flex items-center justify-between">
-        <div className="df-card__hint">Aperçu juridique</div>
-        <div className="flex gap-2">
-          <StatusChip label="Droit marocain" tone="brand" />
-          <StatusChip label="DOC · Loi 31-08" tone="info" />
-        </div>
-      </div>
-      <article className="mt-3 rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-6 text-[13px] leading-relaxed">
-        <h3 className="text-center text-[15px] font-black tracking-wide uppercase">Contrat {t?.label}</h3>
-        <p className="mt-2 text-center text-[11px] text-[color:var(--df-text-muted)]">Référence brouillon · {today}</p>
-        <hr className="my-4 border-[color:var(--df-border)]" />
-        <p><strong>Entre les soussignés :</strong></p>
-        <p className="mt-2">DriveFlow SA, société de droit marocain au capital de <span className="df-num font-semibold">10 000 000 MAD</span>, siège social à Casablanca, ci-après dénommée <em>« le Bailleur »</em>,</p>
-        <p className="mt-2">Et</p>
-        <p className="mt-2"><strong>{client}</strong>, ci-après dénommé <em>« le Preneur »</em>,</p>
-        <hr className="my-4 border-[color:var(--df-border)]" />
-        <p><strong>Article 1 — Objet</strong></p>
-        <p className="mt-1">
-          {`Le Bailleur met à la disposition du Preneur, dans le cadre d’un contrat `}
-          <em>{t?.label}</em>
-          {`, le véhicule `}<strong>{vehicle}</strong>
-          {`, pour une durée de `}
-          <span className="df-num font-semibold">
-            {isShortRental ? `${state.durationMonths} jour${state.durationMonths > 1 ? "s" : ""}` : `${state.durationMonths} mois`}
-          </span>.
-        </p>
-        <p className="mt-3"><strong>Article 2 — {isShortRental ? "Tarif et conditions financières" : "Loyer et conditions financières"}</strong></p>
-        {isShortRental ? (
-          <p className="mt-1">{`Le tarif journalier est fixé à `}<span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>{`, payable à la prise en charge. Le kilométrage inclus est de `}<span className="df-num font-semibold">{state.kmInclMonth.toLocaleString("fr-MA")} km/jour</span>{` ; tout dépassement sera facturé conformément à l’annexe tarifaire.`}</p>
-        ) : (
-          <p className="mt-1">{`Le loyer mensuel est fixé à `}<span className="df-num font-semibold">{formatCurrencyMad(state.monthlyRentMad)}</span>{`, payable le 5 de chaque mois. Le kilométrage inclus est de `}<span className="df-num font-semibold">{state.kmInclMonth.toLocaleString("fr-MA")} km/mois</span>{` ; tout dépassement sera facturé conformément à l’annexe tarifaire.`}</p>
-        )}
-        <p className="mt-3"><strong>Article 3 — Géolocalisation</strong></p>
-        <p className="mt-1">{`Conformément à la loi 09-08, le Preneur est informé que le véhicule est équipé d’un dispositif GPS. Les données sont conservées de manière chiffrée et utilisées exclusivement pour le suivi contractuel et la sécurité de l’actif.`}</p>
-        <p className="mt-3 text-[11px] text-[color:var(--df-text-faint)]">… clauses supplémentaires générées automatiquement selon le type de contrat.</p>
-      </article>
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4">
-          <div className="df-card__hint">Signature Bailleur</div>
-          <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-[color:var(--df-border-strong)] text-[12px] text-[color:var(--df-text-muted)]">
-            Signature manuelle sur document imprimé
-          </div>
-        </div>
-        <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-solid)] p-4">
-          <div className="df-card__hint">Signature Preneur</div>
-          <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-[color:var(--df-border-strong)] text-[12px] text-[color:var(--df-text-muted)]">
-            Signature manuelle sur document imprimé
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 

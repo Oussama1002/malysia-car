@@ -14,6 +14,7 @@ import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const EntriesPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -79,8 +80,8 @@ export const EntriesPage: React.FC = () => {
             <option value="">Tous les journaux</option>
             {journals.map((j) => <option key={j.id} value={j.id}>{j.code} — {j.name}</option>)}
           </select>
-          <input type="date" className="df-input" value={filters.from ?? ''} onChange={(e) => setFilter({ from: e.target.value || undefined })} />
-          <input type="date" className="df-input" value={filters.to ?? ''} onChange={(e) => setFilter({ to: e.target.value || undefined })} />
+          <DateField className="df-input" value={filters.from ?? ''} onChange={(dfValue) => setFilter({ from: dfValue || undefined })} />
+          <DateField className="df-input" value={filters.to ?? ''} onChange={(dfValue) => setFilter({ to: dfValue || undefined })} />
         </div>
       </div>
 

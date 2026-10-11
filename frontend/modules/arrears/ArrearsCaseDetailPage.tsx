@@ -15,7 +15,7 @@ import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
-import { formatClientCode } from '@/services/entityCode';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const ACTION_TYPES: ActionType[] = [
   'note', 'reminder_call', 'reminder_sms', 'reminder_email',
@@ -87,7 +87,7 @@ export const ArrearsCaseDetailPage: React.FC = () => {
         <div>
           <Link to="/arrears" className="text-xs font-bold text-indigo-600">← Contentieux</Link>
           <h1 className="text-2xl font-black text-slate-900">{arrCase.case_number}</h1>
-          <p className="text-slate-500">{arrCase.customer?.full_name ?? formatClientCode(arrCase.customer_id)}</p>
+          <p className="text-slate-500">{arrCase.customer?.full_name ?? arrCase.customer_id}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {arrCase.stage !== 'closed' && (
@@ -131,7 +131,7 @@ export const ArrearsCaseDetailPage: React.FC = () => {
         <div className="df-card__body grid gap-3 md:grid-cols-3 text-sm">
           <div><span className="font-bold text-slate-500">Client : </span>
             <Link to={`/customers/${arrCase.customer_id}`} className="text-indigo-600 font-semibold hover:underline">
-              {arrCase.customer?.full_name ?? formatClientCode(arrCase.customer_id)}
+              {arrCase.customer?.full_name ?? arrCase.customer_id}
             </Link>
           </div>
           {arrCase.contract && (
@@ -262,7 +262,7 @@ const ActionForm: React.FC<{
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date *</label>
-        <input type="date" className="df-input mt-1" value={form.action_date} onChange={(e) => setForm({ ...form, action_date: e.target.value })} required />
+        <DateField className="df-input mt-1" value={form.action_date} onChange={(v) => setForm({ ...form, action_date: v })} required />
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Description *</label>
@@ -277,7 +277,7 @@ const ActionForm: React.FC<{
       {needsPromise && (
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Date de promesse</label>
-          <input type="date" className="df-input mt-1" value={form.promise_date ?? ''} onChange={(e) => setForm({ ...form, promise_date: e.target.value || undefined })} />
+          <DateField className="df-input mt-1" value={form.promise_date ?? ''} onChange={(dfValue) => setForm({ ...form, promise_date: dfValue || undefined })} />
         </div>
       )}
       <div className="flex justify-end gap-2">

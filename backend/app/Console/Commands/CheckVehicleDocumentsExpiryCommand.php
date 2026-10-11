@@ -44,15 +44,17 @@ class CheckVehicleDocumentsExpiryCommand extends Command
                 default => 'Document',
             };
 
-            $title = $isExpired ? "{$label} expiree" : "{$label} bientot expiree";
-            $description = "Vehicule {$vehicle->registration_number}";
+            $title = $isExpired ? "{$label} expirée" : "{$label} bientôt expirée";
+            $vLabel = trim(($vehicle->brand_name ?? '').($vehicle->model_name ? ' '.$vehicle->model_name : ''));
+            $vFull = $vLabel ? "{$vLabel} ({$vehicle->registration_number})" : $vehicle->registration_number;
+            $description = "Véhicule {$vFull}";
             $this->alerts->createAlert(
                 vehicle: $vehicle,
                 type: $type.'_'.$doc->id,
                 severity: $severity,
                 title: $title,
                 description: $description,
-                payload: ['document_id' => $doc->id, 'days_remaining' => $days, 'type' => $doc->type],
+                payload: ['document_id' => $doc->id, 'days_remaining' => $days, 'type' => $doc->type, 'vehicle_brand' => $vehicle->brand_name, 'vehicle_model' => $vehicle->model_name, 'registration_number' => $vehicle->registration_number],
                 documentId: (int) $doc->id,
             );
             $this->notifications->notifyRoles(

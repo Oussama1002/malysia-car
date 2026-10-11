@@ -97,8 +97,9 @@ interface MissingPriceVehicle {
   fuel?: string | null;
   transmission?: string | null;
   categorie?: string | null;
+  /** Chemin relatif renvoyé par l'API (ex. `/api/v1/files/<uuid>`). */
   photo_url?: string | null;
-  daily_rental_price?: number | null;
+  /** Prix /jour par palier (clés : tier_1_2, tier_3_6, …). */
   rental_price_tiers?: Record<string, number> | null;
 }
 
@@ -160,7 +161,7 @@ export const WebsiteLeadsPage: React.FC = () => {
     queryFn: () =>
       apiClient<{
         data: MissingPriceVehicle[];
-        meta?: { total: number; missing_count?: number; tier_schema?: TierSchemaItem[] };
+        meta?: { total: number; tier_schema?: TierSchemaItem[] };
       }>('/v1/website-leads/missing-prices'),
   });
 
@@ -186,8 +187,8 @@ export const WebsiteLeadsPage: React.FC = () => {
 
   const leads = leadsQ.data?.data ?? [];
   const newCount = leadsQ.data?.meta?.new_count ?? 0;
-  const allVehicles = missingPricesQ.data?.data ?? [];
-  const missingCount = missingPricesQ.data?.meta?.missing_count ?? 0;
+  const missing = missingPricesQ.data?.data ?? [];
+  const missingCount = missing.length;
 
   return (
     <div className="space-y-6">
@@ -239,7 +240,7 @@ export const WebsiteLeadsPage: React.FC = () => {
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Véhicules
+          Véhicules à tarifer
           {missingCount > 0 && (
             <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-700">
               {missingCount}
@@ -250,8 +251,7 @@ export const WebsiteLeadsPage: React.FC = () => {
 
       {tab === 'pricing' && (
         <PricingTab
-          vehicles={allVehicles}
-          missingCount={missingCount}
+          vehicles={missing}
           loading={missingPricesQ.isLoading}
           tierSchema={missingPricesQ.data?.meta?.tier_schema ?? DEFAULT_TIER_SCHEMA}
           onSetPrice={(vehicleId, tiers) => setPriceM.mutateAsync({ vehicleId, tiers })}
@@ -428,68 +428,41 @@ export const WebsiteLeadsPage: React.FC = () => {
    ──────────────────────────────────────────────────────────── */
 const PricingTab: React.FC<{
   vehicles: MissingPriceVehicle[];
-  missingCount: number;
   loading: boolean;
   tierSchema: TierSchemaItem[];
   onSetPrice: (vehicleId: string, tiers: Record<string, number>) => Promise<unknown>;
   pending: boolean;
-}> = ({ vehicles, missingCount, loading, tierSchema, onSetPrice, pending }) => {
-  const [vSearch, setVSearch] = useState('');
+}> = ({ vehicles, loading, tierSchema, onSetPrice, pending }) => {
   if (loading) {
     return <div className="df-card df-card__body text-sm text-slate-500">Chargement…</div>;
   }
   if (vehicles.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
-        Aucun véhicule sur le site.
+      <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 p-10 text-center text-sm text-emerald-700">
+        <div className="mb-1 text-base font-black">✓ Tous les véhicules du site ont un tarif.</div>
+        <div className="text-xs">Aucune action à faire — rien ne saute à l'œil du visiteur.</div>
       </div>
     );
   }
-  const q = vSearch.toLowerCase().trim();
-  const filtered = q
-    ? vehicles.filter((v) =>
-        [v.brand, v.model, v.registration, v.categorie, v.fuel, v.transmission, v.year?.toString()]
-          .filter(Boolean)
-          .some((f) => f!.toLowerCase().includes(q)),
-      )
-    : vehicles;
   return (
     <div className="space-y-3">
-      {missingCount > 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <div className="font-black">
-            {missingCount} véhicule{missingCount > 1 ? 's' : ''} sans tarif journalier.
-          </div>
-          <div className="mt-0.5 text-xs">
-            Les visiteurs voient « Tarif sur demande ». Cliquez sur <strong>Tarif</strong> pour configurer les prix par durée.
-          </div>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="font-black">
+          {vehicles.length} véhicule{vehicles.length > 1 ? 's' : ''} apparaissent sur le site sans tarif journalier.
         </div>
-      ) : (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-          <div className="font-black">✓ Tous les véhicules du site ont un tarif.</div>
+        <div className="mt-0.5 text-xs">
+          Les visiteurs voient « Tarif sur demande ». Cliquez sur <strong>Tarif</strong> pour configurer les prix par durée — un prix /jour pour 1-2 j, puis les paliers plus longs si vous voulez remiser.
         </div>
-      )}
-      <input
-        className="df-input w-full"
-        placeholder="Rechercher un véhicule (marque, modèle, immatriculation)…"
-        value={vSearch}
-        onChange={(e) => setVSearch(e.target.value)}
-      />
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
-          Aucun véhicule ne correspond à « {vSearch} ».
-        </div>
-      ) : (
-        filtered.map((v) => (
-          <PricingRow
-            key={v.id}
-            v={v}
-            tierSchema={tierSchema}
-            onSetPrice={onSetPrice}
-            pending={pending}
-          />
-        ))
-      )}
+      </div>
+      {vehicles.map((v) => (
+        <PricingRow
+          key={v.id}
+          v={v}
+          tierSchema={tierSchema}
+          onSetPrice={onSetPrice}
+          pending={pending}
+        />
+      ))}
     </div>
   );
 };
@@ -505,12 +478,9 @@ const PricingRow: React.FC<{
   const label = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
   const sub = [v.year, v.categorie, v.fuel, v.transmission].filter(Boolean).join(' · ');
   const img = photoUrl(v.photo_url);
-  const hasPrice = v.daily_rental_price != null && v.daily_rental_price > 0;
-  const tiers = v.rental_price_tiers;
-  const hasTiers = tiers && typeof tiers === 'object' && Object.keys(tiers).length > 0;
   return (
     <>
-      <article className={`df-card ${!hasPrice ? 'border-amber-200 bg-amber-50/30' : ''}`}>
+      <article className="df-card">
         <div className="df-card__body flex flex-wrap items-center gap-4">
           <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200">
             {img ? (
@@ -539,40 +509,18 @@ const PricingRow: React.FC<{
               {v.registration && sub ? ' · ' : null}
               {sub}
             </div>
-            {hasPrice ? (
-              <div className="mt-1 flex flex-wrap gap-2">
-                {hasTiers ? (
-                  tierSchema.filter((t) => tiers[t.key] != null && Number(tiers[t.key]) > 0).map((t) => (
-                    <span key={t.key} className="rounded-lg bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
-                      {t.label} : {Number(tiers[t.key]).toLocaleString('fr-MA')} MAD
-                    </span>
-                  ))
-                ) : (
-                  <span className="rounded-lg bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
-                    {v.daily_rental_price!.toLocaleString('fr-MA')} MAD / jour
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="mt-1">
-                <span className="rounded-lg bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-700">
-                  Sans tarif
-                </span>
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setOpen(true)}
               disabled={pending}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black disabled:opacity-40 ${
-                hasPrice
-                  ? 'border border-slate-200 text-slate-700 hover:bg-slate-50'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
-              }`}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-40"
             >
-              {hasPrice ? 'Modifier' : 'Tarif'}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Tarif
             </button>
             {savedAt && (
               <span className="text-xs font-semibold text-emerald-600">✓ Enregistré</span>

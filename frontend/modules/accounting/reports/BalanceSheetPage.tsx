@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getBalanceSheet } from '@/services/accountingApi';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const BalanceSheetPage: React.FC = () => {
   const [asOf, setAsOf] = useState(new Date().toISOString().substring(0, 10));
@@ -25,7 +26,7 @@ export const BalanceSheetPage: React.FC = () => {
         <div className="df-card__body flex gap-3 items-end">
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">À la date du</label>
-            <input type="date" className="df-input mt-1" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+            <DateField className="df-input mt-1" value={asOf} onChange={(dfValue) => setAsOf(dfValue)} />
           </div>
         </div>
       </div>

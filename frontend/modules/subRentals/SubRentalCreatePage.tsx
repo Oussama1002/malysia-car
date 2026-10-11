@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supplierAgencyApi, subRentalApi, type PaymentMethod } from '@/services/subRentalApi';
 import { apiClient, getApiBase } from '@/services/apiClient';
+import { documentCenterApi } from '@/services/documentCenterApi';
+import { documentReaderApi } from '@/services/documentReaderApi';
+import { VehicleDocumentScanner, type VehicleDocSlotKey } from '@/modules/fleet/VehicleDocumentScanner';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const PLATE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWY'.split('');
 const PLATE_REGIONS = Array.from({ length: 99 }, (_, i) => i + 1);
@@ -60,12 +64,42 @@ const INITIAL: FormState = {
   notes: '',
 };
 
-export const SubRentalCreatePage: React.FC = () => {
+/** Predefined document categories the user can attach when creating an SL contract. */
+const DOC_CATEGORIES = [
+  { key: 'insurance',                label: 'Assurance',                icon: '🛡️' },
+  { key: 'registration_card',        label: 'Carte grise',              icon: '🚗' },
+  { key: 'circulation_authorization',label: 'Autorisation de circulation', icon: '📄' },
+  { key: 'payment_attestation',      label: 'Attestation de paiement',  icon: '✅' },
+  { key: 'technical_inspection',     label: 'Visite technique',         icon: '🔧' },
+  { key: 'vignette',                 label: 'Vignette',                 icon: '🎫' },
+] as const;
+type DocCategoryKey = typeof DOC_CATEGORIES[number]['key'];
+
+interface SubRentalCreatePageProps {
+  /** When true, render without the outer page shell (title, spacing) — suits a drawer. */
+  embedded?: boolean;
+  /** Called after successful creation. Overrides the default navigate-to-detail. */
+  onCreated?: (id: string) => void;
+  /** Called when the user clicks Annuler. Overrides the default navigate-back. */
+  onCancel?: () => void;
+}
+
+export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
+  embedded = false,
+  onCreated,
+  onCancel,
+}) => {
   const navigate = useNavigate();
   const apiReady = !!getApiBase();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
   const [brands, setBrands] = useState<VehicleBrandOption[]>([]);
+  const [photos, setPhotos] = useState<File[]>([]);
+  // Reader-document ids per slot, captured as soon as the OCR scanner ingests
+  // a file. After the SL is created we link each id to the new SL contract via
+  // documentReaderApi.link so the docs show up on the SL's document panel.
+  const [scannedDocIds, setScannedDocIds] = useState<Partial<Record<VehicleDocSlotKey, string>>>({});
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!apiReady) return;
@@ -95,11 +129,88 @@ export const SubRentalCreatePage: React.FC = () => {
       : 0;
   const computedTotal = computedDays * (parseFloat(form.daily_cost) || 0);
 
+  const uploadAttachments = async (subRentalId: string): Promise<void> => {
+    const uploads: Array<{ label: string; run: () => Promise<unknown> }> = [];
+
+    // Reader-scanned documents already live in the document_reader storage —
+    // we just link them to the newly created SL contract.
+    for (const [slot, readerId] of Object.entries(scannedDocIds) as Array<[VehicleDocSlotKey, string]>) {
+      if (!readerId) continue;
+      const cat = DOC_CATEGORIES.find((c) => c.key === slot);
+      uploads.push({
+        label: cat?.label ?? slot,
+        run: () => documentReaderApi.link(readerId, 'sub_rental_contract', subRentalId),
+      });
+    }
+
+    photos.forEach((file, idx) => {
+      uploads.push({
+        label: `Photo ${idx + 1}`,
+        run: () => {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('category', 'photo');
+          fd.append('label', `Photo véhicule ${idx + 1}`);
+          return documentCenterApi.uploadToEntity('sub_rental_contract', subRentalId, fd);
+        },
+      });
+    });
+
+    if (uploads.length === 0) return;
+    let done = 0;
+    for (const u of uploads) {
+      setUploadStatus(`Envoi ${u.label} (${done + 1}/${uploads.length})…`);
+      try { await u.run(); } catch { /* non-blocking */ }
+      done++;
+    }
+    setUploadStatus(null);
+  };
+
+  /**
+   * OCR pre-fill hook: when the scanner extracts fields (registration, brand,
+   * model, colour, year, mileage), we merge them into the SL form.
+   */
+  const applyOcrPrefill = (data: Record<string, unknown>) => {
+    setForm((f) => {
+      const next = { ...f };
+      const reg = (data.registration ?? data.cgMarque ?? '') as string;
+      const brandName = (data.cgMarque ?? data.marque ?? '') as string;
+      const modelName = (data.cgModele ?? data.modele ?? '') as string;
+      const year = data.miseEnCirculation ? new Date(String(data.miseEnCirculation)).getFullYear() : null;
+      // Registration → plate picker
+      if (typeof reg === 'string' && /^(\d+)-([A-Z])-(\d+)$/.test(reg)) {
+        const p = parsePlate(reg);
+        next.plat_num = p.platNum;
+        next.plat_letter = p.platLetter;
+        next.plat_region = p.platRegion;
+      }
+      if (brandName) {
+        const b = brands.find((br) => br.name.toLowerCase() === String(brandName).toLowerCase());
+        if (b) {
+          next.ext_brand_id = b.id;
+          if (modelName) {
+            const m = b.models.find((mo) => mo.name.toLowerCase() === String(modelName).toLowerCase());
+            if (m) next.ext_model_id = m.id;
+          }
+        }
+      }
+      if (year && !isNaN(year)) next.ext_year = String(year);
+      return next;
+    });
+  };
+
   const createMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => subRentalApi.create(body),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       const id = (res as any)?.data?.id;
-      navigate(id ? `/fleet/sub-rentals/${id}` : '/fleet/sub-rentals');
+      if (id) {
+        try { await uploadAttachments(id); } catch { /* ignore */ }
+      }
+      if (onCreated && id) {
+        onCreated(id);
+      } else {
+        navigate(id ? `/fleet/sub-rentals/${id}` : '/fleet/sub-rentals');
+      }
     },
     onError: (e: unknown) => {
       const msg = (e as any)?.data?.message ?? (e as Error)?.message ?? 'Erreur lors de la création.';
@@ -107,6 +218,7 @@ export const SubRentalCreatePage: React.FC = () => {
     },
   });
 
+  const setField = (k: keyof FormState) => (value: string) => setForm((f) => ({ ...f, [k]: value }));
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -159,11 +271,13 @@ export const SubRentalCreatePage: React.FC = () => {
   const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Nouveau contrat de sous-location</h1>
-        <p className="text-sm text-slate-500">Renseignez les informations du contrat avec le fournisseur.</p>
-      </div>
+    <div className={embedded ? 'space-y-6' : 'max-w-2xl space-y-6'}>
+      {!embedded && (
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Nouveau contrat de sous-location</h1>
+          <p className="text-sm text-slate-500">Renseignez les informations du contrat avec le fournisseur.</p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Supplier */}
@@ -282,8 +396,8 @@ export const SubRentalCreatePage: React.FC = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Contrat</h2>
           <div className="grid grid-cols-2 gap-3">
-            {field('Date de début', <input className={inputCls} type="date" value={form.start_date} onChange={set('start_date')} required />, true)}
-            {field('Date de fin', <input className={inputCls} type="date" value={form.end_date} onChange={set('end_date')} required />, true)}
+            {field('Date de début', <DateField className={inputCls} value={form.start_date} onChange={setField('start_date')} required />, true)}
+            {field('Date de fin', <DateField className={inputCls} value={form.end_date} onChange={setField('end_date')} required />, true)}
             {field('Coût journalier (MAD)', <input className={inputCls} type="number" step="0.01" min="0" value={form.daily_cost} onChange={set('daily_cost')} placeholder="0.00" required />, true)}
             {field('Coût total estimé', (
               <input className={`${inputCls} bg-slate-50`} readOnly value={computedTotal > 0 ? `${computedTotal.toLocaleString('fr-MA')} MAD (${computedDays} jours)` : '—'} />
@@ -304,6 +418,65 @@ export const SubRentalCreatePage: React.FC = () => {
           ))}
         </div>
 
+        {/* Photos */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-800">Photos du véhicule</h2>
+            <span className="text-[11px] font-semibold text-slate-400">{photos.length} sélectionnée{photos.length > 1 ? 's' : ''}</span>
+          </div>
+          <p className="text-xs text-slate-500">Face, arrière, profils, intérieur, tableau de bord — utile en cas de restitution.</p>
+
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {photos.map((f, i) => (
+              <div key={i} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 aspect-square">
+                <img src={URL.createObjectURL(f)} alt={f.name} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPhotos((s) => s.filter((_, j) => j !== i))}
+                  className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-black text-white opacity-0 transition group-hover:opacity-100"
+                  aria-label="Retirer"
+                >✕</button>
+              </div>
+            ))}
+            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v12m6-6H6" /></svg>
+              <span className="text-[11px] font-bold">Ajouter</span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  setPhotos((s) => [...s, ...files]);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Documents — OCR-based scanner (same UX as the Nouvelle flotte form) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-800">Documents véhicule</h2>
+            <span className="text-[11px] font-semibold text-slate-400">
+              {Object.values(scannedDocIds).filter(Boolean).length} scanné{Object.values(scannedDocIds).filter(Boolean).length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <VehicleDocumentScanner
+            carteGriseRecue
+            onPrefill={applyOcrPrefill}
+            onDocumentUploaded={(slot, id) => setScannedDocIds((s) => ({ ...s, [slot]: id }))}
+          />
+        </div>
+
+        {uploadStatus && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700">
+            {uploadStatus}
+          </div>
+        )}
+
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
@@ -318,7 +491,7 @@ export const SubRentalCreatePage: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/fleet/sub-rentals')}
+            onClick={() => (onCancel ? onCancel() : navigate('/fleet/sub-rentals'))}
             className="rounded-xl border border-slate-200 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Annuler

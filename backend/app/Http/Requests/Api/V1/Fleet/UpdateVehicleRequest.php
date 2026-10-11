@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1\Fleet;
 
 use App\Http\Requests\ApiFormRequest;
+use App\Models\Vehicle;
 use Illuminate\Validation\Rule;
 
 class UpdateVehicleRequest extends ApiFormRequest
@@ -34,6 +35,7 @@ class UpdateVehicleRequest extends ApiFormRequest
             'fuel_type' => ['sometimes', 'nullable', 'string', 'max:50'],
             'fiscal_power' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:999'],
             'registration_card_number' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'insurance_start' => ['sometimes', 'nullable', 'date'],
             'insurance_expiry' => ['sometimes', 'nullable', 'date'],
             'tech_control_expiry' => ['sometimes', 'nullable', 'date'],
             'vignette_expiry' => ['sometimes', 'nullable', 'date'],
@@ -46,6 +48,7 @@ class UpdateVehicleRequest extends ApiFormRequest
             'residual_value' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'book_value' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'daily_rental_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'insurance_deductible' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'monthly_rental_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'gps_enabled' => ['sometimes', 'nullable', 'boolean'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -64,12 +67,18 @@ class UpdateVehicleRequest extends ApiFormRequest
             'vehicle_type' => ['sometimes', 'nullable', 'string', 'max:50'],
             'numero_police' => ['sometimes', 'nullable', 'string', 'max:100'],
             'nombre_cylindres' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:16'],
+            'nombre_places' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:60'],
+            'nombre_portes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:10'],
             'gamme' => ['sometimes', 'nullable', 'string', 'max:50'],
             'mise_en_circulation' => ['sometimes', 'nullable', 'date'],
             'date_immatriculation' => ['sometimes', 'nullable', 'date'],
             'categorie' => ['sometimes', 'nullable', 'string', 'max:50'],
             'immat_online' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'carte_grise_status' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'immat_provisoire_expiry' => ['sometimes', 'nullable', 'date'],
             'chassis' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'equipments' => ['sometimes', 'nullable', 'array'],
+            'equipments.*' => ['string', Rule::in(Vehicle::EQUIPMENTS)],
         ];
     }
 }

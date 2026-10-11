@@ -140,7 +140,8 @@ class InvoiceController extends Controller
                 $qty = (float) ($line['quantity'] ?? 1);
                 $unit = (float) $line['unit_price'];
                 $discount = (float) ($line['discount_amount'] ?? 0);
-                $rate = (float) ($line['tax_rate'] ?? 0);
+                // TVA par défaut (Paramètres) quand la ligne n'en impose pas.
+                $rate = (float) ($line['tax_rate'] ?? \App\Support\CompanyDefaults::vatRate($invoice->company_id));
                 $subtotal = max(0, $qty * $unit - $discount);
                 $tax = round($subtotal * $rate / 100, 2);
                 $lineTotal = round($subtotal + $tax, 2);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { documentReaderApi, type ReaderDocumentType } from '@/services/documentReaderApi';
+import { apiClient } from '@/services/apiClient';
 
 /**
  * Fields that can be pre-filled on the customer "Identité particulier" section
@@ -13,6 +14,8 @@ export interface ScannedIdentity {
   nationality?: string;
   driving_license_number?: string;
   driving_license_expiry?: string;
+  /** Adresse lue sur la CIN — le formulaire la place dans le bloc adresse. */
+  address?: string;
 }
 
 /** A single uploaded-and-extracted reader document that the parent should
@@ -43,7 +46,7 @@ export const CustomerIdentityScanner: React.FC<{
       </div>
       <p className="mb-3 text-xs text-slate-600">
         Déposez la CIN ou le passeport, puis le permis de conduire. Les champs détectés
-        (nom, CIN, date de naissance, nationalité…) seront préremplis ci-dessous. Vous pouvez tout corriger
+        (nom, CIN, date de naissance, nationalité, adresse…) seront préremplis ci-dessous. Vous pouvez tout corriger
         avant d'enregistrer.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -115,12 +118,26 @@ const ScanSlot: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [docType, setDocType] = useState<ReaderDocumentType>(defaultType);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const [existing, setExisting] = useState<ExistingCustomer | null>(null);
+
+  // L'aperçu vit le temps du formulaire : on libère l'URL quand il change.
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview.url); }, [preview]);
 
   const handle = useCallback(
     async (file: File) => {
       setLoading(true);
       setError(null);
       setSuccess(null);
+      setExisting(null);
+      // L'agent doit voir ce qu'il vient de déposer, avant même l'OCR.
+      const isPdf = file.type === 'application/pdf';
+      setPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        // Un PDF n'a pas d'aperçu dans le navigateur : on affiche sa première
+        // page rendue par le serveur, une fois le fichier déposé.
+        return isPdf ? null : { url: URL.createObjectURL(file), name: file.name };
+      });
       try {
         // 1. Upload the file — fast, just stores it.
         const uploaded = await documentReaderApi.upload(file, docType);
@@ -129,6 +146,16 @@ const ScanSlot: React.FC<{
         // Register the document ID immediately so the parent can attach it
         // to the customer even if OCR partially fails.
         onScanComplete?.({ documentId: docId, documentType: docType });
+
+        if (isPdf) {
+          const thumb = await documentReaderApi.thumbnailObjectUrl(docId);
+          if (thumb) {
+            setPreview((prev) => {
+              if (prev) URL.revokeObjectURL(prev.url);
+              return { url: thumb, name: file.name };
+            });
+          }
+        }
 
         // 2. Trigger OCR — returns 202 instantly, OCR runs in a background worker.
         // For customer prefill, force synchronous OCR to avoid queue worker
@@ -156,6 +183,10 @@ const ScanSlot: React.FC<{
           onPrefill(cleaned as ScannedIdentity);
           const labels = Object.keys(cleaned).map(frenchFieldLabel);
           setSuccess(`Champs détectés : ${labels.join(', ')}`);
+          // Ce document appartient peut-être à un client déjà enregistré :
+          // le dire évite une fiche en double.
+          const known = await findExistingCustomer(cleaned as ScannedIdentity);
+          if (known) setExisting(known);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Échec OCR';
@@ -244,9 +275,30 @@ const ScanSlot: React.FC<{
           }}
         />
         <div className="mt-1 text-[10px] text-slate-500">PDF, JPG, PNG · 15 Mo max</div>
+        {preview ? (
+          <div className="mt-2 w-full">
+            {/* Recto et verso empilés : on laisse de la hauteur, et un clic
+                ouvre la pièce en grand pour la relire. */}
+            <a href={preview.url} target="_blank" rel="noreferrer" title="Ouvrir en grand">
+              <img
+                src={preview.url}
+                alt={`Aperçu ${title}`}
+                className="mx-auto max-h-72 w-full rounded-lg border border-slate-200 bg-white object-contain"
+              />
+            </a>
+            <div className="mt-1 truncate text-center text-[10px] text-slate-400">{preview.name}</div>
+          </div>
+        ) : null}
         <ElapsedTimer running={loading} />
         {error ? <div className="mt-1 text-[11px] font-semibold text-rose-600">{error}</div> : null}
         {success ? <div className="mt-1 text-[11px] font-semibold text-emerald-600">{success}</div> : null}
+        {existing ? (
+          <div className="mt-2 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-[11px] text-amber-900">
+            <span className="font-black">Ce client existe déjà.</span>{' '}
+            {existing.name} ({existing.customer_code ?? '—'}) — document reconnu par{' '}
+            {existing.matched_on === 'cin' ? 'la CIN' : 'le permis'}. Ouvrez sa fiche plutôt que d'en créer une seconde.
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -310,18 +362,45 @@ function frenchFieldLabel(key: string): string {
     nationality: 'Nationalité',
     driving_license_number: 'N° de permis',
     driving_license_expiry: 'Expiration permis',
+    address: 'Adresse',
   };
   return map[key] ?? key;
 }
 
 function mapIdCardFields(extracted: Record<string, unknown>): ScannedIdentity {
-  // CIN / Passeport scan owns these three fields only — name/permis come from
-  // the Permis scan to avoid one document overwriting the other's values.
+  // La CIN porte aussi le nom : scannée seule, elle laissait le formulaire
+  // vide. Les valeurs absentes sont écartées par l'appelant, donc le permis
+  // scanné ensuite complète sans rien effacer.
   return {
+    first_name: titleCase(extracted.first_name),
+    last_name: titleCase(extracted.last_name),
     national_id_number: asString(extracted.document_number),
     date_of_birth: asString(extracted.date_of_birth),
     nationality: normalizeNationality(extracted.nationality),
+    address: asString(extracted.address),
   };
+}
+
+interface ExistingCustomer {
+  id: string;
+  customer_code?: string | null;
+  name: string;
+  matched_on: 'cin' | 'permis';
+}
+
+/** Le document scanné correspond-il à un client déjà enregistré ? */
+async function findExistingCustomer(fields: ScannedIdentity): Promise<ExistingCustomer | null> {
+  const params = new URLSearchParams();
+  if (fields.national_id_number) params.set('national_id_number', fields.national_id_number);
+  if (fields.driving_license_number) params.set('driving_license_number', fields.driving_license_number);
+  if ([...params].length === 0) return null;
+  try {
+    const res = await apiClient<{ data: ExistingCustomer | null }>(`/v1/customers/lookup?${params}`);
+    return res.data ?? null;
+  } catch {
+    // La recherche est un confort : son échec ne bloque pas la saisie.
+    return null;
+  }
 }
 
 function mapLicenseFields(extracted: Record<string, unknown>): ScannedIdentity {
@@ -347,6 +426,11 @@ function mapLicenseFields(extracted: Record<string, unknown>): ScannedIdentity {
   return {
     first_name: first,
     last_name: last,
+    // The Permis also carries the CIN (N° C.N.I.E) and, via "ROYAUME DU MAROC",
+    // the nationality — forward both so the client form is prefilled from the
+    // permis alone.
+    national_id_number: asString(extracted.national_id_number),
+    nationality: normalizeNationality(extracted.nationality),
     date_of_birth: asString(extracted.date_of_birth),
     driving_license_number: asString(extracted.license_number),
     driving_license_expiry: asString(extracted.expiry_date),

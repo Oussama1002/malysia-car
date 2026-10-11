@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { FranchisePanel } from './FranchisePanel';
 
 interface Report {
   id: string;
@@ -16,12 +17,14 @@ interface Report {
 interface Props {
   reservationId: string;
   reports: Report[];
+  /** Dommages constatés sur ce retour — la franchise s'y réfère. */
+  damagesCount?: number;
   onRefresh: () => void;
 }
 
 const PHOTO_ZONES = ['Avant', 'Arrière', 'Gauche', 'Droite', 'Intérieur', 'Tableau de bord'];
 
-const TabCheckIn: React.FC<Props> = ({ reservationId, reports, onRefresh }) => {
+const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0, onRefresh }) => {
   const returns = reports.filter((r) => r.handover_type === 'return');
   const lastPickup = reports.filter((r) => r.handover_type === 'pickup').at(-1);
 
@@ -177,6 +180,9 @@ const TabCheckIn: React.FC<Props> = ({ reservationId, reports, onRefresh }) => {
           </button>
         </div>
       </div>
+
+      {/* Once the vehicle is back and the photos checked, release the guarantee. */}
+      <FranchisePanel reservationId={reservationId} mode="settle" damagesCount={damagesCount} />
     </div>
   );
 };

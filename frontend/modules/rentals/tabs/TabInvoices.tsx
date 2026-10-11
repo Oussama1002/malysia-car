@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { DateField } from '@/modules/shared/components/DateField';
 
 interface Props {
   reservationId: string;
@@ -145,20 +146,18 @@ const TabInvoices: React.FC<Props> = ({ reservationId, invoices, data, onRefresh
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-[10px] font-bold text-slate-400">Date emission</label>
-                <input
-                  type="date"
+                <DateField
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
                   value={billingForm.issue_date}
-                  onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, issue_date: e.target.value })); }}
+                  onChange={(dfValue) => { setBillingError(null); setBillingForm((s) => ({ ...s, issue_date: dfValue })); }}
                 />
               </div>
               <div>
                 <label className="mb-1 block text-[10px] font-bold text-slate-400">Date echeance</label>
-                <input
-                  type="date"
+                <DateField
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
                   value={billingForm.due_date}
-                  onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, due_date: e.target.value })); }}
+                  onChange={(dfValue) => { setBillingError(null); setBillingForm((s) => ({ ...s, due_date: dfValue })); }}
                 />
               </div>
             </div>

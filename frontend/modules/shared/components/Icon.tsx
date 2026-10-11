@@ -8,12 +8,13 @@ export type IconName =
   | 'home' | 'car' | 'users' | 'doc' | 'credit' | 'coin' | 'alert'
   | 'marketplace' | 'map' | 'sparkles' | 'mobile' | 'bell' | 'key'
   | 'audit' | 'gear' | 'search' | 'plus' | 'minus' | 'close' | 'check'
+  | 'chat'
   | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'chevron-up'
   | 'sun' | 'moon' | 'density' | 'filter' | 'download' | 'upload'
   | 'arrow-up' | 'arrow-down' | 'arrow-right' | 'trend-up' | 'trend-down'
   | 'play' | 'pause' | 'pin' | 'shield' | 'sign' | 'bolt' | 'wifi'
   | 'refresh' | 'more' | 'external' | 'star' | 'eye' | 'eye-off' | 'pdf' | 'filter-2'
-  | 'chat';
+  | 'calendar' | 'receipt' | 'calculator' | 'folder' | 'scan' | 'log-out' | 'user';
 
 const P = (d: string) => (
   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d={d} />
@@ -32,6 +33,7 @@ const MAP: Record<IconName, React.ReactNode> = {
   sparkles: P('M12 3v4m0 10v4m9-9h-4M7 12H3m14.5-6.5-2.8 2.8m-5.4 5.4-2.8 2.8m0-11 2.8 2.8m5.4 5.4 2.8 2.8'),
   mobile: P('M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 15h2'),
   bell: P('M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.7V5a2 2 0 1 0-4 0v.3A6 6 0 0 0 6 11v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9'),
+  chat: P('M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-4 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9ZM8 9h8M8 12h5'),
   key: P('M15 7a4 4 0 1 1 0 8 4 4 0 0 1-3.7-2.5L3 21l2-2 2 2 2-2 2.3-2.3A4 4 0 0 1 15 7Zm0 2.5h.01'),
   audit: P('M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14h6m-6-4h3'),
   gear: P('M10.3 4.3c.4-1.7 2.9-1.7 3.4 0a1.7 1.7 0 0 0 2.6 1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 0 0 1 2.6c1.7.4 1.7 2.9 0 3.4a1.7 1.7 0 0 0-1 2.6c.9 1.5-.8 3.3-2.4 2.4a1.7 1.7 0 0 0-2.6 1c-.4 1.7-2.9 1.7-3.4 0a1.7 1.7 0 0 0-2.6-1c-1.5.9-3.3-.8-2.4-2.4a1.7 1.7 0 0 0-1-2.6c-1.7-.4-1.7-2.9 0-3.4a1.7 1.7 0 0 0 1-2.6c-.9-1.5.8-3.3 2.4-2.4a1.7 1.7 0 0 0 2.6-1ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'),
@@ -70,7 +72,13 @@ const MAP: Record<IconName, React.ReactNode> = {
   eye: P('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Zm10 3a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z'),
   'eye-off': P('M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22'),
   pdf: P('M9 13v4m3-4v4m3-4h-2m0 0v4m2-2h-2m-6-9H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5'),
-  chat: P('M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'),
+  calendar: P('M8 3v3m8-3v3M4 8h16M4 8v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M4 8V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2m-8 4h.01M12 16h.01M8 12h.01M8 16h.01M16 12h.01M16 16h.01'),
+  receipt: P('M4 3v18l3-2 3 2 3-2 3 2V3l-3 2-3-2-3 2-3-2ZM8 9h8M8 13h5'),
+  calculator: P('M5 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4Zm3 2h8v3H8V6Zm0 6h2v2H8v-2Zm4 0h2v2h-2v-2Zm4 0h2v2h-2v-2Zm-8 4h2v2H8v-2Zm4 0h2v2h-2v-2Zm4 0h2v2h-2v-2Z'),
+  folder: P('M3 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-3H5a2 2 0 0 0-2 2Z'),
+  scan: P('M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2m8-16h2a2 2 0 0 1 2 2v2m0 8v2a2 2 0 0 1-2 2h-2M9 12h6'),
+  'log-out': P('M16 17l5-5-5-5m5 5H9m0 7H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4'),
+  user: P('M12 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 7a7 7 0 0 1 14 0'),
 };
 
 export const Icon: React.FC<{ name: IconName; className?: string; size?: number; strokeWidth?: number }> = ({

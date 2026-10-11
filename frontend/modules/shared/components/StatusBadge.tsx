@@ -9,7 +9,7 @@ const tones: Record<string, string> = {
 };
 
 export const StatusBadge: React.FC<{ label: string; tone?: keyof typeof tones }> = ({ label, tone = 'default' }) => (
-  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tones[tone]}`}>
+  <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tones[tone]}`}>
     {label}
   </span>
 );

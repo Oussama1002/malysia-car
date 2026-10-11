@@ -16,12 +16,12 @@ export function isExperimentalEnabled(): boolean {
 }
 
 /**
- * Modules hidden when VITE_DEMO_MODE=true.
- * Reason: incomplete/unverified UI or backend dependency that breaks demo flow.
- *  - ai         : experimental, placeholder components
- *  - mobileOps  : minimal page, contents unverified
- *  - audit      : requires backend; shows raw "API non configurée" if not connected
- *  - settings   : admin surface (users/roles/branches) — hidden to keep demo focused
+ * Modules hidden when VITE_DEMO_MODE=true — kept out of the sidebar to keep the
+ * demo focused on the core rental flow.
+ *  - ai         : experimental, still stubbed on the backend
+ *  - mobileOps  : field-agent workflow, not relevant to demo audiences
+ *  - audit      : internal traceability, noisy for a demo tour
+ *  - settings   : admin surface (users/roles/branches)
  */
 const DEMO_HIDDEN_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
   'ai',

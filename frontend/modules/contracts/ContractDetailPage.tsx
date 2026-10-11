@@ -8,14 +8,11 @@ import { TabsSection } from '@/modules/shared/components/TabsSection';
 import { contractsApi } from '@/services/contractsApi';
 import { contractSignatureApi, type SignatureRequestStatus } from '@/services/contractSignatureApi';
 import { ApiError, apiClient, endpoints } from '@/services/apiClient';
-import { opsApi } from '@/services/opsApi';
 import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
-import { VehicleSwapWizard } from '@/modules/rentals/VehicleSwapWizard';
 import { walletApi } from '@/services/walletApi';
 import { createPortal } from 'react-dom';
-import TabCheckOut from '@/modules/rentals/tabs/TabCheckOut';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,25 +48,6 @@ const STATUS_FR: Record<string, string> = {
   suspended: 'Suspendu',
   completed: 'Terminé',
   rejected: 'Rejeté',
-};
-
-const STATUS_STYLE: Record<string, string> = {
-  draft:               'bg-slate-100 text-slate-700 border-slate-300',
-  pending:             'bg-amber-50 text-amber-800 border-amber-300',
-  pending_approval:    'bg-amber-50 text-amber-800 border-amber-300',
-  pending_created:     'bg-amber-50 text-amber-800 border-amber-300',
-  pending_signature:   'bg-amber-50 text-amber-800 border-amber-300',
-  approved:            'bg-blue-50 text-blue-800 border-blue-300',
-  active:              'bg-emerald-50 text-emerald-800 border-emerald-300',
-  signed:              'bg-blue-50 text-blue-800 border-blue-300',
-  sent_for_signature:  'bg-indigo-50 text-indigo-800 border-indigo-300',
-  terminated:          'bg-rose-50 text-rose-800 border-rose-300',
-  expired:             'bg-orange-50 text-orange-800 border-orange-300',
-  cancelled:           'bg-rose-50 text-rose-800 border-rose-300',
-  closed:              'bg-slate-100 text-slate-700 border-slate-300',
-  suspended:           'bg-orange-50 text-orange-800 border-orange-300',
-  completed:           'bg-emerald-50 text-emerald-800 border-emerald-300',
-  rejected:            'bg-rose-50 text-rose-800 border-rose-300',
 };
 
 const ACTION_FR: Record<string, string> = {
@@ -110,10 +88,6 @@ const PAYMENT_METHOD_FR: Record<string, string> = {
 
 /** French labels for installment statuses */
 const INSTALLMENT_STATUS_FR: Record<string, { label: string; cls: string }> = {
-  DUE:       { label: 'En attente',  cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  PAID:      { label: 'Payé',        cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  OVERDUE:   { label: 'En retard',   cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  PARTIAL:   { label: 'Partiel',     cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   pending:   { label: 'En attente',  cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   paid:      { label: 'Payé',        cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   overdue:   { label: 'En retard',   cls: 'bg-rose-50 text-rose-700 border-rose-200' },
@@ -132,10 +106,6 @@ export const ContractDetailPage: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [showSwapVehicle, setShowSwapVehicle] = useState(false);
-  const [statusBusy, setStatusBusy] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
-  const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
 
   const q = useQuery({
     queryKey: queryKeys.contracts.one(cid),
@@ -145,7 +115,6 @@ export const ContractDetailPage: React.FC = () => {
 
   const c = q.data?.contract ?? null;
   const history = q.data?.history ?? [];
-  const linkedReservationId: string | null = (q.data as any)?.linked_reservation_id ?? null;
 
   // Resolve raw IDs → names by fetching customer + vehicle
   const raw = c as any;
@@ -174,24 +143,20 @@ export const ContractDetailPage: React.FC = () => {
     ? (customerQ.data.display_name ?? customerQ.data.name ?? shortId(customerId, 'CLT'))
     : shortId(customerId, 'CLT');
 
-  const vehicleName: string = raw?.vehicleName
-    ?? raw?.vehicle_name
-    ?? (vehicleQ.data
-      ? [
-          typeof vehicleQ.data.brand === 'string' ? vehicleQ.data.brand : vehicleQ.data.brand?.name,
-          typeof vehicleQ.data.model === 'string' ? vehicleQ.data.model : vehicleQ.data.model?.name ?? vehicleQ.data.model?.model_name,
-          vehicleQ.data.registration ?? vehicleQ.data.plate,
-        ].filter(Boolean).join(' ')
-      : shortId(vehicleId, 'VHL'));
-
-  const handoverQ = useQuery({
-    queryKey: ['handover-reports', linkedReservationId],
-    enabled: !!linkedReservationId,
-    queryFn: async () => {
-      const res = await apiClient<{ data: any[] }>(`/v1/reservations/${linkedReservationId}/handover-reports`);
-      return res.data;
-    },
-  });
+  const vehicleName: string = (() => {
+    const d = vehicleQ.data;
+    if (!d) return shortId(vehicleId, 'VHL');
+    // The fleet show endpoint wraps the vehicle inside { vehicle, current, … };
+    // the list/create endpoints return the vehicle at the top level. Support both.
+    const v = d.vehicle ?? d;
+    const parts = [
+      v.brand?.name ?? v.brand ?? v.brand_name,
+      v.model?.name ?? v.model?.model_name ?? v.model ?? v.model_name,
+      v.plate ?? v.registration ?? v.registration_number,
+    ].filter(Boolean);
+    const joined = parts.join(' ').trim();
+    return joined || shortId(vehicleId, 'VHL');
+  })();
 
   // Compute end date if missing: startDate + duration_months
   const durationMonths: number | null = raw?.durationMonths ?? raw?.duration_months ?? null;
@@ -222,44 +187,36 @@ export const ContractDetailPage: React.FC = () => {
       </Link>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black text-slate-900">
-              {c.reference ?? shortId(c.id, 'CTR')}
-            </h1>
-            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-black ${STATUS_STYLE[c.status] ?? 'bg-slate-100 text-slate-700 border-slate-300'}`}>
-              {statusLabel}
-            </span>
-          </div>
-          <p className="text-sm text-slate-500">{c.type}</p>
+          <h1 className="text-2xl font-black text-slate-900">
+            {c.reference ?? shortId(c.id, 'CTR')}
+          </h1>
+          <p className="text-sm text-slate-500">
+            {c.type} •{' '}
+            <span className="font-semibold">{statusLabel}</span>
+          </p>
         </div>
-        <div className="flex flex-wrap items-start gap-3">
+        <div className="flex flex-col items-stretch gap-3 md:items-end">
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-right">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Montant</div>
             <div className="text-2xl font-black text-indigo-700">{formatCurrencyMad((raw?.baseAmount ?? raw?.amountMad ?? raw?.base_amount ?? 0) as number)}</div>
           </div>
-          <div className="rounded-2xl bg-slate-900 px-5 py-4 text-right">
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Document</div>
-            <GeneratePdfButton kind="contract" entityId={String(c.id ?? id)} className="mt-1 text-2xl font-black text-white hover:text-slate-200 transition-colors disabled:opacity-50" />
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <GeneratePdfButton
+              kind="contract"
+              entityId={String(c.id ?? id)}
+              className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors hover:bg-slate-800"
+            />
+            {/* Early return button — only for active contracts with a future end date */}
+            {(c.status === 'active' || c.status === 'approved') && computedEndDate && (
+              <button
+                type="button"
+                onClick={() => setShowEarlyReturn(true)}
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+              >
+                ↩ Retour anticipé
+              </button>
+            )}
           </div>
-          {c.status === 'active' && (
-            <button
-              type="button"
-              onClick={() => setShowSwapVehicle(true)}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50 transition-colors"
-            >
-              Changer de véhicule
-            </button>
-          )}
-          {/* Early return button — only for active contracts with a future end date */}
-          {(c.status === 'active' || c.status === 'approved') && computedEndDate && (
-            <button
-              type="button"
-              onClick={() => setShowEarlyReturn(true)}
-              className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
-            >
-              Retour anticipé
-            </button>
-          )}
         </div>
       </div>
 
@@ -273,7 +230,6 @@ export const ContractDetailPage: React.FC = () => {
           { id: 'signature', label: 'Signature' },
           { id: 'payments',  label: 'Paiements' },
           { id: 'legal',     label: 'Contentieux' },
-          { id: 'checkout',  label: 'Check-Out' },
           { id: 'history',   label: 'Historique' },
           { id: 'actions',   label: 'Actions' },
         ]}
@@ -349,12 +305,8 @@ export const ContractDetailPage: React.FC = () => {
       {tab === 'documents' && (
         <div className="space-y-6">
           <EntityDocuments entityType="contract" entityId={String(c.id ?? id)} title="Documents du contrat" />
-          {customerId ? (
-            <EntityDocuments entityType="customer" entityId={customerId} title={`Documents du client — ${clientName} (CIN, Permis, etc.)`} />
-          ) : (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-              Aucun client associé — impossible d'afficher les documents du client.
-            </div>
+          {customerId && (
+            <EntityDocuments entityType="customer" entityId={customerId} title="Documents du client (CIN, Permis, etc.)" />
           )}
         </div>
       )}
@@ -363,17 +315,10 @@ export const ContractDetailPage: React.FC = () => {
       {tab === 'signature' && <SignatureTab contractId={String(c.id ?? id)} />}
 
       {/* ── PAIEMENTS ────────────────────────────────────────────────────── */}
-      {tab === 'payments' && <PaymentsTab contractId={String(c.id ?? id)} customerId={customerId} />}
+      {tab === 'payments' && <PaymentsTab contractId={String(c.id ?? id)} />}
 
       {/* ── CONTENTIEUX ──────────────────────────────────────────────────── */}
       {tab === 'legal' && <LegalTab />}
-
-      {/* ── CHECK-OUT ──────────────────────────────────────────────────── */}
-      {tab === 'checkout' && (
-        linkedReservationId
-          ? <TabCheckOut reservationId={linkedReservationId} reports={handoverQ.data ?? []} onRefresh={() => { handoverQ.refetch(); }} />
-          : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-700">Aucune réservation liée à ce contrat. Le Check-Out nécessite une réservation active.</div>
-      )}
 
       {/* ── HISTORIQUE ───────────────────────────────────────────────────── */}
       {tab === 'history' && (
@@ -400,53 +345,6 @@ export const ContractDetailPage: React.FC = () => {
       {/* ── ACTIONS ─────────────────────────────────────────────────────── */}
       {tab === 'actions' && (
         <div className="space-y-4">
-          {/* Status change */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <div className="text-sm font-black text-slate-900">Modifier le statut</div>
-            <p className="mt-1 text-sm text-slate-500">Statut actuel : <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${STATUS_STYLE[c.status] ?? 'bg-slate-100 text-slate-700 border-slate-300'}`}>{STATUS_FR[c.status] ?? c.status}</span></p>
-            {statusError && <div className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{statusError}</div>}
-            {statusSuccess && <div className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{statusSuccess}</div>}
-            <div className="mt-4 flex flex-wrap gap-2">
-              {[
-                { key: 'draft', label: 'Brouillon', guard: () => c.status !== 'draft' },
-                { key: 'pending_approval', label: 'En attente d\'approbation', guard: () => ['draft'].includes(c.status) },
-                { key: 'approved', label: 'Approuvé', guard: () => ['pending_approval', 'draft'].includes(c.status) },
-                { key: 'active', label: 'Actif', guard: () => ['approved', 'pending_approval', 'draft'].includes(c.status) },
-                { key: 'suspended', label: 'Suspendu', guard: () => c.status === 'active' },
-                { key: 'terminated', label: 'Résilié', guard: () => ['active', 'suspended'].includes(c.status) },
-                { key: 'closed', label: 'Clôturé', guard: () => ['active', 'terminated', 'completed'].includes(c.status) },
-                { key: 'cancelled', label: 'Annulé', guard: () => !['cancelled', 'closed', 'terminated'].includes(c.status) },
-              ]
-                .filter((s) => s.guard())
-                .map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    disabled={statusBusy}
-                    className={`rounded-xl border px-4 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${STATUS_STYLE[s.key] ?? 'bg-slate-100 text-slate-700 border-slate-300'} hover:opacity-80`}
-                    onClick={async () => {
-                      setStatusBusy(true);
-                      setStatusError(null);
-                      setStatusSuccess(null);
-                      try {
-                        await contractsApi.changeStatus(cid, s.key);
-                        setStatusSuccess(`Statut changé en "${s.label}"`);
-                        q.refetch();
-                        setTimeout(() => setStatusSuccess(null), 4000);
-                      } catch (e) {
-                        setStatusError(e instanceof ApiError ? e.message : 'Erreur lors du changement de statut');
-                      } finally {
-                        setStatusBusy(false);
-                      }
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-            </div>
-          </div>
-
-          {/* Danger zone */}
           <div className="rounded-2xl border border-rose-100 bg-white p-6 shadow-sm">
             <div className="text-sm font-black text-rose-700">Zone dangereuse</div>
             <p className="mt-2 text-sm text-slate-600">
@@ -499,19 +397,6 @@ export const ContractDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── VEHICLE SWAP WIZARD ────────────────────────────────────────────── */}
-      <VehicleSwapWizard
-        open={showSwapVehicle}
-        onClose={() => setShowSwapVehicle(false)}
-        source={cid ? { type: 'contract', id: cid } : null}
-        contract={c}
-        currentVehicle={null}
-        onSuccess={() => {
-          setShowSwapVehicle(false);
-          q.refetch();
-        }}
-      />
-
       {/* ── EARLY RETURN MODAL ───────────────────────────────────────────── */}
       {showEarlyReturn && customerId && (
         <EarlyReturnModal
@@ -532,54 +417,29 @@ export const ContractDetailPage: React.FC = () => {
 
 // ── Échéancier tab ─────────────────────────────────────────────────────────────
 const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
-  const qc = useQueryClient();
-  const [regenBusy, setRegenBusy] = useState(false);
   const q = useQuery({
     queryKey: ['contract-installments', contractId],
     queryFn: async () => contractsApi.installments(contractId),
   });
-  const paymentsQ = useQuery({
-    queryKey: ['contract-payments-schedule', contractId],
-    queryFn: async () => {
-      const res = await apiClient<{ data: any[] }>(`/v1/payments?contract_id=${contractId}&per_page=200`);
-      return res.data;
-    },
-  });
 
   const installments = (q.data ?? []) as any[];
-  const payments = (paymentsQ.data ?? []) as any[];
-  const actualPaid = payments.reduce((s: number, p: any) => s + Number(p.amount ?? 0), 0);
 
-  const totalDue  = installments.reduce((s, i) => s + Number(i.total_due_amount ?? i.amount_due ?? 0), 0);
-  const remaining = Math.max(0, totalDue - actualPaid);
+  const totalDue  = installments.reduce((s, i) => s + Number(i.amount_due  ?? i.amountDue  ?? 0), 0);
+  const totalPaid = installments.reduce((s, i) => s + Number(i.amount_paid ?? i.amountPaid ?? 0), 0);
+  const remaining = totalDue - totalPaid;
 
   return (
     <div className="space-y-4">
       {/* Summary row */}
       <div className="grid grid-cols-3 gap-4">
         <SummaryCard label="Total dû" value={formatCurrencyMad(totalDue)} tone="neutral" />
-        <SummaryCard label="Total payé" value={formatCurrencyMad(actualPaid)} tone="success" />
+        <SummaryCard label="Total payé" value={formatCurrencyMad(totalPaid)} tone="success" />
         <SummaryCard label="Reste à payer" value={formatCurrencyMad(remaining)} tone={remaining > 0 ? 'warn' : 'success'} />
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="px-6 py-4 border-b border-slate-100">
           <div className="text-sm font-black text-slate-900">Tableau de bord des échéances</div>
-          <button
-            type="button"
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
-            disabled={regenBusy}
-            onClick={async () => {
-              setRegenBusy(true);
-              try {
-                await contractsApi.generateSchedule(contractId, {});
-                await qc.invalidateQueries({ queryKey: ['contract-installments', contractId] });
-              } catch { /* ignore */ }
-              setRegenBusy(false);
-            }}
-          >
-            {regenBusy ? 'Génération…' : 'Régénérer'}
-          </button>
         </div>
         {q.isLoading ? (
           <div className="p-6 text-sm text-slate-500">Chargement de l'échéancier…</div>
@@ -600,10 +460,10 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {installments.map((inst: any, idx: number) => {
-                  const due    = Number(inst.total_due_amount ?? inst.amount_due ?? 0);
-                  const paid   = Number(inst.total_paid_amount ?? inst.amount_paid ?? 0);
+                  const due    = Number(inst.amount_due  ?? inst.amountDue  ?? 0);
+                  const paid   = Number(inst.amount_paid ?? inst.amountPaid ?? 0);
                   const rest   = due - paid;
-                  const status = inst.installment_status ?? inst.status ?? (paid >= due ? 'paid' : new Date(inst.due_date ?? inst.dueDate ?? '') < new Date() ? 'overdue' : 'pending');
+                  const status = inst.status ?? (paid >= due ? 'paid' : new Date(inst.due_date ?? inst.dueDate ?? '') < new Date() ? 'overdue' : 'pending');
                   const s      = INSTALLMENT_STATUS_FR[status] ?? { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
                   return (
                     <tr key={inst.id ?? idx} className="hover:bg-slate-50/50 transition-colors">
@@ -630,168 +490,57 @@ const ScheduleTab: React.FC<{ contractId: string }> = ({ contractId }) => {
 };
 
 // ── Paiements tab ──────────────────────────────────────────────────────────────
-const PaymentsTab: React.FC<{ contractId: string; customerId?: string | null }> = ({ contractId, customerId }) => {
-  const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('bank_transfer');
-  const [payType, setPayType] = useState('paiement_location');
-  const [payRef, setPayRef] = useState('');
-  const [payCheckNum, setPayCheckNum] = useState('');
-  const [payNotes, setPayNotes] = useState('');
-  const [payError, setPayError] = useState<string | null>(null);
-  const [payBusy, setPayBusy] = useState(false);
+const PAYMENT_STATUS_FR: Record<string, string> = {
+  received: 'Reçu',
+  allocated: 'Alloué',
+  partial: 'Partiel',
+  unallocated: 'Non alloué',
+  pending: 'En attente',
+  cancelled: 'Annulé',
+  refunded: 'Remboursé',
+};
 
-  const q = useQuery({
+const PaymentsTab: React.FC<{ contractId: string }> = ({ contractId }) => {
+  const installmentsQ = useQuery({
     queryKey: ['contract-installments-payments', contractId],
     queryFn: async () => contractsApi.installments(contractId),
   });
 
-  const paymentsListQ = useQuery({
-    queryKey: ['contract-payments-list', contractId],
+  const paymentsQ = useQuery({
+    queryKey: ['contract-payments', contractId],
     queryFn: async () => {
-      const res = await apiClient<{ data: any[] }>(`/v1/payments?contract_id=${contractId}&per_page=200`);
-      return res.data;
+      const res = await apiClient<{ data: any[] }>(
+        `${endpoints.payments.list}?contract_id=${contractId}&per_page=100`,
+      );
+      return res.data ?? [];
     },
   });
 
-  const directPayments = (paymentsListQ.data ?? []) as any[];
+  const installments = (installmentsQ.data ?? []) as any[];
+  // Backend uses installment_status + total_paid_amount — not status/amount_paid.
+  const isPaid = (i: any) =>
+    ['PAID', 'paid'].includes(String(i.installment_status ?? i.status ?? '')) ||
+    Number(i.total_paid_amount ?? i.amount_paid ?? 0) > 0;
+  const paidInstallments    = installments.filter(isPaid);
+  const pendingInstallments = installments.filter((i: any) => !isPaid(i));
 
-  const all = (q.data ?? []) as any[];
-  const paid    = all.filter((i: any) => (i.installment_status ?? i.status ?? '') === 'paid' || Number(i.total_paid_amount ?? i.amount_paid ?? 0) > 0);
-  const pending = all.filter((i: any) => (i.installment_status ?? i.status ?? '') !== 'paid' && Number(i.total_paid_amount ?? i.amount_paid ?? 0) === 0);
-
-  const handleAddPayment = async () => {
-    if (!payAmount || Number(payAmount) <= 0) { setPayError('Montant requis.'); return; }
-    if (!customerId) { setPayError('Client introuvable pour ce contrat.'); return; }
-    setPayBusy(true);
-    setPayError(null);
-    try {
-      await apiClient('/v1/payments', {
-        method: 'POST',
-        body: JSON.stringify({
-          customer_id: customerId,
-          contract_id: contractId,
-          payment_method: payMethod,
-          payment_type: payType,
-          amount: Math.round(Number(payAmount) * 100) / 100,
-          currency_code: 'MAD',
-          payment_date: new Date().toISOString().slice(0, 10),
-          external_reference: payRef || undefined,
-          check_number: payCheckNum || undefined,
-          notes: payNotes || undefined,
-        }),
-      });
-      setShowForm(false);
-      setPayAmount('');
-      setPayMethod('bank_transfer');
-      setPayType('paiement_location');
-      setPayRef('');
-      setPayCheckNum('');
-      setPayNotes('');
-      await qc.invalidateQueries({ queryKey: ['contract-installments-payments', contractId] });
-      await qc.invalidateQueries({ queryKey: ['contract-payments-list', contractId] });
-    } catch (e: any) {
-      setPayError(e instanceof ApiError ? e.message : 'Erreur lors de l\'enregistrement du paiement.');
-    } finally {
-      setPayBusy(false);
-    }
-  };
+  const payments = (paymentsQ.data ?? []) as any[];
 
   return (
     <div className="space-y-4">
-      {/* Add payment button + modal */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-black text-slate-900">Paiements du contrat</div>
-        <button
-          type="button"
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700"
-          onClick={() => { setShowForm(true); setPayError(null); }}
-        >
-          Ajouter un paiement
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowForm(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Nouveau paiement</h3>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
-            </div>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-600">Montant (MAD) *</label>
-                  <input type="number" step="any" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-600">Mode de paiement *</label>
-                  <select className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-                    <option value="bank_transfer">Virement bancaire</option>
-                    <option value="check">Chèque</option>
-                    <option value="cash">Espèce</option>
-                    <option value="card">Carte bancaire</option>
-                    <option value="compensation">Compensation</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">Type de paiement</label>
-                <select className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payType} onChange={(e) => setPayType(e.target.value)}>
-                  <option value="avance">Avance</option>
-                  <option value="paiement_location">Paiement location</option>
-                  <option value="solde">Solde</option>
-                  <option value="caution">Caution</option>
-                  <option value="penalite">Pénalité</option>
-                </select>
-              </div>
-              {payMethod === 'check' && (
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-600">N° chèque</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payCheckNum} onChange={(e) => setPayCheckNum(e.target.value)} />
-                </div>
-              )}
-              {(payMethod === 'bank_transfer' || payMethod === 'card') && (
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-600">Référence externe</label>
-                  <input type="text" className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" value={payRef} onChange={(e) => setPayRef(e.target.value)} />
-                </div>
-              )}
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">Notes</label>
-                <textarea className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" rows={2} value={payNotes} onChange={(e) => setPayNotes(e.target.value)} />
-              </div>
-              {payError && <p className="text-xs font-semibold text-red-600">{payError}</p>}
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600" onClick={() => setShowForm(false)}>Annuler</button>
-                <button
-                  type="button"
-                  className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
-                  disabled={payBusy || !payAmount}
-                  onClick={handleAddPayment}
-                >
-                  {payBusy ? 'Enregistrement…' : 'Enregistrer le paiement'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Direct payments list */}
       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <div className="mb-4 text-sm font-black text-slate-900">Paiements reçus</div>
-        {paymentsListQ.isLoading && q.isLoading ? (
+        {paymentsQ.isLoading ? (
           <p className="text-sm text-slate-500">Chargement…</p>
-        ) : directPayments.length === 0 && paid.length === 0 ? (
+        ) : payments.length === 0 ? (
           <p className="text-sm text-slate-500">Aucun paiement enregistré pour ce contrat.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {directPayments.map((p: any) => {
+            {payments.map((p: any) => {
               const amount = Number(p.amount ?? 0);
-              const date = p.payment_date ?? p.created_at;
+              const date   = p.payment_date ?? p.paymentDate ?? p.created_at;
               const method = PAYMENT_METHOD_FR[p.payment_method ?? ''] ?? p.payment_method ?? '—';
+              const statusLabel = PAYMENT_STATUS_FR[p.status ?? ''] ?? p.status ?? '';
               return (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                   <div className="flex items-center gap-3">
@@ -801,28 +550,13 @@ const PaymentsTab: React.FC<{ contractId: string; customerId?: string | null }> 
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-800">{p.payment_number ?? 'Paiement'}</div>
-                      <div className="text-xs text-slate-500">{date ? formatDate(date) : '—'} · {method}</div>
-                    </div>
-                  </div>
-                  <div className="font-black text-emerald-700">{formatCurrencyMad(amount)}</div>
-                </li>
-              );
-            })}
-            {paid.filter((inst: any) => !directPayments.some((dp: any) => dp.id === inst.id)).map((inst: any, idx: number) => {
-              const amount = Number(inst.amount_paid ?? inst.amountPaid ?? inst.amount_due ?? 0);
-              const date   = inst.paid_at ?? inst.paidAt ?? inst.due_date ?? inst.dueDate;
-              return (
-                <li key={inst.id ?? idx} className="flex items-center justify-between gap-3 py-3 text-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-800">Échéance {idx + 1}</div>
-                      <div className="text-xs text-slate-500">{date ? formatDate(date) : '—'}</div>
+                      <div className="font-semibold text-slate-800">
+                        {p.payment_number ?? 'Paiement'} · {method}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {date ? formatDate(date) : '—'}
+                        {statusLabel && <> · {statusLabel}</>}
+                      </div>
                     </div>
                   </div>
                   <div className="font-black text-emerald-700">{formatCurrencyMad(amount)}</div>
@@ -833,28 +567,52 @@ const PaymentsTab: React.FC<{ contractId: string; customerId?: string | null }> 
         )}
       </div>
 
-      {pending.length > 0 && (
+      {paidInstallments.length > 0 && (
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-3 text-sm font-black text-slate-900">
+            Échéances soldées ({paidInstallments.length})
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {paidInstallments.map((inst: any) => {
+              const amount = Number(inst.total_paid_amount ?? inst.amount_paid ?? inst.total_due_amount ?? 0);
+              const date   = inst.paid_at ?? inst.paidAt ?? inst.due_date ?? inst.dueDate;
+              const num    = inst.installment_number ?? '—';
+              return (
+                <li key={inst.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div>
+                    <div className="font-semibold text-slate-800">Échéance {num}</div>
+                    <div className="text-xs text-slate-500">{date ? formatDate(date) : '—'}</div>
+                  </div>
+                  <div className="font-black text-emerald-700">{formatCurrencyMad(amount)}</div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {pendingInstallments.length > 0 && (
         <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-6">
           <div className="mb-3 text-sm font-black text-amber-800">
-            {pending.length} échéance{pending.length > 1 ? 's' : ''} en attente
+            {pendingInstallments.length} échéance{pendingInstallments.length > 1 ? 's' : ''} en attente
           </div>
           <ul className="space-y-2">
-            {pending.slice(0, 5).map((inst: any, idx: number) => {
-              const due  = Number(inst.amount_due ?? inst.amountDue ?? 0);
+            {pendingInstallments.slice(0, 5).map((inst: any, idx: number) => {
+              const due  = Number(inst.total_due_amount ?? inst.amount_due ?? inst.amountDue ?? 0);
               const date = inst.due_date ?? inst.dueDate;
               const overdue = date && new Date(date) < new Date();
               return (
                 <li key={inst.id ?? idx} className="flex items-center justify-between text-sm">
                   <span className={`font-semibold ${overdue ? 'text-rose-700' : 'text-amber-800'}`}>
-                    {date ? formatDate(date) : `Échéance ${idx + 1}`}
+                    {date ? formatDate(date) : `Échéance ${inst.installment_number ?? idx + 1}`}
                     {overdue && ' · En retard'}
                   </span>
                   <span className="font-bold text-slate-800">{formatCurrencyMad(due)}</span>
                 </li>
               );
             })}
-            {pending.length > 5 && (
-              <li className="text-xs text-slate-500">+ {pending.length - 5} autres…</li>
+            {pendingInstallments.length > 5 && (
+              <li className="text-xs text-slate-500">+ {pendingInstallments.length - 5} autres…</li>
             )}
           </ul>
         </div>
@@ -1052,7 +810,6 @@ const SignatureTab: React.FC<{ contractId: string }> = ({ contractId }) => {
     </div>
   );
 };
-
 
 // ── Early Return Modal ─────────────────────────────────────────────────────────
 const EarlyReturnModal: React.FC<{

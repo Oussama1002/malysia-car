@@ -38,6 +38,9 @@ class Payment extends Model
         'check_number',
         'check_date',
         'check_bank',
+        'cheque_status',
+        'cheque_cashed_at',
+        'cheque_bounce_reason',
         'notes',
         'received_by_user_id',
     ];
@@ -48,6 +51,7 @@ class Payment extends Model
         'amount_unallocated' => 'decimal:2',
         'payment_date' => 'date',
         'check_date' => 'date',
+        'cheque_cashed_at' => 'datetime',
     ];
 
     /** @return BelongsTo<Customer, $this> */

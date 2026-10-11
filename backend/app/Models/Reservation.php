@@ -107,5 +107,10 @@ class Reservation extends Model
     {
         return $this->hasMany(Invoice::class, 'contract_id');
     }
+
+    public function missions(): HasMany
+    {
+        return $this->hasMany(Mission::class);
+    }
 }
 

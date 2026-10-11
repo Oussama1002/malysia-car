@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Models\Payment;
 use App\Models\ReaderDocument;
 use App\Services\DocumentReader\DocumentReaderService;
 use Illuminate\Http\JsonResponse;
@@ -47,13 +48,45 @@ class ChequeOcrController extends Controller
             $extraction = $doc->latestExtraction;
             $fields = $extraction?->extracted_data ?? [];
 
+            // Warn the caller when this cheque already backs a live payment,
+            // so the payment form can refuse the scan before the user even
+            // fills the rest of the fields.
+            // Même registre que l'enregistrement : le scan prévient de la même
+            // façon que le serveur refusera, franchises et fournisseurs compris.
+            $existing = null;
+            $chequeNumber = trim((string) ($fields['check_number'] ?? ''));
+            $chequeBank = trim((string) ($fields['bank'] ?? ''));
+            if ($chequeNumber !== '') {
+                $dup = \App\Support\ChequeRegistry::findDuplicate($chequeNumber, $chequeBank ?: null);
+                if ($dup) {
+                    $row = Payment::query()
+                        ->whereRaw('TRIM(check_number) = ?', [$chequeNumber])
+                        ->whereNotIn('status', ['reversed', 'refunded'])
+                        ->first(['id', 'payment_number', 'amount', 'payment_date', 'check_bank', 'status']);
+                    $existing = [
+                        'payment_id' => $row->id ?? null,
+                        'payment_number' => $row->payment_number ?? $dup['reference'],
+                        'amount' => (float) ($row->amount ?? 0),
+                        'payment_date' => optional($row?->payment_date)?->toDateString(),
+                        'bank' => $row->check_bank ?? null,
+                        'status' => $row->status ?? null,
+                        'source' => $dup['label'],
+                    ];
+                }
+            }
+
             return ApiResponse::success([
+                // Ids of the stored scan: the payment form sends one back so the
+                // image stays attached to the payment as its preuve.
+                'document_id' => $doc->id,
+                'file_id' => $doc->file_id,
                 'check_number' => $fields['check_number'] ?? null,
                 'bank' => $fields['bank'] ?? null,
                 'amount' => $fields['amount'] ?? null,
                 'check_date' => $fields['check_date'] ?? null,
                 'raw_text' => $extraction?->raw_text ?? null,
                 'confidence' => $extraction?->confidence_score ?? null,
+                'existing_payment' => $existing,
             ]);
         } catch (\Throwable $e) {
             return ApiResponse::error('OCR a échoué : ' . $e->getMessage(), 422);

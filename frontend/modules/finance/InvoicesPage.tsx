@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   INVOICE_STATUS_LABEL,
+  INVOICE_TYPE_LABEL,
   invoiceStatusTone,
   listInvoices,
   createInvoice,
@@ -19,6 +20,7 @@ import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const InvoicesPage: React.FC = () => {
   const qc = useQueryClient();
@@ -96,17 +98,15 @@ export const InvoicesPage: React.FC = () => {
             <option value="service">Service</option>
             <option value="credit_note">Avoir</option>
           </select>
-          <input
-            type="date"
+          <DateField
             className="df-input"
             value={filters.from ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value || undefined, page: 1 }))}
+            onChange={(dfValue) => setFilters((f) => ({ ...f, from: dfValue || undefined, page: 1 }))}
           />
-          <input
-            type="date"
+          <DateField
             className="df-input"
             value={filters.to ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value || undefined, page: 1 }))}
+            onChange={(dfValue) => setFilters((f) => ({ ...f, to: dfValue || undefined, page: 1 }))}
           />
           <select
             className="df-input"
@@ -135,7 +135,7 @@ export const InvoicesPage: React.FC = () => {
             render: (r) => (
               <div>
                 <div className="font-mono font-bold text-slate-900">{r.invoice_number}</div>
-                <div className="text-xs text-slate-500">{r.invoice_type}</div>
+                <div className="text-xs text-slate-500">{INVOICE_TYPE_LABEL[r.invoice_type] ?? r.invoice_type}</div>
               </div>
             ),
           },
@@ -151,7 +151,17 @@ export const InvoicesPage: React.FC = () => {
           },
           { key: 'issue', header: 'Émise', render: (r) => (r.issue_date ? formatDate(r.issue_date) : '—') },
           { key: 'due', header: 'Échéance', render: (r) => (r.due_date ? formatDate(r.due_date) : '—') },
-          { key: 'total', header: 'Total', render: (r) => formatCurrencyMad(Number(r.total_amount)) },
+          {
+            key: 'tax',
+            header: 'TVA',
+            render: (r) =>
+              Number(r.tax_amount) > 0 ? (
+                <span title={`${Number(r.lines?.[0]?.tax_rate ?? 0)} %`}>{formatCurrencyMad(Number(r.tax_amount))}</span>
+              ) : (
+                <span className="text-slate-400">—</span>
+              ),
+          },
+          { key: 'total', header: 'Total TTC', render: (r) => formatCurrencyMad(Number(r.total_amount)) },
           {
             key: 'amount_due',
             header: 'Reste dû',

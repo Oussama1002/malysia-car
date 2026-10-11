@@ -5,6 +5,7 @@ import {
   createPayment,
   listPayments,
   listInvoices,
+  updateChequeStatus,
   PAYMENT_METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
   PAYMENT_TYPE_LABEL,
@@ -22,10 +23,38 @@ import { endpoints } from '@/services/endpoints';
 import { queryKeys } from '@/services/queryKeys';
 import { ApiError } from '@/services/apiError';
 
+/**
+ * Unpack any error (including Laravel 422 validation bags and 500 exceptions
+ * with a body) into readable text. Falls back to the raw HTTP message.
+ */
+function extractError(e: unknown): string {
+  if (e instanceof ApiError) {
+    const body = e.body as { message?: string; error?: string; errors?: Record<string, string[]>; exception?: string; file?: string; line?: number } | null;
+    const parts: string[] = [];
+    if (body?.message) parts.push(body.message);
+    if (body?.error) parts.push(body.error);
+    if (body?.errors) {
+      for (const list of Object.values(body.errors)) {
+        if (Array.isArray(list)) for (const m of list) parts.push(String(m));
+      }
+    }
+    // Include exception class + file:line so a 500 tells the user what actually broke
+    if (body?.exception) {
+      const loc = body.file ? ` @ ${String(body.file).split(/[\\/]/).pop()}:${body.line ?? '?'}` : '';
+      parts.push(`${body.exception}${loc}`);
+    }
+    if (parts.length === 0) parts.push(e.message || `HTTP ${e.status}`);
+    return Array.from(new Set(parts)).join(' · ');
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 /* ── French status labels ──────────────────────────────────────────── */
 
 const CONTRACT_STATUS_FR: Record<string, string> = {
   draft: 'Brouillon', active: 'Actif', signed: 'Signé', pending: 'En attente',
+  approved: 'Approuvé', rejected: 'Rejeté', expired: 'Expiré', closed: 'Clôturé',
   terminated: 'Résilié', completed: 'Terminé', cancelled: 'Annulé', suspended: 'Suspendu',
 };
 const RESERVATION_STATUS_FR: Record<string, string> = {
@@ -34,13 +63,15 @@ const RESERVATION_STATUS_FR: Record<string, string> = {
   completed: 'Terminée', pending: 'En attente',
 };
 const INVOICE_STATUS_FR: Record<string, string> = {
-  draft: 'Brouillon', sent: 'Envoyée', paid: 'Payée', partial: 'Partielle',
+  draft: 'Brouillon', issued: 'Émise', sent: 'Envoyée', paid: 'Payée', partial: 'Partielle',
   overdue: 'En retard', cancelled: 'Annulée', credited: 'Avoir',
 };
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
+import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
 
 /* ── Types used by data loading ─────────────────────────────────────── */
 
@@ -82,6 +113,7 @@ export const PaymentsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [allocateOpenPayment, setAllocateOpenPayment] = useState<Payment | null>(null);
+  const [detailOpenPayment, setDetailOpenPayment] = useState<Payment | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const listQ = useQuery({
@@ -95,7 +127,7 @@ export const PaymentsPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['payments'] });
       setCreateOpen(false);
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur'),
+    onError: (e) => setError(extractError(e)),
   });
 
   const allocateMut = useMutation({
@@ -107,7 +139,7 @@ export const PaymentsPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['payments'] });
       setAllocateOpenPayment(null);
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur'),
+    onError: (e) => setError(extractError(e)),
   });
 
   const rows = listQ.data?.data ?? [];
@@ -212,35 +244,68 @@ export const PaymentsPage: React.FC = () => {
           { key: 'date', header: 'Date', render: (r) => formatDate(r.payment_date) },
           { key: 'amount', header: 'Montant', render: (r) => formatCurrencyMad(Number(r.amount)) },
           {
-            key: 'unallocated',
-            header: 'Non alloué',
-            render: (r) =>
-              Number(r.amount_unallocated) > 0 ? (
-                <span className="font-bold text-amber-700">{formatCurrencyMad(Number(r.amount_unallocated))}</span>
-              ) : (
-                <span className="text-emerald-700">0</span>
-              ),
-          },
-          {
             key: 'status',
             header: 'Statut',
-            render: (r) => <StatusBadge label={PAYMENT_STATUS_LABEL[r.status]} tone={paymentStatusTone(r.status)} />,
+            render: (r) => {
+              const raw = (r.status ?? '').toString().toLowerCase();
+              const alloc = Number(r.amount_allocated ?? 0);
+              const total = Number(r.amount ?? 0);
+              // Derive a display status when the backend value is empty or unrecognised.
+              const derived: 'allocated' | 'partial' | 'received' | 'refunded' | 'reversed' =
+                raw === 'refunded' ? 'refunded'
+                : raw === 'reversed' ? 'reversed'
+                : total > 0 && alloc >= total ? 'allocated'
+                : alloc > 0 ? 'partial'
+                : 'received';
+              const labelMap: Record<string, string> = { ...PAYMENT_STATUS_LABEL, partial: 'Partiel' };
+              const toneMap: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
+                allocated: 'success',
+                partial: 'warning',
+                received: 'info',
+                refunded: 'warning',
+                reversed: 'danger',
+              };
+              return <StatusBadge label={labelMap[derived]} tone={toneMap[derived]} />;
+            },
+          },
+          {
+            key: 'cheque',
+            header: 'Chèque',
+            render: (r) => {
+              const method = String(r.payment_method ?? '').toLowerCase();
+              if (method !== 'check' && method !== 'cheque') return <span className="text-slate-300">—</span>;
+              const s = String(r.cheque_status ?? 'pending');
+              const tone = s === 'cleared' ? 'success' : s === 'bounced' ? 'danger' : 'warning';
+              const label = s === 'cleared' ? 'Encaissé' : s === 'bounced' ? 'Rejeté' : 'En attente';
+              return <StatusBadge label={label} tone={tone} />;
+            },
           },
           {
             key: 'actions',
             header: '',
-            render: (r) =>
-              Number(r.amount_unallocated) > 0 ? (
+            render: (r) => (
+              <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   className="df-btn df-btn--ghost text-xs"
-                  onClick={() => {
-                    setError(null);
-                    setAllocateOpenPayment(r);
-                  }}
+                  onClick={() => setDetailOpenPayment(r)}
                 >
-                  Allouer
+                  Détail
                 </button>
-              ) : null,
+                {Number(r.amount_unallocated) > 0 && (
+                  <button
+                    type="button"
+                    className="df-btn df-btn--ghost text-xs"
+                    onClick={() => {
+                      setError(null);
+                      setAllocateOpenPayment(r);
+                    }}
+                  >
+                    Allouer
+                  </button>
+                )}
+              </div>
+            ),
           },
         ]}
       />
@@ -267,6 +332,24 @@ export const PaymentsPage: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* ── Detail drawer ────────────────────────────────────────── */}
+      <DrawerPanel
+        open={!!detailOpenPayment}
+        title={`Paiement ${detailOpenPayment?.payment_number ?? ''}`}
+        onClose={() => setDetailOpenPayment(null)}
+      >
+        {detailOpenPayment && (
+          <PaymentDetailView
+            payment={detailOpenPayment}
+            onClose={() => setDetailOpenPayment(null)}
+            onChanged={(p) => {
+              qc.invalidateQueries({ queryKey: ['payments'] });
+              setDetailOpenPayment(p);
+            }}
+          />
+        )}
+      </DrawerPanel>
 
       {/* ── Create drawer ────────────────────────────────────────── */}
       <DrawerPanel open={createOpen} title="Nouveau paiement client" onClose={() => setCreateOpen(false)}>
@@ -305,13 +388,228 @@ export const PaymentsPage: React.FC = () => {
 /* Payment creation form                                                   */
 /* ════════════════════════════════════════════════════════════════════════ */
 
+interface ChequeOcrResult {
+  document_id?: string | null;
+  check_number?: string;
+  bank?: string;
+  check_date?: string;
+  amount?: number;
+  existing_payment?: {
+    payment_id: string;
+    payment_number: string;
+    amount: number;
+    payment_date?: string | null;
+    bank?: string | null;
+    status?: string | null;
+  } | null;
+}
+
+/**
+ * Send a cheque image/PDF to the OCR endpoint and return the extracted fields.
+ * Uses apiClient so the request carries the real auth token (df_session) and
+ * the configured API base — the previous inline fetch read a non-existent
+ * "auth_token" key and hit a hardcoded URL, causing "Unauthenticated".
+ */
+async function scanCheque(file: File): Promise<ChequeOcrResult> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await apiClient<{ data?: ChequeOcrResult }>('/v1/cheque-ocr', {
+    method: 'POST',
+    body: fd,
+  });
+  return res.data ?? {};
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Payment detail view — full payment info + cheque status management.
+   ──────────────────────────────────────────────────────────────────────── */
+
+const PaymentDetailView: React.FC<{
+  payment: Payment;
+  onClose: () => void;
+  onChanged: (p: Payment) => void;
+}> = ({ payment, onClose, onChanged }) => {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [bounceReason, setBounceReason] = useState('');
+
+  const isCheque = ['check', 'cheque'].includes(String(payment.payment_method ?? '').toLowerCase());
+  const chequeStatus = String(payment.cheque_status ?? 'pending');
+
+  const setCheque = async (
+    status: 'pending' | 'cleared' | 'bounced',
+    reason?: string,
+  ) => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await updateChequeStatus(payment.id, {
+        cheque_status: status,
+        ...(status === 'cleared' ? { cashed_at: new Date().toISOString() } : {}),
+        ...(status === 'bounced' ? { bounce_reason: reason || undefined } : {}),
+      });
+      // Refresh every list that could be showing this payment (paiements page,
+      // reservation payments tab, dashboards, treasury...).
+      qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: ['reservation'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      // A bounced cheque removes the payment entirely — close the drawer.
+      if (status === 'bounced') {
+        onClose();
+        return;
+      }
+      onChanged(res.data);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const alloc = Number(payment.amount_allocated ?? 0);
+  const total = Number(payment.amount ?? 0);
+  const unalloc = Number(payment.amount_unallocated ?? 0);
+
+  const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div className="grid grid-cols-3 gap-3 border-b border-slate-100 py-2 last:border-b-0">
+      <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="col-span-2 text-sm font-semibold text-slate-800">{value ?? '—'}</div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 p-5 text-white">
+        <div className="text-[11px] font-bold uppercase tracking-widest opacity-80">Montant</div>
+        <div className="mt-1 text-3xl font-black">{formatCurrencyMad(total)}</div>
+        <div className="mt-2 text-xs opacity-90">
+          Alloué : <span className="font-bold">{formatCurrencyMad(alloc)}</span>
+          {' · '}Non alloué : <span className="font-bold">{formatCurrencyMad(unalloc)}</span>
+        </div>
+      </div>
+
+      {/* Cheque management */}
+      {isCheque && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-sm font-black text-amber-900">Gestion du chèque</div>
+            <StatusBadge
+              label={chequeStatus === 'cleared' ? 'Encaissé' : chequeStatus === 'bounced' ? 'Rejeté' : 'En attente'}
+              tone={chequeStatus === 'cleared' ? 'success' : chequeStatus === 'bounced' ? 'danger' : 'warning'}
+            />
+          </div>
+          <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
+            <div><span className="font-bold text-amber-800">N° chèque :</span> <span className="text-slate-800">{payment.check_number ?? '—'}</span></div>
+            <div><span className="font-bold text-amber-800">Banque :</span> <span className="text-slate-800">{payment.check_bank ?? '—'}</span></div>
+            <div><span className="font-bold text-amber-800">Date chèque :</span> <span className="text-slate-800">{payment.check_date ? formatDate(payment.check_date) : '—'}</span></div>
+            {payment.cheque_cashed_at && (
+              <div><span className="font-bold text-amber-800">Encaissé le :</span> <span className="text-slate-800">{formatDate(payment.cheque_cashed_at)}</span></div>
+            )}
+            {payment.cheque_bounce_reason && (
+              <div className="col-span-2"><span className="font-bold text-amber-800">Motif de rejet :</span> <span className="italic text-rose-700">{payment.cheque_bounce_reason}</span></div>
+            )}
+          </div>
+
+          {chequeStatus !== 'cleared' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCheque('cleared')}
+              className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+            >
+              ✓ Marquer comme encaissé
+            </button>
+          )}
+          {chequeStatus === 'cleared' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCheque('pending')}
+              className="w-full rounded-xl border border-amber-300 bg-white py-2.5 text-xs font-black uppercase tracking-wider text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            >
+              ↩ Revenir en attente
+            </button>
+          )}
+          {chequeStatus !== 'bounced' && (
+            <div className="mt-2">
+              <input
+                type="text"
+                className="mb-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                placeholder="Motif de rejet (optionnel)"
+                value={bounceReason}
+                onChange={(e) => setBounceReason(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setCheque('bounced', bounceReason)}
+                className="w-full rounded-xl border border-rose-300 bg-white py-2.5 text-xs font-black uppercase tracking-wider text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+              >
+                ✗ Marquer comme rejeté
+              </button>
+            </div>
+          )}
+          {err && <div className="mt-2 text-xs font-semibold text-rose-700">{err}</div>}
+        </div>
+      )}
+
+      {/* Details */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-2 text-xs font-black uppercase tracking-widest text-slate-500">Détails</div>
+        <Row label="N° paiement" value={<span className="font-mono">{payment.payment_number}</span>} />
+        <Row label="Date" value={formatDate(payment.payment_date)} />
+        <Row label="Client" value={payment.customer?.full_name ?? payment.customer?.customer_code ?? '—'} />
+        <Row label="Type" value={payment.payment_type ? (PAYMENT_TYPE_LABEL[payment.payment_type] ?? payment.payment_type) : '—'} />
+        <Row label="Mode" value={PAYMENT_METHOD_LABEL[payment.payment_method] ?? payment.payment_method} />
+        <Row label="Sens" value={payment.payment_direction === 'incoming' ? 'Entrant (encaissement)' : 'Sortant (remboursement)'} />
+        <Row label="Devise" value={payment.currency_code ?? 'MAD'} />
+        {payment.external_reference && <Row label="Référence" value={payment.external_reference} />}
+        {payment.notes && <Row label="Notes" value={<span className="italic">{payment.notes}</span>} />}
+      </div>
+
+      {/* Allocations */}
+      {payment.allocations && payment.allocations.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="mb-2 text-xs font-black uppercase tracking-widest text-slate-500">Allocations ({payment.allocations.length})</div>
+          <div className="space-y-2">
+            {payment.allocations.map((a: any) => (
+              <div key={a.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                <div className="font-semibold text-slate-800">
+                  {a.invoice?.invoice_number ?? a.invoice_id?.slice(0, 8) ?? '—'}
+                </div>
+                <div className="font-bold text-emerald-700">{formatCurrencyMad(Number(a.amount_allocated))}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button type="button" onClick={onClose} className="df-btn df-btn--ghost">Fermer</button>
+      </div>
+    </div>
+  );
+};
+
 export const PaymentForm: React.FC<{
   submitting: boolean;
   error: string | null;
   onCancel: () => void;
   onSubmit: (p: PaymentCreatePayload) => void;
   initialValues?: Partial<PaymentCreatePayload>;
-}> = ({ submitting, error, onCancel, onSubmit, initialValues }) => {
+  /** When the form is opened for a specific reservation, its remaining balance
+   *  (total − déjà payé). Shown as "Solde à payer" instead of the customer's
+   *  global invoiced balance, so already-paid amounts on this reservation are
+   *  reflected. */
+  reservationBalance?: number;
+  /** Reservation's vehicle id — used to auto-select the matching contract
+   *  (same customer + vehicle), since there's no stored reservation→contract link. */
+  reservationVehicleId?: string;
+  /** Reservation's invoice id (from the reservation detail) — auto-selected in
+   *  the Facture dropdown when present. */
+  reservationInvoiceId?: string;
+}> = ({ submitting, error, onCancel, onSubmit, initialValues, reservationBalance, reservationVehicleId, reservationInvoiceId }) => {
   const [form, setForm] = useState<PaymentCreatePayload>({
     customer_id: initialValues?.customer_id ?? '',
     contract_id: initialValues?.contract_id,
@@ -324,19 +622,68 @@ export const PaymentForm: React.FC<{
   });
   const [chequeScanning, setChequeScanning] = useState(false);
   const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
+  const [chequeDuplicate, setChequeDuplicate] = useState<NonNullable<ChequeOcrResult['existing_payment']> | null>(null);
+  const [chequeNotice, setChequeNotice] = useState<string | null>(null);
+  // Le numéro saisi a-t-il déjà servi ? Vérifié pendant la frappe.
+  const chequeAlreadyUsed = useChequeDuplicate(form.check_number, form.check_bank);
+
+  const applyChequeScan = async (file: File) => {
+    setChequeScanning(true);
+    setChequeOcrError(null);
+    setChequeNotice(null);
+    setChequeDuplicate(null);
+    try {
+      const data = await scanCheque(file);
+      // Refuse to prefill and warn the user when the scanned cheque already
+      // backs a live payment. The user can still enter another cheque number
+      // manually — the guard fires again on server-side submit.
+      if (data.existing_payment) {
+        setChequeDuplicate(data.existing_payment);
+        return;
+      }
+      if (!data.check_number && !data.bank && !data.check_date && data.amount == null) {
+        setChequeOcrError('Rien n\'a pu être lu sur ce chèque. Saisissez les champs manuellement.');
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        check_number: data.check_number ?? f.check_number,
+        check_bank: data.bank ?? f.check_bank,
+        check_date: data.check_date ?? f.check_date,
+        amount: data.amount ?? f.amount,
+        // Garde le scan stocké : il sera attaché au paiement comme preuve.
+        cheque_document_id: data.document_id ?? f.cheque_document_id,
+      }));
+      // A handwritten amount is often unreadable — name what is left to fill
+      // so nobody submits a cheque with a field silently empty.
+      const missing = [
+        data.amount == null ? 'le montant' : null,
+        !data.check_number ? 'le n° de chèque' : null,
+        !data.bank ? 'la banque' : null,
+        !data.check_date ? 'la date du chèque' : null,
+      ].filter(Boolean);
+      if (missing.length > 0) {
+        setChequeNotice(`Saisissez manuellement ${missing.join(', ')} : l'OCR n'a pas pu le lire.`);
+      }
+    } catch (err) {
+      setChequeOcrError(err instanceof Error ? err.message : 'Échec du scan OCR');
+    } finally {
+      setChequeScanning(false);
+    }
+  };
 
   /* ── Load catalogue data ──────────────────────────────────────── */
 
   const customersQ = useQuery({
     queryKey: queryKeys.customers.all,
     queryFn: async () =>
-      (await apiClient<ApiListResponse<CustomerMin>>(`${endpoints.customers.list}?per_page=200`)).data,
+      (await apiClient<ApiListResponse<CustomerMin>>(endpoints.customers.list)).data,
   });
 
   const contractsQ = useQuery({
     queryKey: queryKeys.contracts.all,
     queryFn: async () =>
-      (await apiClient<ApiListResponse<ContractMin>>(`${endpoints.contracts.list}?per_page=200`)).data,
+      (await apiClient<ApiListResponse<ContractMin>>(endpoints.contracts.list)).data,
   });
 
   const reservationsQ = useQuery({
@@ -400,6 +747,37 @@ export const PaymentForm: React.FC<{
   const set = <K extends keyof PaymentCreatePayload>(field: K, value: PaymentCreatePayload[K]) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  // When opened from a reservation, auto-select the matching contract. There is
+  // no stored reservation→contract link. A contract generated from the
+  // reservation shares the customer; the vehicle can differ after a vehicle
+  // SWAP, so it's only a tiebreaker. We match by customer, EXCLUDE cancelled/
+  // dead contracts, prefer a live contract on the reservation's vehicle, and
+  // never fall back to a cancelled one.
+  useEffect(() => {
+    if (!form.customer_id || form.contract_id) return;
+    const all = (contractsQ.data as Array<ContractMin & { customerId?: string; vehicleId?: string; startDate?: string }> | undefined) ?? [];
+    const dead = ['cancelled', 'terminated', 'rejected', 'expired', 'closed', 'completed'];
+    const live = all.filter((c) => c.customerId === form.customer_id && !dead.includes(String(c.status).toLowerCase()));
+    if (live.length === 0) return; // no live contract → leave unselected
+    const vehicleMatch = reservationVehicleId ? live.filter((c) => c.vehicleId === reservationVehicleId) : [];
+    const pool = vehicleMatch.length > 0 ? vehicleMatch : live;
+    const rank = (s: string): number =>
+      ({ active: 0, approved: 1, signed: 2, pending: 3, draft: 4 } as Record<string, number>)[String(s).toLowerCase()] ?? 9;
+    pool.sort((a, b) => {
+      const r = rank(a.status) - rank(b.status);
+      if (r !== 0) return r;
+      return String(b.startDate ?? '').localeCompare(String(a.startDate ?? '')); // most recent first
+    });
+    setForm((f) => ({ ...f, contract_id: String(pool[0].id) }));
+  }, [contractsQ.data, reservationVehicleId, form.customer_id, form.contract_id]);
+
+  // Auto-select the reservation's invoice (resolved by the reservation detail).
+  useEffect(() => {
+    if (reservationInvoiceId && !form.invoice_id) {
+      setForm((f) => ({ ...f, invoice_id: reservationInvoiceId }));
+    }
+  }, [reservationInvoiceId, form.invoice_id]);
+
   return (
     <form
       className="space-y-4"
@@ -407,6 +785,8 @@ export const PaymentForm: React.FC<{
         e.preventDefault();
         onSubmit({
           ...form,
+          // Horodaté à l'enregistrement : le formulaire peut rester ouvert.
+          payment_date: new Date().toISOString().slice(0, 16),
           payment_direction: 'incoming',
         });
       }}
@@ -442,8 +822,18 @@ export const PaymentForm: React.FC<{
       {form.customer_id && (
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs font-bold uppercase text-slate-500">Solde à payer</div>
-            {balanceQ.isLoading ? (
+            <div className="text-xs font-bold uppercase text-slate-500">
+              {reservationBalance !== undefined ? 'Restant sur la réservation' : 'Solde à payer'}
+            </div>
+            {reservationBalance !== undefined ? (
+              // Reservation-specific remaining = total − déjà payé (accounts for
+              // earlier payments on this reservation).
+              <div className="mt-1">
+                <span className={`text-lg font-black ${reservationBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  {formatCurrencyMad(reservationBalance)}
+                </span>
+              </div>
+            ) : balanceQ.isLoading ? (
               <div className="mt-1 text-sm text-slate-400">Chargement...</div>
             ) : balanceQ.data ? (
               <div className="mt-1">
@@ -480,8 +870,8 @@ export const PaymentForm: React.FC<{
         </div>
       )}
 
-      {/* ── Contrat / Réservation / Facture ──────────────────── */}
-      <div className="space-y-3">
+      {/* ── Contrat / Réservation / Facture (chacun sur sa ligne) ── */}
+      <div className="grid gap-3 grid-cols-1">
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Contrat</label>
           <select
@@ -492,7 +882,7 @@ export const PaymentForm: React.FC<{
             <option value="">-- Aucun --</option>
             {filteredContracts.map((c) => (
               <option key={String(c.id)} value={String(c.id)}>
-                {c.reference ?? (c as any).contract_number ?? String(c.id).slice(0, 8)} — {CONTRACT_STATUS_FR[c.status] ?? c.status}
+                {c.reference ?? (c as any).contract_number ?? c.id} — {CONTRACT_STATUS_FR[String(c.status).toLowerCase()] ?? c.status}
               </option>
             ))}
           </select>
@@ -524,7 +914,7 @@ export const PaymentForm: React.FC<{
               const amt = Number((inv as any).total_amount ?? inv.total_amount_mad);
               return (
                 <option key={inv.id} value={inv.id}>
-                  {inv.invoice_number} — {INVOICE_STATUS_FR[inv.status] ?? inv.status}{isFinite(amt) ? ` — ${formatCurrencyMad(amt)}` : ''}
+                  {inv.invoice_number} — {INVOICE_STATUS_FR[String(inv.status).toLowerCase()] ?? inv.status}{isFinite(amt) ? ` — ${formatCurrencyMad(amt)}` : ''}
                 </option>
               );
             })}
@@ -566,43 +956,6 @@ export const PaymentForm: React.FC<{
         </select>
       </div>
 
-      {/* ── Montant + Date ───────────────────────────────────── */}
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Montant (MAD) *</label>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            className="df-input mt-1 w-full"
-            value={form.amount}
-            onChange={(e) => set('amount', Math.round(Number(e.target.value) * 100) / 100)}
-            required
-          />
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement</label>
-          <input
-            type="datetime-local"
-            className="df-input mt-1 w-full bg-slate-50 text-slate-500 cursor-not-allowed"
-            value={form.payment_date}
-            readOnly
-            disabled
-          />
-        </div>
-      </div>
-
-      {/* ── Référence ────────────────────────────────────────── */}
-      <div>
-        <label className="text-xs font-bold uppercase text-slate-500">Référence</label>
-        <input
-          className="df-input mt-1 w-full"
-          value={form.external_reference ?? ''}
-          onChange={(e) => set('external_reference', e.target.value)}
-          placeholder="Référence externe, n° reçu..."
-        />
-      </div>
-
       {/* ── Chèque OCR scan + fields ────────────────────────── */}
       {form.payment_method === 'check' && (
         <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
@@ -620,38 +973,11 @@ export const PaymentForm: React.FC<{
                 className="hidden"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (!file) return;
-                  setChequeScanning(true);
-                  setChequeOcrError(null);
-                  try {
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    const res = await fetch('/api/v1/cheque-ocr', {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
-                      body: fd,
-                    });
-                    const json = await res.json();
-                    if (json.data) {
-                      setForm((f) => ({
-                        ...f,
-                        check_number: json.data.check_number ?? f.check_number,
-                        check_bank: json.data.bank ?? f.check_bank,
-                        check_date: json.data.check_date ?? f.check_date,
-                        amount: json.data.amount ?? f.amount,
-                      }));
-                    } else {
-                      setChequeOcrError(json.message ?? 'OCR a échoué');
-                    }
-                  } catch {
-                    setChequeOcrError('Erreur réseau lors du scan OCR');
-                  } finally {
-                    setChequeScanning(false);
-                    e.target.value = '';
-                  }
+                  if (file) await applyChequeScan(file);
+                  e.target.value = '';
                 }}
               />
-              {chequeScanning ? '⏳ Analyse en cours...' : '📄 Importer un fichier'}
+              {chequeScanning ? 'Analyse en cours...' : 'Importer un fichier'}
             </label>
             <label className="df-btn df-btn--ghost flex-1 cursor-pointer justify-center text-center text-xs">
               <input
@@ -661,43 +987,48 @@ export const PaymentForm: React.FC<{
                 className="hidden"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (!file) return;
-                  setChequeScanning(true);
-                  setChequeOcrError(null);
-                  try {
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    const res = await fetch('/api/v1/cheque-ocr', {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') ?? ''}` },
-                      body: fd,
-                    });
-                    const json = await res.json();
-                    if (json.data) {
-                      setForm((f) => ({
-                        ...f,
-                        check_number: json.data.check_number ?? f.check_number,
-                        check_bank: json.data.bank ?? f.check_bank,
-                        check_date: json.data.check_date ?? f.check_date,
-                        amount: json.data.amount ?? f.amount,
-                      }));
-                    } else {
-                      setChequeOcrError(json.message ?? 'OCR a échoué');
-                    }
-                  } catch {
-                    setChequeOcrError('Erreur réseau lors du scan OCR');
-                  } finally {
-                    setChequeScanning(false);
-                    e.target.value = '';
-                  }
+                  if (file) await applyChequeScan(file);
+                  e.target.value = '';
                 }}
               />
-              {chequeScanning ? '⏳ Analyse...' : '📷 Prendre une photo'}
+              {chequeScanning ? 'Analyse...' : 'Prendre une photo'}
             </label>
           </div>
 
+          {chequeDuplicate && (
+            <div className="rounded-xl border border-rose-300 bg-rose-50 px-3.5 py-3 text-xs">
+              <div className="mb-1 flex items-center gap-2 font-black text-rose-800">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" /></svg>
+                Chèque déjà enregistré
+              </div>
+              <div className="text-rose-700 leading-snug">
+                Ce chèque a déjà été utilisé pour le paiement{' '}
+                <span className="font-mono font-bold">{chequeDuplicate.payment_number}</span>
+                {chequeDuplicate.amount ? <> ({formatCurrencyMad(chequeDuplicate.amount)}</> : null}
+                {chequeDuplicate.payment_date ? <>{chequeDuplicate.amount ? ' · ' : ' ('}{formatDate(chequeDuplicate.payment_date)}</> : null}
+                {(chequeDuplicate.amount || chequeDuplicate.payment_date) ? ')' : null}.
+                {' '}Un même chèque ne peut pas être payé deux fois.
+              </div>
+              <button
+                type="button"
+                onClick={() => setChequeDuplicate(null)}
+                className="mt-2 rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-100"
+              >
+                Fermer
+              </button>
+            </div>
+          )}
+
+          {chequeAlreadyUsed && (
+            <div className="rounded-xl border-2 border-rose-300 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-800">
+              ⚠ {chequeAlreadyUsed}
+            </div>
+          )}
           {chequeOcrError && (
             <div className="rounded bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
+          )}
+          {chequeNotice && (
+            <div className="rounded bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">{chequeNotice}</div>
           )}
           {chequeScanning && (
             <div className="flex items-center gap-2 text-xs text-blue-600">
@@ -728,16 +1059,53 @@ export const PaymentForm: React.FC<{
             </div>
             <div>
               <label className="text-xs font-bold uppercase text-slate-500">Date du chèque</label>
-              <input
-                type="date"
+              <DateField
                 className="df-input mt-1 w-full"
                 value={form.check_date ?? ''}
-                onChange={(e) => set('check_date', e.target.value)}
+                onChange={(dfValue) => set('check_date', dfValue)}
               />
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Montant + Date ───────────────────────────────────── */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Montant (MAD) *</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className="df-input mt-1 w-full"
+            value={form.amount}
+            onChange={(e) => set('amount', Number(e.target.value))}
+            required
+          />
+        </div>
+        <div>
+          <label className="text-xs font-bold uppercase text-slate-500">Date & heure paiement</label>
+          {/* Horodatage de l'encaissement : relevé par le système, pas saisi. */}
+          <DateField
+            withTime
+            className="df-input mt-1 w-full bg-slate-50 text-slate-500"
+            value={form.payment_date}
+            onChange={() => {}}
+            disabled
+          />
+        </div>
+      </div>
+
+      {/* ── Référence ────────────────────────────────────────── */}
+      <div>
+        <label className="text-xs font-bold uppercase text-slate-500">Référence</label>
+        <input
+          className="df-input mt-1 w-full"
+          value={form.external_reference ?? ''}
+          onChange={(e) => set('external_reference', e.target.value)}
+          placeholder="Référence externe, n° reçu..."
+        />
+      </div>
 
       {/* ── Notes ────────────────────────────────────────────── */}
       <div>
@@ -756,7 +1124,7 @@ export const PaymentForm: React.FC<{
         <button type="button" className="df-btn df-btn--ghost" onClick={onCancel}>
           Annuler
         </button>
-        <button type="submit" className="df-btn df-btn--primary" disabled={submitting}>
+        <button type="submit" className="df-btn df-btn--primary" disabled={submitting || !!chequeAlreadyUsed}>
           {submitting ? 'Enregistrement...' : 'Enregistrer le paiement'}
         </button>
       </div>

@@ -16,6 +16,7 @@ import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const STATUS_FILTERS: EnvelopeStatus[] = ['draft', 'sent', 'in_progress', 'completed', 'declined', 'voided', 'expired', 'failed'];
 const PROVIDERS = ['internal', 'docusign', 'yousign', 'adobe'] as const;
@@ -185,7 +186,7 @@ const CreateEnvelopeForm: React.FC<{
           </div>
           <div>
             <label className="text-xs font-bold uppercase text-slate-500">Expiration</label>
-            <input type="date" className="df-input mt-1" value={form.expires_at ?? ''} onChange={(e) => setForm({ ...form, expires_at: e.target.value || undefined })} />
+            <DateField className="df-input mt-1" value={form.expires_at ?? ''} onChange={(dfValue) => setForm({ ...form, expires_at: dfValue || undefined })} />
           </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2">

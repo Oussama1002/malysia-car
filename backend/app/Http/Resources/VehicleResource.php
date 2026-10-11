@@ -36,6 +36,7 @@ class VehicleResource extends JsonResource
             'fuel' => $v->fuel_type,
             'cv' => $v->fiscal_power,
             'mileageKm' => $v->mileage_current ? (int) $v->mileage_current : null,
+            'insuranceStart' => $v->insurance_start?->toDateString(),
             'insuranceExpiry' => $v->insurance_expiry?->toDateString(),
             'techControlExpiry' => $v->tech_control_expiry?->toDateString(),
             'vignetteExpiry' => $v->vignette_expiry?->toDateString(),
@@ -56,6 +57,7 @@ class VehicleResource extends JsonResource
             'currentValueMad' => $v->book_value !== null ? (float) $v->book_value : null,
             'branchId' => $v->branch_id,
             'pricePerDay' => $v->daily_rental_price !== null ? (float) $v->daily_rental_price : null,
+            'insuranceDeductible' => $v->insurance_deductible !== null ? (float) $v->insurance_deductible : null,
             'photoUrl' => $this->resolvePhotoUrl($v),
             'vehicleType' => $v->vehicle_type,
             'numeroPolice' => $v->numero_police,
@@ -65,6 +67,14 @@ class VehicleResource extends JsonResource
             'dateImmatriculation' => $v->date_immatriculation?->toDateString(),
             'categorie' => $v->categorie,
             'immatOnline' => $v->immat_online,
+            'carteGriseStatus' => $v->carte_grise_status,
+            'immatProvisoireExpiry' => $v->immat_provisoire_expiry?->toDateString(),
+            // Liste d'équipements cochés sur la fiche véhicule. Tableau de
+            // libellés tels que listés dans `Vehicle::EQUIPMENTS` — stocké
+            // en JSON pour éviter une table de pivot sur une liste figée.
+            'equipments' => $v->equipments ?? [],
+            'nombrePlaces' => $v->nombre_places !== null ? (int) $v->nombre_places : null,
+            'nombrePortes' => $v->nombre_portes !== null ? (int) $v->nombre_portes : null,
         ];
     }
 
@@ -78,7 +88,9 @@ class VehicleResource extends JsonResource
             return null;
         }
 
-        return Storage::disk($file->storage_disk)->url($file->storage_path);
+        // Serve through the app's public file route rather than the static
+        // /storage path, which the web server 403s (permissions / nginx rules).
+        return rtrim((string) config('app.url'), '/').'/api/v1/files/'.$v->photo_file_id;
     }
 }
 

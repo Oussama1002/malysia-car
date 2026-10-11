@@ -2,12 +2,62 @@ import React, { lazy, Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { apiClient, getApiBase } from '@/services/apiClient';
 import { ApiError } from '@/services/apiError';
+import { queryKeys } from '@/services/queryKeys';
+
+/**
+ * Map backend rental / reservation error codes and English fallbacks to
+ * French sentences so users see readable messages instead of raw enum values
+ * (e.g. "overlapping_reservation") or Laravel English messages.
+ */
+const RENTAL_ERROR_FR: Record<string, string> = {
+  overlapping_reservation: 'Une autre réservation se chevauche sur cette période.',
+  active_contract_overlap: 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
+  overlapping_mission: 'Une mission est planifiée pour ce véhicule sur ce créneau.',
+  vehicle_in_maintenance: 'Un ordre de réparation est en cours sur ce véhicule.',
+  vehicle_in_scheduled_maintenance: 'Maintenance planifiée en cours.',
+  vehicle_accident_hold: 'Dossier sinistre ouvert sur ce véhicule.',
+  vehicle_not_found: 'Véhicule introuvable.',
+  invalid_range: 'Plage de dates invalide.',
+  vehicle_status_unavailable: 'Statut flotte : véhicule non louable.',
+  vehicle_availability_flag: 'Véhicule marqué indisponible à la location.',
+  // Common Laravel English messages
+  'Another reservation overlaps this period.': 'Une autre réservation se chevauche sur cette période.',
+  'An active finance or lease contract overlaps this period.': 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
+  'A mission is scheduled for this vehicle during this period.': 'Une mission est planifiée pour ce véhicule sur ce créneau.',
+  'Vehicle has an open repair order.': 'Un ordre de réparation est en cours sur ce véhicule.',
+};
+
+function translateError(msg: string): string {
+  return RENTAL_ERROR_FR[msg] ?? msg;
+}
+
+/**
+ * Turn any error (Laravel 422 validation body included) into a full list of
+ * French messages, so the drawer shows every problem instead of the first
+ * one followed by "(and N more errors)".
+ */
+function formatErrorList(err: unknown, fallback: string): string[] {
+  if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+    const body = err.body as { errors?: Record<string, string[]>; message?: string };
+    const bag = body.errors ?? {};
+    const items: string[] = [];
+    for (const list of Object.values(bag)) {
+      if (Array.isArray(list)) {
+        for (const raw of list) items.push(translateError(String(raw)));
+      }
+    }
+    if (items.length > 0) return Array.from(new Set(items));
+    if (body.message) return [translateError(body.message).replace(/\s*\(and \d+ more errors?\)\.?$/i, '')];
+  }
+  if (err instanceof Error) return [translateError(err.message)];
+  return [fallback];
+}
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { PaymentForm } from '@/modules/finance/PaymentsPage';
 import { createPayment, type PaymentCreatePayload } from '@/services/financeApi';
-import { VehicleSwapWizard } from '@/modules/rentals/VehicleSwapWizard';
 
 /* ─── lazy tab components ─────────────────────────────────────────── */
 const TabSummary      = lazy(() => import('./tabs/TabSummary'));
@@ -48,6 +98,7 @@ function statusTone(s: string): 'success' | 'danger' | 'brand' | 'info' | 'warni
 
 const TABS = [
   { id: 'summary',    label: 'Résumé' },
+  { id: 'missions',   label: 'Missions' },
   { id: 'drivers',    label: 'Conducteurs' },
   { id: 'contract',   label: 'Contrat' },
   { id: 'checkout',   label: 'Check-Out' },
@@ -74,12 +125,27 @@ export const ReservationDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('summary');
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [validateError, setValidateError] = useState<string | null>(null);
-  const [swapWizardOpen, setSwapWizardOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [swapVehicleId, setSwapVehicleId] = useState('');
+  const [swapReason, setSwapReason] = useState('');
+  const [swapError, setSwapError] = useState<string[] | null>(null);
+  const [swapMode, setSwapMode] = useState<'instant' | 'request'>('instant');
 
   const detailQ = useQuery({
     queryKey: ['reservation', rid],
     queryFn: () => opsApi.reservation(rid!),
+    enabled: !!rid,
+  });
+
+  const vehiclesQ = useQuery({
+    queryKey: ['fleet', 'all-vehicles'],
+    queryFn: async () => (await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200')).data,
+    enabled: swapOpen && !!getApiBase(),
+  });
+
+  const swapsQ = useQuery({
+    queryKey: ['vehicle-swaps', rid],
+    queryFn: () => opsApi.vehicleSwaps({ reservation_id: rid }),
     enabled: !!rid,
   });
 
@@ -92,33 +158,47 @@ export const ReservationDetailPage: React.FC = () => {
 
   const validateM = useMutation({
     mutationFn: () => opsApi.validateReservation(rid!),
-    onSuccess: () => {
-      setValidateError(null);
-      qc.invalidateQueries({ queryKey: ['reservation', rid] });
-      qc.invalidateQueries({ queryKey: ['reservations'] });
-    },
-    onError: (e: unknown) => {
-      if (e instanceof ApiError && e.body && typeof e.body === 'object') {
-        const body = e.body as any;
-        const parts = body.errors?.vehicle_id ?? [];
-        setValidateError(parts.length > 0 ? parts.join(' ') : body.message ?? e.message);
-      } else {
-        setValidateError(e instanceof Error ? e.message : 'Erreur lors de la validation');
-      }
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
   });
   const confirmM = useMutation({
     mutationFn: () => opsApi.confirmReservation(rid!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
+  });
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; reason: string; error: string | null }>({
+    open: false,
+    reason: '',
+    error: null,
   });
   const cancelM = useMutation({
-    mutationFn: () => opsApi.cancelReservation(rid!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reservation', rid] }),
+    mutationFn: (reason?: string) => opsApi.cancelReservation(rid!, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reservation', rid] });
+      qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      setCancelDialog({ open: false, reason: '', error: null });
+    },
+    onError: (e: unknown) => {
+      const body = (e as any)?.body;
+      const msg = body?.errors ? Object.values<any>(body.errors).flat().join(' · ')
+        : body?.message ?? (e as any)?.message ?? 'Annulation impossible';
+      setCancelDialog((s) => ({ ...s, error: String(msg) }));
+    },
+  });
+  const [statusChangeTarget, setStatusChangeTarget] = useState('');
+  const changeStatusM = useMutation({
+    mutationFn: (newStatus: string) => opsApi.changeReservationStatus(rid!, newStatus),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); setStatusChangeTarget(''); },
   });
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteM = useMutation({
     mutationFn: () => opsApi.deleteReservation(rid!),
-    onSuccess: () => navigate('/contracts'),
+    onSuccess: () => {
+      // Invalidate the reservations list so the deleted row disappears
+      // and the reserved-vehicle set recomputes (its vehicle stops showing
+      // as Reserve on the fleet, GPS and picker views).
+      qc.invalidateQueries({ queryKey: queryKeys.reservations });
+      qc.removeQueries({ queryKey: ['reservation', rid] });
+      navigate('/reservations');
+    },
     onError: (e) => alert(e instanceof Error ? e.message : 'Erreur de suppression'),
   });
   const paymentM = useMutation({
@@ -127,11 +207,66 @@ export const ReservationDetailPage: React.FC = () => {
       setPaymentDrawerOpen(false);
       setPaymentError(null);
       qc.invalidateQueries({ queryKey: ['reservation', rid] });
+      qc.invalidateQueries({ queryKey: ['payments'] });
     },
-    onError: (e) => setPaymentError(e instanceof Error ? e.message : 'Erreur de création du paiement'),
+    onError: (e) => {
+      // Unpack Laravel's { message, errors: { field: [...] } } so the drawer
+      // shows the real reason (e.g. "Ce chèque a déjà été enregistré...")
+      // instead of a generic Erreur de création du paiement.
+      let msg = 'Erreur de création du paiement';
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string; errors?: Record<string, string[]> } | null;
+        const parts: string[] = [];
+        if (body?.errors) {
+          for (const list of Object.values(body.errors)) {
+            if (Array.isArray(list)) parts.push(...list.map(String));
+          }
+        }
+        if (parts.length) msg = Array.from(new Set(parts)).join(' · ');
+        else if (body?.message) msg = body.message;
+        else if (e.message) msg = e.message;
+      } else if (e instanceof Error) {
+        msg = e.message;
+      }
+      setPaymentError(msg);
+    },
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['reservation', rid] });
+  const swapInstantM = useMutation({
+    mutationFn: () => opsApi.instantVehicleSwap({ reservation_id: rid!, new_vehicle_id: swapVehicleId, reason: swapReason || undefined }),
+    onSuccess: () => {
+      setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
+      qc.invalidateQueries({ queryKey: ['reservation', rid] });
+      qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
+      qc.invalidateQueries({ queryKey: queryKeys.reservations });
+    },
+    onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors du changement')),
+  });
+  const swapRequestM = useMutation({
+    mutationFn: () => opsApi.requestVehicleSwap({ reservation_id: rid!, new_vehicle_id: swapVehicleId, reason: swapReason || undefined }),
+    onSuccess: () => {
+      setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
+      qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
+    },
+    onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors de la demande')),
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['reservation', rid] });
+    qc.invalidateQueries({ queryKey: queryKeys.reservations });
+  };
+
+  // Ensure a draft invoice exists for the reservation total, then refresh so
+  // the payment form can auto-select it. Idempotent (returns existing invoice).
+  const ensureInvoiceM = useMutation({
+    mutationFn: () => apiClient(`/v1/reservations/${rid}/ensure-invoice`, { method: 'POST' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
+  });
+  const openPaymentDrawer = () => {
+    setPaymentError(null);
+    setPaymentDrawerOpen(true);
+    if (rid) ensureInvoiceM.mutate();
+  };
 
   if (detailQ.isLoading) {
     return (
@@ -158,7 +293,7 @@ export const ReservationDetailPage: React.FC = () => {
 
       {/* ── Back link ── */}
       <Link
-        to="/contracts"
+        to="/reservations"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
       >
         ← Retour aux réservations
@@ -188,38 +323,20 @@ export const ReservationDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Info cards — roomy grid so labels/values are fully readable */}
-        <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Info cards row */}
+        <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3 lg:grid-cols-7">
           {[
             { label: 'Client', value: d?.customer_name ?? '—' },
-            {
-              label: 'Véhicule',
-              value: (() => {
-                const candidateVehicles = (d?.candidate_vehicles ?? []) as { id: string; name: string; registration: string }[];
-                if (candidateVehicles.length > 1) {
-                  return candidateVehicles.map((v) => v.name).join('  /  ');
-                }
-                return d?.vehicle_name ?? '—';
-              })(),
-            },
-            {
-              label: 'Immatriculation',
-              value: (() => {
-                const candidateVehicles = (d?.candidate_vehicles ?? []) as { id: string; name: string; registration: string }[];
-                if (candidateVehicles.length > 1) {
-                  return candidateVehicles.map((v) => v.registration).join('  /  ');
-                }
-                return d?.vehicle_registration ?? '—';
-              })(),
-            },
+            { label: 'Véhicule', value: d?.vehicle_name ?? '—' },
+            { label: 'Immatriculation', value: d?.vehicle_registration ?? '—' },
             { label: 'Début', value: fmtDate(r.desired_start_at) },
             { label: 'Fin', value: fmtDate(r.desired_end_at) },
             { label: 'Total', value: fmtMad(grandTotal) },
             { label: 'Solde', value: fmtMad(balance), highlight: balance > 0 },
           ].map((c, i) => (
-            <div key={i} className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/60 px-5 py-4">
+            <div key={i} className="bg-white px-4 py-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{c.label}</div>
-              <div className={`mt-1.5 text-base font-black leading-snug break-words ${(c as { highlight?: boolean }).highlight ? 'text-rose-600' : 'text-slate-800'}`}>
+              <div className={`mt-0.5 text-sm font-black truncate ${(c as any).highlight ? 'text-rose-600' : 'text-slate-800'}`}>
                 {c.value}
               </div>
             </div>
@@ -237,70 +354,67 @@ export const ReservationDetailPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => { setValidateError(null); validateM.mutate(); }}
+              onClick={() => validateM.mutate()}
               disabled={validateM.isPending}
               className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50 shadow-lg"
             >
-              {validateM.isPending ? 'Validation…' : '✓ Valider la réservation'}
+              {validateM.isPending ? 'Validation…' : 'Valider la réservation'}
             </button>
           </div>
         )}
-        {validateError && (
-          <div className="border-t border-rose-200 bg-rose-50 px-6 py-3 text-sm text-rose-800">
-            <span className="font-black">Erreur de validation :</span> {validateError}
-          </div>
-        )}
 
-        {/* No contract banner */}
-        {!['cancelled', 'closed', 'draft'].includes(status) && d && !d.has_contract && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-200 bg-amber-50 px-6 py-3">
-            <div className="flex items-center gap-2">
-              <div>
-                <div className="text-xs font-black text-amber-800">Aucun contrat associé</div>
-                <div className="text-[10px] text-amber-600">Cette réservation n'a pas encore de contrat. Générez un contrat pour formaliser la location.</div>
-              </div>
-            </div>
-            <Link
-              to={`/contracts/new?from_reservation=${rid}`}
-              className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white hover:bg-amber-700 shadow-lg transition-colors"
+        {/* Status change + Quick actions bar */}
+        <div className="flex items-center gap-1.5 border-t border-slate-100 px-6 py-3 bg-slate-50/50 overflow-x-auto">
+          <div className="flex items-center gap-1.5 mr-2 shrink-0">
+            <select
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700"
+              value={statusChangeTarget || status}
+              onChange={(e) => setStatusChangeTarget(e.target.value === status ? '' : e.target.value)}
             >
-              Générer contrat
-            </Link>
+              {Object.entries(STATUS_FR).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            {statusChangeTarget && statusChangeTarget !== status && (
+              <button
+                onClick={() => changeStatusM.mutate(statusChangeTarget)}
+                disabled={changeStatusM.isPending}
+                className="rounded-lg bg-indigo-600 px-2 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-50 shrink-0"
+              >
+                {changeStatusM.isPending ? '...' : 'Appliquer'}
+              </button>
+            )}
           </div>
-        )}
-
-        {/* Quick actions bar */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-6 py-3 bg-slate-50/50">
           {status === 'draft' && (
             <button
-              onClick={() => { setValidateError(null); validateM.mutate(); }}
+              onClick={() => validateM.mutate()}
               disabled={validateM.isPending}
-              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-emerald-700 disabled:opacity-50 shrink-0"
             >
-              ✓ Valider réservation
+              Valider
             </button>
           )}
           {!['cancelled', 'closed'].includes(status) && (
             <Link
               to={`/contracts/new?from_reservation=${rid}`}
-              className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
+              className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-amber-700 transition-colors shrink-0"
             >
-              Générer contrat
+              Contrat
             </Link>
           )}
           {!['cancelled', 'closed', 'draft'].includes(status) && (
             <button
-              onClick={() => setSwapWizardOpen(true)}
-              className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-black text-white hover:bg-slate-900"
+              onClick={() => { setSwapError(null); setSwapOpen(true); }}
+              className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-slate-900 shrink-0"
             >
-              Changer de véhicule
+              Changer véhicule
             </button>
           )}
           {status === 'reserved' && (
             <button
               onClick={() => confirmM.mutate()}
               disabled={confirmM.isPending}
-              className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-50 shrink-0"
             >
               Confirmer
             </button>
@@ -309,60 +423,60 @@ export const ReservationDetailPage: React.FC = () => {
             <>
               <button
                 onClick={() => setActiveTab('checkout')}
-                className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700"
+                className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-emerald-700 shrink-0"
               >
                 Check-Out
               </button>
               <button
                 onClick={() => setActiveTab('checkin')}
-                className="rounded-xl bg-cyan-600 px-3 py-2 text-xs font-black text-white hover:bg-cyan-700"
+                className="rounded-lg bg-cyan-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-cyan-700 shrink-0"
               >
                 Check-In
               </button>
               <button
-                onClick={() => { setActiveTab('payments'); setTimeout(() => { setPaymentError(null); setPaymentDrawerOpen(true); }, 100); }}
-                className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700"
+                onClick={() => { setActiveTab('payments'); setTimeout(openPaymentDrawer, 100); }}
+                className="rounded-lg bg-violet-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-violet-700 shrink-0"
               >
-                Ajouter paiement
+                Paiement
               </button>
               <button
                 onClick={() => setActiveTab('invoices')}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700 hover:bg-slate-50 shrink-0"
               >
-                Générer facture
+                Facture
               </button>
               <button
-                onClick={() => cancelM.mutate()}
+                onClick={() => setCancelDialog({ open: true, reason: '', error: null })}
                 disabled={cancelM.isPending}
-                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                className="rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-rose-600 hover:bg-rose-50 disabled:opacity-50 ml-auto shrink-0"
               >
-                Annuler réservation
+                Annuler
               </button>
             </>
           )}
           {status === 'cancelled' && !deleteConfirm && (
             <button
               onClick={() => setDeleteConfirm(true)}
-              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white hover:bg-rose-700"
+              className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-rose-700 shrink-0"
             >
               Supprimer
             </button>
           )}
           {status === 'cancelled' && deleteConfirm && (
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-xs font-bold text-rose-600">Confirmer la suppression ?</span>
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+              <span className="text-[11px] font-bold text-rose-600">Supprimer ?</span>
               <button
                 onClick={() => deleteM.mutate()}
                 disabled={deleteM.isPending}
-                className="rounded-xl bg-rose-700 px-3 py-2 text-xs font-black text-white hover:bg-rose-800 disabled:opacity-50"
+                className="rounded-lg bg-rose-700 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-rose-800 disabled:opacity-50"
               >
-                {deleteM.isPending ? 'Suppression…' : 'Oui, supprimer'}
+                {deleteM.isPending ? '...' : 'Oui'}
               </button>
               <button
                 onClick={() => setDeleteConfirm(false)}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-black text-slate-600 hover:bg-slate-50"
               >
-                Annuler
+                Non
               </button>
             </div>
           )}
@@ -397,13 +511,14 @@ export const ReservationDetailPage: React.FC = () => {
         <div className="p-6">
           <Suspense fallback={<TabFallback />}>
             {activeTab === 'summary'    && <TabSummary data={d} />}
+            {activeTab === 'missions'   && <TabMissions missions={d?.missions ?? []} reservation={r} />}
             {activeTab === 'drivers'    && <TabDrivers reservationId={rid!} drivers={d?.drivers ?? []} onRefresh={invalidate} />}
-            {activeTab === 'contract'   && <TabContract reservation={r} detail={d} />}
-            {activeTab === 'checkout'   && <TabCheckOut reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
-            {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} onRefresh={invalidate} />}
+            {activeTab === 'contract'   && <TabContract reservation={r} />}
+            {activeTab === 'checkout'   && <TabCheckOut reservationId={rid!} reports={d?.handover_reports ?? []} franchiseDue={Number(d?.contract?.deposit_amount ?? 0)} onRefresh={invalidate} />}
+            {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} damagesCount={(d?.damage_reports ?? []).length} onRefresh={invalidate} />}
             {activeTab === 'extensions' && <TabExtensions reservationId={rid!} extensions={d?.extensions ?? []} onRefresh={invalidate} />}
             {activeTab === 'damages'    && <TabDamages reservationId={rid!} damages={d?.damage_reports ?? []} onRefresh={invalidate} />}
-            {activeTab === 'payments'   && <TabPayments data={d} onAddPayment={() => { setPaymentError(null); setPaymentDrawerOpen(true); }} />}
+            {activeTab === 'payments'   && <TabPayments data={d} onAddPayment={openPaymentDrawer} />}
             {activeTab === 'invoices'   && <TabInvoices reservationId={rid!} invoices={d?.invoices ?? []} data={d} onRefresh={invalidate} />}
             {activeTab === 'history'    && <TabHistory history={d?.history ?? []} />}
           </Suspense>
@@ -428,19 +543,454 @@ export const ReservationDetailPage: React.FC = () => {
             customer_id: r?.customer_id ?? '',
             reservation_id: rid ?? '',
           }}
+          reservationBalance={balance}
+          reservationVehicleId={r?.vehicle_id}
+          reservationInvoiceId={d?.invoices?.[0]?.id}
         />
       </DrawerPanel>
 
-      <VehicleSwapWizard
-        open={swapWizardOpen}
-        onClose={() => setSwapWizardOpen(false)}
-        source={rid ? { type: 'reservation', id: rid } : null}
-        reservation={{ ...r, customer_name: d?.customer_name, vehicle_name: d?.vehicle_name, vehicle_registration: d?.vehicle_registration }}
-        currentVehicle={null}
-        onSuccess={() => {
-          qc.invalidateQueries({ queryKey: ['reservation', rid] });
-        }}
-      />
+      {/* ── Cancel reservation confirmation ── */}
+      {cancelDialog.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+          onClick={() => !cancelM.isPending && setCancelDialog({ open: false, reason: '', error: null })}
+        >
+          <div
+            className="my-4 w-full max-w-md rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-black text-slate-900">Annuler cette réservation ?</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    La réservation {r?.reservation_number ?? ''} passera au statut <strong>Annulé</strong>. Les missions
+                    planifiées seront elles aussi annulées. Cette action est irréversible.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5 space-y-3">
+              <label className="block">
+                <span className="mb-1 flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <span>Motif d'annulation</span>
+                  <span className="font-semibold text-slate-400">Optionnel</span>
+                </span>
+                <textarea
+                  className="df-input w-full resize-none"
+                  rows={3}
+                  placeholder="Ex : Demande du client, indisponibilité véhicule, retard de règlement…"
+                  value={cancelDialog.reason}
+                  onChange={(e) => setCancelDialog((s) => ({ ...s, reason: e.target.value, error: null }))}
+                />
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {['Demande client', 'Indisponibilité véhicule', 'Retard de règlement', 'Erreur de saisie'].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setCancelDialog((s) => ({ ...s, reason: m, error: null }))}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {cancelDialog.error && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                  {cancelDialog.error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setCancelDialog({ open: false, reason: '', error: null })}
+                disabled={cancelM.isPending}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Revenir
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelM.mutate(cancelDialog.reason.trim() || undefined)}
+                disabled={cancelM.isPending}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {cancelM.isPending ? 'Annulation…' : "Oui, annuler la réservation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Vehicle swap modal ── */}
+      {swapOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:items-center"
+          onClick={() => setSwapOpen(false)}
+        >
+          <div
+            className="my-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex-1 overflow-y-auto p-6">
+            <h3 className="mb-1 text-sm font-black text-slate-900">Changer de véhicule</h3>
+            <p className="mb-4 text-xs text-slate-500">
+              Véhicule actuel : <span className="font-bold text-slate-700">{d?.vehicle_name ?? '—'}</span> ({d?.vehicle_registration ?? '—'})
+            </p>
+
+            {/* Mode toggle */}
+            <div className="mb-4 flex gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={swapMode === 'instant'} onChange={() => setSwapMode('instant')} className="accent-indigo-600" />
+                <div>
+                  <div className="text-xs font-black text-slate-800">Changement immédiat</div>
+                  <div className="text-[10px] text-slate-500">Approuver et appliquer maintenant</div>
+                </div>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={swapMode === 'request'} onChange={() => setSwapMode('request')} className="accent-amber-600" />
+                <div>
+                  <div className="text-xs font-black text-slate-800">Demande (approbation requise)</div>
+                  <div className="text-[10px] text-slate-500">En attente de validation</div>
+                </div>
+              </label>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-bold text-slate-400">Nouveau véhicule *</label>
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                  value={swapVehicleId}
+                  onChange={(e) => setSwapVehicleId(e.target.value)}
+                >
+                  <option value="">— Sélectionner un véhicule —</option>
+                  {(vehiclesQ.data ?? [])
+                    .filter((v: any) => v.id !== r?.vehicle_id)
+                    .map((v: any) => {
+                      const brand = v.brand?.name ?? v.brand ?? v.brand_name ?? '';
+                      const model = v.model?.model_name ?? v.model?.name ?? v.model ?? v.model_name ?? '';
+                      const reg = v.registration_number ?? v.registration ?? '';
+                      const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
+                      const isSL = ownership === 'sub_rented' || ownership === 'sub_rental';
+                      // Take the derived availability first (server already
+                      // considers live reservations/contracts); fall back to the
+                      // raw fleet status only when it's missing.
+                      const availability = String(v.availability_status ?? v.availabilityStatus ?? '').toLowerCase();
+                      const fleetStatus  = String(v.status ?? '').toLowerCase();
+                      // Prefer the freshly computed flags from the list endpoint
+                      // (hasActiveReservation / hasActiveContract) because the
+                      // vehicles.current_* columns are only updated manually and
+                      // frequently go stale in production.
+                      const hasCurrentReservation = !!(v.hasActiveReservation ?? v.current_reservation_id ?? v.currentReservationId);
+                      const hasCurrentContract    = !!(v.hasActiveContract    ?? v.current_contract_id    ?? v.currentContractId);
+                      const effective = hasCurrentContract
+                        ? 'rented'
+                        : hasCurrentReservation
+                        ? 'reserved'
+                        : (availability || fleetStatus);
+                      const statusFr =
+                        effective === 'available'          ? 'Disponible'
+                        : effective === 'rented'           ? 'Loué'
+                        : effective === 'reserved'         ? 'Réservé'
+                        : effective === 'maintenance'      ? 'Maintenance'
+                        : effective === 'in_repair'        ? 'Réparation'
+                        : effective === 'blocked' || effective === 'unavailable' ? 'Indisponible'
+                        : effective || 'Inconnu';
+                      const isAvailable = effective === 'available';
+                      const nameLabel = [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule';
+                      const prefix = isSL ? '🟣 SL · ' : '';
+                      return (
+                        <option key={v.id} value={v.id} disabled={!isAvailable}>
+                          {prefix}{nameLabel} · {reg} ({statusFr})
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold text-slate-400">Motif (optionnel)</label>
+                <input
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                  placeholder="Ex: panne, demande client, upgrade…"
+                  value={swapReason}
+                  onChange={(e) => setSwapReason(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {swapError && swapError.length > 0 && (
+              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+                <div className="mb-1 font-black">
+                  {swapError.length === 1 ? 'Changement impossible' : `Changement impossible (${swapError.length} problèmes)`}
+                </div>
+                <ul className="list-inside list-disc space-y-0.5">
+                  {swapError.map((m, i) => <li key={i}>{m}</li>)}
+                </ul>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setSwapOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600">Annuler</button>
+              <button
+                onClick={() => swapMode === 'instant' ? swapInstantM.mutate() : swapRequestM.mutate()}
+                disabled={!swapVehicleId || swapInstantM.isPending || swapRequestM.isPending}
+                className={`rounded-xl px-5 py-2.5 text-xs font-black text-white disabled:opacity-50 ${swapMode === 'instant' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-600 hover:bg-amber-700'}`}
+              >
+                {(swapInstantM.isPending || swapRequestM.isPending)
+                  ? 'Traitement…'
+                  : swapMode === 'instant' ? 'Appliquer le changement' : 'Envoyer la demande'}
+              </button>
+            </div>
+
+            {/* Swap history */}
+            {(swapsQ.data ?? []).length > 0 && (
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Historique des changements ({(swapsQ.data ?? []).length})
+                </div>
+                <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                  {(swapsQ.data ?? []).map((s: any) => {
+                    const vehLabel = (v: any) => {
+                      const brand = v?.brand?.name ?? v?.brand_name ?? v?.brand ?? '';
+                      const model = v?.model?.model_name ?? v?.model?.name ?? v?.model_name ?? v?.model ?? '';
+                      const reg = v?.registration_number ?? v?.registration ?? '—';
+                      return { name: [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule', plate: reg };
+                    };
+                    const userName = (u: any) =>
+                      u ? ([u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || '—') : '—';
+                    const fmtDT = (iso?: string | null) => {
+                      if (!iso) return '—';
+                      const d = new Date(iso);
+                      return d.toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    };
+                    const oldV = vehLabel(s.old_vehicle);
+                    const newV = vehLabel(s.new_vehicle);
+                    const tone =
+                      s.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      : s.status === 'rejected' ? 'bg-rose-100 text-rose-700 border-rose-200'
+                      : 'bg-amber-100 text-amber-700 border-amber-200';
+                    const statusFr = s.status === 'approved' ? 'Validé' : s.status === 'rejected' ? 'Refusé' : 'En attente';
+                    return (
+                      <div key={s.id} className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ancien véhicule</div>
+                            <div className="font-bold text-slate-700">{oldV.name}</div>
+                            <div className="font-mono text-[11px] text-slate-500">{oldV.plate}</div>
+                          </div>
+                          <div className="mt-4 text-slate-400">→</div>
+                          <div className="min-w-0 text-right">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nouveau véhicule</div>
+                            <div className="font-black text-slate-900">{newV.name}</div>
+                            <div className="font-mono text-[11px] text-slate-500">{newV.plate}</div>
+                          </div>
+                          <span className={`ms-auto rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${tone}`}>
+                            {statusFr}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-2 text-[11px]">
+                          <div>
+                            <span className="font-bold text-slate-400">Demandé par :</span>{' '}
+                            <span className="font-semibold text-slate-700">{userName(s.requested_by_user)}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-400">Le :</span>{' '}
+                            <span className="font-semibold text-slate-700">{fmtDT(s.requested_at ?? s.created_at)}</span>
+                          </div>
+                          {(s.status === 'approved' || s.status === 'rejected') && (
+                            <>
+                              <div>
+                                <span className="font-bold text-slate-400">{s.status === 'approved' ? 'Validé par :' : 'Refusé par :'}</span>{' '}
+                                <span className="font-semibold text-slate-700">{userName(s.resolved_by_user)}</span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-400">Le :</span>{' '}
+                                <span className="font-semibold text-slate-700">{fmtDT(s.resolved_at)}</span>
+                              </div>
+                            </>
+                          )}
+                          {s.reason && (
+                            <div className="col-span-2">
+                              <span className="font-bold text-slate-400">Motif :</span>{' '}
+                              <span className="italic text-slate-700">{s.reason}</span>
+                            </div>
+                          )}
+                          {s.status === 'rejected' && s.rejection_reason && (
+                            <div className="col-span-2">
+                              <span className="font-bold text-slate-400">Motif de refus :</span>{' '}
+                              <span className="italic text-rose-700">{s.rejection_reason}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+};
+
+// ---------------------------------------------------------------------------
+// Missions tab with timeline
+// ---------------------------------------------------------------------------
+const MISSION_STATUS_FR: Record<string, string> = { planned: 'Planifiée', in_progress: 'En cours', completed: 'Terminée', failed: 'Échouée' };
+const MISSION_TYPE_FR: Record<string, string> = { delivery: 'Livraison', pickup: 'Récupération' };
+
+const TabMissions: React.FC<{ missions: MissionRow[]; reservation: Record<string, unknown> | null }> = ({ missions, reservation }) => {
+  if (!missions.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="text-4xl mb-3 text-slate-300">—</div>
+        <div className="text-sm font-bold text-slate-500">Aucune mission créée</div>
+        <div className="text-xs text-slate-400 mt-1">Utilisez le bouton « + Mission » sur la liste des réservations</div>
+      </div>
+    );
+  }
+
+  const FLOW_STEPS = [
+    { key: 'reserved', label: 'Réservé' },
+    { key: 'mission_delivery', label: 'Livraison' },
+    { key: 'active', label: 'En cours' },
+    { key: 'mission_pickup', label: 'Récupération' },
+    { key: 'closed', label: 'Clôturé' },
+  ];
+
+  const resStatus = String(reservation?.status ?? 'draft');
+  const deliveryMission = missions.find((m) => m.mission_type === 'delivery');
+  const pickupMission = missions.find((m) => m.mission_type === 'pickup');
+
+  const stepDone = (key: string) => {
+    if (key === 'reserved') return resStatus !== 'draft';
+    if (key === 'mission_delivery') return deliveryMission?.status === 'completed';
+    if (key === 'active') return ['active', 'extension_requested', 'return_scheduled', 'returned', 'inspection_pending', 'damage_pending', 'billing_pending', 'closed'].includes(resStatus);
+    if (key === 'mission_pickup') return pickupMission?.status === 'completed';
+    if (key === 'closed') return resStatus === 'closed';
+    return false;
+  };
+  const stepActive = (key: string) => {
+    if (key === 'mission_delivery') return deliveryMission?.status === 'in_progress';
+    if (key === 'mission_pickup') return pickupMission?.status === 'in_progress';
+    if (key === 'active') return resStatus === 'active';
+    return false;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Timeline */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Timeline</div>
+        <div className="flex items-center justify-between">
+          {FLOW_STEPS.map((step, i) => {
+            const done = stepDone(step.key);
+            const active = stepActive(step.key);
+            return (
+              <React.Fragment key={step.key}>
+                {i > 0 && <div className={`flex-1 h-0.5 mx-1 ${done ? 'bg-emerald-400' : active ? 'bg-indigo-300' : 'bg-slate-200'}`} />}
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black ${done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-500 text-white ring-4 ring-indigo-100' : 'bg-slate-100 text-slate-400'}`}>
+                    {done ? 'OK' : i + 1}
+                  </div>
+                  <span className={`text-[10px] font-bold ${done ? 'text-emerald-600' : active ? 'text-indigo-600' : 'text-slate-400'}`}>{step.label}</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Mission cards */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {missions.map((m) => (
+          <div key={m.id} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${m.mission_type === 'pickup' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>{m.mission_type === 'pickup' ? 'R' : 'L'}</span>
+                <span className="text-sm font-black text-slate-800">{MISSION_TYPE_FR[m.mission_type] ?? m.mission_type}</span>
+              </div>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : m.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                {MISSION_STATUS_FR[m.status] ?? m.status}
+              </span>
+            </div>
+            {m.mission_number && <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{m.mission_number}</div>}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {m.scheduled_start_at && (
+                <div><span className="text-slate-400">Prévu</span><div className="font-bold text-slate-700">{new Date(m.scheduled_start_at).toLocaleString('fr-MA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>
+              )}
+              {m.actual_start_at && (
+                <div><span className="text-slate-400">Début réel</span><div className="font-bold text-slate-700">{new Date(m.actual_start_at).toLocaleString('fr-MA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>
+              )}
+              {m.actual_end_at && (
+                <div><span className="text-slate-400">Fin réelle</span><div className="font-bold text-emerald-700">{new Date(m.actual_end_at).toLocaleString('fr-MA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>
+              )}
+            </div>
+            {m.assigned_agent && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-black text-indigo-600">
+                  {(m.assigned_agent.name?.[0] ?? m.assigned_agent.first_name?.[0] ?? '?').toUpperCase()}
+                </span>
+                <span className="font-bold text-slate-700">{m.assigned_agent.name || `${m.assigned_agent.first_name ?? ''} ${m.assigned_agent.last_name ?? ''}`.trim()}</span>
+              </div>
+            )}
+            {(m.origin_address || m.destination_address) && (
+              <div className="space-y-1">
+                {m.origin_address && (
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-slate-400 font-bold">De :</span>
+                    <span className="text-slate-600">{m.origin_address}</span>
+                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.origin_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">Carte</a>
+                  </div>
+                )}
+                {m.destination_address && (
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-slate-400 font-bold">À :</span>
+                    <span className="text-slate-600">{m.destination_address}</span>
+                    <a href={`https://www.google.com/maps/search/${encodeURIComponent(m.destination_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 font-bold" title="Voir sur la carte">Carte</a>
+                  </div>
+                )}
+                {m.origin_address && m.destination_address && (
+                  <a href={`https://www.google.com/maps/dir/${encodeURIComponent(m.origin_address)}/${encodeURIComponent(m.destination_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-100 transition">
+                    Itinéraire Google Maps
+                  </a>
+                )}
+              </div>
+            )}
+            {m.notes && <div className="text-[10px] text-slate-500 italic">{m.notes}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type MissionRow = {
+  id: string;
+  mission_number?: string;
+  mission_type: string;
+  status: string;
+  scheduled_start_at?: string | null;
+  scheduled_end_at?: string | null;
+  actual_start_at?: string | null;
+  actual_end_at?: string | null;
+  origin_address?: string | null;
+  destination_address?: string | null;
+  notes?: string | null;
+  assigned_user_id?: string | null;
+  assigned_agent?: { id: string; name?: string; first_name?: string; last_name?: string; email?: string } | null;
 };

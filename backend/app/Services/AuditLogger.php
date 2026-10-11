@@ -117,7 +117,11 @@ class AuditLogger
     ): ?AuditLog {
         return self::write(
             action: 'status_changed',
-            label: $label ?? sprintf('Statut %s → %s', $fromStatus, $toStatus),
+            label: $label ?? sprintf(
+                'Statut %s → %s',
+                AuditTrailPresenter::translate($fromStatus) ?? $fromStatus,
+                AuditTrailPresenter::translate($toStatus) ?? $toStatus,
+            ),
             subject: $subject,
             user: $user,
             before: ['status' => $fromStatus] + (array) $extra,

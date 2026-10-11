@@ -480,78 +480,22 @@
   // ── Barre de recherche hero ─────────────────────────────
   function wireSearchbar() {
     var form = $('searchForm');
+    var quote = $('quoteForm');
     if (!form) return;
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var pickup = $('searchPickup').value;
       var ret = $('searchReturn').value;
-      var category = $('searchCategory').value;
-      // Store dates in sessionStorage so flotte.html and the reservation form can read them
-      try {
-        if (pickup) sessionStorage.setItem('mc_pickup', pickup);
-        if (ret) sessionStorage.setItem('mc_return', ret);
-        if (category) sessionStorage.setItem('mc_category', category);
-      } catch (_) {}
-      // Navigate to fleet page with filters
-      var params = [];
-      if (category) params.push('cat=' + encodeURIComponent(category));
-      window.location.href = 'flotte.html' + (params.length ? '?' + params.join('&') : '');
+      if (quote) {
+        if (pickup && quote.elements.pickup_at) quote.elements.pickup_at.value = pickup;
+        if (ret && quote.elements.return_at) quote.elements.return_at.value = ret;
+      }
+      var target = document.getElementById('flotte') || quote;
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
 
-  // ── Agences : chargement depuis l'API + clic sur carte ──
-  function loadAgencies() {
-    if (!API) return;
-    var list = $('agenciesList');
-    if (!list) return;
-    fetch(API + '/v1/public/site/branches', { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function (payload) {
-        var branches = (payload && payload.data) || [];
-        if (!branches.length) return;
-        list.innerHTML = '';
-        // Also update hero searchbar branch select
-        var branchSelect = $('searchBranch');
-        if (branchSelect) {
-          branchSelect.innerHTML = '';
-          var allOpt = document.createElement('option');
-          allOpt.value = '';
-          allOpt.textContent = 'Toutes les agences';
-          branchSelect.appendChild(allOpt);
-        }
-        branches.forEach(function (b, i) {
-          var article = document.createElement('article');
-          article.className = 'agency' + (i === 0 ? ' agency--active' : '');
-          var h3 = document.createElement('h3');
-          h3.textContent = b.name || '—';
-          article.appendChild(h3);
-          var p = document.createElement('p');
-          p.textContent = b.city || '';
-          article.appendChild(p);
-          var small = document.createElement('small');
-          var info = [];
-          if (b.phone) info.push(b.phone);
-          if (b.email) info.push(b.email);
-          small.textContent = info.join(' · ');
-          article.appendChild(small);
-          list.appendChild(article);
-          // Populate branch select
-          if (branchSelect) {
-            var opt = document.createElement('option');
-            opt.value = b.id;
-            opt.textContent = b.name + (b.city ? ' · ' + b.city : '');
-            branchSelect.appendChild(opt);
-          }
-        });
-        // Update hero fact
-        var agencyFact = document.querySelector('.hero__facts li:nth-child(2) strong');
-        if (agencyFact) agencyFact.textContent = branches.length;
-      })
-      .catch(function () {
-        // Keep fallback HTML agencies
-      });
-  }
-
+  // ── Agences : clic sur une carte → re-centre l'iframe ──
   function wireAgencies() {
     var list = $('agenciesList');
     var frame = $('agencyMapFrame');
@@ -583,29 +527,15 @@
     var select = $('vehicleSelect');
     if (select && id) select.value = id;
     togglePreferences();
-    // Pre-fill dates from sessionStorage if available
-    try {
-      var storedPickup = sessionStorage.getItem('mc_pickup');
-      var storedReturn = sessionStorage.getItem('mc_return');
-      var form = $('quoteForm');
-      if (form) {
-        if (storedPickup && form.elements.pickup_at) {
-          form.elements.pickup_at.value = storedPickup;
-          form.elements.pickup_at.dispatchEvent(new Event('change'));
-        }
-        if (storedReturn && form.elements.return_at) {
-          form.elements.return_at.value = storedReturn;
-          form.elements.return_at.dispatchEvent(new Event('change'));
-        }
-        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        var note = $('quoteNote');
-        if (note) {
-          note.className = 'formNote';
-          note.textContent = name + ' — complétez vos dates, on vous rappelle.';
-        }
-        updatePriceTip();
+    var form = $('quoteForm');
+    if (form) {
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      var note = $('quoteNote');
+      if (note) {
+        note.className = 'formNote';
+        note.textContent = name + ' — complétez vos dates, on vous rappelle.';
       }
-    } catch (_) {}
+    }
   }
 
   // ── Catalogue public : marques + modeles complets de la base ──
@@ -912,11 +842,6 @@
     block.hidden = !!vehicleSelect.value;
   }
 
-  // Vehicles are stored globally so flotte.html can reuse them.
-  var ALL_VEHICLES = [];
-  var TIER_SCHEMA = [];
-  var VEHICLES_BY_ID = {};
-
   function loadFleet() {
     var grid = $('fleetGrid');
     var note = $('fleetNote');
@@ -926,27 +851,14 @@
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (payload) {
         var list = (payload && payload.data) || [];
-        ALL_VEHICLES = list;
-        var meta = (payload && payload.meta) || {};
-        if (meta.tier_schema) {
-          TIER_SCHEMA = Object.keys(meta.tier_schema).map(function (k) {
-            return { key: k, min: meta.tier_schema[k].min_days, max: meta.tier_schema[k].max_days, label: meta.tier_schema[k].label };
-          });
-        }
-        list.forEach(function (v) { VEHICLES_BY_ID[v.id] = v; });
         grid.innerHTML = '';
         if (!list.length) {
           note.textContent = 'La flotte est en cours de mise à jour — appelez-nous, nous vous dirons ce qui est disponible.';
           return;
         }
         var select = $('vehicleSelect');
-        // Show only first 9 on landing
-        var preview = list.slice(0, 9);
-        preview.forEach(function (v) {
-          grid.appendChild(vehicleCard(v));
-        });
-        // Populate vehicle select with ALL vehicles
         list.forEach(function (v) {
+          grid.appendChild(vehicleCard(v));
           if (select) {
             var opt = document.createElement('option');
             opt.value = v.id;
@@ -955,11 +867,11 @@
             select.appendChild(opt);
           }
         });
+        // Les marques et modeles du formulaire ne viennent plus de la flotte
+        // visible : loadCatalog() les tire de l'API /public/site/catalog
+        // pour couvrir tout le referentiel.
         var fact = $('factFleet');
         if (fact) fact.textContent = list.length;
-        // Show "Voir toute la flotte" if there are more than 9
-        var moreBtn = $('fleetMore');
-        if (moreBtn && list.length > 9) moreBtn.hidden = false;
         note.textContent = 'Tarifs à la journée, dégressifs à la semaine et au mois. Disponibilité confirmée par téléphone.';
       })
       .catch(function () {
@@ -1170,107 +1082,6 @@
     });
   }
 
-  function updatePriceTip() {
-    var tip = $('priceTip');
-    if (!tip) return;
-    var form = $('quoteForm');
-    if (!form) return;
-    var vid = form.elements.vehicle_id ? form.elements.vehicle_id.value : '';
-    var pickup = form.elements.pickup_at ? form.elements.pickup_at.value : '';
-    var ret = form.elements.return_at ? form.elements.return_at.value : '';
-    if (!vid) { tip.hidden = true; return; }
-    var v = VEHICLES_BY_ID[vid];
-    if (!v) { tip.hidden = true; return; }
-    var tiers = v.rental_price_tiers;
-    var hasTiers = tiers && Object.keys(tiers).some(function (k) { return tiers[k] && Number(tiers[k]) > 0; });
-    var days = 0;
-    if (pickup && ret) {
-      var d1 = new Date(pickup), d2 = new Date(ret);
-      days = Math.round((d2 - d1) / 86400000);
-      if (days < 1) days = 1;
-    }
-    var pricePerDay = null;
-    var tierLabel = '';
-    if (hasTiers && days > 0) {
-      for (var i = 0; i < TIER_SCHEMA.length; i++) {
-        var t = TIER_SCHEMA[i];
-        if (days >= t.min && (t.max === null || days <= t.max)) {
-          pricePerDay = tiers[t.key] ? Number(tiers[t.key]) : null;
-          tierLabel = t.label;
-          break;
-        }
-      }
-    }
-    if (pricePerDay && pricePerDay > 0 && days > 0) {
-      var total = pricePerDay * days;
-      tip.innerHTML =
-        '<strong>' + pricePerDay.toLocaleString('fr-MA') + ' MAD/jour</strong>' +
-        ' × ' + days + ' jour' + (days > 1 ? 's' : '') +
-        ' = <strong>' + total.toLocaleString('fr-MA') + ' MAD</strong>' +
-        '<span class="priceTip__label"> · Tarif ' + tierLabel + '</span>';
-      tip.hidden = false;
-    } else if (v.price_per_day && days > 0) {
-      var dp = Number(v.price_per_day);
-      var tot = dp * days;
-      tip.innerHTML =
-        '<strong>' + dp.toLocaleString('fr-MA') + ' MAD/jour</strong>' +
-        ' × ' + days + ' jour' + (days > 1 ? 's' : '') +
-        ' = <strong>' + tot.toLocaleString('fr-MA') + ' MAD</strong>';
-      tip.hidden = false;
-    } else if (v.price_per_day || hasTiers) {
-      var basePrice = hasTiers
-        ? (v.price_from_per_day || v.price_per_day)
-        : v.price_per_day;
-      if (basePrice) {
-        tip.innerHTML = (hasTiers ? 'À partir de ' : '') +
-          '<strong>' + Number(basePrice).toLocaleString('fr-MA') + ' MAD/jour</strong>' +
-          (hasTiers ? '<span class="priceTip__label"> · Le tarif s\'adapte à la durée de location</span>' : '');
-        tip.hidden = false;
-      } else {
-        tip.hidden = true;
-      }
-    } else {
-      tip.hidden = true;
-    }
-  }
-
-  function wirePriceTip() {
-    var form = $('quoteForm');
-    if (!form) return;
-    var fields = ['quotePickup', 'quoteReturn', 'vehicleSelect'];
-    fields.forEach(function (id) {
-      var el = $(id);
-      if (el) {
-        el.addEventListener('change', updatePriceTip);
-        el.addEventListener('input', updatePriceTip);
-      }
-    });
-  }
-
-  function prefillFromSession() {
-    try {
-      var vid = sessionStorage.getItem('mc_vehicle_id');
-      var vname = sessionStorage.getItem('mc_vehicle_name');
-      if (!vid) return;
-      sessionStorage.removeItem('mc_vehicle_id');
-      sessionStorage.removeItem('mc_vehicle_name');
-      var wait = function (tries) {
-        var sel = $('vehicleSelect');
-        if (!sel) return;
-        var opt = sel.querySelector('option[value="' + vid + '"]');
-        if (!opt && tries < 20) { setTimeout(function () { wait(tries + 1); }, 200); return; }
-        if (opt) {
-          sel.value = vid;
-          sel.dispatchEvent(new Event('change'));
-        }
-        chooseVehicle(vid, vname || '');
-      };
-      if (window.location.hash === '#reserver') {
-        wait(0);
-      }
-    } catch (_) {}
-  }
-
   fillContacts();
   fillBrandsMarquee();
   wireMenu();
@@ -1280,9 +1091,6 @@
   wireDateFields();
   wireAgencies();
   wireFleetFilters();
-  wirePriceTip();
   loadFleet();
   loadCatalog();
-  loadAgencies();
-  prefillFromSession();
 })();

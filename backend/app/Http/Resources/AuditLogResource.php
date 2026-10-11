@@ -70,6 +70,8 @@ class AuditLogResource extends JsonResource
             'company_id' => $this->company_id,
             'branch_id' => $this->branch_id,
             'user_id' => $this->user_id,
+            // Un agent lit un nom, pas une adresse e-mail ni un UUID.
+            'actor_name' => $this->user?->name ?: $this->user?->email,
             'actor_email' => $this->user?->email,
             // `role` column is absent on the live MySQL users table — the
             // role lives in the `user_roles` pivot. `primaryRoleCode()` reads

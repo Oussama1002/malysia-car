@@ -12,6 +12,7 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
+import { DateField } from '@/modules/shared/components/DateField';
 
 const CATEGORY_LABEL: Record<FixedAsset['category'], string> = {
   vehicle: 'Véhicule',
@@ -211,7 +212,7 @@ const FixedAssetForm: React.FC<{
         </div>
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Date d'acquisition *</label>
-          <input type="date" className="df-input mt-1" value={form.acquisition_date ?? ''} onChange={(e) => setForm({ ...form, acquisition_date: e.target.value })} required />
+          <DateField className="df-input mt-1" value={form.acquisition_date ?? ''} onChange={(v) => setForm({ ...form, acquisition_date: v })} required />
         </div>
         <div>
           <label className="text-xs font-bold uppercase text-slate-500">Coût d'acquisition *</label>
@@ -267,7 +268,7 @@ const DisposeForm: React.FC<{
       <p className="text-sm text-slate-600">Enregistrez la cession de cet actif. Une écriture comptable sera générée automatiquement.</p>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Date de cession *</label>
-        <input type="date" className="df-input mt-1" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <DateField className="df-input mt-1" value={date} onChange={setDate} required />
       </div>
       <div>
         <label className="text-xs font-bold uppercase text-slate-500">Montant de cession (MAD)</label>

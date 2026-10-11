@@ -108,8 +108,18 @@ class DocumentReaderService
         $absolute = $disk->path($document->file_path);
 
         try {
-            $ocr = $this->ocr->extract($absolute);
+            // Le temps passé est la première question quand un scan traîne :
+            // on le note, par document et par type.
+            $startedAt = microtime(true);
+            $ocr = $this->ocr->extract($absolute, ['doc_type' => $hintedType ?? $document->document_type]);
+            $ocrSeconds = round(microtime(true) - $startedAt, 1);
             $parsed = $this->parser->parse($ocr->rawText, $hintedType ?? $document->document_type);
+            Log::info('reader_document.extracted', [
+                'document' => $document->id,
+                'type' => $hintedType ?? $document->document_type,
+                'ocr_seconds' => $ocrSeconds,
+                'total_seconds' => round(microtime(true) - $startedAt, 1),
+            ]);
 
             return DB::transaction(function () use ($document, $ocr, $parsed) {
                 $document->update([
@@ -118,12 +128,17 @@ class DocumentReaderService
                     'error_message' => null,
                 ]);
 
+                $extractedData = $parsed['fields'];
+                if (! empty($parsed['type_mismatch'])) {
+                    $extractedData['_type_mismatch'] = $parsed['type_mismatch'];
+                }
+
                 return ReaderDocumentExtraction::query()->create([
                     'id' => (string) Str::uuid(),
                     'document_id' => $document->id,
                     'provider' => $ocr->provider,
                     'raw_text' => $ocr->rawText,
-                    'extracted_data' => $parsed['fields'],
+                    'extracted_data' => $extractedData,
                     'validated_data' => null,
                     'confidence_score' => $ocr->confidence,
                     'status' => ReaderDocumentExtraction::STATUS_DRAFT,
@@ -201,6 +216,7 @@ class DocumentReaderService
                 ReaderDocument::TYPE_DRIVING_LICENSE => 'Permis de conduire',
                 ReaderDocument::TYPE_VEHICLE_REGISTRATION => 'Carte grise',
                 ReaderDocument::TYPE_RENTAL_CONTRACT => 'Contrat de location',
+                ReaderDocument::TYPE_AUTORISATION_CIRCULATION => 'Autorisation de circulation',
                 default => $document->file_name,
             };
             // Don't double-attach if the same file is linked again.
@@ -225,7 +241,70 @@ class DocumentReaderService
             }
         }
 
+        if ($entityType === 'customer') {
+            $this->fileKycChecklist($document, $entityId);
+        }
+
         return $document->fresh();
+    }
+
+    /**
+     * La CIN et le permis scannés à la création du client sont exactement les
+     * pièces que la checklist KYC réclame : sans ce rattachement l'agent voyait
+     * « 0 document » et redemandait au client ce qu'il avait déjà donné.
+     */
+    private function fileKycChecklist(ReaderDocument $document, string $customerId): void
+    {
+        $type = match ($document->document_type) {
+            ReaderDocument::TYPE_CIN, ReaderDocument::TYPE_PASSPORT => 'cin',
+            ReaderDocument::TYPE_DRIVING_LICENSE => 'driving_license',
+            default => null,
+        };
+        if ($type === null || ! $document->file_path) {
+            return;
+        }
+
+        try {
+            $case = \App\Models\CustomerKycCase::query()
+                ->where('customer_id', $customerId)
+                ->orderByDesc('created_at')
+                ->first();
+
+            if (! $case) {
+                $case = \App\Models\CustomerKycCase::query()->create([
+                    'customer_id' => $customerId,
+                    'kyc_status' => 'pending',
+                    'verification_level' => 'basic',
+                ]);
+            }
+
+            $already = \App\Models\CustomerKycDocument::query()
+                ->where('kyc_case_id', $case->id)
+                ->where('file_path', $document->file_path)
+                ->exists();
+            if ($already) {
+                return;
+            }
+
+            \App\Models\CustomerKycDocument::query()->create([
+                'kyc_case_id' => $case->id,
+                'document_type' => $type,
+                'file_path' => $document->file_path,
+                'file_name' => $document->file_name,
+                'file_size' => $document->file_size,
+                'mime_type' => $document->mime_type,
+                'verification_status' => 'pending',
+                'notes' => 'Scanné à la saisie du client.',
+            ]);
+        } catch (Throwable $e) {
+            // La checklist est un confort : son échec ne doit pas faire perdre
+            // le rattachement du document lui-même.
+            Log::warning('reader_document.kyc_checklist_failed', [
+                'document' => $document->id,
+                'customer' => $customerId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function humanizeError(string $raw): string

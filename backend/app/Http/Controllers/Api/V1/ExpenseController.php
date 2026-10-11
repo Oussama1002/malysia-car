@@ -59,6 +59,24 @@ class ExpenseController extends Controller
             ->limit(10)
             ->get();
 
+        // Un identifiant ne dit rien : le classement nomme le véhicule.
+        $vehicles = \App\Models\Vehicle::query()
+            ->whereIn('id', $topVehicles->pluck('vehicle_id')->filter()->all())
+            ->with(['brand', 'model'])
+            ->get()
+            ->keyBy('id');
+        $topVehicles = $topVehicles->map(function ($row) use ($vehicles) {
+            $v = $vehicles->get($row->vehicle_id);
+
+            return [
+                'vehicle_id' => $row->vehicle_id,
+                'total' => (float) $row->total,
+                'brand' => $v?->brand?->name ?? $v?->brand_name,
+                'model' => $v?->model?->model_name ?? $v?->model?->name ?? $v?->model_name,
+                'registration' => $v?->registration_number,
+            ];
+        });
+
         $monthlyTrend = Expense::query()
             ->where('expense_date', '>=', $now->copy()->subMonths(12)->startOfMonth()->toDateString())
             ->groupBy(DB::raw("DATE_FORMAT(expense_date, '%Y-%m')"))

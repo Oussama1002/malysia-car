@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { DateField } from '@/modules/shared/components/DateField';
+import { Modal } from '@/modules/shared/components/Modal';
 
 interface Extension {
   id: string;
@@ -31,6 +33,7 @@ const fmtDate = (v: string | null | undefined) =>
 const fmtMad = (v: number) => `${v.toLocaleString('fr-MA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} MAD`;
 
 const TabExtensions: React.FC<Props> = ({ reservationId, extensions, onRefresh }) => {
+  const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ new_end_at: '', additional_amount: '', notes: '' });
 
   const extM = useMutation({
@@ -43,6 +46,7 @@ const TabExtensions: React.FC<Props> = ({ reservationId, extensions, onRefresh }
     onSuccess: () => {
       onRefresh();
       setForm({ new_end_at: '', additional_amount: '', notes: '' });
+      setOpen(false);
     },
   });
 
@@ -92,17 +96,25 @@ const TabExtensions: React.FC<Props> = ({ reservationId, extensions, onRefresh }
         )}
       </div>
 
-      {/* New extension form */}
-      <div className="rounded-xl border border-slate-100 p-5">
-        <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-slate-400">Nouvelle prolongation</h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white hover:bg-amber-700"
+        >
+          + Nouvelle prolongation
+        </button>
+      </div>
+
+      {/* Saisie en popup : la page reste lisible, le formulaire ne la coupe pas. */}
+      <Modal open={open} title="Nouvelle prolongation" onClose={() => setOpen(false)} widthClass="max-w-xl">
+        <div className="space-y-4">
           <div>
             <label className="mb-1 block text-[10px] font-bold text-slate-400">Nouvelle date de retour</label>
-            <input
-              type="datetime-local"
+            <DateField withTime
               className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
               value={form.new_end_at}
-              onChange={(e) => setForm((s) => ({ ...s, new_end_at: e.target.value }))}
+              onChange={(dfValue) => setForm((s) => ({ ...s, new_end_at: dfValue }))}
             />
           </div>
           <div>
@@ -124,17 +136,19 @@ const TabExtensions: React.FC<Props> = ({ reservationId, extensions, onRefresh }
               onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
             />
           </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="df-btn df-btn--ghost" onClick={() => setOpen(false)}>Annuler</button>
+            <button
+              onClick={() => extM.mutate()}
+              disabled={extM.isPending || !form.new_end_at}
+              className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {extM.isPending ? 'Enregistrement…' : 'Appliquer prolongation'}
+            </button>
+          </div>
         </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={() => extM.mutate()}
-            disabled={extM.isPending || !form.new_end_at}
-            className="rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            {extM.isPending ? 'Enregistrement…' : 'Appliquer prolongation'}
-          </button>
-        </div>
-      </div>
+      </Modal>
+
     </div>
   );
 };

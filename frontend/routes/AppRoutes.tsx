@@ -8,6 +8,7 @@ import { ResetPasswordPage } from '@/modules/auth/ResetPasswordPage';
 import { PublicSignaturePage } from '@/modules/signature/PublicSignaturePage';
 import { AppLayout } from '@/modules/layout/AppLayout';
 import { ExecutiveDashboardPage } from '@/modules/dashboard/ExecutiveDashboardPage';
+import { ChatPage } from '@/modules/chat/ChatPage';
 import { FleetListPage } from '@/modules/fleet/FleetListPage';
 import { FleetVehicleDetailPage } from '@/modules/fleet/FleetVehicleDetailPage';
 import { FleetMaintenanceDashboardPage } from '@/modules/fleet/FleetMaintenanceDashboardPage';
@@ -15,9 +16,10 @@ import { FleetComplianceDashboardPage } from '@/modules/fleet/FleetComplianceDas
 import VehiclesList from '@/screens/VehiclesList';
 import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
-import { ContractsModulePage } from '@/modules/contracts/ContractsModulePage';
-import { ReservationDetailPage } from '@/modules/rentals/ReservationDetailPage';
+import { ContractsPage } from '@/modules/contracts/ContractsPage';
+import { RentalsPage } from '@/modules/rentals/RentalsPage';
 import { WebsiteLeadsPage } from '@/modules/rentals/WebsiteLeadsPage';
+import { ReservationDetailPage } from '@/modules/rentals/ReservationDetailPage';
 import { ContractWizardPage } from '@/modules/contracts/ContractWizardPage';
 import { ContractDetailPage } from '@/modules/contracts/ContractDetailPage';
 import { ContractTemplatesPage } from '@/modules/contracts/ContractTemplatesPage';
@@ -78,7 +80,7 @@ import { UserManagementPage } from '@/modules/settings/UserManagementPage';
 import { RolesPermissionsPage } from '@/modules/settings/RolesPermissionsPage';
 import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
 import { VehicleBrandsPage } from '@/modules/settings/VehicleBrandsPage';
-import { ContractSettingsPage } from '@/modules/settings/ContractSettingsPage';
+import { ParametersPage } from '@/modules/settings/ParametersPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
 import { DocumentReaderPage } from '@/modules/documents/DocumentReaderPage';
@@ -135,6 +137,12 @@ function SettingsRoleGate({ children }: { children: React.ReactNode }): React.Re
   return <>{children}</>;
 }
 
+function HomeRedirect(): React.ReactElement {
+  const isMobile = typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 767px)').matches;
+  return <Navigate to={isMobile ? '/mobile-ops' : '/dashboard'} replace />;
+}
+
 export default function AppRoutes(): React.ReactElement {
   return (
     <>
@@ -149,7 +157,8 @@ export default function AppRoutes(): React.ReactElement {
 
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<HomeRedirect />} />
+            <Route path="/chat" element={<ChatPage />} />
             <Route
               path="/dashboard"
               element={
@@ -250,29 +259,34 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
 
-            {/*
-              /contracts is now the "Réservations" module shell: a tabbed page
-              hosting both the contracts list and the rental operations
-              (formerly /rentals). See ContractsModulePage.
-            */}
+            {/* Contrats and Réservations are now two separate pages, one per
+                sidebar entry — no in-page tab switcher. */}
             <Route
               path="/contracts"
               element={
                 <ModuleGate module="contracts">
-                  <ContractsModulePage />
+                  <ContractsPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/reservations"
+              element={
+                <ModuleGate module="contracts">
+                  <RentalsPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/reservations/website-leads"
+              element={
+                <ModuleGate module="contracts">
+                  <WebsiteLeadsPage />
                 </ModuleGate>
               }
             />
             <Route
               path="/contracts/new"
-              element={
-                <ModuleGate module="contracts">
-                  <ContractWizardPage />
-                </ModuleGate>
-              }
-            />
-            <Route
-              path="/contracts/:id/edit"
               element={
                 <ModuleGate module="contracts">
                   <ContractWizardPage />
@@ -715,13 +729,12 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
-
             <Route
-              path="/settings/contracts"
+              path="/settings/parameters"
               element={
                 <ModuleGate module="settings">
                   <SettingsRoleGate>
-                    <ContractSettingsPage />
+                    <ParametersPage />
                   </SettingsRoleGate>
                 </ModuleGate>
               }
@@ -769,16 +782,7 @@ export default function AppRoutes(): React.ReactElement {
                 </ModuleGate>
               }
             />
-            <Route
-              path="/reservations/website-leads"
-              element={
-                <ModuleGate module="contracts">
-                  <WebsiteLeadsPage />
-                </ModuleGate>
-              }
-            />
-            <Route path="/rentals" element={<Navigate to="/contracts?tab=locations" replace />} />
-            <Route path="/reservations" element={<Navigate to="/contracts?tab=locations" replace />} />
+            <Route path="/rentals" element={<Navigate to="/reservations" replace />} />
 
             {/* Sous-location */}
             <Route

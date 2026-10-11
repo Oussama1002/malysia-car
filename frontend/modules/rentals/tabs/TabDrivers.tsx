@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
+import { DateField } from '@/modules/shared/components/DateField';
 
 interface Driver {
   id: string;
@@ -171,7 +172,7 @@ const TabDrivers: React.FC<Props> = ({ reservationId, drivers, onRefresh }) => {
               <input className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="N° Permis" value={form.license_number as string} onChange={(e) => set('license_number', e.target.value)} />
               <div>
                 <label className="mb-1 block text-[10px] font-bold text-slate-400">Expiration permis</label>
-                <input type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.license_expiry as string} onChange={(e) => set('license_expiry', e.target.value)} />
+                <DateField className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" value={form.license_expiry as string} onChange={(dfValue) => set('license_expiry', dfValue)} />
               </div>
               <input className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm" placeholder="Relation (conjoint, ami…)" value={form.relationship as string} onChange={(e) => set('relationship', e.target.value)} />
               <label className="flex items-center gap-2 text-sm">

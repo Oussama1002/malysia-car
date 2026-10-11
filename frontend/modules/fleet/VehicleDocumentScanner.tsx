@@ -6,6 +6,7 @@ export interface ScannedVehicleData {
   insuranceCompany?: string;
   numeroPolice?: string;
   insuranceExpiry?: string;
+  insuranceStart?: string;
   // Facture d'achat
   marque?: string;
   modele?: string;
@@ -13,18 +14,44 @@ export interface ScannedVehicleData {
   acquisitionDate?: string;
   vendeur?: string;
   montant?: string;
+  registration?: string;
+  fuelType?: string;
+  miseEnCirculation?: string;
+  fiscalPower?: string;
   // Immatriculation provisoire / WW
   immatProvisoire?: string;
   immatProvisoireExpiry?: string;
+  // Autorisation de circulation
+  autorisationExpiry?: string;
   // Visite technique
   techControlExpiry?: string;
   // Vignette
   vignetteExpiry?: string;
+  // Carte Grise
+  cgMarque?: string;
+  cgModele?: string;
+  cgChassis?: string;
+  cgFuelType?: string;
+  cgFiscalPower?: string;
+  cgExpiry?: string;
 }
+
+export type VehicleDocSlotKey =
+  | 'insurance'
+  | 'circulation_authorization'
+  | 'payment_attestation'
+  | 'technical_inspection'
+  | 'vignette'
+  | 'registration_card';
 
 export const VehicleDocumentScanner: React.FC<{
   onPrefill: (data: ScannedVehicleData) => void;
-}> = ({ onPrefill }) => (
+  /** Fires as soon as a slot's document has been ingested by the reader,
+   *  so consumers can later link it to their own entity (SL contract, …). */
+  onDocumentUploaded?: (slot: VehicleDocSlotKey, readerDocumentId: string) => void;
+  carteGriseRecue?: boolean;
+  carteGriseRef?: React.RefObject<HTMLDivElement | null>;
+}> = ({ onPrefill, onDocumentUploaded, carteGriseRecue, carteGriseRef }) => (
   <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
     <div className="text-xs font-black uppercase tracking-wider text-indigo-700">
       Scanner les documents véhicule (OCR)
@@ -35,34 +62,43 @@ export const VehicleDocumentScanner: React.FC<{
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       <ScanSlot
         title="Assurance"
-        description="Compagnie, N° police, expiration"
+        description="N° police, période de garantie, immatriculation"
         onPrefill={onPrefill}
         mapFields={mapAssurance}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('insurance', id)}
       />
       <ScanSlot
-        title="Facture d'achat"
-        description="Marque, modèle, VIN, date, vendeur, montant"
+        title="Autorisation de circulation"
+        description="Immat., N° WW, marque, carburant, mise en circulation, validité"
         onPrefill={onPrefill}
-        mapFields={mapFacture}
-      />
-      <ScanSlot
-        title="Immat. provisoire / WW"
-        description="N° provisoire, date validité"
-        onPrefill={onPrefill}
-        mapFields={mapImmatProvisoire}
+        mapFields={mapAutorisation}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('circulation_authorization', id)}
       />
       <ScanSlot
         title="Visite technique"
-        description="Date expiration, N° visite, centre contrôle"
+        description="Immat., WW, carburant, mise en circulation, puissance (CV), validité"
         onPrefill={onPrefill}
         mapFields={mapVisiteTech}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('technical_inspection', id)}
       />
       <ScanSlot
         title="Vignette"
         description="Année / date expiration"
         onPrefill={onPrefill}
         mapFields={mapVignette}
+        onDocumentUploaded={(id) => onDocumentUploaded?.('vignette', id)}
       />
+      {carteGriseRecue && (
+        <div ref={carteGriseRef}>
+          <ScanSlot
+            title="Carte Grise"
+            description="Marque, modèle, châssis, carburant, puissance, fin validité"
+            onPrefill={onPrefill}
+            mapFields={mapCarteGrise}
+            onDocumentUploaded={(id) => onDocumentUploaded?.('registration_card', id)}
+          />
+        </div>
+      )}
     </div>
   </div>
 );
@@ -96,21 +132,30 @@ const ScanSlot: React.FC<{
   description: string;
   onPrefill: (data: ScannedVehicleData) => void;
   mapFields: Mapper;
-}> = ({ title, description, onPrefill, mapFields }) => {
+  onDocumentUploaded?: (readerDocumentId: string) => void;
+}> = ({ title, description, onPrefill, mapFields, onDocumentUploaded }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScannedVehicleData | null>(null);
+  const [docPreview, setDocPreview] = useState<{ url: string; isImage: boolean } | null>(null);
 
   const handle = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
     setPreview(null);
+    const localUrl = URL.createObjectURL(file);
+    setDocPreview({ url: localUrl, isImage: file.type.startsWith('image/') });
     try {
-      const uploaded = await documentReaderApi.upload(file, 'other');
-      await documentReaderApi.extract(uploaded.data.id, 'other');
+      const docType = mapFields === mapAssurance ? 'insurance'
+        : mapFields === mapCarteGrise ? 'vehicle_registration'
+        : mapFields === mapAutorisation ? 'autorisation_circulation'
+        : 'other';
+      const uploaded = await documentReaderApi.upload(file, docType);
+      onDocumentUploaded?.(uploaded.data.id);
+      await documentReaderApi.extract(uploaded.data.id, docType);
       const done = await documentReaderApi.pollUntilDone(uploaded.data.id);
 
       if (done.data.status === 'failed') {
@@ -119,6 +164,12 @@ const ScanSlot: React.FC<{
       }
 
       const fields = (done.data.extraction?.extracted_data ?? {}) as Record<string, unknown>;
+
+      if (typeof fields._type_mismatch === 'string') {
+        setError(fields._type_mismatch);
+        return;
+      }
+
       const mapped = mapFields(fields);
       const cleaned = Object.fromEntries(
         Object.entries(mapped).filter(([, v]) => v !== undefined && v !== '' && v !== null),
@@ -129,7 +180,7 @@ const ScanSlot: React.FC<{
         return;
       }
 
-      setPreview(cleaned);
+      setPreview(mapped);
       onPrefill(cleaned);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Échec OCR');
@@ -139,14 +190,15 @@ const ScanSlot: React.FC<{
   }, [mapFields, onPrefill]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-3 gap-2">
       <div className="text-xs font-bold text-slate-700">{title}</div>
-      <div className="text-[10px] text-slate-400">{description}</div>
+      {/* Fixed-height description block so drop zones align across cards */}
+      <div className="min-h-[42px] text-[10px] leading-snug text-slate-400">{description}</div>
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) void handle(f); }}
-        className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-4 text-center text-[11px] transition ${
+        className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-4 text-center text-[11px] transition ${
           dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 bg-slate-50'
         } ${loading ? 'pointer-events-none opacity-70' : ''}`}
       >
@@ -161,26 +213,61 @@ const ScanSlot: React.FC<{
             Photo
           </button>
         </div>
-        <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden"
+        <input ref={inputRef} type="file" accept="image/*,application/pdf,.pdf,.heic,.heif,.webp,.tiff,.bmp" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void handle(f); e.target.value = ''; }} />
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+        {/* Camera capture: accept="image/*" without `capture` so the OS shows the
+            native "Take Photo" option (the `capture` attribute forces an inline
+            camera that renders black in many mobile / in-app browsers). */}
+        <input ref={cameraRef} type="file" accept="image/*" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void handle(f); e.target.value = ''; }} />
-        <div className="mt-1 text-[10px] text-slate-500">PDF, JPG, PNG · 15 Mo max</div>
+        <div className="mt-1 text-[10px] text-slate-500">Image ou PDF · 15 Mo max</div>
         <ElapsedTimer running={loading} />
         {error && <div className="mt-1 text-[11px] font-semibold text-rose-600">{error}</div>}
       </div>
 
-      {preview && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 space-y-1">
-          <div className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Champs détectés ✓</div>
-          {Object.entries(preview).map(([k, v]) => (
-            <div key={k} className="flex justify-between text-[10px]">
-              <span className="text-slate-500">{FIELD_LABELS[k] ?? k}</span>
-              <span className="font-semibold text-slate-800 max-w-[55%] truncate">{String(v)}</span>
-            </div>
-          ))}
+      {docPreview && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-1 overflow-hidden">
+          {docPreview.isImage ? (
+            <img src={docPreview.url} alt="Document"
+              className="w-full max-h-60 object-contain rounded cursor-pointer"
+              onClick={() => window.open(docPreview.url, '_blank')} />
+          ) : (
+            <iframe src={`${docPreview.url}#toolbar=0&navpanes=0`} title="Document"
+              className="w-full rounded border-0" style={{ height: '300px' }} />
+          )}
         </div>
       )}
+
+      {preview && (() => {
+        const detected = Object.entries(preview).filter(([, v]) => v !== undefined && v !== '' && v !== null);
+        const missing = Object.entries(preview).filter(([, v]) => v === undefined || v === '' || v === null);
+        return (
+          <div className="space-y-2">
+            {detected.length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 space-y-1">
+                <div className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Champs détectés</div>
+                {detected.map(([k, v]) => (
+                  <div key={k} className="flex justify-between text-[10px]">
+                    <span className="text-slate-500">{FIELD_LABELS[k] ?? k}</span>
+                    <span className="font-semibold text-slate-800 max-w-[55%] truncate">{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {missing.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 space-y-1">
+                <div className="text-[10px] font-black text-amber-700 uppercase tracking-wider">Non détectés</div>
+                {missing.map(([k]) => (
+                  <div key={k} className="flex justify-between text-[10px]">
+                    <span className="text-slate-500">{FIELD_LABELS[k] ?? k}</span>
+                    <span className="font-medium text-amber-600 italic">non détecté</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -190,39 +277,69 @@ const ScanSlot: React.FC<{
 // ---------------------------------------------------------------------------
 
 function str(v: unknown): string | undefined {
+  if (v === null || v === undefined) return undefined;
+  if (typeof v === 'number') return String(v);
   if (typeof v !== 'string' || !v.trim()) return undefined;
   return v.trim();
+}
+
+// A "N° provisoire / WW" must be a WW plate: WW + 4-7 digits. Accepts the WW
+// possibly garbled by OCR (WM/WN/WA + optional stray letter) and normalises to
+// "WW<digits>". Returns undefined for anything else, so the field shows
+// "non détecté" instead of a bogus value like "dena".
+function wwStr(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s) return undefined;
+  const up = s.toUpperCase();
+  const m = up.match(/W[WMNAHVY][A-Z]?\s*[-.]?\s*(\d{4,7})/) || up.match(/(\d{4,7})\s*W[WMNAHVY]/);
+  return m ? 'WW' + m[1] : undefined;
 }
 
 function mapAssurance(d: Record<string, unknown>): ScannedVehicleData {
   return {
     insuranceCompany: str(d.insurance_company ?? d.company_name ?? d.compagnie ?? d.insurer),
     numeroPolice:     str(d.policy_number ?? d.numero_police ?? d.policy_no ?? d.contract_number),
-    insuranceExpiry:  str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_fin),
+    insuranceStart:   str(d.guarantee_start ?? d.date_effet ?? d.start_date ?? d.date_debut),
+    insuranceExpiry:  str(d.guarantee_end ?? d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_fin),
+    immatProvisoire:  wwStr(d.registration_number ?? d.immatriculation ?? d.plate_number ?? d.ww_number),
   };
 }
 
-function mapFacture(d: Record<string, unknown>): ScannedVehicleData {
+function mapAutorisation(d: Record<string, unknown>): ScannedVehicleData {
   return {
-    marque:          str(d.brand ?? d.marque ?? d.make ?? d.manufacturer),
-    modele:          str(d.model ?? d.modele ?? d.model_name),
-    chassis:         str(d.vin ?? d.chassis ?? d.chassis_number ?? d.serial_number ?? d.vehicle_identification_number),
-    acquisitionDate: str(d.purchase_date ?? d.date_achat ?? d.invoice_date ?? d.date_facture ?? d.sale_date),
-    vendeur:         str(d.seller ?? d.vendeur ?? d.dealer ?? d.vendor ?? d.sold_by),
-    montant:         str(d.amount ?? d.montant ?? d.total ?? d.price ?? d.prix ?? d.total_amount),
+    registration:       str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    immatProvisoire:    wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire ?? d.registration_number),
+    cgMarque:           str(d.brand ?? d.marque ?? d.make),
+    fuelType:           str(d.fuel_type ?? d.carburant ?? d.energie),
+    miseEnCirculation:  str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
+    autorisationExpiry: str(d.authorization_expiry ?? d.valid_until ?? d.expiry_date ?? d.date_validite),
   };
 }
 
-function mapImmatProvisoire(d: Record<string, unknown>): ScannedVehicleData {
-  return {
-    immatProvisoire:       str(d.provisional_number ?? d.numero_provisoire ?? d.registration_number ?? d.plate_number ?? d.ww_number),
-    immatProvisoireExpiry: str(d.validity_date ?? d.date_validite ?? d.expiry_date ?? d.date_expiration ?? d.valid_until),
-  };
-}
-
+/**
+ * La visite technique EST l'attestation de paiement : un seul papier, qui porte
+ * l'immatriculation, le WW, le carburant, la mise en circulation et la
+ * puissance fiscale en plus de sa date de validité.
+ */
 function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
   return {
     techControlExpiry: str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_validite ?? d.valid_until ?? d.next_inspection),
+    registration:      str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    immatProvisoire:   wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire),
+    fuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
+    miseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
+    fiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale ?? d.cv_fiscaux),
+  };
+}
+
+function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
+  return {
+    cgMarque:            str(d.brand ?? d.marque ?? d.make),
+    cgModele:            str(d.model ?? d.modele),
+    cgChassis:           str(d.vin_number ?? d.vin ?? d.chassis ?? d.chassis_number),
+    cgFuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
+    cgFiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale),
+    cgExpiry:            str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
   };
 }
 
@@ -235,15 +352,27 @@ function mapVignette(d: Record<string, unknown>): ScannedVehicleData {
 const FIELD_LABELS: Record<string, string> = {
   insuranceCompany:      'Compagnie',
   numeroPolice:          'N° police',
-  insuranceExpiry:       'Exp. assurance',
+  insuranceStart:        'Garantie du',
+  insuranceExpiry:       'Garantie au',
   marque:                'Marque',
   modele:                'Modèle',
   chassis:               'VIN / Châssis',
   acquisitionDate:       'Date achat',
   vendeur:               'Vendeur',
   montant:               'Montant',
-  immatProvisoire:       'N° provisoire',
+  registration:          'Immatriculation',
+  fuelType:              'Carburant',
+  miseEnCirculation:     'Mise en circulation',
+  fiscalPower:           'Puissance fiscale',
+  immatProvisoire:       'N° provisoire / WW',
   immatProvisoireExpiry: 'Validité',
+  autorisationExpiry:    'Autorisation valable jusqu\'au',
   techControlExpiry:     'Exp. visite tech.',
   vignetteExpiry:        'Exp. vignette',
+  cgMarque:              'Marque',
+  cgModele:              'Modèle',
+  cgChassis:             'N° châssis (VIN)',
+  cgFuelType:            'Carburant',
+  cgFiscalPower:         'Puissance fiscale',
+  cgExpiry:              'Fin de validité',
 };

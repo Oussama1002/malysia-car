@@ -2,10 +2,41 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { subRentalApi, type SubRentalPayment, type PaymentMethod } from '@/services/subRentalApi';
-import { getApiBase } from '@/services/apiClient';
-import { labelPaymentMethod, labelPaymentStatus } from '@/services/labels';
+import { apiClient, getApiBase } from '@/services/apiClient';
+import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
+import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
+import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
+import { DateField } from '@/modules/shared/components/DateField';
+import { ProofUploader } from '@/modules/shared/components/ProofUploader';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
+
+/* Les valeurs stockées sont des codes : rien de tout cela ne s'affiche tel quel. */
+const METHOD_FR: Record<string, string> = {
+  cash: 'Espèces', especes: 'Espèces',
+  cheque: 'Chèque', check: 'Chèque',
+  bank_transfer: 'Virement', virement: 'Virement',
+  card: 'Carte', carte: 'Carte',
+  other: 'Autre',
+};
+const CONTRACT_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon', active: 'Actif', returned: 'Retourné',
+  closed: 'Clôturé', cancelled: 'Annulé',
+};
+const OWNERSHIP_FR: Record<string, string> = {
+  owned: 'En propriété', sub_rented: 'Sous-location', sub_rental: 'Sous-location',
+  leased: 'Leasing', financed: 'Financé',
+};
+const AGENCY_STATUS_FR: Record<string, string> = {
+  active: 'Active', inactive: 'Inactive', blacklisted: 'Blacklistée',
+};
+const FUEL_FR: Record<string, string> = {
+  empty: 'Vide', quarter: '1/4', half: '1/2', three_quarters: '3/4', full: 'Plein',
+};
+const fr = (map: Record<string, string>, value: unknown): string => {
+  const key = String(value ?? '').toLowerCase();
+  return map[key] ?? (value ? String(value) : '—');
+};
 
 function TabBtn({ id, active, onClick, label }: { id: Tab; active: Tab; onClick: (t: Tab) => void; label: string }) {
   return (
@@ -40,6 +71,7 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
     onError: (e: unknown) => setErr((e as any)?.data?.message ?? (e as any)?.data?.errors?.vehicle_id?.[0] ?? 'Erreur'),
   });
 
+  const setField = (k: string) => (value: string) => setForm((f) => ({ ...f, [k]: value }));
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   const inp = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
@@ -53,7 +85,7 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
         </div>
         <form onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ ...form, odometer_km: form.odometer_km ? parseFloat(form.odometer_km) : undefined, extra_charges: form.extra_charges ? parseFloat(form.extra_charges) : undefined }); }} className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><input className={inp} type="date" value={form.returned_at} onChange={set('returned_at')} required /></div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={inp} value={form.returned_at} onChange={setField('returned_at')} required /></div>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">Kilométrage</label><input className={inp} type="number" min="0" value={form.odometer_km} onChange={set('odometer_km')} /></div>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">Niveau carburant</label><select className={inp} value={form.fuel_level} onChange={set('fuel_level')}><option value="">—</option><option value="empty">Vide</option><option value="quarter">1/4</option><option value="half">1/2</option><option value="three_quarters">3/4</option><option value="full">Plein</option></select></div>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">Frais supplémentaires</label><input className={inp} type="number" min="0" step="0.01" value={form.extra_charges} onChange={set('extra_charges')} /></div>
@@ -72,42 +104,242 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
   );
 }
 
-function AddPaymentModal({ contractId, onClose }: { contractId: string; onClose: () => void }) {
+type ChequeScan = { document_id?: string | null; check_number?: string; bank?: string; check_date?: string; amount?: number };
+
+async function scanCheque(file: File): Promise<ChequeScan> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await apiClient<{ data?: ChequeScan }>('/v1/cheque-ocr', {
+    method: 'POST',
+    body: fd,
+  });
+  return res.data ?? {};
+}
+
+function AddPaymentDrawer({ contractId, open, onClose }: { contractId: string; open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ amount: '', payment_method: 'cash' as PaymentMethod, payment_date: new Date().toISOString().split('T')[0], reference: '', notes: '' });
+  const [form, setForm] = useState({
+    amount: '',
+    payment_method: 'cash' as PaymentMethod,
+    payment_date: new Date().toISOString().split('T')[0],
+    reference: '',
+    check_number: '',
+    check_bank: '',
+    check_date: '',
+    notes: '',
+    cheque_document_id: '',
+  });
   const [err, setErr] = useState<string | null>(null);
+  const [chequeScanning, setChequeScanning] = useState(false);
+  const [chequeOcrError, setChequeOcrError] = useState<string | null>(null);
+  const [chequeNotice, setChequeNotice] = useState<string | null>(null);
+  const chequeAlreadyUsed = useChequeDuplicate(
+    form.payment_method === 'cheque' ? form.check_number : null,
+    form.check_bank,
+  );
 
   const mutation = useMutation({
     mutationFn: (data: Parameters<typeof subRentalApi.addPayment>[1]) => subRentalApi.addPayment(contractId, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sub-rental', contractId, 'payments'] }); qc.invalidateQueries({ queryKey: ['sub-rental', contractId] }); onClose(); },
-    onError: (e: unknown) => setErr((e as any)?.data?.message ?? 'Erreur'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sub-rental', contractId, 'payments'] });
+      qc.invalidateQueries({ queryKey: ['sub-rental', contractId] });
+      onClose();
+    },
+    onError: (e: unknown) => {
+      // Ne jamais afficher un cadre rouge vide : on garde le statut HTTP et le
+      // détail du serveur, c'est tout ce qu'on a pour comprendre un refus.
+      const err = e as { body?: { errors?: Record<string, string[]>; message?: string }; message?: string; status?: number };
+      const parts: string[] = [];
+      if (err?.body?.errors) {
+        for (const list of Object.values(err.body.errors)) {
+          if (Array.isArray(list)) parts.push(...list.map(String));
+        }
+      }
+      if (err?.body?.message) parts.push(err.body.message);
+      if (parts.length === 0 && err?.message) parts.push(err.message);
+      if (err?.status) parts.push(`HTTP ${err.status}`);
+      setErr(Array.from(new Set(parts)).join(' · ') || "Erreur inconnue lors de l'enregistrement.");
+    },
   });
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  const setField = (k: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [k]: value }));
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
-  const inp = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
+
+  const applyChequeScan = async (file: File) => {
+    setChequeScanning(true);
+    setChequeOcrError(null);
+    setChequeNotice(null);
+    try {
+      const data = await scanCheque(file);
+      if (!data.check_number && !data.bank && !data.check_date && data.amount == null) {
+        setChequeOcrError('Rien n\'a pu être lu sur ce chèque. Saisissez les champs manuellement.');
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        check_number: data.check_number ?? f.check_number,
+        check_bank:   data.bank ?? f.check_bank,
+        check_date:   data.check_date ?? f.check_date,
+        amount:       data.amount != null ? String(data.amount) : f.amount,
+        // Le scan stocké reste attaché au paiement comme preuve.
+        cheque_document_id: data.document_id ?? f.cheque_document_id,
+      }));
+      const missing = [
+        data.amount == null ? 'le montant' : null,
+        !data.check_number ? 'le n° de chèque' : null,
+        !data.bank ? 'la banque' : null,
+        !data.check_date ? 'la date du chèque' : null,
+      ].filter(Boolean);
+      if (missing.length > 0) {
+        setChequeNotice(`Saisissez manuellement ${missing.join(', ')} : l'OCR n'a pas pu le lire.`);
+      }
+    } catch (e) {
+      setChequeOcrError(e instanceof Error ? e.message : 'Échec du scan OCR');
+    } finally {
+      setChequeScanning(false);
+    }
+  };
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setErr(null);
+    const amount = parseFloat(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setErr('Merci de renseigner un montant supérieur à 0.');
+      return;
+    }
+    const payload: Parameters<typeof subRentalApi.addPayment>[1] = {
+      amount,
+      payment_method: form.payment_method,
+      // Horodaté à l'enregistrement : le drawer peut rester ouvert longtemps.
+      payment_date: new Date().toISOString().split('T')[0],
+      reference: form.reference || undefined,
+      notes: form.notes || undefined,
+    };
+    if (form.payment_method === 'cheque') {
+      payload.check_number = form.check_number || undefined;
+      payload.check_bank = form.check_bank || undefined;
+      payload.check_date = form.check_date || undefined;
+    }
+    // Une preuve vaut pour tous les modes : virement, espèces, chèque.
+    payload.cheque_document_id = form.cheque_document_id || undefined;
+    mutation.mutate(payload);
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="font-bold text-slate-900">Enregistrer un paiement fournisseur</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
+    <DrawerPanel open={open} title="Nouveau paiement fournisseur" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Montant (MAD) *</span>
+            <input className="df-input w-full" type="number" step="0.01" min="0.01" value={form.amount} onChange={set('amount')} required />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Date & heure paiement</span>
+            {/* Horodatage de l'encaissement : relevé par le système, pas saisi. */}
+            <DateField className="df-input w-full bg-slate-50 text-slate-500" value={form.payment_date} onChange={() => {}} disabled />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Mode paiement *</span>
+            <select className="df-input w-full" value={form.payment_method} onChange={set('payment_method')}>
+              <option value="cash">Espèces</option>
+              <option value="bank_transfer">Virement</option>
+              <option value="cheque">Chèque</option>
+              <option value="card">Carte</option>
+              <option value="other">Autre</option>
+            </select>
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Référence</span>
+            <input className="df-input w-full" placeholder="Référence externe, n° reçu…" value={form.reference} onChange={set('reference')} />
+          </label>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ amount: parseFloat(form.amount), payment_method: form.payment_method, payment_date: form.payment_date, reference: form.reference || undefined, notes: form.notes || undefined }); }} className="p-5 space-y-3">
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Montant (MAD) <span className="text-red-500">*</span></label><input className={inp} type="number" step="0.01" min="0.01" value={form.amount} onChange={set('amount')} required /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Mode de paiement</label><select className={inp} value={form.payment_method} onChange={set('payment_method')}><option value="cash">Espèces</option><option value="bank_transfer">Virement</option><option value="cheque">Chèque</option><option value="card">Carte</option><option value="other">Autre</option></select></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date</label><input className={inp} type="date" value={form.payment_date} onChange={set('payment_date')} required /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Référence</label><input className={inp} value={form.reference} onChange={set('reference')} /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Notes</label><textarea className={`${inp} resize-none`} rows={2} value={form.notes} onChange={set('notes')} /></div>
-          {err && <p className="text-xs text-red-600">{err}</p>}
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Annuler</button>
-            <button type="submit" disabled={mutation.isPending} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{mutation.isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
+
+        {form.payment_method === 'cheque' && (
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-indigo-800">Scanner un chèque</span>
+              <span className="text-[10px] text-indigo-600">Photo ou upload — remplissage auto par OCR</span>
+            </div>
+            <div className="flex gap-2">
+              <label className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50">
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => {
+                  const f = e.target.files?.[0]; if (f) await applyChequeScan(f); e.target.value = '';
+                }} />
+                {chequeScanning ? 'Analyse en cours…' : 'Importer un fichier'}
+              </label>
+              <label className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50">
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                  const f = e.target.files?.[0]; if (f) await applyChequeScan(f); e.target.value = '';
+                }} />
+                {chequeScanning ? 'Analyse…' : 'Prendre une photo'}
+              </label>
+            </div>
+            {chequeAlreadyUsed && (
+              <div className="rounded-xl border-2 border-rose-300 bg-rose-50 px-3.5 py-3 text-xs font-bold text-rose-800">
+                ⚠ {chequeAlreadyUsed}
+              </div>
+            )}
+            {chequeOcrError && (
+              <div className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">{chequeOcrError}</div>
+            )}
+            {chequeNotice && (
+              <div className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">{chequeNotice}</div>
+            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">N° chèque</span>
+                <input className="df-input w-full" value={form.check_number} onChange={set('check_number')} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Banque</span>
+                <input className="df-input w-full" value={form.check_bank} onChange={set('check_bank')} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-500">Date du chèque</span>
+                <DateField className="df-input w-full" value={form.check_date} onChange={setField('check_date')} />
+              </label>
+            </div>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        <ProofUploader
+          documentId={form.cheque_document_id || null}
+          onUploaded={(id) => setForm((f) => ({ ...f, cheque_document_id: id }))}
+          onCleared={() => setForm((f) => ({ ...f, cheque_document_id: '' }))}
+        />
+
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-black uppercase tracking-wider text-slate-500">Notes</span>
+          <textarea className="df-input w-full resize-none" rows={3} value={form.notes} onChange={set('notes')} />
+        </label>
+
+        {(err || mutation.error) && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+            {err ?? (mutation.error as Error | undefined)?.message ?? 'Erreur inconnue lors de l\'enregistrement.'}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="df-btn df-btn--ghost">Annuler</button>
+          <button
+            type="submit"
+            disabled={mutation.isPending || !!chequeAlreadyUsed}
+            onClick={(e) => {
+              // Fallback in case the surrounding <form>'s submit event is
+              // intercepted; ensures a click always reaches handleSubmit.
+              if (e.currentTarget.form) return; // <form> will handle it
+              e.preventDefault();
+              handleSubmit();
+            }}
+            className="df-btn df-btn--primary"
+          >
+            {mutation.isPending ? 'Enregistrement…' : 'Enregistrer le paiement'}
+          </button>
+        </div>
+      </form>
+    </DrawerPanel>
   );
 }
 
@@ -247,7 +479,7 @@ export const SubRentalDetailPage: React.FC = () => {
               <div>
                 <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Contrat</h3>
                 <InfoRow label="Numéro" value={c.contract_number} />
-                <InfoRow label="Statut" value={c.status} />
+                <InfoRow label="Statut" value={fr(CONTRACT_STATUS_FR, c.status)} />
                 <InfoRow label="Date de début" value={new Date(c.start_date).toLocaleDateString('fr-MA')} />
                 <InfoRow label="Date de fin" value={new Date(c.end_date).toLocaleDateString('fr-MA')} />
                 <InfoRow label="Jours" value={Math.max(1, Math.round((new Date(c.end_date).getTime() - new Date(c.start_date).getTime()) / 86400000))} />
@@ -257,8 +489,20 @@ export const SubRentalDetailPage: React.FC = () => {
                 <InfoRow label="Coût journalier" value={`${Number(c.daily_cost).toLocaleString('fr-MA')} MAD`} />
                 <InfoRow label="Coût total" value={`${Number(c.total_cost).toLocaleString('fr-MA')} MAD`} />
                 <InfoRow label="Caution" value={c.deposit_amount ? `${Number(c.deposit_amount).toLocaleString('fr-MA')} MAD` : '—'} />
-                <InfoRow label="Mode de paiement" value={labelPaymentMethod(c.payment_method)} />
-                <InfoRow label="Statut paiement" value={labelPaymentStatus(c.payment_status)} />
+                <InfoRow label="Mode de paiement" value={
+                  c.payment_method === 'cash' ? 'Espèces'
+                    : c.payment_method === 'bank_transfer' ? 'Virement'
+                    : c.payment_method === 'cheque' ? 'Chèque'
+                    : c.payment_method === 'card' ? 'Carte'
+                    : c.payment_method === 'other' ? 'Autre'
+                    : c.payment_method
+                } />
+                <InfoRow label="Statut paiement" value={
+                  c.payment_status === 'paid' ? 'Payé'
+                    : c.payment_status === 'partial' ? 'Partiellement payé'
+                    : c.payment_status === 'unpaid' ? 'Impayé'
+                    : c.payment_status
+                } />
               </div>
             </div>
             {c.notes && (
@@ -281,7 +525,7 @@ export const SubRentalDetailPage: React.FC = () => {
                 <InfoRow label="Année" value={vehicle.year} />
                 <InfoRow label="Couleur" value={vehicle.color} />
                 <InfoRow label="Kilométrage" value={vehicle.mileage_current ? `${vehicle.mileage_current.toLocaleString('fr-MA')} km` : undefined} />
-                <InfoRow label="Statut propriété" value={vehicle.ownership_status} />
+                <InfoRow label="Statut propriété" value={fr(OWNERSHIP_FR, vehicle.ownership_status)} />
                 <div className="mt-4">
                   <Link to={`/fleet/${vehicle.id}`} className="text-sm font-semibold text-indigo-600 hover:underline">
                     Voir le véhicule dans la flotte →
@@ -320,7 +564,7 @@ export const SubRentalDetailPage: React.FC = () => {
                 <InfoRow label="RC" value={agency.rc} />
                 <InfoRow label="Statut" value={
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${agency.status === 'blacklisted' ? 'bg-red-100 text-red-700' : agency.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                    {agency.status}
+                    {fr(AGENCY_STATUS_FR, agency.status)}
                   </span>
                 } />
                 <div className="mt-4">
@@ -345,6 +589,15 @@ export const SubRentalDetailPage: React.FC = () => {
                 </button>
               )}
             </div>
+            {paymentsQ.isError && (
+              // Sans ça, un refus du serveur s'affichait comme « aucun paiement »
+              // et un solde à zéro : on montre la vraie raison.
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                Impossible de charger les paiements : {(paymentsQ.error as Error | undefined)?.message ?? 'erreur inconnue'}
+                {(paymentsQ.error as { status?: number } | undefined)?.status === 403
+                  && " — votre profil n'a pas le droit « paiements sous-location »."}
+              </div>
+            )}
             {paymentsQ.isLoading ? (
               <p className="text-sm text-slate-500">Chargement…</p>
             ) : (
@@ -380,8 +633,11 @@ export const SubRentalDetailPage: React.FC = () => {
                         <tr key={p.id}>
                           <td className="px-3 py-2 text-slate-600">{new Date(p.payment_date).toLocaleDateString('fr-MA')}</td>
                           <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">{Number(p.amount).toLocaleString('fr-MA')} MAD</td>
-                          <td className="px-3 py-2 text-slate-600">{labelPaymentMethod(p.payment_method)}</td>
-                          <td className="px-3 py-2 text-slate-500 text-xs">{p.reference ?? '—'}</td>
+                          <td className="px-3 py-2 text-slate-600">{fr(METHOD_FR, p.payment_method)}</td>
+                          <td className="px-3 py-2 text-slate-500 text-xs">
+                            {p.reference ?? '—'}
+                            <div className="mt-0.5"><ScanProofLink entityType="sub_rental_payment" entityId={p.id} /></div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -432,7 +688,7 @@ export const SubRentalDetailPage: React.FC = () => {
               <>
                 <InfoRow label="Date retour" value={new Date((c as any).return_report.returned_at).toLocaleDateString('fr-MA')} />
                 <InfoRow label="Kilométrage" value={(c as any).return_report.odometer_km ? `${(c as any).return_report.odometer_km.toLocaleString('fr-MA')} km` : undefined} />
-                <InfoRow label="Niveau carburant" value={(c as any).return_report.fuel_level} />
+                <InfoRow label="Niveau carburant" value={fr(FUEL_FR, (c as any).return_report.fuel_level)} />
                 <InfoRow label="Signé par" value={(c as any).return_report.signed_by_supplier} />
                 {(c as any).return_report.condition_notes && (
                   <div className="mt-3 rounded-xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500 mb-1">État</p><p className="text-sm">{(c as any).return_report.condition_notes}</p></div>
@@ -460,7 +716,7 @@ export const SubRentalDetailPage: React.FC = () => {
       </div>
 
       {showReturn && id && <ReturnModal contractId={id} onClose={() => setShowReturn(false)} />}
-      {showPayment && id && <AddPaymentModal contractId={id} onClose={() => setShowPayment(false)} />}
+      {id && <AddPaymentDrawer contractId={id} open={showPayment} onClose={() => setShowPayment(false)} />}
     </div>
   );
 };

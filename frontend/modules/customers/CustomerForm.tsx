@@ -13,10 +13,19 @@ import {
   type ScannedIdentity,
 } from '@/modules/customers/CustomerIdentityScanner';
 import { COUNTRIES_FR } from '@/modules/customers/countries';
+import { DateField } from '@/modules/shared/components/DateField';
 
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
   initial?: Customer | null;
+  /** Pré-remplissage léger pour les créations à chaud (ex. depuis une
+   *  demande du site public). Ignoré en mode `edit` : `initial` prime. */
+  seed?: {
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    email?: string;
+  } | null;
   error: string | null;
   submitting: boolean;
   branches: Branch[];
@@ -27,7 +36,7 @@ export const CustomerForm: React.FC<{
    * newly-created customer.
    */
   onSubmit: (payload: CustomerCreatePayload, scannedDocuments: ScannedDocument[]) => void;
-}> = ({ mode, initial, error, submitting, branches, onCancel, onSubmit }) => {
+}> = ({ mode, initial, seed, error, submitting, branches, onCancel, onSubmit }) => {
   const [scannedDocs, setScannedDocs] = useState<ScannedDocument[]>([]);
   const [type, setType] = useState<CustomerType>(initial?.customer_type ?? 'PARTICULIER');
   const [customerCode, setCustomerCode] = useState(initial?.customer_code ?? '');
@@ -38,16 +47,16 @@ export const CustomerForm: React.FC<{
 
   const [individual, setIndividual] = useState<Partial<IndividualProfile>>(
     initial?.individual_profile ?? {
-      first_name: '',
-      last_name: '',
+      first_name: mode === 'create' ? (seed?.first_name ?? '') : '',
+      last_name: mode === 'create' ? (seed?.last_name ?? '') : '',
       nationality: 'Maroc',
     },
   );
   const [company, setCompany] = useState<Partial<CompanyProfile>>(initial?.company_profile ?? { legal_name: '' });
 
   // Optional primary contact + address created with the customer
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState(mode === 'create' ? (seed?.phone ?? '') : '');
+  const [email, setEmail] = useState(mode === 'create' ? (seed?.email ?? '') : '');
   const [addressLine, setAddressLine] = useState('');
   const [city, setCity] = useState('');
 
@@ -133,9 +142,12 @@ export const CustomerForm: React.FC<{
           <SectionTitle>Identité particulier</SectionTitle>
           {mode === 'create' ? (
             <CustomerIdentityScanner
-              onPrefill={(scanned: ScannedIdentity) =>
-                setIndividual((prev) => ({ ...prev, ...scanned }))
-              }
+              onPrefill={({ address, ...scanned }: ScannedIdentity) => {
+                setIndividual((prev) => ({ ...prev, ...scanned }));
+                // L'adresse n'appartient pas à l'identité : elle alimente le
+                // bloc adresse, et ne remplace pas une saisie déjà faite.
+                if (address) setAddressLine((prev) => prev || address);
+              }}
               onScanComplete={(scan) =>
                 setScannedDocs((prev) =>
                   prev.some((s) => s.documentId === scan.documentId) ? prev : [...prev, scan],
@@ -168,11 +180,10 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Date de naissance">
-              <input
-                type="date"
+              <DateField
                 className="df-input"
                 value={individual.date_of_birth ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, date_of_birth: e.target.value }))}
+                onChange={(dfValue) => setIndividual((p) => ({ ...p, date_of_birth: dfValue }))}
               />
             </Field>
             <Field label="Nationalité">
@@ -200,11 +211,10 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Expiration permis">
-              <input
-                type="date"
+              <DateField
                 className="df-input"
                 value={individual.driving_license_expiry ?? ''}
-                onChange={(e) => setIndividual((p) => ({ ...p, driving_license_expiry: e.target.value }))}
+                onChange={(dfValue) => setIndividual((p) => ({ ...p, driving_license_expiry: dfValue }))}
               />
             </Field>
             <Field label="Profession">
@@ -264,11 +274,10 @@ export const CustomerForm: React.FC<{
               />
             </Field>
             <Field label="Date d'immatriculation">
-              <input
-                type="date"
+              <DateField
                 className="df-input"
                 value={company.incorporation_date ?? ''}
-                onChange={(e) => setCompany((p) => ({ ...p, incorporation_date: e.target.value }))}
+                onChange={(dfValue) => setCompany((p) => ({ ...p, incorporation_date: dfValue }))}
               />
             </Field>
             <Field label="Activité">

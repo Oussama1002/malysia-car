@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1\Fleet;
 
 use App\Http\Requests\ApiFormRequest;
+use App\Models\Vehicle;
 use Illuminate\Validation\Rule;
 
 class StoreVehicleRequest extends ApiFormRequest
@@ -31,6 +32,7 @@ class StoreVehicleRequest extends ApiFormRequest
             'fuel_type' => ['nullable', 'string', 'max:50'],
             'fiscal_power' => ['nullable', 'integer', 'min:1', 'max:999'],
             'registration_card_number' => ['nullable', 'string', 'max:100'],
+            'insurance_start' => ['nullable', 'date'],
             'insurance_expiry' => ['nullable', 'date'],
             'tech_control_expiry' => ['nullable', 'date'],
             'vignette_expiry' => ['nullable', 'date'],
@@ -42,6 +44,7 @@ class StoreVehicleRequest extends ApiFormRequest
             'residual_value' => ['nullable', 'numeric', 'min:0'],
             'book_value' => ['nullable', 'numeric', 'min:0'],
             'daily_rental_price' => ['nullable', 'numeric', 'min:0'],
+            'insurance_deductible' => ['nullable', 'numeric', 'min:0'],
             'monthly_rental_price' => ['nullable', 'numeric', 'min:0'],
             'gps_enabled' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -50,12 +53,20 @@ class StoreVehicleRequest extends ApiFormRequest
             'vehicle_type' => ['nullable', 'string', 'max:50'],
             'numero_police' => ['nullable', 'string', 'max:100'],
             'nombre_cylindres' => ['nullable', 'integer', 'min:1', 'max:16'],
+            'nombre_places' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'nombre_portes' => ['nullable', 'integer', 'min:1', 'max:10'],
             'gamme' => ['nullable', 'string', 'max:50'],
             'mise_en_circulation' => ['nullable', 'date'],
             'date_immatriculation' => ['nullable', 'date'],
             'categorie' => ['nullable', 'string', 'max:50'],
             'immat_online' => ['nullable', 'string', 'max:100'],
+            'carte_grise_status' => ['nullable', 'string', 'max:20'],
+            'immat_provisoire_expiry' => ['nullable', 'date'],
             'chassis' => ['nullable', 'string', 'max:100'],
+            // Équipements : liste de libellés tirés de `Vehicle::EQUIPMENTS`.
+            // L'ordre et les doublons sont tolérés (nettoyés côté contrôleur).
+            'equipments' => ['nullable', 'array'],
+            'equipments.*' => ['string', Rule::in(Vehicle::EQUIPMENTS)],
         ];
     }
 }

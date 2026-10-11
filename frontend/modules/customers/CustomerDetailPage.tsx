@@ -115,25 +115,6 @@ export const CustomerDetailPage: React.FC = () => {
         <Link to="/customers" className="text-sm font-semibold text-indigo-600">
           ← Clients
         </Link>
-        <div className="flex gap-2">
-          {!customer.is_blacklisted ? (
-            <button
-              type="button"
-              className="df-btn df-btn--danger"
-              onClick={() => setConfirmBlacklist('add')}
-            >
-              Ajouter à la blacklist
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="df-btn df-btn--primary"
-              onClick={() => setConfirmBlacklist('remove')}
-            >
-              Retirer de la blacklist
-            </button>
-          )}
-        </div>
       </div>
 
       <header className="df-card df-card--elevated">
@@ -207,7 +188,15 @@ export const CustomerDetailPage: React.FC = () => {
           <EntityAuditTimeline entityType="customer" entityId={customer.id} />
         </div>
       )}
-      {tab === 'risk' && <RiskTab dossier={dossier} blacklist={blacklist} />}
+      {tab === 'risk' && (
+        <RiskTab
+          dossier={dossier}
+          blacklist={blacklist}
+          isBlacklisted={customer.is_blacklisted}
+          onAddBlacklist={() => setConfirmBlacklist('add')}
+          onRemoveBlacklist={() => setConfirmBlacklist('remove')}
+        />
+      )}
 
       <ConfirmModal
         open={confirmBlacklist === 'remove'}
@@ -616,8 +605,58 @@ const KycTab: React.FC<{
 // Contracts / Payments stubs (joined later)
 // ---------------------------------------------------------------------------
 
-const CONTRACT_TYPE_FR: Record<string, string> = { LLD: 'LLD', LOA: 'LOA', credit: 'Crédit', VO: 'Vente occasion', rental: 'Location' };
-const CONTRACT_STATUS_FR: Record<string, string> = { draft: 'Brouillon', pending_approval: 'En attente', approved: 'Approuvé', active: 'Actif', suspended: 'Suspendu', terminated: 'Résilié', closed: 'Clôturé', cancelled: 'Annulé' };
+const CONTRACT_TYPE_FR: Record<string, string> = {
+  LLD:              'LLD',
+  LOA:              'LOA',
+  CREDIT_AUTO:      'Crédit auto',
+  credit_auto:      'Crédit auto',
+  credit:           'Crédit',
+  VENTE_VO:         'Vente occasion',
+  VO:               'Vente occasion',
+  vente_vo:         'Vente occasion',
+  LOCATION_COURTE:  'LCD',
+  location_courte:  'LCD',
+  SHORT_RENTAL:     'LCD',
+  short_rental:     'LCD',
+  rental:           'Location',
+};
+const CONTRACT_STATUS_FR: Record<string, string> = {
+  draft: 'Brouillon',
+  pending_approval: 'En attente d\'approbation',
+  'pending approval': 'En attente d\'approbation',
+  pending: 'En attente',
+  approved: 'Approuvé',
+  awaiting_signature: 'En attente de signature',
+  'awaiting signature': 'En attente de signature',
+  signed: 'Signé',
+  active: 'Actif',
+  suspended: 'Suspendu',
+  terminated: 'Résilié',
+  cancelled: 'Annulé',
+  rejected: 'Rejeté',
+  expired: 'Expiré',
+  completed: 'Terminé',
+  closed: 'Clôturé',
+};
+
+const CONTRACT_STATUS_TONE: Record<string, string> = {
+  active: 'bg-emerald-100 text-emerald-700',
+  signed: 'bg-emerald-100 text-emerald-700',
+  approved: 'bg-emerald-100 text-emerald-700',
+  completed: 'bg-emerald-100 text-emerald-700',
+  draft: 'bg-slate-100 text-slate-600',
+  pending_approval: 'bg-amber-100 text-amber-700',
+  'pending approval': 'bg-amber-100 text-amber-700',
+  awaiting_signature: 'bg-amber-100 text-amber-700',
+  'awaiting signature': 'bg-amber-100 text-amber-700',
+  pending: 'bg-amber-100 text-amber-700',
+  suspended: 'bg-amber-100 text-amber-700',
+  closed: 'bg-indigo-100 text-indigo-700',
+  expired: 'bg-indigo-100 text-indigo-700',
+  terminated: 'bg-rose-100 text-rose-700',
+  cancelled: 'bg-rose-100 text-rose-700',
+  rejected: 'bg-rose-100 text-rose-700',
+};
 const fmtMadC = (v: unknown) => { const n = Number(v); return isFinite(n) ? `${n.toLocaleString('fr-MA')} MAD` : '—'; };
 
 const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
@@ -648,8 +687,8 @@ const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
                     <td className="px-4 py-3 font-black text-indigo-700">{r.contract_number ?? '—'}</td>
                     <td className="px-4 py-3">{CONTRACT_TYPE_FR[r.contract_type] ?? r.contract_type ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${st === 'active' ? 'bg-emerald-100 text-emerald-700' : st === 'draft' ? 'bg-slate-100 text-slate-600' : st === 'terminated' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {CONTRACT_STATUS_FR[st] ?? st}
+                      <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-bold ${CONTRACT_STATUS_TONE[st.toLowerCase()] ?? 'bg-slate-100 text-slate-600'}`}>
+                        {CONTRACT_STATUS_FR[st.toLowerCase()] ?? st}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-bold">{fmtMadC(r.base_amount)}</td>
@@ -667,8 +706,14 @@ const ContractsTab: React.FC<{ contracts: unknown[] }> = ({ contracts }) => (
   </div>
 );
 
-const PAY_METHOD_FR: Record<string, string> = { cash: 'Espèces', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte', mobile: 'Mobile' };
-const PAY_STATUS_FR: Record<string, string> = { received: 'Reçu', allocated: 'Alloué', pending: 'En attente', refunded: 'Remboursé', completed: 'Complété', failed: 'Échoué' };
+const PAY_METHOD_FR: Record<string, string> = {
+  cash: 'Espèces', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte',
+  mobile: 'Mobile', compensation: 'Compensation', wallet: 'Portefeuille', other: 'Autre',
+};
+const PAY_STATUS_FR: Record<string, string> = {
+  received: 'Reçu', allocated: 'Alloué', partial: 'Partiel', pending: 'En attente',
+  refunded: 'Remboursé', reversed: 'Annulé',
+};
 
 const PaymentsTab: React.FC<{ payments: unknown[] }> = ({ payments }) => (
   <div className="df-card">
@@ -691,17 +736,34 @@ const PaymentsTab: React.FC<{ payments: unknown[] }> = ({ payments }) => (
             <tbody className="divide-y divide-slate-100">
               {payments.map((p, i) => {
                 const r = p as Record<string, any>;
-                const st = String(r.status ?? '');
+                const raw = String(r.status ?? '').toLowerCase();
+                const alloc = Number(r.amount_allocated ?? 0);
+                const total = Number(r.amount ?? 0);
+                // Derive a status when the backend value is empty or unknown.
+                const derived: 'allocated' | 'partial' | 'received' | 'refunded' | 'reversed' =
+                  raw === 'refunded' ? 'refunded'
+                  : raw === 'reversed' ? 'reversed'
+                  : total > 0 && alloc >= total ? 'allocated'
+                  : alloc > 0 ? 'partial'
+                  : (raw === 'allocated' || raw === 'partial' || raw === 'received') ? (raw as any)
+                  : 'received';
+                const toneMap: Record<string, string> = {
+                  allocated: 'bg-emerald-100 text-emerald-700',
+                  received:  'bg-indigo-100 text-indigo-700',
+                  partial:   'bg-amber-100 text-amber-700',
+                  refunded:  'bg-amber-100 text-amber-700',
+                  reversed:  'bg-rose-100 text-rose-700',
+                };
                 return (
                   <tr key={r.id ?? i} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{r.payment_number ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600">{r.payment_date ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-black text-slate-800">{fmtMadC(r.amount)}</td>
-                    <td className="px-4 py-3">{PAY_METHOD_FR[r.payment_method] ?? r.payment_method ?? '—'}</td>
+                    <td className="px-4 py-3">{PAY_METHOD_FR[String(r.payment_method ?? '').toLowerCase()] ?? r.payment_method ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">{r.check_number ? `Chèque ${r.check_number}` : r.external_reference || '—'}{r.check_bank ? ` · ${r.check_bank}` : ''}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${st === 'received' ? 'bg-emerald-100 text-emerald-700' : st === 'allocated' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {PAY_STATUS_FR[st] ?? st}
+                      <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-bold ${toneMap[derived]}`}>
+                        {PAY_STATUS_FR[derived] ?? derived}
                       </span>
                     </td>
                   </tr>
@@ -835,7 +897,13 @@ const NotesTab: React.FC<{
 // Risk tab — score + blacklist history
 // ---------------------------------------------------------------------------
 
-const RiskTab: React.FC<{ dossier: Dossier; blacklist: Dossier['blacklist'] }> = ({ dossier, blacklist }) => {
+const RiskTab: React.FC<{
+  dossier: Dossier;
+  blacklist: Dossier['blacklist'];
+  isBlacklisted: boolean;
+  onAddBlacklist: () => void;
+  onRemoveBlacklist: () => void;
+}> = ({ dossier, blacklist, isBlacklisted, onAddBlacklist, onRemoveBlacklist }) => {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="df-card">
@@ -855,7 +923,18 @@ const RiskTab: React.FC<{ dossier: Dossier; blacklist: Dossier['blacklist'] }> =
 
       <div className="df-card">
         <div className="df-card__body space-y-3">
-          <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">Blacklist</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">Blacklist</h3>
+            {!isBlacklisted ? (
+              <button type="button" className="df-btn df-btn--danger" onClick={onAddBlacklist}>
+                Ajouter à la blacklist
+              </button>
+            ) : (
+              <button type="button" className="df-btn df-btn--primary" onClick={onRemoveBlacklist}>
+                Retirer de la blacklist
+              </button>
+            )}
+          </div>
           {blacklist.active.length === 0 && blacklist.history.length === 0 ? (
             <p className="text-sm text-slate-500">Aucun incident enregistré.</p>
           ) : (

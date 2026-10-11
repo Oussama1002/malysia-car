@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
-import { documentReaderApi } from '@/services/documentReaderApi';
+import { FranchisePanel, useDeposits } from './FranchisePanel';
 
 interface Report {
   id: string;
@@ -19,12 +19,14 @@ interface Report {
 interface Props {
   reservationId: string;
   reports: Report[];
+  /** Franchise prévue au contrat — la remise est bloquée tant qu'elle n'est pas encaissée. */
+  franchiseDue?: number;
   onRefresh: () => void;
 }
 
 const PHOTO_ZONES = ['Avant', 'Arrière', 'Gauche', 'Droite', 'Intérieur', 'Tableau de bord'];
 
-const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => {
+const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0, onRefresh }) => {
   const pickups = reports.filter((r) => r.handover_type === 'pickup');
   const [form, setForm] = useState({
     odometer: '',
@@ -32,34 +34,11 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
     condition_notes: '',
     signature: '',
   });
-  const [ocrStatus, setOcrStatus] = useState<'idle' | 'uploading' | 'extracting' | 'done' | 'error'>('idle');
-  const [ocrError, setOcrError] = useState<string | null>(null);
 
-  async function handleDashboardPhoto(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    setOcrStatus('uploading');
-    setOcrError(null);
-    try {
-      const uploaded = await documentReaderApi.upload(file, 'vehicle_dashboard');
-      setOcrStatus('extracting');
-      await documentReaderApi.extract(uploaded.data.id, 'vehicle_dashboard');
-      const result = await documentReaderApi.pollUntilDone(uploaded.data.id, { timeoutMs: 30000 });
-      const doc = result.data;
-      const data = doc.extraction?.extracted_data ?? doc.extracted_data ?? {};
-      const km = Number(data.odometer ?? data.mileage ?? data.km ?? data.kilometrage ?? 0);
-      const fuel = Number(data.fuel_level ?? data.fuel ?? data.carburant ?? 0);
-      setForm((s) => ({
-        ...s,
-        odometer: km > 0 ? String(km) : s.odometer,
-        fuel_level: fuel > 0 ? String(Math.min(100, fuel)) : s.fuel_level,
-      }));
-      setOcrStatus('done');
-    } catch {
-      setOcrStatus('error');
-      setOcrError('Extraction impossible. Remplissez les champs manuellement.');
-    }
-  }
+  const depositsQ = useDeposits(reservationId);
+  const franchiseHeld = (depositsQ.data ?? []).some((d) => d.status === 'held');
+  const franchiseBlocks = franchiseDue > 0 && !franchiseHeld;
+  const [pickupError, setPickupError] = useState<string | null>(null);
 
   const pickupM = useMutation({
     mutationFn: () =>
@@ -72,13 +51,17 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
         photos: [],
       }),
     onSuccess: () => {
+      setPickupError(null);
       onRefresh();
       setForm({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
     },
+    onError: (e: unknown) => setPickupError(e instanceof Error ? e.message : 'Erreur lors du check-out.'),
   });
 
   return (
     <div className="space-y-6">
+      <FranchisePanel reservationId={reservationId} dueAmount={franchiseDue} mode="collect" />
+
       {/* Existing pickup records */}
       {pickups.length > 0 && (
         <div>
@@ -145,41 +128,20 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
           </div>
         </div>
 
-        {/* Photo zones */}
+        {/* Photo zones placeholder */}
         <div className="mt-4">
           <label className="mb-2 block text-[10px] font-bold text-slate-400">Photos du véhicule</label>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {PHOTO_ZONES.map((zone) => {
-              const isDashboard = zone === 'Tableau de bord';
-              return (
-                <label
-                  key={zone}
-                  className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-3 text-center cursor-pointer ${
-                    isDashboard
-                      ? 'border-indigo-300 bg-indigo-50/40 hover:border-indigo-400'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture={isDashboard ? 'environment' : undefined}
-                    className="hidden"
-                    onChange={(e) => {
-                      if (isDashboard) handleDashboardPhoto(e.target.files);
-                    }}
-                  />
-                  <div className="text-lg text-slate-300">{isDashboard ? '🔍' : '📷'}</div>
-                  <div className={`mt-1 text-[10px] font-bold ${isDashboard ? 'text-indigo-600' : 'text-slate-400'}`}>{zone}</div>
-                  {isDashboard && <div className="mt-0.5 text-[8px] text-indigo-400">Auto-remplir km & carburant</div>}
-                </label>
-              );
-            })}
+            {PHOTO_ZONES.map((zone) => (
+              <div
+                key={zone}
+                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 p-3 text-center hover:border-slate-300 cursor-pointer"
+              >
+                <div className="text-lg text-slate-300">📷</div>
+                <div className="mt-1 text-[10px] font-bold text-slate-400">{zone}</div>
+              </div>
+            ))}
           </div>
-          {ocrStatus === 'uploading' && <div className="mt-2 text-xs font-semibold text-indigo-600">Upload en cours…</div>}
-          {ocrStatus === 'extracting' && <div className="mt-2 text-xs font-semibold text-indigo-600">Extraction OCR en cours…</div>}
-          {ocrStatus === 'done' && <div className="mt-2 text-xs font-semibold text-emerald-600">Km et carburant extraits avec succès.</div>}
-          {ocrStatus === 'error' && <div className="mt-2 text-xs font-semibold text-rose-600">{ocrError}</div>}
         </div>
 
         <div className="mt-4">
@@ -189,13 +151,22 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, onRefresh }) => 
           </div>
         </div>
 
+        {pickupError && (
+          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{pickupError}</div>
+        )}
+        {franchiseBlocks && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+            Encaissez la franchise d'assurance ci-dessus avant de remettre le véhicule.
+          </div>
+        )}
+
         <div className="mt-4 flex justify-end">
           <button
             onClick={() => pickupM.mutate()}
-            disabled={pickupM.isPending}
+            disabled={pickupM.isPending || franchiseBlocks}
             className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            {pickupM.isPending ? 'Enregistrement…' : 'Valider le Check-Out'}
+            {pickupM.isPending ? 'Enregistrement…' : '🚗 Valider le Check-Out'}
           </button>
         </div>
       </div>

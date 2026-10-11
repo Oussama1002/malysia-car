@@ -58,6 +58,8 @@ class StoreMaintenanceEventRequest extends ApiFormRequest
             'vendor' => ['nullable', 'string', 'max:255'],
             'cost_mad' => ['nullable', 'numeric', 'min:0'],
             'lifecycle_status' => ['nullable', 'in:planned,in_progress,completed,cancelled'],
+            // Facture ou photo de l'entretien, déjà téléversée.
+            'proof_document_id' => ['nullable', 'uuid'],
         ];
     }
 }

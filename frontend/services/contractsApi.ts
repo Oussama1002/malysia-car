@@ -8,6 +8,7 @@ export type ContractListFilters = {
   status?: string;
   customer_id?: string;
   vehicle_id?: string;
+  reservation_id?: string;
 };
 
 export type ContractDetailResponse = {
@@ -37,6 +38,7 @@ export const contractsApi = {
     if (filters?.status) qs.set('status', filters.status);
     if (filters?.customer_id) qs.set('customer_id', filters.customer_id);
     if (filters?.vehicle_id) qs.set('vehicle_id', filters.vehicle_id);
+    if (filters?.reservation_id) qs.set('reservation_id', filters.reservation_id);
     const path = `${endpoints.contracts.list}${qs.toString() ? `?${qs.toString()}` : ''}`;
     const res = await apiClient<ApiListResponse<ContractDto>>(path);
     return res.data;
@@ -50,6 +52,7 @@ export const contractsApi = {
       contract_type: payload.type,
       customer_id: String(payload.clientId),
       vehicle_id: payload.vehicleId ? String(payload.vehicleId) : null,
+      reservation_id: (payload as any).reservationId ?? null,
       start_date: payload.startDate ?? null,
       end_date: payload.endDate ?? null,
       duration_months: (payload as any).durationMonths ?? null,
@@ -59,6 +62,10 @@ export const contractsApi = {
       allowed_km: (payload as any).allowedKm ?? null,
       excess_km_rate: (payload as any).excessKmRate ?? null,
       deposit_amount: (payload as any).depositAmount ?? null,
+      deposit_method: (payload as any).depositMethod ?? undefined,
+      deposit_check_number: (payload as any).depositCheckNumber ?? undefined,
+      deposit_check_bank: (payload as any).depositCheckBank ?? undefined,
+      deposit_check_date: (payload as any).depositCheckDate ?? undefined,
       notes: (payload as any).notes ?? null,
       payment_method: (payload as any).paymentMethod ?? null,
       payment_terms: (payload as any).paymentTerms ?? null,

@@ -137,6 +137,9 @@ export interface Payment {
   check_number?: string | null;
   check_date?: string | null;
   check_bank?: string | null;
+  cheque_status?: 'pending' | 'cleared' | 'bounced' | null;
+  cheque_cashed_at?: string | null;
+  cheque_bounce_reason?: string | null;
   notes?: string | null;
   customer?: { id: string; full_name?: string | null; customer_code?: string | null } | null;
   bank_account?: BankAccount | null;
@@ -173,6 +176,8 @@ export interface PaymentCreatePayload {
   check_number?: string;
   check_date?: string;
   check_bank?: string;
+  /** Scan du chèque stocké par /v1/cheque-ocr, rattaché au paiement comme preuve. */
+  cheque_document_id?: string | null;
   notes?: string;
   allocations?: Array<{
     invoice_id?: string;
@@ -351,6 +356,16 @@ export function createPayment(payload: PaymentCreatePayload): Promise<{ data: Pa
   return apiClient<{ data: Payment }>(`/v1/payments`, { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export function updateChequeStatus(
+  id: string,
+  payload: { cheque_status: 'pending' | 'cleared' | 'bounced'; cashed_at?: string; bounce_reason?: string },
+): Promise<{ data: Payment }> {
+  return apiClient<{ data: Payment }>(`/v1/payments/${id}/cheque-status`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function allocatePayment(id: string, payload: AllocatePayload): Promise<{ data: Payment }> {
   return apiClient<{ data: Payment }>(`/v1/payments/${id}/allocate`, {
     method: 'POST',
@@ -465,6 +480,13 @@ export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
   paid: 'Payée',
   overdue: 'En retard',
   cancelled: 'Annulée',
+};
+
+export const INVOICE_TYPE_LABEL: Record<InvoiceType, string> = {
+  contract: 'Contrat',
+  sale: 'Vente',
+  service: 'Service',
+  credit_note: 'Avoir',
 };
 
 export function invoiceStatusTone(status: InvoiceStatus): 'default' | 'success' | 'warning' | 'danger' | 'info' {

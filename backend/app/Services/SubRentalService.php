@@ -52,6 +52,21 @@ class SubRentalService
                 'created_by'               => $userId,
             ]);
 
+            // Ensure a Vehicle row exists straight away — even for draft
+            // sub-rentals — so the SL vehicle shows up on the fleet list, in
+            // reservation & contract vehicle pickers, and elsewhere the app
+            // filters on vehicle_id. If only external_vehicle_identity is
+            // provided, we spin up a temporary vehicle here.
+            if (! $contract->vehicle_id && ! empty($contract->external_vehicle_identity)) {
+                $vehicle = $this->createTemporaryVehicleIfNeeded($contract, $userId);
+                $contract->vehicle_id = $vehicle->id;
+                $contract->save();
+            } elseif ($contract->vehicle_id) {
+                Vehicle::whereKey($contract->vehicle_id)->update([
+                    'ownership_status' => 'sub_rented',
+                ]);
+            }
+
             return $contract;
         });
     }
@@ -201,6 +216,7 @@ class SubRentalService
         return [
             'supplier_cost'     => $supplierCost,
             'customer_revenue'  => $customerRevenue,
+            'customer_collected' => $contract->customerReservationsCollected(),
             'margin'            => $margin,
             'margin_percentage' => $marginPct,
             'total_paid'        => $contract->totalPaid(),
@@ -246,7 +262,7 @@ class SubRentalService
         }
     }
 
-    private function createTemporaryVehicleIfNeeded(SubRentalContract $contract, string $userId): Vehicle
+    public function createTemporaryVehicleIfNeeded(SubRentalContract $contract, string $userId): Vehicle
     {
         $identity = $contract->external_vehicle_identity ?? [];
 
@@ -256,27 +272,57 @@ class SubRentalService
             ]);
         }
 
-        $vehicle = Vehicle::create([
-            'id'                   => (string) Str::uuid(),
-            'company_id'           => $contract->company_id,
-            'branch_id'            => $contract->branch_id,
-            'vehicle_code'         => 'SL-' . strtoupper(Str::random(6)),
-            'registration_number'  => $identity['registration_number'] ?? ('SL-' . strtoupper(Str::random(6))),
-            'color'                => $identity['color'] ?? null,
-            'year'                 => $identity['year'] ?? null,
-            'mileage_current'      => $identity['mileage'] ?? 0,
-            'status'               => 'available',
-            'ownership_status'     => 'sub_rented',
-            'availability_status'  => 'available',
-            'acquisition_type'     => 'sub_rental',
-            'notes'                => 'Véhicule sous-location - ' . ($contract->supplierAgency->name ?? ''),
-        ]);
+        $plate = $identity['registration_number'] ?? null;
 
-        // Link brand and model if provided
+        // Reuse an existing vehicle with the same plate (case-insensitive) so
+        // re-activating a contract or having a manually-created row does not
+        // trip the vehicles_registration_number_unique constraint.
+        $vehicle = null;
+        if (!empty($plate)) {
+            $vehicle = Vehicle::withoutGlobalScopes()
+                ->whereRaw('UPPER(TRIM(registration_number)) = ?', [strtoupper(trim($plate))])
+                ->first();
+        }
+
+        if ($vehicle) {
+            // Existing row — update ownership + refresh missing display fields
+            // so it reads as a sub-location vehicle from now on.
+            $vehicle->company_id          = $vehicle->company_id ?: $contract->company_id;
+            $vehicle->branch_id           = $vehicle->branch_id ?: $contract->branch_id;
+            $vehicle->ownership_status    = 'sub_rented';
+            $vehicle->availability_status = $vehicle->availability_status ?: 'available';
+            $vehicle->acquisition_type    = $vehicle->acquisition_type ?: 'sub_rental';
+            if (empty($vehicle->brand_name) && !empty($identity['brand_name'])) $vehicle->brand_name = $identity['brand_name'];
+            if (empty($vehicle->model_name) && !empty($identity['model_name'])) $vehicle->model_name = $identity['model_name'];
+            if (empty($vehicle->color) && !empty($identity['color'])) $vehicle->color = $identity['color'];
+            if (empty($vehicle->year) && !empty($identity['year'])) $vehicle->year = $identity['year'];
+            if ((int) ($vehicle->mileage_current ?? 0) === 0 && !empty($identity['mileage'])) $vehicle->mileage_current = $identity['mileage'];
+        } else {
+            $vehicle = Vehicle::create([
+                'id'                   => (string) Str::uuid(),
+                'company_id'           => $contract->company_id,
+                'branch_id'            => $contract->branch_id,
+                'vehicle_code'         => 'SL-' . strtoupper(Str::random(6)),
+                'registration_number'  => $plate ?? ('SL-' . strtoupper(Str::random(6))),
+                'brand_name'           => $identity['brand_name'] ?? null,
+                'model_name'           => $identity['model_name'] ?? null,
+                'color'                => $identity['color'] ?? null,
+                'year'                 => $identity['year'] ?? null,
+                'mileage_current'      => $identity['mileage'] ?? 0,
+                'status'               => 'available',
+                'ownership_status'     => 'sub_rented',
+                'availability_status'  => 'available',
+                'acquisition_type'     => 'sub_rental',
+                'notes'                => 'Véhicule sous-location - ' . ($contract->supplierAgency->name ?? ''),
+            ]);
+        }
+
+        // Link brand and model if provided so the vehicle joins the referential
+        // (VehicleBrand / VehicleModel) and appears in brand/model filters.
         if (!empty($identity['brand_name'])) {
             $brand = \App\Models\VehicleBrand::firstOrCreate(
-                ['name' => $identity['brand_name'], 'company_id' => $contract->company_id],
-                ['company_id' => $contract->company_id, 'name' => $identity['brand_name']]
+                ['name' => $identity['brand_name']],
+                ['name' => $identity['brand_name']]
             );
             $vehicle->brand_id = $brand->id;
         }

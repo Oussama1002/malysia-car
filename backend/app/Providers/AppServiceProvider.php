@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\DocumentReader\GoogleVisionOcrProvider;
 use App\Services\DocumentReader\OcrProviderInterface;
 use App\Services\DocumentReader\TesseractOcrProvider;
 use App\Services\Sms\ExternalSmsProviderStub;
@@ -27,14 +28,26 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(OcrProviderInterface::class, function () {
-            // Future: switch on config('document_reader.provider') to swap in
-            // Google Document AI / Azure Document Intelligence implementations.
-            return new TesseractOcrProvider(
+            $tesseract = new TesseractOcrProvider(
                 tesseractBin: (string) config('document_reader.tesseract.bin', 'tesseract'),
                 pdftoppmBin: (string) config('document_reader.tesseract.pdftoppm_bin', 'pdftoppm'),
                 defaultLang: (string) config('document_reader.tesseract.lang', 'fra+eng'),
                 timeoutSeconds: (int) config('document_reader.tesseract.timeout', 120),
             );
+
+            // Google Vision when selected — with Tesseract kept as the automatic
+            // fallback so a bad key / network issue never breaks OCR entirely.
+            if ((string) config('document_reader.provider') === 'google_vision') {
+                return new GoogleVisionOcrProvider(
+                    apiKey: (string) config('document_reader.google_vision.api_key', ''),
+                    endpoint: (string) config('document_reader.google_vision.endpoint', 'https://vision.googleapis.com/v1'),
+                    timeoutSeconds: (int) config('document_reader.google_vision.timeout', 120),
+                    maxPdfPages: (int) config('document_reader.google_vision.max_pdf_pages', 5),
+                    fallback: $tesseract,
+                );
+            }
+
+            return $tesseract;
         });
     }
 
