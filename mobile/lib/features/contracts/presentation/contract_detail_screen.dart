@@ -1407,7 +1407,8 @@ String _uuidPrefix(String key) {
   if (k.contains('invoice')) return 'INV';
   if (k.contains('document')) return 'DOC';
   if (k.contains('user')) return 'USR';
-  return key.replaceAll(RegExp(r'_id$'), '').substring(0, key.length.clamp(0, 3)).toUpperCase();
+  final clean = key.replaceAll(RegExp(r'_id$'), '');
+  return clean.substring(0, clean.length.clamp(0, 3)).toUpperCase();
 }
 
 String _formatFieldLabel(String field) {
