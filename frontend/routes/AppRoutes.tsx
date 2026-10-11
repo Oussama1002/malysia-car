@@ -17,6 +17,7 @@ import { CustomersPage } from '@/modules/customers/CustomersPage';
 import { CustomerDetailPage } from '@/modules/customers/CustomerDetailPage';
 import { ContractsModulePage } from '@/modules/contracts/ContractsModulePage';
 import { ReservationDetailPage } from '@/modules/rentals/ReservationDetailPage';
+import { WebsiteLeadsPage } from '@/modules/rentals/WebsiteLeadsPage';
 import { ContractWizardPage } from '@/modules/contracts/ContractWizardPage';
 import { ContractDetailPage } from '@/modules/contracts/ContractDetailPage';
 import { ContractTemplatesPage } from '@/modules/contracts/ContractTemplatesPage';
@@ -765,6 +766,14 @@ export default function AppRoutes(): React.ReactElement {
               element={
                 <ModuleGate module="contracts">
                   <ReservationDetailPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/reservations/website-leads"
+              element={
+                <ModuleGate module="contracts">
+                  <WebsiteLeadsPage />
                 </ModuleGate>
               }
             />

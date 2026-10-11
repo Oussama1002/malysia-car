@@ -12,7 +12,8 @@ export type IconName =
   | 'sun' | 'moon' | 'density' | 'filter' | 'download' | 'upload'
   | 'arrow-up' | 'arrow-down' | 'arrow-right' | 'trend-up' | 'trend-down'
   | 'play' | 'pause' | 'pin' | 'shield' | 'sign' | 'bolt' | 'wifi'
-  | 'refresh' | 'more' | 'external' | 'star' | 'eye' | 'eye-off' | 'pdf' | 'filter-2';
+  | 'refresh' | 'more' | 'external' | 'star' | 'eye' | 'eye-off' | 'pdf' | 'filter-2'
+  | 'chat';
 
 const P = (d: string) => (
   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d={d} />
@@ -69,6 +70,7 @@ const MAP: Record<IconName, React.ReactNode> = {
   eye: P('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Zm10 3a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z'),
   'eye-off': P('M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22'),
   pdf: P('M9 13v4m3-4v4m3-4h-2m0 0v4m2-2h-2m-6-9H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5'),
+  chat: P('M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'),
 };
 
 export const Icon: React.FC<{ name: IconName; className?: string; size?: number; strokeWidth?: number }> = ({

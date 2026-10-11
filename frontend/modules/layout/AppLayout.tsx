@@ -32,6 +32,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { to: '/fleet', module: 'fleet', labelKey: 'nav.fleet', icon: 'car' },
       { to: '/contracts', module: 'contracts', labelKey: 'nav.contractsSidebar', icon: 'doc' },
+      { to: '/reservations/website-leads', module: 'contracts', labelKey: 'nav.websiteLeads', icon: 'chat' },
       { to: '/customers', module: 'customers', labelKey: 'nav.customers', icon: 'users' },
       { to: '/gps', module: 'gps', labelKey: 'nav.gps', icon: 'map' },
       { to: '/fleet/sub-rentals', module: 'subRentals', labelKey: 'nav.subRentals', icon: 'key' },
