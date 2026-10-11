@@ -8,7 +8,6 @@ import '../../../core/auth/user_repo.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../chat/data/chat_repo.dart';
 import '../../notifications/data/notifications_repo.dart';
-import '../../placeholders/placeholder_screen.dart';
 import '../../chat/presentation/chat_screen.dart';
 import '../../contracts/presentation/contracts_screen.dart';
 import '../../customers/presentation/customers_screen.dart';
@@ -221,177 +220,124 @@ class _ModulesGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final modules = _modules(context);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      itemCount: modules.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 0.90,
-      ),
-      itemBuilder: (_, i) => modules[i],
-    );
-  }
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  List<Widget> _modules(BuildContext context) {
     void open(Widget target) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => target));
     }
 
-    PlaceholderScreen stub(String title, IconData icon) =>
-        PlaceholderScreen(title: title, icon: icon);
-
-    return [
-      _ModuleTile(
-        label: 'Réservations',
-        icon: Icons.event,
-        color: const Color(0xFF6366F1),
-        onTap: () => open(const ReservationsScreen()),
-      ),
-      _ModuleTile(
-        label: 'Clients',
-        icon: Icons.people_outline,
-        color: const Color(0xFF10B981),
-        onTap: () => open(const CustomersScreen()),
-      ),
-      _ModuleTile(
-        label: 'Flotte',
-        icon: Icons.directions_car,
-        color: const Color(0xFFF59E0B),
-        onTap: () => open(const VehiclesScreen()),
-      ),
-      _ModuleTile(
-        label: 'Contrats',
-        icon: Icons.description_outlined,
-        color: const Color(0xFF14B8A6),
-        onTap: () => open(const ContractsScreen()),
-      ),
-      _ModuleTile(
-        label: 'Paiements',
-        icon: Icons.attach_money,
-        color: const Color(0xFF22C55E),
-        onTap: () => open(const PaymentsScreen()),
-      ),
-      _ModuleTile(
-        label: 'Documents',
-        icon: Icons.folder_open,
-        color: const Color(0xFF8B5CF6),
-        onTap: () => open(const DocumentsScreen()),
-      ),
-      _ModuleTile(
-        label: 'Scanner',
-        icon: Icons.qr_code_scanner,
-        color: const Color(0xFFEC4899),
-        onTap: () => open(const DocumentReaderScreen()),
-      ),
-      _ModuleTile(
-        label: 'GPS',
-        icon: Icons.map_outlined,
-        color: const Color(0xFF3B82F6),
-        onTap: () => open(const GpsScreen()),
-      ),
-      _ModuleTile(
-        label: 'Discussions',
-        icon: Icons.chat_bubble_outline,
-        color: const Color(0xFF0EA5E9),
-        onTap: () => open(const ChatScreen()),
-      ),
-      _ModuleTile(
-        label: 'Sous-location',
-        icon: Icons.vpn_key_outlined,
-        color: const Color(0xFFEF4444),
-        onTap: () => open(const SubRentalsScreen()),
-      ),
-      _ModuleTile(
-        label: 'Occasion',
-        icon: Icons.sell_outlined,
-        color: const Color(0xFF2563EB),
-        onTap: () => open(const UsedCarsScreen()),
-      ),
-      _ModuleTile(
-        label: 'Demandes',
-        icon: Icons.public,
-        color: const Color(0xFF64748B),
-        onTap: () => open(const WebsiteLeadsScreen()),
-      ),
+    final modules = <_ModuleEntry>[
+      _ModuleEntry('Réservations', Icons.event, const Color(0xFF6366F1),
+          () => open(const ReservationsScreen())),
+      _ModuleEntry('Clients', Icons.people_outline, const Color(0xFF10B981),
+          () => open(const CustomersScreen())),
+      _ModuleEntry('Flotte', Icons.directions_car, const Color(0xFFF59E0B),
+          () => open(const VehiclesScreen())),
+      _ModuleEntry('Contrats', Icons.description_outlined,
+          const Color(0xFF14B8A6), () => open(const ContractsScreen())),
+      _ModuleEntry('Paiements', Icons.attach_money, const Color(0xFF22C55E),
+          () => open(const PaymentsScreen())),
+      _ModuleEntry('Documents', Icons.folder_open, const Color(0xFF8B5CF6),
+          () => open(const DocumentsScreen())),
+      _ModuleEntry('Scanner', Icons.qr_code_scanner, const Color(0xFFEC4899),
+          () => open(const DocumentReaderScreen())),
+      _ModuleEntry('GPS', Icons.map_outlined, const Color(0xFF3B82F6),
+          () => open(const GpsScreen())),
+      _ModuleEntry('Discussions', Icons.chat_bubble_outline,
+          const Color(0xFF0EA5E9), () => open(const ChatScreen())),
+      _ModuleEntry('Sous-location', Icons.vpn_key_outlined,
+          const Color(0xFFEF4444), () => open(const SubRentalsScreen())),
+      _ModuleEntry('Occasion', Icons.sell_outlined, const Color(0xFF2563EB),
+          () => open(const UsedCarsScreen())),
+      _ModuleEntry('Demandes', Icons.public, const Color(0xFF64748B),
+          () => open(const WebsiteLeadsScreen())),
     ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? cs.onSurface.withOpacity(0.08)
+              : Colors.black.withOpacity(0.06),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            for (int i = 0; i < modules.length; i++) ...[
+              _ModuleRow(entry: modules[i]),
+              if (i < modules.length - 1)
+                Divider(
+                  height: 0,
+                  thickness: 1,
+                  color: isDark
+                      ? cs.onSurface.withOpacity(0.06)
+                      : Colors.black.withOpacity(0.04),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
-class _ModuleTile extends StatelessWidget {
-  const _ModuleTile({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
+class _ModuleEntry {
+  const _ModuleEntry(this.label, this.icon, this.color, this.onTap);
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+}
+
+class _ModuleRow extends StatelessWidget {
+  const _ModuleRow({required this.entry});
+  final _ModuleEntry entry;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: cs.surface,
-      borderRadius: BorderRadius.circular(18),
-      elevation: 0,
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-                color: isDark
-                    ? cs.onSurface.withOpacity(0.08)
-                    : Colors.black.withOpacity(0.04)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        onTap: entry.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withOpacity(0.35),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  color: entry.color,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: Colors.white, size: 26),
+                child: Icon(entry.icon, color: Colors.white, size: 20),
               ),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  entry.label,
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
-                    color: cs.onSurface),
+                    fontSize: 14,
+                    color: cs.onSurface,
+                  ),
+                ),
               ),
+              Icon(Icons.chevron_right,
+                  color: cs.onSurface.withOpacity(0.3), size: 22),
             ],
           ),
         ),
