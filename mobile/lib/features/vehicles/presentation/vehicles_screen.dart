@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-
 import '../../../core/config/app_config.dart';
 import '../../../core/widgets/module_scaffold.dart';
 import '../../placeholders/placeholder_screen.dart';
@@ -322,7 +320,6 @@ class _VehicleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final money = NumberFormat.currency(locale: 'fr', symbol: 'MAD');
     final compliance = _compliance(v);
     return ModuleCard(
       onTap: () => Navigator.of(context).push(
@@ -377,12 +374,6 @@ class _VehicleCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (v.pricePerDay != null && v.pricePerDay! > 0) ...[
-                  const SizedBox(height: 6),
-                  Text('${money.format(v.pricePerDay)}/j',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 13)),
-                ],
               ],
             ),
           ),
