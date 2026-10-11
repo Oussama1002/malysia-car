@@ -1160,6 +1160,30 @@
     });
   }
 
+  function prefillFromSession() {
+    try {
+      var vid = sessionStorage.getItem('mc_vehicle_id');
+      var vname = sessionStorage.getItem('mc_vehicle_name');
+      if (!vid) return;
+      sessionStorage.removeItem('mc_vehicle_id');
+      sessionStorage.removeItem('mc_vehicle_name');
+      var wait = function (tries) {
+        var sel = $('vehicleSelect');
+        if (!sel) return;
+        var opt = sel.querySelector('option[value="' + vid + '"]');
+        if (!opt && tries < 20) { setTimeout(function () { wait(tries + 1); }, 200); return; }
+        if (opt) {
+          sel.value = vid;
+          sel.dispatchEvent(new Event('change'));
+        }
+        chooseVehicle(vid, vname || '');
+      };
+      if (window.location.hash === '#reserver') {
+        wait(0);
+      }
+    } catch (_) {}
+  }
+
   fillContacts();
   fillBrandsMarquee();
   wireMenu();
@@ -1172,4 +1196,5 @@
   loadFleet();
   loadCatalog();
   loadAgencies();
+  prefillFromSession();
 })();
