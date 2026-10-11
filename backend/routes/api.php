@@ -1128,6 +1128,8 @@ Route::prefix('v1')->group(function () {
                 ->middleware('permission:branches.manage');
             Route::delete('branches/{branch}', [BranchController::class, 'destroy'])
                 ->middleware('permission:branches.manage');
+            Route::post('branches/resolve-map-url', [BranchController::class, 'resolveMapUrl'])
+                ->middleware('permission:branches.manage');
 
             Route::get('settings/{group}', [CompanySettingsController::class, 'show']);
             Route::put('settings/{group}', [CompanySettingsController::class, 'update']);

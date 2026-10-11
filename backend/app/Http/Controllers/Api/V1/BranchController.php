@@ -55,4 +55,45 @@ class BranchController extends Controller
 
         return ApiResponse::message('Branch deleted', 200);
     }
+
+    public function resolveMapUrl(Request $request): JsonResponse
+    {
+        $url = $request->input('url', '');
+        if (! $url || ! preg_match('#^https?://(maps\.app\.goo\.gl|goo\.gl|g\.co)/#', $url)) {
+            return ApiResponse::error('URL invalide', 422);
+        }
+
+        try {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 5,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 5,
+                CURLOPT_NOBODY => false,
+                CURLOPT_USERAGENT => 'Mozilla/5.0',
+            ]);
+            curl_exec($ch);
+            $finalUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+            curl_close($ch);
+
+            $lat = null;
+            $lng = null;
+            if (preg_match('/@(-?\d+\.?\d*),(-?\d+\.?\d*)/', $finalUrl, $m)) {
+                $lat = (float) $m[1];
+                $lng = (float) $m[2];
+            } elseif (preg_match('/[?&](?:q|query|ll)=(-?\d+\.?\d*),(-?\d+\.?\d*)/', $finalUrl, $m)) {
+                $lat = (float) $m[1];
+                $lng = (float) $m[2];
+            }
+
+            return ApiResponse::success([
+                'resolved_url' => $finalUrl,
+                'latitude' => $lat,
+                'longitude' => $lng,
+            ]);
+        } catch (\Throwable) {
+            return ApiResponse::error('Impossible de résoudre le lien', 422);
+        }
+    }
 }

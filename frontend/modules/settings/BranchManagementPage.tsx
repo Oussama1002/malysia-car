@@ -260,31 +260,44 @@ const BranchForm: React.FC<{
     is_active: branch?.is_active ?? true,
   });
 
+  const [resolving, setResolving] = useState(false);
+
+  const extractCoordsFromUrl = (url: string): { lat: number; lng: number } | null => {
+    let m = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+    m = url.match(/[?&](?:q|query)=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+    m = url.match(/[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+    m = url.match(/maps\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+    return null;
+  };
+
   const parseGoogleMapsUrl = (url: string) => {
     setForm((f) => ({ ...f, google_maps_url: url }));
     if (!url) return;
-    // Try @lat,lng pattern (e.g. google.com/maps/place/.../@33.5731,-7.5898,15z)
-    let m = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-    if (m) {
-      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
+
+    const coords = extractCoordsFromUrl(url);
+    if (coords) {
+      setForm((f) => ({ ...f, latitude: coords.lat, longitude: coords.lng }));
       return;
     }
-    // Try q=lat,lng or query=lat,lng
-    m = url.match(/[?&](?:q|query)=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-    if (m) {
-      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
-      return;
-    }
-    // Try ll=lat,lng
-    m = url.match(/[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-    if (m) {
-      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
-      return;
-    }
-    // Try maps/place/lat,lng (short links)
-    m = url.match(/maps\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-    if (m) {
-      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
+
+    if (/^https?:\/\/(maps\.app\.goo\.gl|goo\.gl|g\.co)\//i.test(url)) {
+      setResolving(true);
+      apiClient<{ data: { resolved_url: string; latitude: number | null; longitude: number | null } }>(
+        '/v1/branches/resolve-map-url',
+        { method: 'POST', body: JSON.stringify({ url }) },
+      )
+        .then((res) => {
+          const d = res.data;
+          if (d.latitude != null && d.longitude != null) {
+            setForm((f) => ({ ...f, latitude: d.latitude, longitude: d.longitude, google_maps_url: d.resolved_url || url }));
+          }
+        })
+        .catch(() => {})
+        .finally(() => setResolving(false));
     }
   };
 
@@ -382,7 +395,9 @@ const BranchForm: React.FC<{
           onChange={(e) => parseGoogleMapsUrl(e.target.value)}
         />
         <p className="mt-1 text-xs text-slate-400">
-          Collez un lien Google Maps — la latitude et longitude seront extraites automatiquement.
+          {resolving
+            ? '⏳ Résolution du lien en cours…'
+            : 'Collez un lien Google Maps — la latitude et longitude seront extraites automatiquement.'}
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
