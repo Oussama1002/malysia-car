@@ -120,6 +120,25 @@ export const BranchManagementPage: React.FC = () => {
             render: (r) => <span className="font-bold text-slate-900">{r.name}</span>,
           },
           { key: 'city', header: 'Ville', render: (r) => r.city ?? '—' },
+          {
+            key: 'location',
+            header: 'Localisation',
+            render: (r) =>
+              r.google_maps_url ? (
+                <a
+                  href={r.google_maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold text-indigo-600 hover:underline"
+                >
+                  📍 Voir sur Maps
+                </a>
+              ) : r.latitude != null ? (
+                <span className="text-xs text-slate-500">{r.latitude}, {r.longitude}</span>
+              ) : (
+                <span className="text-xs text-slate-400">—</span>
+              ),
+          },
           { key: 'phone', header: 'Téléphone', render: (r) => r.phone ?? '—' },
           { key: 'email', header: 'Email', render: (r) => r.email ?? '—' },
           {
@@ -231,11 +250,43 @@ const BranchForm: React.FC<{
     code: branch?.code ?? '',
     name: branch?.name ?? '',
     city: branch?.city ?? '',
+    address: branch?.address ?? '',
+    latitude: branch?.latitude ?? null,
+    longitude: branch?.longitude ?? null,
+    google_maps_url: branch?.google_maps_url ?? '',
     country_code: branch?.country_code ?? 'MA',
     phone: branch?.phone ?? '',
     email: branch?.email ?? '',
     is_active: branch?.is_active ?? true,
   });
+
+  const parseGoogleMapsUrl = (url: string) => {
+    setForm((f) => ({ ...f, google_maps_url: url }));
+    if (!url) return;
+    // Try @lat,lng pattern (e.g. google.com/maps/place/.../@33.5731,-7.5898,15z)
+    let m = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) {
+      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
+      return;
+    }
+    // Try q=lat,lng or query=lat,lng
+    m = url.match(/[?&](?:q|query)=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) {
+      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
+      return;
+    }
+    // Try ll=lat,lng
+    m = url.match(/[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) {
+      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
+      return;
+    }
+    // Try maps/place/lat,lng (short links)
+    m = url.match(/maps\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (m) {
+      setForm((f) => ({ ...f, latitude: parseFloat(m![1]), longitude: parseFloat(m![2]) }));
+    }
+  };
 
   return (
     <form
@@ -311,6 +362,58 @@ const BranchForm: React.FC<{
           />
         </div>
       </div>
+      <div>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Adresse</label>
+        <input
+          className="df-input"
+          placeholder="123 Bd Mohammed V, Casablanca"
+          value={form.address ?? ''}
+          onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
+          Lien Google Maps
+        </label>
+        <input
+          className="df-input"
+          placeholder="https://maps.google.com/..."
+          value={form.google_maps_url ?? ''}
+          onChange={(e) => parseGoogleMapsUrl(e.target.value)}
+        />
+        <p className="mt-1 text-xs text-slate-400">
+          Collez un lien Google Maps — la latitude et longitude seront extraites automatiquement.
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Latitude</label>
+          <input
+            type="number"
+            step="any"
+            className="df-input"
+            placeholder="33.5731"
+            value={form.latitude ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, latitude: e.target.value ? parseFloat(e.target.value) : null }))}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Longitude</label>
+          <input
+            type="number"
+            step="any"
+            className="df-input"
+            placeholder="-7.5898"
+            value={form.longitude ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, longitude: e.target.value ? parseFloat(e.target.value) : null }))}
+          />
+        </div>
+      </div>
+      {form.latitude != null && form.longitude != null && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+          📍 Position détectée : {form.latitude}, {form.longitude}
+        </div>
+      )}
       <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
         <input
           type="checkbox"

@@ -228,6 +228,10 @@ export interface Branch {
   code: string;
   name: string;
   city: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  google_maps_url: string | null;
   country_code: string;
   phone: string | null;
   email: string | null;
@@ -284,6 +288,10 @@ export async function listBranches(): Promise<{ data: Branch[] }> {
         code: b.code,
         name: b.name,
         city: null,
+        address: null,
+        latitude: null,
+        longitude: null,
+        google_maps_url: null,
         country_code: 'MA',
         phone: null,
         email: null,
@@ -310,6 +318,10 @@ export async function listBranches(): Promise<{ data: Branch[] }> {
         code: b.code,
         name: b.name,
         city: null,
+        address: null,
+        latitude: null,
+        longitude: null,
+        google_maps_url: null,
         country_code: 'MA',
         phone: null,
         email: null,
