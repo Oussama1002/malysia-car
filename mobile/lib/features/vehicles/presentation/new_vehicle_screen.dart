@@ -20,7 +20,7 @@ class NewVehicleScreen extends ConsumerStatefulWidget {
   ConsumerState<NewVehicleScreen> createState() => _NewVehicleScreenState();
 }
 
-enum _VehDoc { assurance, facture, immatProv, techControl, vignette }
+enum _VehDoc { carteGrise, assurance, facture, immatProv, techControl, vignette }
 
 enum _CarteGriseStatus { enAttente, recue }
 
@@ -140,6 +140,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   final _dailyPrice = TextEditingController();
   final _monthlyPrice = TextEditingController();
   final _purchasePrice = TextEditingController();
+  final _insuranceDeductible = TextEditingController();
 
   // Dropdowns alignés sur le web — on garde '' = pas de choix.
   String _fuelType = '';
@@ -151,6 +152,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   DateTime? _miseEnCirculation;
   DateTime? _dateImmatriculation;
   DateTime? _acquisitionDate;
+  DateTime? _insuranceStart;
   DateTime? _insuranceExpiry;
   DateTime? _techExpiry;
   DateTime? _vignetteExpiry;
@@ -199,6 +201,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     _dailyPrice.dispose();
     _monthlyPrice.dispose();
     _purchasePrice.dispose();
+    _insuranceDeductible.dispose();
     _newBrandName.dispose();
     _newModelName.dispose();
     super.dispose();
@@ -212,6 +215,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   // ------------------------------------------------------------------
 
   String _ocrType(_VehDoc d) => switch (d) {
+        _VehDoc.carteGrise => 'carte_grise',
         _VehDoc.assurance => 'insurance_card',
         _VehDoc.facture => 'invoice',
         _VehDoc.immatProv => 'provisional_registration',
@@ -220,6 +224,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
       };
 
   String _ocrLabel(_VehDoc d) => switch (d) {
+        _VehDoc.carteGrise => 'Carte grise',
         _VehDoc.assurance => 'Assurance',
         _VehDoc.facture => "Facture d'achat",
         _VehDoc.immatProv => 'Immat. provisoire / WW',
@@ -286,6 +291,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
       if (numeroPolice != null && _numeroPolice.text.isEmpty) {
         _numeroPolice.text = numeroPolice;
       }
+      final insuranceStart = _s(fields['insurance_start']) ??
+          _s(fields['start_date']) ??
+          _s(fields['date_debut']);
+      if (insuranceStart != null && _insuranceStart == null) {
+        _insuranceStart = DateTime.tryParse(insuranceStart);
+      }
       if (insuranceExpiry != null && _insuranceExpiry == null) {
         _insuranceExpiry = DateTime.tryParse(insuranceExpiry);
       }
@@ -348,8 +359,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           'registration_card_number': _registrationCard.text.trim(),
         'carte_grise_status':
             _carteGriseStatus == _CarteGriseStatus.recue ? 'recue' : 'en_attente',
+        if (_insuranceStart != null)
+          'insurance_start': _iso(_insuranceStart!),
         if (_insuranceExpiry != null)
           'insurance_expiry': _iso(_insuranceExpiry!),
+        if (double.tryParse(_insuranceDeductible.text.trim()) != null)
+          'insurance_deductible': double.parse(_insuranceDeductible.text.trim()),
         if (_techExpiry != null) 'tech_control_expiry': _iso(_techExpiry!),
         if (_vignetteExpiry != null) 'vignette_expiry': _iso(_vignetteExpiry!),
         if (int.tryParse(_mileage.text.trim()) != null)
@@ -1006,15 +1021,31 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             onPick: (d) => setState(() => _immatProvExpiry = d),
           ),
           const SizedBox(height: 10),
+          TextFormField(
+            controller: _numeroPolice,
+            decoration: const InputDecoration(labelText: 'N° police'),
+          ),
+          const SizedBox(height: 10),
           _twoCols(
             _dateInput(
-              label: 'Expiration assurance',
+              label: 'Assurance du',
+              value: _insuranceStart,
+              onPick: (d) => setState(() => _insuranceStart = d),
+            ),
+            _dateInput(
+              label: 'Assurance au',
               value: _insuranceExpiry,
               onPick: (d) => setState(() => _insuranceExpiry = d),
             ),
-            TextFormField(
-              controller: _numeroPolice,
-              decoration: const InputDecoration(labelText: 'N° police'),
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _insuranceDeductible,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: "Franchise d'assurance (MAD)",
+              hintText: 'Ex : 5000',
             ),
           ),
           const SizedBox(height: 10),
