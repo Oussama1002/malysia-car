@@ -236,4 +236,81 @@ class RentalAvailabilityLockingTest extends TestCase
         $this->actingAs($user, 'sanctum')->postJson("/api/v1/contracts/{$contractId}/activate", [])
             ->assertOk();
     }
+
+    public function test_reservation_linked_mission_does_not_block_availability_separately(): void
+    {
+        $this->withoutMiddleware([EnsurePermission::class, EnsureRole::class]);
+        $user = $this->seedUser();
+        $customerId = $this->seedCustomer();
+        $vehicleId = $this->seedVehicle();
+
+        $reservationId = (string) Str::uuid();
+        $start = now()->addDay();
+        $end = now()->addDays(20);
+
+        Reservation::query()->create([
+            'id' => $reservationId,
+            'reservation_number' => 'RSV-MSN-001',
+            'customer_id' => $customerId,
+            'vehicle_id' => $vehicleId,
+            'reservation_type' => 'SHORT_RENTAL',
+            'status' => 'reserved',
+            'desired_start_at' => $start,
+            'desired_end_at' => $end,
+        ]);
+
+        DB::table('missions')->insert([
+            'id' => (string) Str::uuid(),
+            'mission_number' => 'MSN-TEST-0001',
+            'reservation_id' => $reservationId,
+            'vehicle_id' => $vehicleId,
+            'mission_type' => 'delivery',
+            'status' => 'planned',
+            'scheduled_start_at' => $start,
+            'scheduled_end_at' => $end,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/v1/rentals/availability?'.http_build_query([
+            'vehicle_id' => $vehicleId,
+            'start_at' => $start->copy()->addDays(2)->toISOString(),
+            'end_at' => $start->copy()->addDays(5)->toISOString(),
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('data.available', false)
+            ->assertJsonPath('data.reasons.0', 'overlapping_reservation');
+        $this->assertNotContains('overlapping_mission', $response->json('data.reasons'));
+    }
+
+    public function test_standalone_mission_blocks_availability(): void
+    {
+        $this->withoutMiddleware([EnsurePermission::class, EnsureRole::class]);
+        $user = $this->seedUser();
+        $vehicleId = $this->seedVehicle();
+
+        $start = now()->addDay();
+        $end = now()->addDays(3);
+
+        DB::table('missions')->insert([
+            'id' => (string) Str::uuid(),
+            'mission_number' => 'MSN-TEST-0002',
+            'vehicle_id' => $vehicleId,
+            'mission_type' => 'inspection',
+            'status' => 'planned',
+            'scheduled_start_at' => $start,
+            'scheduled_end_at' => $end,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/v1/rentals/availability?'.http_build_query([
+            'vehicle_id' => $vehicleId,
+            'start_at' => $start->copy()->addDay()->toISOString(),
+            'end_at' => $start->copy()->addDays(2)->toISOString(),
+        ]))->assertOk()
+            ->assertJsonPath('data.available', false)
+            ->assertJsonPath('data.reasons.0', 'overlapping_mission');
+    }
 }

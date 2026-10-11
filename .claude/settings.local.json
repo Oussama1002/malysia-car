@@ -166,7 +166,32 @@
       "PowerShell($files = @\\('backend/app/Models/ReaderDocument.php','backend/app/Models/ReaderDocumentExtraction.php','backend/app/Services/DocumentReader/DocumentReaderService.php','backend/app/Services/DocumentReader/TesseractOcrProvider.php','backend/app/Services/DocumentReader/DocumentParser.php','backend/app/Services/DocumentReader/OcrResult.php','backend/app/Services/DocumentReader/OcrProviderInterface.php','backend/app/Http/Controllers/Api/V1/DocumentReaderController.php','backend/database/migrations/2026_05_20_100000_create_document_reader_tables.php','backend/app/Providers/AppServiceProvider.php','backend/routes/api.php','backend/config/document_reader.php'\\); foreach \\($f in $files\\) { php -l $f })",
       "Bash(bash -n deploy/pre-deploy-checklist.sh)",
       "Bash(grep -nA 20 \"mysql.cnf\\\\|Credentials MySQL\\\\|TRUSTED_PROXIES\\\\|schedule:run\" deploy/runbook.md)",
-      "Bash(grep -nB 1 -A 20 \"Phase 2\\\\|Phase 3\" deploy/runbook.md)"
+      "Bash(grep -nB 1 -A 20 \"Phase 2\\\\|Phase 3\" deploy/runbook.md)",
+      "Bash(git diff *)",
+      "Bash(/c/xampp2/php/php.exe -l backend/app/Http/Controllers/Api/V1/DocumentReaderController.php)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s http://localhost:9000/api/health)",
+      "Bash(curl -s -X POST http://localhost:9000/api/v1/auth/login -H \"Content-Type: application/json\" -H \"Accept: application/json\" -d '{\"email\":\"admin@driveflow.ma\",\"password\":\"password\"}')",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s -X POST http://localhost:9000/api/v1/auth/login -H \"Content-Type: application/json\" -H \"Accept: application/json\" -H \"Origin: http://localhost:3000\" -d '{\"email\":\"admin@driveflow.ma\",\"password\":\"password\"}' -I)",
+      "Bash(curl -s -v -X POST http://localhost:9000/api/v1/auth/login -H \"Content-Type: application/json\" -H \"Accept: application/json\" -H \"Origin: http://localhost:3000\" -d '{\"email\":\"admin@driveflow.ma\",\"password\":\"password\"}')",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "PowerShell(Stop-Process -Id 27912 -Force -Confirm:$false)",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\)['data']; [print\\(json.dumps\\({k:c.get\\(k\\) for k in ['id','display_name','customer_code','first_name','last_name','individual_profile','company_profile']}, indent=2, ensure_ascii=False\\)\\) for c in data[:3]]\")",
+      "PowerShell($login = Invoke-RestMethod -Uri 'http://localhost:9000/api/v1/auth/login' -Method POST -ContentType 'application/json' -Body '{\"email\":\"admin@driveflow.ma\",\"password\":\"password\"}'; $token = $login.data.token; $customers = Invoke-RestMethod -Uri 'http://localhost:9000/api/v1/customers?per_page=5' -Headers @{Authorization=\"Bearer $token\"; Accept='application/json'}; $customers.data | Select-Object -First 3 | ForEach-Object { [PSCustomObject]@{id=$_.id; display_name=$_.display_name; customer_code=$_.customer_code; first_name=$_.first_name; last_name=$_.last_name; individual_first=$_.individual_profile.first_name; individual_last=$_.individual_profile.last_name; customer_type=$_.customer_type} } | Format-List)",
+      "Bash(git push *)",
+      "Bash(grep -E \"\\\\.\\(php|vue|js|sql\\)$\")",
+      "Bash(find:*)",
+      "Bash(curl -s http://79.143.180.186:8080/api/v1/payments)",
+      "Bash(/c/xampp2/php/php.exe:*)",
+      "Bash(ssh:*)",
+      "Bash(curl:*)",
+      "Bash(npx vite build)",
+      "Bash(git commit:*)",
+      "Bash(ls:*)",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget"
     ]
   }
 }

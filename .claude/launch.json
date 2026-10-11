@@ -3,10 +3,11 @@
   "configurations": [
     {
       "name": "driveflow-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set VITE_API_BASE=http://79.143.180.186:8080/api&& set VITE_ENABLE_REAL_DASHBOARD=true&& set VITE_DEMO_MODE=false&& set VITE_ALLOW_MOCK_FALLBACK=false&& set VITE_SHOW_EXPERIMENTAL=false&& npm run dev"],
       "cwd": "C:\\xampp2\\htdocs\\driveflow\\frontend",
-      "port": 3000
+      "port": 3000,
+      "autoPort": false
     }
   ]
 }

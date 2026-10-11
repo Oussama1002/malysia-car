@@ -243,6 +243,10 @@ class PublicSiteController extends Controller
                     'id' => $b->id,
                     'name' => $b->name,
                     'city' => $b->city,
+                    'address' => $b->address,
+                    'latitude' => $b->latitude !== null ? (float) $b->latitude : null,
+                    'longitude' => $b->longitude !== null ? (float) $b->longitude : null,
+                    'google_maps_url' => $b->google_maps_url,
                     'phone' => $b->phone,
                     'email' => $b->email,
                 ])

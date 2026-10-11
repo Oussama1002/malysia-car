@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import type { FromLeadNavState } from '@/modules/rentals/WebsiteLeadsPage';
+import React, { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, endpoints, getApiBase, apiClient } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
@@ -14,11 +13,9 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
 import type { ScannedDocument } from '@/modules/customers/CustomerIdentityScanner';
 import { createCustomer, type CustomerCreatePayload } from '@/services/customersApi';
-import { listBranches, listUsers } from '@/services/adminApi';
+import { listBranches, getSettings } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
-import { contractsApi } from '@/services/contractsApi';
-import { companySettingsApi } from '@/services/companySettingsApi';
-import { DateField } from '@/modules/shared/components/DateField';
+import { MissionCreationDrawer } from '@/modules/rentals/MissionCreationDrawer';
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -34,7 +31,7 @@ const RENTAL_REASON_LABELS: Record<string, string> = {
 
 function formatRentalConflict(r: RentalAvailabilityDto): string {
   const msgs = r.messages ?? {};
-  return r.reasons.map((c) => RENTAL_REASON_LABELS[c] ?? msgs[c] ?? c).join(' · ');
+  return r.reasons.map((c) => msgs[c] ?? RENTAL_REASON_LABELS[c] ?? c).join(' · ');
 }
 
 function hasBackend(): boolean {
@@ -63,14 +60,8 @@ const STATUS_FR: Record<string, string> = {
 
 export const ReservationsOpsPage: React.FC = () => {
   const nav = useNavigate();
-  const location = useLocation();
   const qc = useQueryClient();
-  // Démarre renseigné quand on arrive depuis la page « Demandes du site » :
-  // on ouvre le drawer de création, pré-rempli, et à la création réussie on
-  // marque la demande comme « converted » côté backend.
-  const [fromLead, setFromLead] = useState<FromLeadNavState | null>(null);
   const [q, setQ] = useState('');
-  const [showArchive, setShowArchive] = useState(false);
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
   const [pickupForm, setPickupForm] = useState({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
   const [returnForm, setReturnForm] = useState({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
@@ -83,9 +74,6 @@ export const ReservationsOpsPage: React.FC = () => {
   const [availForm, setAvailForm] = useState({ vehicle_id: '', start_at: '', end_at: '' });
   const [newClientDrawerOpen, setNewClientDrawerOpen] = useState(false);
   const [newClientError, setNewClientError] = useState<string | null>(null);
-  const [missionModalResId, setMissionModalResId] = useState<string | null>(null);
-  const [missionForm, setMissionForm] = useState({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '', create_return: false, return_assigned_user_id: '', return_scheduled_at: '', return_notes: '' });
-  const [missionError, setMissionError] = useState<string | null>(null);
 
   const reservationsQ = useQuery({
     queryKey: queryKeys.reservations,
@@ -93,46 +81,14 @@ export const ReservationsOpsPage: React.FC = () => {
     enabled: hasBackend(),
   });
 
-  // Contracts are used to hide "Generer contrat" when a reservation already
-  // has one. Contracts don't carry a direct reservation_id, so the match is
-  // customer_id + vehicle_id with a non-dead status.
-  const allContractsQ = useQuery({
-    queryKey: ['contracts', 'all', { for: 'reservations-page' }],
-    queryFn: async () => contractsApi.list(),
-    enabled: hasBackend(),
-    staleTime: 60_000,
-  });
-
-  const reservationsWithContract = useMemo<Set<string>>(() => {
-    const dead = new Set(['cancelled', 'terminated', 'rejected', 'expired']);
-    const activeContracts = (allContractsQ.data ?? []).filter(
-      (c: any) => !dead.has(String(c.status ?? '').toLowerCase()),
-    );
-    const directIds = new Set<string>();
-    const byKey = new Set<string>();
-    for (const c of activeContracts) {
-      const rsv = (c as any).reservationId ?? (c as any).reservation_id;
-      if (rsv) directIds.add(String(rsv));
-      const cust = String((c as any).customerId ?? (c as any).customer_id ?? '');
-      const veh = String((c as any).vehicleId ?? (c as any).vehicle_id ?? '');
-      if (cust && veh) byKey.add(`${cust}|${veh}`);
-    }
-    const ids = new Set<string>(directIds);
-    for (const r of ((reservationsQ.data ?? []) as ReservationDto[])) {
-      // Legacy fallback: contracts pre-dating reservation_id linkage.
-      if (byKey.has(`${r.customer_id}|${r.vehicle_id}`)) ids.add(String(r.id));
-    }
-    return ids;
-  }, [allContractsQ.data, reservationsQ.data]);
-
   const customersQ = useQuery({
     queryKey: queryKeys.customers.all,
-    queryFn: async () => (await apiClient<ApiListResponse<CustomerDto>>(endpoints.customers.list)).data,
+    queryFn: async () => (await apiClient<ApiListResponse<CustomerDto>>(`${endpoints.customers.list}?per_page=500`)).data,
     enabled: hasBackend(),
+    staleTime: 5 * 60_000,
   });
 
-  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches(), enabled: hasBackend() });
-  const usersQ = useQuery({ queryKey: ['admin', 'users'], queryFn: () => listUsers({ per_page: 200 }), enabled: hasBackend() });
+  const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches(), enabled: hasBackend(), staleTime: 5 * 60_000 });
 
   const createCustomerMut = useMutation({
     mutationFn: async (vars: { payload: CustomerCreatePayload; scans: ScannedDocument[] }) => {
@@ -145,6 +101,7 @@ export const ReservationsOpsPage: React.FC = () => {
     onSuccess: async (res) => {
       setNewClientError(null);
       setNewClientDrawerOpen(false);
+      setNewResOpen(true);
       await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
       setForm((s) => ({ ...s, customer_id: String(res.data.id) }));
     },
@@ -153,70 +110,38 @@ export const ReservationsOpsPage: React.FC = () => {
 
   const vehiclesQ = useQuery({
     queryKey: queryKeys.fleet.all,
-    queryFn: async () => (await apiClient<ApiListResponse<FleetVehicleDto>>(endpoints.fleet.list)).data,
+    queryFn: async () => (await apiClient<ApiListResponse<FleetVehicleDto>>(`${endpoints.fleet.list}?per_page=500`)).data,
     enabled: hasBackend(),
+    staleTime: 5 * 60_000,
   });
+
+  const contractSettingsQ = useQuery({
+    queryKey: ['settings', 'contracts'],
+    queryFn: () => getSettings('contracts'),
+    enabled: hasBackend(),
+    staleTime: 5 * 60_000,
+  });
+  const cSettings = contractSettingsQ.data?.data?.settings ?? {};
+  const lcdMaxDays = Number(cSettings.lcd_max_days) || 30;
 
   const [form, setForm] = useState({
     customer_id: '',
     vehicle_id: '',
+    vehicle_ids: [] as string[],
     reservation_type: 'SHORT_RENTAL',
     desired_start_at: '',
     desired_end_at: '',
     pickup_address: '',
     delivery_address: '',
     estimated_price: '',
+    daily_rate: '',
+    deposit_amount: '',
+    allowed_km_per_day: '',
     is_draft: false,
   });
 
-  // Company-wide LCD ↔ LLD threshold (in months). Defaults to 3 while the
-  // settings load so the classifier is stable even before the query resolves.
-  const companySettingsQ = useQuery({
-    queryKey: ['company-settings'],
-    queryFn: async () => (await companySettingsApi.get()).data,
-    staleTime: 5 * 60_000,
-  });
-  const lldThresholdMonths = companySettingsQ.data?.reservations?.lld_threshold_months ?? 3;
-
-  // Durée de la réservation : déduite des deux dates, et modifiable — saisir un
-  // nombre de jours repositionne la date de fin en gardant l'heure de départ.
-  const durationDays = useMemo(() => {
-    if (!form.desired_start_at || !form.desired_end_at) return '';
-    const start = new Date(form.desired_start_at).getTime();
-    const end = new Date(form.desired_end_at).getTime();
-    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return '';
-    return String(Math.max(1, Math.round((end - start) / 86400000)));
-  }, [form.desired_start_at, form.desired_end_at]);
-
-  const setDurationDays = (raw: string) => {
-    const days = Number(raw);
-    if (!form.desired_start_at || !Number.isFinite(days) || days <= 0) return;
-    const end = new Date(form.desired_start_at);
-    if (Number.isNaN(end.getTime())) return;
-    end.setDate(end.getDate() + Math.round(days));
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const iso = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`
-      + `T${pad(end.getHours())}:${pad(end.getMinutes())}`;
-    setForm((st) => ({ ...st, desired_end_at: iso }));
-  };
-
-  // Auto-classify the reservation as LCD or LLD based on the requested window
-  // and the company threshold; the picker stays disabled so this is the
-  // authoritative value at submission. We compare elapsed days to the
-  // threshold expressed in days (≈30 j/mois) so a 100-jour rental with a
-  // 3-mois threshold correctly bumps to LLD — the earlier "full months"
-  // rounding could miss the boundary when days-of-month straddled it.
-  useEffect(() => {
-    if (!form.desired_start_at || !form.desired_end_at) return;
-    const s = new Date(form.desired_start_at);
-    const e = new Date(form.desired_end_at);
-    if (isNaN(s.getTime()) || isNaN(e.getTime()) || e <= s) return;
-    const days = Math.ceil((e.getTime() - s.getTime()) / 86_400_000);
-    const thresholdDays = Math.max(1, Math.round(lldThresholdMonths * 30));
-    const isLLD = days >= thresholdDays;
-    const next = isLLD ? 'LONG_RENTAL' : 'SHORT_RENTAL';
-    setForm((f) => (f.reservation_type === next ? f : { ...f, reservation_type: next }));
-  }, [form.desired_start_at, form.desired_end_at, lldThresholdMonths]);
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
 
   const reservationDetailQ = useQuery({
     queryKey: ['reservation', selectedReservationId],
@@ -264,95 +189,64 @@ export const ReservationsOpsPage: React.FC = () => {
     staleTime: 10_000,
   });
 
-  const [validateFeedback, setValidateFeedback] = useState<{ id?: string; kind: 'success' | 'error'; text: string } | null>(null);
+  const [validateChoice, setValidateChoice] = useState<ReservationDto | null>(null);
+  const [validateVehicleId, setValidateVehicleId] = useState('');
+  const [validateError, setValidateError] = useState<string | null>(null);
 
-  const RESERVATION_ERROR_FR: Record<string, string> = {
-    'Another reservation overlaps this period.': 'Une autre réservation se chevauche sur cette période.',
-    'An active finance or lease contract overlaps this period.': 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
-    'A mission is scheduled for this vehicle during this period.': 'Une mission est planifiée pour ce véhicule sur ce créneau.',
-    'Vehicle has an open repair order.': 'Un ordre de réparation est en cours sur ce véhicule.',
-    'Vehicle is in scheduled maintenance.': 'Maintenance planifiée en cours.',
-    'Vehicle is on accident hold.': 'Dossier sinistre ouvert sur ce véhicule.',
-    'Vehicle not found.': 'Véhicule introuvable.',
-    'Invalid date range.': 'Plage de dates invalide.',
-    'Vehicle status is not rentable.': 'Statut flotte : véhicule non louable.',
-    'Vehicle marked as unavailable.': 'Véhicule marqué indisponible à la location.',
-    overlapping_reservation: 'Une autre réservation se chevauche sur cette période.',
-    active_contract_overlap: 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
-    overlapping_mission: 'Une mission est planifiée pour ce véhicule sur ce créneau.',
-    vehicle_in_maintenance: 'Un ordre de réparation est en cours sur ce véhicule.',
-    vehicle_in_scheduled_maintenance: 'Maintenance planifiée en cours.',
-    vehicle_accident_hold: 'Dossier sinistre ouvert sur ce véhicule.',
-    vehicle_not_found: 'Véhicule introuvable.',
-    invalid_range: 'Plage de dates invalide.',
-    vehicle_status_unavailable: 'Statut flotte : véhicule non louable.',
-    vehicle_availability_flag: 'Véhicule marqué indisponible à la location.',
-  };
-  const translateResErr = (m: string): string => RESERVATION_ERROR_FR[m] ?? m;
   const validateRes = useMutation({
-    mutationFn: async (id: string) => opsApi.validateReservation(id),
-    onSuccess: async (_res, id) => {
+    mutationFn: async (vars: { id: string; vehicle_id?: string }) => opsApi.validateReservation(vars.id, vars.vehicle_id),
+    onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
-      setValidateFeedback({ id, kind: 'success', text: 'Réservation validée' });
-      window.setTimeout(() => setValidateFeedback(null), 2500);
+      setValidateChoice(null);
+      setValidateError(null);
     },
-    onError: (e, id) => {
-      // Surface the real backend reason (typically 422 with a field bag or a
-      // message) so users understand why nothing happened. Every message is
-      // translated to French so the UI never leaks the raw English enum.
-      let msg = 'Validation impossible';
-      if (e instanceof ApiError) {
-        const body = e.body as any;
-        if (body?.errors && typeof body.errors === 'object') {
-          const parts: string[] = [];
-          for (const v of Object.values<any>(body.errors)) {
-            if (Array.isArray(v)) parts.push(...v.map((m) => translateResErr(String(m))));
-          }
-          if (parts.length) msg = Array.from(new Set(parts)).join(' · ');
-          else if (body.message) msg = translateResErr(body.message).replace(/\s*\(and \d+ more errors?\)\.?$/i, '');
-        } else if (body?.message) {
-          msg = translateResErr(body.message).replace(/\s*\(and \d+ more errors?\)\.?$/i, '');
-        } else {
-          msg = translateResErr(e.message) || msg;
-        }
-      } else if (e instanceof Error) {
-        msg = translateResErr(e.message);
+    onError: (e: unknown) => {
+      if (e instanceof ApiError && e.body && typeof e.body === 'object') {
+        const body = e.body as { errors?: Record<string, string[]>; message?: string };
+        const parts = Object.values(body.errors ?? {}).flat();
+        setValidateError(parts.length > 0 ? parts.join(' ') : body.message ?? e.message);
+        return;
       }
-      setValidateFeedback({ id, kind: 'error', text: msg });
+      setValidateError(e instanceof Error ? e.message : 'Erreur lors de la validation');
     },
   });
 
   const createRes = useMutation({
-    mutationFn: async () =>
-      opsApi.createReservation({
+    mutationFn: async () => {
+      const draftIds = form.is_draft && form.vehicle_ids.length > 0 ? form.vehicle_ids : null;
+      const base = {
         customer_id: form.customer_id,
-        vehicle_id: form.vehicle_id,
         reservation_type: form.reservation_type,
         desired_start_at: form.desired_start_at,
         desired_end_at: form.desired_end_at,
         pickup_address: form.pickup_address || undefined,
         delivery_address: form.delivery_address || undefined,
-        estimated_price: form.estimated_price ? Number(form.estimated_price) : undefined,
+        estimated_price: (() => {
+          const rate = parseFloat(form.daily_rate);
+          const start = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
+          const end = form.desired_end_at ? new Date(form.desired_end_at).getTime() : NaN;
+          const days = (!isNaN(start) && !isNaN(end) && end > start) ? Math.ceil((end - start) / 86_400_000) : 0;
+          return (rate > 0 && days > 0) ? rate * days : undefined;
+        })(),
+        daily_rate: form.daily_rate ? Number(form.daily_rate) : undefined,
+        deposit_amount: form.deposit_amount ? Number(form.deposit_amount) : undefined,
+        allowed_km_per_day: form.allowed_km_per_day ? Number(form.allowed_km_per_day) : undefined,
         is_draft: form.is_draft,
-      }),
+      };
+      // A single reservation is created even for multi-vehicle intentions:
+      // the shortlist travels in vehicle_ids and one vehicle is chosen at
+      // validation time.
+      await opsApi.createReservation({
+        ...base,
+        vehicle_id: draftIds ? draftIds[0] : form.vehicle_id,
+        ...(draftIds && draftIds.length > 1 ? { vehicle_ids: draftIds } : {}),
+      });
+    },
     onMutate: () => setCreateError(null),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
-      setForm((s) => ({ ...s, desired_start_at: '', desired_end_at: '', estimated_price: '' }));
+      setForm((s) => ({ ...s, desired_start_at: '', desired_end_at: '' }));
       setNewResOpen(false);
-      // Si la création a été ouverte depuis une demande du site, on la marque
-      // comme traitée côté backend puis on invalide la liste des leads pour
-      // que la page « Demandes » reflète le nouveau statut.
-      if (fromLead) {
-        try {
-          await apiClient(`/v1/website-leads/${fromLead.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ status: 'converted' }),
-          });
-          await qc.invalidateQueries({ queryKey: ['website-leads'] });
-        } catch { /* non bloquant : la réservation est bien créée */ }
-        setFromLead(null);
-      }
     },
     onError: (e: unknown) => {
       if (e instanceof ApiError && e.body && typeof e.body === 'object') {
@@ -365,27 +259,8 @@ export const ReservationsOpsPage: React.FC = () => {
     },
   });
 
-  const createMission = useMutation({
-    mutationFn: async (reservationId: string) =>
-      opsApi.createMission(reservationId, {
-        mission_type: missionForm.mission_type,
-        assigned_user_id: missionForm.assigned_user_id || null,
-        scheduled_start_at: missionForm.scheduled_start_at || undefined,
-        notes: missionForm.notes || undefined,
-        create_return_mission: missionForm.create_return || undefined,
-        return_assigned_user_id: missionForm.create_return ? (missionForm.return_assigned_user_id || null) : undefined,
-        return_scheduled_at: missionForm.create_return ? (missionForm.return_scheduled_at || undefined) : undefined,
-        return_notes: missionForm.create_return ? (missionForm.return_notes || undefined) : undefined,
-      }),
-    onMutate: () => setMissionError(null),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: queryKeys.missions });
-      await qc.invalidateQueries({ queryKey: queryKeys.reservations });
-      setMissionModalResId(null);
-      setMissionForm({ mission_type: 'delivery', assigned_user_id: '', scheduled_start_at: '', notes: '', create_return: false, return_assigned_user_id: '', return_scheduled_at: '', return_notes: '' });
-    },
-    onError: (e) => setMissionError(e instanceof Error ? e.message : 'Erreur création mission'),
-  });
+  const [missionSuccess, setMissionSuccess] = useState<string | null>(null);
+  const [missionDrawerRes, setMissionDrawerRes] = useState<ReservationDto | null>(null);
 
   const confirmRes = useMutation({
     mutationFn: async (id: string) => opsApi.confirmReservation(id),
@@ -395,19 +270,11 @@ export const ReservationsOpsPage: React.FC = () => {
       if (selectedReservationId) await qc.invalidateQueries({ queryKey: ['reservation', selectedReservationId] });
     },
   });
-  const [cancelDialog, setCancelDialog] = useState<{ id: string; reason: string; error: string | null } | null>(null);
   const cancelRes = useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => opsApi.cancelReservation(id, reason),
+    mutationFn: async (id: string) => opsApi.cancelReservation(id),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
       if (selectedReservationId) await qc.invalidateQueries({ queryKey: ['reservation', selectedReservationId] });
-      setCancelDialog(null);
-    },
-    onError: (e: unknown) => {
-      const body = (e as any)?.body;
-      const msg = body?.errors ? Object.values<any>(body.errors).flat().join(' · ')
-        : body?.message ?? (e as any)?.message ?? 'Annulation impossible';
-      setCancelDialog((s) => (s ? { ...s, error: String(msg) } : s));
     },
   });
   const pickupM = useMutation({
@@ -498,22 +365,8 @@ export const ReservationsOpsPage: React.FC = () => {
           display_name?: string;
           customer_code?: string;
           customer_type?: string;
-          individual_profile?: { first_name?: string; last_name?: string } | null;
-          company_profile?: { trade_name?: string; legal_name?: string } | null;
         };
-        // Synthesise a readable label so we never render a raw UUID even
-        // when display_name is empty on the record.
-        const individual = [c.individual_profile?.first_name, c.individual_profile?.last_name]
-          .filter(Boolean)
-          .join(' ')
-          .trim();
-        const company = c.company_profile?.trade_name || c.company_profile?.legal_name || '';
-        const shortId = `CLT-${String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase()}`;
-        const name = c.display_name?.trim()
-          || individual
-          || company
-          || c.customer_code
-          || shortId;
+        const name = c.display_name || c.customer_code || String(c.id);
         const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
         return { id: String(c.id), label: `${name} (${kind})` };
       }),
@@ -522,151 +375,33 @@ export const ReservationsOpsPage: React.FC = () => {
   const formSlotBlocked = Boolean(formAvailabilityQ.data && formAvailabilityQ.data.available === false);
   const confirmSlotBlocked = Boolean(confirmAvailabilityQ.data && confirmAvailabilityQ.data.available === false);
 
-  // Vehicle IDs that already carry an active reservation — used to annotate
-  // the picker so users see "Réservé" instead of "Disponible" for them.
-  const reservedVehicleIds = useMemo(() => {
-    const now = Date.now();
-    const ACTIVE = new Set(['draft', 'reserved', 'confirmed', 'pickup_scheduled', 'handed_over', 'active', 'extension_requested']);
-    const LIVE = new Set(['handed_over', 'active', 'extension_requested']);
-    const s = new Set<string>();
-    for (const r of ((reservationsQ.data ?? []) as ReservationDto[])) {
-      const st = String(r.status ?? '').toLowerCase();
-      if (!r.vehicle_id) continue;
-      if (LIVE.has(st)) { s.add(String(r.vehicle_id)); continue; }
-      if (!ACTIVE.has(st)) continue;
-      const endMs = r.desired_end_at ? new Date(r.desired_end_at).getTime() : 0;
-      if (endMs >= now) s.add(String(r.vehicle_id));
-    }
-    return s;
-  }, [reservationsQ.data]);
-
-  // Arrivée depuis la page « Demandes du site » (navigation state `fromLead`) :
-  // on bascule le drawer de création en mode pré-rempli, puis on vide le state
-  // pour qu'un refresh ou un back ne rouvre pas la modale par erreur.
-  useEffect(() => {
-    const seed = (location.state as { fromLead?: FromLeadNavState } | null)?.fromLead;
-    if (!seed) return;
-    setFromLead(seed);
-    const toLocal = (iso?: string | null): string => {
-      if (!iso) return '';
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return '';
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    setForm((s) => ({
-      ...s,
-      desired_start_at: toLocal(seed.pickup_at) || s.desired_start_at,
-      desired_end_at: toLocal(seed.return_at) || s.desired_end_at,
-    }));
-    setNewResOpen(true);
-    nav(location.pathname, { replace: true, state: null });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Essaie de deviner le véhicule à partir du label libre tapé par le visiteur
-  // sur le site (ex. « Dacia Logan 2022 ») une fois la flotte chargée, pour
-  // éviter à l'agent de rechercher à la main. Les lettres sans correspondance
-  // laissent simplement le champ vide — on n'écrase jamais un choix explicite.
   const vehicleOptions = useMemo(
     () =>
-      (vehiclesQ.data ?? []).map((v) => {
-        const rawStatus = String((v as any).status ?? '').toUpperCase();
-        const ownership = String((v as any).ownership_status ?? (v as any).ownershipStatus ?? '').toLowerCase();
-        const isSubRental = ownership === 'sub_rented' || ownership === 'sub_rental';
-        const isReserved = reservedVehicleIds.has(String(v.id));
-        // Real availability — the SL prefix already tells the user it is a
-        // sub-rental, so status stays the actual disponibilité state.
-        let statusFr: string;
-        if (rawStatus === 'AVAILABLE' && isReserved) statusFr = 'Réservé';
-        else if (rawStatus === 'AVAILABLE') statusFr = 'Disponible';
-        else if (rawStatus === 'RENTED') statusFr = 'Loué';
-        else if (rawStatus === 'MAINTENANCE') statusFr = 'Maintenance';
-        else if (rawStatus === 'IN_REPAIR') statusFr = 'Réparation';
-        else statusFr = rawStatus || '';
-        const prefix = isSubRental ? '🟣 SL · ' : '';
-        return {
-          id: String(v.id),
-          label: `${prefix}${v.brand} ${v.model} · ${v.registration}`,
-          status: statusFr,
-          free: statusFr === 'Disponible',
-        };
-      }),
-    [vehiclesQ.data, reservedVehicleIds]
+      (vehiclesQ.data ?? []).map((v) => ({
+        id: String(v.id),
+        label: `${v.brand} ${v.model} · ${v.registration}`,
+        status: String((v as any).status ?? ''),
+        isSubRented: (v.ownershipStatus ?? '').toLowerCase() === 'sub_rented',
+      })),
+    [vehiclesQ.data]
   );
 
-  // Auto-sélection véhicule à partir du souhait du visiteur du site : on
-  // normalise le label libre (ex. « Dacia Logan 2022 ») et on cherche la
-  // meilleure correspondance par marque+modèle dans la flotte disponible.
-  useEffect(() => {
-    if (!fromLead?.vehicle_label || form.vehicle_id) return;
-    const needle = fromLead.vehicle_label.toLowerCase();
-    const words = needle.split(/\s+/).filter((w) => w.length >= 3);
-    if (words.length === 0) return;
-    let best: { id: string; score: number } | null = null;
-    for (const v of vehicleOptions) {
-      const hay = v.label.toLowerCase();
-      const score = words.reduce((s, w) => s + (hay.includes(w) ? 1 : 0), 0);
-      if (score > 0 && (!best || score > best.score)) best = { id: v.id, score };
-    }
-    if (best) setForm((s) => ({ ...s, vehicle_id: best!.id }));
-  }, [fromLead, vehicleOptions, form.vehicle_id]);
-
-  // Auto-sélection client par téléphone : on normalise les chiffres puis on
-  // compare les 8 derniers (évite d'être piégé par +212 vs 0 préfixe).
-  useEffect(() => {
-    if (!fromLead?.phone || form.customer_id) return;
-    const digits = fromLead.phone.replace(/\D/g, '');
-    if (digits.length < 6) return;
-    const tail = digits.slice(-8);
-    const raws = (customersQ.data ?? []) as unknown as Array<{
-      id: string | number;
-      contacts?: Array<{ contact_type?: string; value?: string }>;
-    }>;
-    const match = raws.find((c) =>
-      (c.contacts ?? []).some(
-        (ct) => ct.contact_type === 'phone' && ct.value && ct.value.replace(/\D/g, '').endsWith(tail),
-      ),
-    );
-    if (match) setForm((s) => ({ ...s, customer_id: String(match.id) }));
-  }, [fromLead, customersQ.data, form.customer_id]);
-
-  // Search the client and vehicle the user actually sees — matching the raw
-  // customer_id/vehicle_id UUIDs meant one letter hit almost every row and two
-  // hit none. Declared after the option lists it reads.
-  // Une réservation annulée n'est plus une opération en cours : elle sort de la
-  // liste et n'est visible que dans l'archive.
-  const allRows = (reservationsQ.data ?? []) as ReservationDto[];
-  const cancelledCount = useMemo(() => allRows.filter((r) => r.status === 'cancelled').length, [allRows]);
-
   const rows = useMemo(() => {
-    const data = allRows.filter((r) => (showArchive ? r.status === 'cancelled' : r.status !== 'cancelled'));
+    const data = (reservationsQ.data ?? []) as ReservationDto[];
     if (!q.trim()) return data;
     const qq = q.toLowerCase();
     return data.filter((r) => {
-      const clientName = customerOptions.find((c) => c.id === String(r.customer_id))?.label ?? '';
-      const vehicleName = vehicleOptions.find((v) => v.id === String(r.vehicle_id))?.label ?? '';
-      const statusFr = STATUS_FR[r.status] ?? r.status;
-      return `${r.reservation_number} ${r.status} ${statusFr} ${clientName} ${vehicleName}`.toLowerCase().includes(qq);
+      const clientName = customerOptions.find((c) => c.id === r.customer_id)?.label ?? '';
+      const vehicleName = vehicleOptions.find((v) => v.id === r.vehicle_id)?.label ?? '';
+      return `${r.reservation_number} ${r.status} ${clientName} ${vehicleName}`.toLowerCase().includes(qq);
     });
-  }, [allRows, showArchive, q, customerOptions, vehicleOptions]);
+  }, [reservationsQ.data, q, customerOptions, vehicleOptions]);
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
   const timelineStatus = String(detail?.status ?? selected?.status ?? '');
 
-  if (!hasBackend()) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        Backend non configuré. Renseignez <span className="font-mono">VITE_API_BASE</span> pour activer les réservations/missions.
-      </div>
-    );
-  }
-
-  // ── Reservations starting today or yesterday that still need a contract ──
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const yesterday = useMemo(() => { const d = new Date(today); d.setDate(d.getDate() - 1); return d; }, [today]);
 
   const urgentReservations = useMemo(() => {
     const PRE_HANDOVER = ['reserved', 'confirmed', 'pickup_scheduled'];
@@ -676,12 +411,18 @@ export const ReservationsOpsPage: React.FC = () => {
       start.setHours(0, 0, 0, 0);
       return start.getTime() === today.getTime() || start.getTime() === yesterday.getTime();
     });
-  }, [reservationsQ.data]);
+  }, [reservationsQ.data, today, yesterday]);
 
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-  const visibleUrgent = urgentReservations.filter(
-    (r) => !dismissedIds.has(r.id) && !reservationsWithContract.has(String(r.id)),
-  );
+  const visibleUrgent = urgentReservations.filter((r) => !dismissedIds.has(r.id));
+
+  if (!hasBackend()) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+        Backend non configuré. Renseignez <span className="font-mono">VITE_API_BASE</span> pour activer les réservations/missions.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -693,9 +434,9 @@ export const ReservationsOpsPage: React.FC = () => {
             <span className="text-lg">🔔</span>
             <div>
               {(() => {
-                // On precise au client s'il s'agit de departs du jour, de
-                // la veille, ou d'un mix — "aujourd'hui ou hier" n'etait
-                // pas assez concret quand il n'y en avait qu'un des deux.
+                // On precise au client s'il s'agit de departs du jour, de la
+                // veille, ou d'un mix — "aujourd'hui ou hier" n'etait pas
+                // assez concret quand il n'y en avait qu'un des deux cas.
                 const todayDay = new Date();
                 todayDay.setHours(0, 0, 0, 0);
                 const todayCount = visibleUrgent.filter((r) => {
@@ -746,14 +487,12 @@ export const ReservationsOpsPage: React.FC = () => {
                     >
                       Voir détail
                     </button>
-                    {!reservationsWithContract.has(String(r.id)) && (
-                      <Link
-                        to={`/contracts/new?from_reservation=${r.id}`}
-                        className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
-                      >
-                        Générer contrat
-                      </Link>
-                    )}
+                    <Link
+                      to={`/contracts/new?from_reservation=${r.id}`}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
+                    >
+                      📄 Générer contrat
+                    </Link>
                     <button
                       type="button"
                       onClick={() => setDismissedIds((s) => new Set([...s, r.id]))}
@@ -772,45 +511,32 @@ export const ReservationsOpsPage: React.FC = () => {
         </div>
       )}
 
-      <SearchFilterBar placeholder="Filtrer réservations…" value={q} onChange={setQ}>
-        <button
-          type="button"
-          className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-black shadow-sm transition-colors ${
-            showArchive
-              ? 'border-slate-300 bg-slate-800 text-white hover:bg-slate-900'
-              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-          onClick={() => setShowArchive((v) => !v)}
-        >
-          {showArchive ? 'Retour aux réservations' : `Archive${cancelledCount > 0 ? ` (${cancelledCount})` : ''}`}
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
-          onClick={() => setAvailCheckOpen(true)}
-        >
-          Vérifier disponibilité
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700"
-          onClick={() => setNewResOpen(true)}
-        >
-          + Nouvelle réservation
-        </button>
-      </SearchFilterBar>
-
-      {showArchive && (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-600">
-          Archive — réservations annulées. Elles ne bloquent aucun véhicule.
+      <header className="flex items-center justify-end gap-2">
+        <div className="flex gap-2 shrink-0">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            onClick={() => setAvailCheckOpen(true)}
+          >
+            🔍 Vérifier disponibilité
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700"
+            onClick={() => setNewResOpen(true)}
+          >
+            + Nouvelle réservation
+          </button>
         </div>
-      )}
+      </header>
+
+      <SearchFilterBar placeholder="Filtrer réservations…" value={q} onChange={setQ} />
 
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
           {rows.map((r) => (
-            <div key={r.id}>
             <div
+              key={r.id}
               className="p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between cursor-pointer hover:bg-slate-50 transition-colors"
               onClick={() => nav(`/reservations/${r.id}`)}
             >
@@ -820,8 +546,16 @@ export const ReservationsOpsPage: React.FC = () => {
                   {customerOptions.find((c) => c.id === r.customer_id)?.label.split(' (')[0]
                     ?? <span className="font-mono text-xs">CLT-{r.customer_id.slice(0, 8).toUpperCase()}</span>}
                   <span className="mx-1.5 text-slate-300">·</span>
-                  {vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
-                    ?? <span className="font-mono text-xs">VHL-{r.vehicle_id.slice(0, 8).toUpperCase()}</span>}
+                  {(() => {
+                    const candidates = (r as ReservationDto).candidate_vehicle_ids ?? [];
+                    if (r.status === 'draft' && candidates.length > 1) {
+                      return candidates
+                        .map((vid: string) => vehicleOptions.find((v) => v.id === String(vid))?.label ?? `VHL-${String(vid).slice(0, 8).toUpperCase()}`)
+                        .join('  /  ');
+                    }
+                    return vehicleOptions.find((v) => v.id === r.vehicle_id)?.label
+                      ?? <span className="font-mono text-xs">VHL-{r.vehicle_id.slice(0, 8).toUpperCase()}</span>;
+                  })()}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
                   {new Date(r.desired_start_at).toLocaleString('fr-MA')} → {new Date(r.desired_end_at).toLocaleString('fr-MA')}
@@ -842,9 +576,19 @@ export const ReservationsOpsPage: React.FC = () => {
                   <button
                     className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
                     disabled={validateRes.isPending}
-                    onClick={(e) => { e.stopPropagation(); validateRes.mutate(r.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const candidates = (r as ReservationDto).candidate_vehicle_ids ?? [];
+                      if (candidates.length > 1) {
+                        setValidateError(null);
+                        setValidateVehicleId(String(r.vehicle_id));
+                        setValidateChoice(r as ReservationDto);
+                      } else {
+                        validateRes.mutate({ id: r.id });
+                      }
+                    }}
                   >
-                    {validateRes.isPending && validateFeedback?.id === r.id ? 'Validation…' : '✓ Valider'}
+                    ✓ Valider
                   </button>
                 )}
                 <button
@@ -853,102 +597,44 @@ export const ReservationsOpsPage: React.FC = () => {
                 >
                   Détail →
                 </button>
-                {r.status !== 'draft' && r.status !== 'cancelled' && r.status !== 'closed' && !reservationsWithContract.has(String(r.id)) && (
-                  <button
+                {!['cancelled', 'closed', 'draft'].includes(r.status) && !r.has_contract && (
+                  <Link
+                    to={`/contracts/new?from_reservation=${r.id}`}
                     className="rounded-2xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); nav(`/contracts/new?from_reservation=${r.id}`); }}
+                    onClick={(e) => e.stopPropagation()}
                   >
                     Générer contrat
+                  </Link>
+                )}
+                {r.status !== 'draft' && (
+                  <button
+                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
+                    onClick={(e) => { e.stopPropagation(); setMissionDrawerRes(r as ReservationDto); }}
+                  >
+                    Créer mission
                   </button>
                 )}
-                {(() => {
-                  const missions = (r as ReservationDto & { missions?: { id: string; mission_type: string; status: string }[] }).missions ?? [];
-                  // A cancelled or closed reservation shouldn't advertise any
-                  // Livraison / Recup. mission pill — the reservation is dead.
-                  const rStatus = String(r.status ?? '').toLowerCase();
-                  const reservationDead = rStatus === 'cancelled' || rStatus === 'closed';
-                  const activeMissionsRaw = missions.filter((m) => {
-                    if (reservationDead) return false;
-                    const s = String(m.status ?? '').toLowerCase();
-                    return !['failed', 'cancelled'].includes(s);
-                  });
-                  const seen = new Set<string>();
-                  const activeMissions = activeMissionsRaw.filter((m) => { if (seen.has(m.mission_type)) return false; seen.add(m.mission_type); return true; });
-                  const hasDelivery = activeMissions.some((m) => m.mission_type === 'delivery');
-                  const hasPickup = activeMissions.some((m) => m.mission_type === 'pickup');
-                  const canCreate = !reservationDead && r.status !== 'draft' && (!hasDelivery || !hasPickup);
-                  return (
-                    <>
-                      {activeMissions.map((m) => (
-                        <span key={m.id} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${m.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : m.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {m.mission_type === 'pickup' ? 'Récup.' : 'Livrais.'} · {m.status === 'completed' ? 'Terminée' : m.status === 'in_progress' ? 'En cours' : 'Planifiée'}
-                        </span>
-                      ))}
-                      {canCreate && (
-                        <button
-                          className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMissionForm({
-                              mission_type: hasDelivery ? 'pickup' : 'delivery',
-                              assigned_user_id: '',
-                              scheduled_start_at: hasDelivery ? (r.desired_end_at ? r.desired_end_at.slice(0, 16) : '') : (r.desired_start_at ? r.desired_start_at.slice(0, 16) : ''),
-                              notes: '',
-                              create_return: false,
-                              return_assigned_user_id: '',
-                              return_scheduled_at: r.desired_end_at ? r.desired_end_at.slice(0, 16) : '',
-                              return_notes: '',
-                            });
-                            setMissionError(null);
-                            setMissionModalResId(r.id);
-                          }}
-                        >
-                          + Mission
-                        </button>
-                      )}
-                    </>
-                  );
-                })()}
               </div>
-            </div>
-            {validateFeedback?.id === r.id && (
-              <div
-                className={`mx-5 mb-4 flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold ${
-                  validateFeedback.kind === 'success'
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-rose-200 bg-rose-50 text-rose-800'
-                }`}
-              >
-                <svg className="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {validateFeedback.kind === 'success'
-                    ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" />}
-                </svg>
-                <div className="min-w-0 flex-1">
-                  <div className="mb-0.5 text-[10px] font-black uppercase tracking-wider opacity-70">
-                    {validateFeedback.kind === 'success' ? 'Validation réussie' : 'Validation impossible'}
-                  </div>
-                  <div className="leading-snug">{validateFeedback.text}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setValidateFeedback(null)}
-                  className="shrink-0 rounded p-0.5 opacity-60 hover:opacity-100"
-                  aria-label="Fermer"
-                >
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            )}
             </div>
           ))}
-          {rows.length === 0 && (
-            <div className="p-10 text-center text-sm text-slate-500">
-              {showArchive ? 'Aucune réservation annulée.' : 'Aucune réservation.'}
-            </div>
-          )}
+          {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
         </div>
+        {missionSuccess && (
+          <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-semibold">
+            {missionSuccess}
+          </div>
+        )}
       </div>
+
+      <MissionCreationDrawer
+        open={!!missionDrawerRes}
+        onClose={() => setMissionDrawerRes(null)}
+        reservation={missionDrawerRes}
+        customers={(customersQ.data ?? []) as CustomerDto[]}
+        vehicles={(vehiclesQ.data ?? []) as FleetVehicleDto[]}
+        branches={(branchesQ.data?.data ?? []) as any[]}
+        onSuccess={() => { setMissionSuccess('Mission créée avec succès.'); setTimeout(() => setMissionSuccess(null), 4000); }}
+      />
 
       <ReservationCalendar
         reservations={(reservationsQ.data ?? []) as ReservationDto[]}
@@ -961,130 +647,159 @@ export const ReservationsOpsPage: React.FC = () => {
         onSelect={(id) => nav(`/reservations/${id}`)}
       />
 
-      {/* Créer mission modal */}
-      <Modal open={!!missionModalResId} title="Créer une mission" onClose={() => setMissionModalResId(null)} widthClass="max-w-xl">
-        <CreateMissionModalContent
-          reservationId={missionModalResId}
-          reservations={reservationsQ.data ?? []}
-          vehicles={vehiclesQ.data ?? []}
-          customers={customersQ.data ?? []}
-          agents={(usersQ.data?.data ?? []).filter((u) => u.status === 'active')}
-          form={missionForm}
-          setForm={setMissionForm}
-          error={missionError}
-          isPending={createMission.isPending}
-          onSubmit={() => { if (missionModalResId) createMission.mutate(missionModalResId); }}
-          onClose={() => setMissionModalResId(null)}
-        />
-      </Modal>
-
       {/* Nouvelle réservation modal */}
-      <Modal
-        open={newResOpen}
-        title={fromLead ? 'Nouvelle réservation — depuis une demande du site' : 'Nouvelle réservation'}
-        onClose={() => { setNewResOpen(false); setFromLead(null); }}
-        widthClass="max-w-2xl"
-      >
+      <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
         <div className="space-y-4">
-          {fromLead && (
-            <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-900">
-              <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-indigo-700">
-                Demande du site
-              </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span className="font-black">{fromLead.full_name}</span>
-                <a className="font-bold text-indigo-700 hover:underline" href={`tel:${fromLead.phone}`}>{fromLead.phone}</a>
-                {fromLead.email && (
-                  <a className="text-indigo-700/80 hover:underline" href={`mailto:${fromLead.email}`}>{fromLead.email}</a>
-                )}
-                {fromLead.vehicle_label && (
-                  <span className="text-indigo-700/80">Souhait : <strong>{fromLead.vehicle_label}</strong></span>
-                )}
-              </div>
-              <div className="mt-2 text-[11px] text-indigo-700/80">
-                Dates pré-remplies depuis la demande. Choisissez le client (ou créez-le, ses infos sont déjà saisies dans le drawer) et le véhicule, puis créez la réservation — la demande sera automatiquement marquée « traitée ».
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
-            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
-              if (e.target.value === '__new__') { setNewClientError(null); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
-              setForm((s) => ({ ...s, customer_id: e.target.value }));
-            }}>
-              <option value="">Client…</option>
-              {customerOptions.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-              <option value="__new__">+ Nouveau client</option>
-            </select>
-            <select className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.vehicle_id} onChange={(e) => setForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
-              <option value="">Véhicule…</option>
-              {vehicleOptions.map((v) => (
-                // Réservé, loué, en maintenance ou en réparation : visible avec
-                // son statut, mais pas réservable. Le véhicule déjà choisi reste
-                // sélectionnable pour ne pas vider le formulaire.
-                <option key={v.id} value={v.id} disabled={!v.free && form.vehicle_id !== v.id}>
-                  {v.label}{v.status ? ` (${v.status})` : ''}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-bold text-slate-500">Type</label>
-              <select disabled className="w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 cursor-not-allowed" value={form.reservation_type} onChange={(e) => setForm((s) => ({ ...s, reservation_type: e.target.value }))}>
-                <option value="SHORT_RENTAL">LCD (Location Courte Durée)</option>
-                <option value="LONG_RENTAL">LLD (Longue Durée)</option>
-                <option value="LLD">LLD</option>
-                <option value="LOA">LOA</option>
+              <label className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500">
+                <span>Client</span>
+                <button
+                  type="button"
+                  onClick={() => { setNewClientError(null); setNewResOpen(false); setNewClientDrawerOpen(true); }}
+                  className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-black text-white hover:bg-indigo-700"
+                >
+                  + Nouveau
+                </button>
+              </label>
+              <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.customer_id} onChange={(e) => {
+                if (e.target.value === '__new__') { setNewClientError(null); setNewResOpen(false); setNewClientDrawerOpen(true); e.target.value = form.customer_id; return; }
+                setForm((s) => ({ ...s, customer_id: e.target.value }));
+              }}>
+                <option value="">Client…</option>
+                {customerOptions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+                <option value="__new__">+ Nouveau client</option>
               </select>
-              <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                Classé automatiquement à partir de la durée · seuil LLD : {lldThresholdMonths} mois
-              </p>
+            </div>
+            <div className="relative">
+              <label className="mb-1 block text-xs font-bold text-slate-500">
+                Véhicule{form.is_draft ? 's (plusieurs possibles)' : ''}
+              </label>
+              {form.is_draft && form.vehicle_ids.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {form.vehicle_ids.map((vid) => {
+                    const vl = vehicleOptions.find((v) => v.id === vid)?.label ?? vid;
+                    return (
+                      <span key={vid} className="inline-flex items-center gap-1 rounded-full bg-indigo-100 border border-indigo-200 px-2.5 py-1 text-xs font-bold text-indigo-800">
+                        {vl}
+                        <button type="button" className="ml-0.5 text-indigo-400 hover:text-indigo-700" onClick={() => setForm((s) => ({ ...s, vehicle_ids: s.vehicle_ids.filter((x) => x !== vid), vehicle_id: s.vehicle_ids.filter((x) => x !== vid)[0] ?? '' }))}>&times;</button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              <input
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+                placeholder="Rechercher marque, modèle ou immatriculation…"
+                value={vehicleSearch || (!form.is_draft && form.vehicle_id ? (vehicleOptions.find((v) => v.id === form.vehicle_id)?.label ?? '') : '')}
+                onChange={(e) => {
+                  setVehicleSearch(e.target.value);
+                  setVehicleDropdownOpen(true);
+                  if (!e.target.value && !form.is_draft) setForm((s) => ({ ...s, vehicle_id: '' }));
+                }}
+                onFocus={() => setVehicleDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setVehicleDropdownOpen(false), 200)}
+              />
+              {!form.is_draft && form.vehicle_id && (
+                <button className="absolute right-3 top-[34px] text-slate-400 hover:text-slate-600 text-sm" onClick={() => { setForm((s) => ({ ...s, vehicle_id: '' })); setVehicleSearch(''); }}>&times;</button>
+              )}
+              {vehicleDropdownOpen && (
+                <div
+                  className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"
+                  // Keep the input focused while interacting with the list:
+                  // otherwise its onBlur unmounts the options mid-click and
+                  // selections are lost (especially in multi-select mode).
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  {vehicleOptions
+                    .filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase()))
+                    .map((v) => {
+                      const selected = form.is_draft ? form.vehicle_ids.includes(v.id) : form.vehicle_id === v.id;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${selected ? 'bg-indigo-50 font-bold' : ''}`}
+                          onClick={() => {
+                            const raw = (vehiclesQ.data ?? []).find((x) => String(x.id) === v.id) as any;
+                            if (form.is_draft) {
+                              setForm((s) => {
+                                const ids = s.vehicle_ids.includes(v.id) ? s.vehicle_ids.filter((x) => x !== v.id) : [...s.vehicle_ids, v.id];
+                                return { ...s, vehicle_ids: ids, vehicle_id: ids[0] ?? '', daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate };
+                              });
+                              setVehicleSearch('');
+                            } else {
+                              setForm((s) => ({ ...s, vehicle_id: v.id, daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate }));
+                              setVehicleSearch('');
+                              setVehicleDropdownOpen(false);
+                            }
+                          }}
+                        >
+                          {form.is_draft && <span className={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selected ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300'}`}>{selected ? '✓' : ''}</span>}
+                          <span className="flex-1">{v.label}</span>
+                          {v.isSubRented && <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-black text-amber-700">SL</span>}
+                        </button>
+                      );
+                    })}
+                  {vehicleOptions.filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase())).length === 0 && (
+                    <div className="px-4 py-3 text-xs text-slate-400">Aucun véhicule trouvé</div>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
-              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.desired_start_at} onChange={(dfValue) => setForm((s) => ({ ...s, desired_start_at: dfValue }))} />
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_start_at} onChange={(e) => setForm((s) => ({ ...s, desired_start_at: e.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
-              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={form.desired_end_at} onChange={(dfValue) => setForm((s) => ({ ...s, desired_end_at: dfValue }))} />
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={form.desired_end_at} onChange={(e) => setForm((s) => ({ ...s, desired_end_at: e.target.value }))} />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-bold text-slate-500">Durée (jours)</label>
-              <input
-                type="number"
-                min="1"
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
-                placeholder={form.desired_start_at ? 'Ex : 3' : "Choisissez d'abord la date de début"}
-                disabled={!form.desired_start_at}
-                value={durationDays}
-                onChange={(e) => setDurationDays(e.target.value)}
-              />
-              <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                Calculée depuis les dates — la modifier décale la date de fin.
-              </p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-bold text-slate-500">Prix estimé (MAD)</label>
-              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Prix estimé (MAD)" value={form.estimated_price} onChange={(e) => setForm((s) => ({ ...s, estimated_price: e.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-bold text-slate-500">Adresse pickup</label>
-              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Optionnel" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-bold text-slate-500">Adresse livraison</label>
-              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Optionnel" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
-            </div>
+            {(() => {
+              const s0 = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
+              const e0 = form.desired_end_at ? new Date(form.desired_end_at).getTime() : NaN;
+              const days = (!isNaN(s0) && !isNaN(e0) && e0 > s0) ? Math.ceil((e0 - s0) / 86_400_000) : 0;
+              const autoType = days > lcdMaxDays ? 'LONG_RENTAL' : 'SHORT_RENTAL';
+              const label = autoType === 'LONG_RENTAL' ? 'Location longue durée (LLD)' : 'Location courte durée (LCD)';
+              if (days > 0 && form.reservation_type !== autoType) {
+                setTimeout(() => setForm((p) => ({ ...p, reservation_type: autoType })), 0);
+              }
+              return (
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-500">Type de réservation</label>
+                  <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                    {days > 0 ? `${label} — ${(() => { const m = Math.floor(days / 30); const d = days % 30; if (m === 0) return `${days} jour${days > 1 ? 's' : ''}`; return `${m} mois${d > 0 ? ` et ${d} jour${d > 1 ? 's' : ''}` : ''}`; })()}` : 'Sélectionnez les dates'}
+                  </div>
+                </div>
+              );
+            })()}
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup (optionnel)" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison (optionnel)" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
+            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Tarif / jour (MAD)" value={form.daily_rate} onChange={(e) => setForm((s) => ({ ...s, daily_rate: e.target.value }))} />
+            {(() => {
+              const rate = parseFloat(form.daily_rate);
+              const start = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
+              const end = form.desired_end_at ? new Date(form.desired_end_at).getTime() : NaN;
+              const days = (!isNaN(start) && !isNaN(end) && end > start) ? Math.ceil((end - start) / 86_400_000) : 0;
+              const est = (rate > 0 && days > 0) ? (rate * days) : 0;
+              return est > 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  Prix estimé : {est.toLocaleString('fr-MA')} MAD ({days} jour{days > 1 ? 's' : ''} × {rate.toLocaleString('fr-MA')} MAD)
+                </div>
+              ) : null;
+            })()}
           </div>
-          {formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
+          {!form.is_draft && formAvailabilityQ.isFetching && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="text-xs font-semibold text-slate-500">Vérification disponibilité…</div>
           )}
-          {formSlotBlocked && formAvailabilityQ.data && (
+          {!form.is_draft && formSlotBlocked && formAvailabilityQ.data && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <span className="font-black">Créneau indisponible.</span> {formatRentalConflict(formAvailabilityQ.data)}
             </div>
           )}
-          {formAvailabilityQ.data?.available && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
+          {!form.is_draft && formAvailabilityQ.data?.available && form.vehicle_id && form.desired_start_at && form.desired_end_at && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">Créneau disponible pour ce véhicule.</div>
           )}
           {/* Draft / Confirmed toggle */}
@@ -1095,12 +810,12 @@ export const ReservationsOpsPage: React.FC = () => {
                   type="radio"
                   name="res_mode"
                   checked={!form.is_draft}
-                  onChange={() => setForm((s) => ({ ...s, is_draft: false }))}
+                  onChange={() => setForm((s) => ({ ...s, is_draft: false, vehicle_id: s.vehicle_ids[0] ?? s.vehicle_id, vehicle_ids: [] }))}
                   className="accent-indigo-600"
                 />
                 <div>
                   <div className="text-xs font-black text-slate-800">Réservation confirmée</div>
-                  <div className="text-[10px] text-slate-500">Véhicule bloqué · créneau réservé</div>
+                  <div className="text-[10px] text-slate-500">1 véhicule bloqué · créneau réservé</div>
                 </div>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -1108,29 +823,87 @@ export const ReservationsOpsPage: React.FC = () => {
                   type="radio"
                   name="res_mode"
                   checked={form.is_draft}
-                  onChange={() => setForm((s) => ({ ...s, is_draft: true }))}
+                  onChange={() => setForm((s) => ({ ...s, is_draft: true, vehicle_ids: s.vehicle_id ? [s.vehicle_id] : [] }))}
                   className="accent-amber-600"
                 />
                 <div>
                   <div className="text-xs font-black text-slate-800">Intention (brouillon)</div>
-                  <div className="text-[10px] text-slate-500">Véhicule non bloqué · en attente de confirmation</div>
+                  <div className="text-[10px] text-slate-500">Plusieurs véhicules possibles · non bloqués</div>
                 </div>
               </label>
             </div>
           </div>
           {createError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{createError}</div>}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => { setNewResOpen(false); setFromLead(null); }}>Annuler</button>
+            <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => setNewResOpen(false)}>Annuler</button>
             <button
               type="button"
               className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-black text-white shadow-lg disabled:opacity-50 ${form.is_draft ? 'bg-amber-600 shadow-amber-100 hover:bg-amber-700' : 'bg-indigo-600 shadow-indigo-100 hover:bg-indigo-700'}`}
-              disabled={!form.customer_id || !form.vehicle_id || !form.desired_start_at || !form.desired_end_at || createRes.isPending || (!form.is_draft && formSlotBlocked)}
+              disabled={!form.customer_id || !(form.is_draft ? form.vehicle_ids.length > 0 : form.vehicle_id) || !form.desired_start_at || !form.desired_end_at || createRes.isPending || (!form.is_draft && formSlotBlocked)}
               onClick={() => createRes.mutate()}
             >
-              {createRes.isPending ? 'Création…' : form.is_draft ? 'Créer intention' : 'Créer réservation'}
+              {createRes.isPending ? 'Création…' : form.is_draft ? `Créer intention${form.vehicle_ids.length > 1 ? ` (${form.vehicle_ids.length} véhicules)` : ''}` : 'Créer réservation'}
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Choix du véhicule pour valider une intention multi-véhicules */}
+      <Modal
+        open={!!validateChoice}
+        title="Valider l'intention — choisir le véhicule"
+        onClose={() => { setValidateChoice(null); setValidateError(null); }}
+        widthClass="max-w-md"
+      >
+        {validateChoice && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Cette intention comporte plusieurs véhicules présélectionnés. Choisissez le véhicule définitif :
+              les autres seront libérés.
+            </p>
+            <div className="space-y-2">
+              {(validateChoice.candidate_vehicle_ids ?? []).map((vid) => {
+                const label = vehicleOptions.find((v) => v.id === String(vid))?.label ?? `VHL-${String(vid).slice(0, 8).toUpperCase()}`;
+                const checked = validateVehicleId === String(vid);
+                return (
+                  <label
+                    key={String(vid)}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${checked ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="validate_vehicle"
+                      className="accent-emerald-600"
+                      checked={checked}
+                      onChange={() => setValidateVehicleId(String(vid))}
+                    />
+                    <span className="text-sm font-semibold text-slate-800">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {validateError && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{validateError}</div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50"
+                onClick={() => { setValidateChoice(null); setValidateError(null); }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                disabled={!validateVehicleId || validateRes.isPending}
+                onClick={() => validateRes.mutate({ id: validateChoice.id, vehicle_id: validateVehicleId })}
+              >
+                {validateRes.isPending ? 'Validation…' : '✓ Valider avec ce véhicule'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Vérifications de disponibilité modal */}
@@ -1140,17 +913,17 @@ export const ReservationsOpsPage: React.FC = () => {
           <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={availForm.vehicle_id} onChange={(e) => setAvailForm((s) => ({ ...s, vehicle_id: e.target.value }))}>
             <option value="">Véhicule…</option>
             {vehicleOptions.map((v) => (
-              <option key={v.id} value={v.id}>{v.label}{v.status ? ` (${v.status})` : ''}</option>
+              <option key={v.id} value={v.id}>{v.label}</option>
             ))}
           </select>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Début</label>
-              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={availForm.start_at} onChange={(dfValue) => setAvailForm((s) => ({ ...s, start_at: dfValue }))} />
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availForm.start_at} onChange={(e) => setAvailForm((s) => ({ ...s, start_at: e.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-500">Fin</label>
-              <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" value={availForm.end_at} onChange={(dfValue) => setAvailForm((s) => ({ ...s, end_at: dfValue }))} />
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" type="datetime-local" value={availForm.end_at} onChange={(e) => setAvailForm((s) => ({ ...s, end_at: e.target.value }))} />
             </div>
           </div>
           {availCheckQ.isFetching && (
@@ -1245,15 +1018,13 @@ export const ReservationsOpsPage: React.FC = () => {
               const PRE_CONTRACT = ['reserved', 'confirmed', 'pickup_scheduled', 'draft'];
               const needsContract = PRE_CONTRACT.includes(selected.status);
               if (!needsContract || (!isStartToday && !isStartPast)) return null;
-              // Already has a contract → skip the reminder
-              if (reservationsWithContract.has(String(selected.id))) return null;
               const clientLabel = customerOptions.find((c) => c.id === selected.customer_id)?.label.split(' (')[0] ?? '—';
               const vehicleLabel = vehicleOptions.find((v) => v.id === selected.vehicle_id)?.label ?? '—';
               const price = selected.estimated_price ? `${Number(selected.estimated_price).toLocaleString('fr-MA')} MAD` : '—';
               return (
                 <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl font-black">!</span>
+                    <span className="text-2xl">⚠️</span>
                     <div>
                       <div className="text-sm font-black text-amber-900">
                         {isStartToday ? 'Départ prévu aujourd\'hui' : 'Départ dépassé'} — contrat requis
@@ -1275,7 +1046,7 @@ export const ReservationsOpsPage: React.FC = () => {
                     to={`/contracts/new?from_reservation=${selected.id}`}
                     className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-black text-white shadow-md hover:bg-amber-700 transition-colors"
                   >
-                    Générer le contrat maintenant
+                    📄 Générer le contrat maintenant
                   </Link>
                 </div>
               );
@@ -1291,8 +1062,7 @@ export const ReservationsOpsPage: React.FC = () => {
                   ✓ Confirmer
                 </button>
                 <button className="rounded-xl bg-slate-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-slate-800 transition-colors"
-                  onClick={() => selectedReservationId && setCancelDialog({ id: selectedReservationId, reason: '', error: null })}
-                  disabled={cancelRes.isPending}>
+                  onClick={() => cancelRes.mutate(selectedReservationId)} disabled={cancelRes.isPending}>
                   ✕ Annuler
                 </button>
                 <button className="rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-50 hover:bg-emerald-700 transition-colors"
@@ -1310,7 +1080,7 @@ export const ReservationsOpsPage: React.FC = () => {
                   to={`/contracts/new?from_reservation=${selected.id}`}
                   className="mt-2 inline-flex items-center gap-2 rounded-xl border-2 border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-black text-amber-800 hover:bg-amber-100 transition-colors"
                 >
-                  Générer contrat depuis cette réservation
+                  📄 Générer contrat depuis cette réservation
                 </Link>
               )}
             </div>
@@ -1337,7 +1107,7 @@ export const ReservationsOpsPage: React.FC = () => {
             <div>
               <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Prolongation</div>
               <div className="grid grid-cols-2 gap-2">
-                <DateField withTime className="rounded-xl border border-slate-200 px-3 py-2 text-xs" value={extensionForm.new_end_at} onChange={(dfValue) => setExtensionForm((s) => ({ ...s, new_end_at: dfValue }))} />
+                <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="datetime-local" value={extensionForm.new_end_at} onChange={(e) => setExtensionForm((s) => ({ ...s, new_end_at: e.target.value }))} />
                 <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" placeholder="Montant additionnel" value={extensionForm.additional_amount} onChange={(e) => setExtensionForm((s) => ({ ...s, additional_amount: e.target.value }))} />
                 <button className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50 hover:bg-amber-700 transition-colors"
                   onClick={() => extensionM.mutate(selectedReservationId)} disabled={extensionM.isPending || !extensionForm.new_end_at}>
@@ -1373,8 +1143,8 @@ export const ReservationsOpsPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <DateField className="rounded-xl border border-slate-200 px-3 py-2 text-xs" value={billingForm.issue_date} onChange={(dfValue) => { setBillingError(null); setBillingForm((s) => ({ ...s, issue_date: dfValue })); }} />
-                  <DateField className="rounded-xl border border-slate-200 px-3 py-2 text-xs" value={billingForm.due_date} onChange={(dfValue) => { setBillingError(null); setBillingForm((s) => ({ ...s, due_date: dfValue })); }} />
+                  <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date émission" value={billingForm.issue_date} onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, issue_date: e.target.value })); }} />
+                  <input className="rounded-xl border border-slate-200 px-3 py-2 text-xs" type="date" placeholder="Date échéance" value={billingForm.due_date} onChange={(e) => { setBillingError(null); setBillingForm((s) => ({ ...s, due_date: e.target.value })); }} />
                   {billingError && (
                     <div className="col-span-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                       {billingError}
@@ -1416,7 +1186,7 @@ export const ReservationsOpsPage: React.FC = () => {
       <DrawerPanel
         open={newClientDrawerOpen}
         title="Nouveau client"
-        onClose={() => setNewClientDrawerOpen(false)}
+        onClose={() => { setNewClientDrawerOpen(false); setNewResOpen(true); }}
         widthClass="max-w-2xl"
       >
         <CustomerForm
@@ -1424,244 +1194,14 @@ export const ReservationsOpsPage: React.FC = () => {
           error={newClientError}
           submitting={createCustomerMut.isPending}
           branches={branchesQ.data?.data ?? []}
-          seed={fromLead ? (() => {
-            // Split naïf du nom : « Prénom NOM COMPOSÉ » → prénom = premier mot,
-            // nom = le reste. Suffisant pour pré-remplir ; l'agent peut corriger.
-            const parts = (fromLead.full_name ?? '').trim().split(/\s+/);
-            const first_name = parts.shift() ?? '';
-            const last_name = parts.join(' ');
-            return {
-              first_name,
-              last_name,
-              phone: fromLead.phone ?? '',
-              email: fromLead.email ?? '',
-            };
-          })() : null}
-          onCancel={() => setNewClientDrawerOpen(false)}
+          onCancel={() => { setNewClientDrawerOpen(false); setNewResOpen(true); }}
           onSubmit={(payload, scans) => {
             setNewClientError(null);
             createCustomerMut.mutate({ payload, scans });
           }}
         />
       </DrawerPanel>
-
-      {/* ── Cancel reservation confirmation ── */}
-      {cancelDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
-          onClick={() => !cancelRes.isPending && setCancelDialog(null)}
-        >
-          <div className="my-4 w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="border-b border-slate-100 px-6 py-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-5 w-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M4.93 19h14.14a1.5 1.5 0 0 0 1.3-2.25L13.3 4.75a1.5 1.5 0 0 0-2.6 0L3.63 16.75A1.5 1.5 0 0 0 4.93 19z" />
-                  </svg>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-black text-slate-900">Annuler cette réservation ?</h3>
-                  <p className="mt-1 text-xs text-slate-500">
-                    La réservation passera au statut <strong>Annulé</strong>. Les missions planifiées seront elles aussi annulées. Cette action est irréversible.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-5 space-y-3">
-              <label className="block">
-                <span className="mb-1 flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <span>Motif d'annulation</span>
-                  <span className="font-semibold text-slate-400">Optionnel</span>
-                </span>
-                <textarea
-                  className="df-input w-full resize-none"
-                  rows={3}
-                  placeholder="Ex : Demande du client, indisponibilité véhicule, retard de règlement…"
-                  value={cancelDialog.reason}
-                  onChange={(e) => setCancelDialog((s) => (s ? { ...s, reason: e.target.value, error: null } : s))}
-                />
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {['Demande client', 'Indisponibilité véhicule', 'Retard de règlement', 'Erreur de saisie'].map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setCancelDialog((s) => (s ? { ...s, reason: m, error: null } : s))}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-              {cancelDialog.error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
-                  {cancelDialog.error}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setCancelDialog(null)}
-                disabled={cancelRes.isPending}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Revenir
-              </button>
-              <button
-                type="button"
-                onClick={() => cancelRes.mutate({ id: cancelDialog.id, reason: cancelDialog.reason.trim() || undefined })}
-                disabled={cancelRes.isPending}
-                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
-              >
-                {cancelRes.isPending ? 'Annulation…' : "Oui, annuler la réservation"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-// ---------------------------------------------------------------------------
-// Agent availability badge
-// ---------------------------------------------------------------------------
-const AgentAvailabilityBadge: React.FC<{ agentId: string; scheduledAt: string; excludeReservationId?: string }> = ({ agentId, scheduledAt, excludeReservationId }) => {
-  const availQ = useQuery({
-    queryKey: ['agentAvailability', agentId, scheduledAt],
-    queryFn: () => opsApi.agentAvailability(agentId, scheduledAt, excludeReservationId),
-    enabled: !!agentId && !!scheduledAt,
-    staleTime: 30_000,
-  });
-  if (!agentId || !scheduledAt || availQ.isLoading) return null;
-  if (!availQ.data) return null;
-  if (availQ.data.available) return <span className="text-[10px] font-bold text-emerald-600">Disponible ce jour</span>;
-  return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 space-y-1">
-      <span className="text-[10px] font-black text-amber-700">
-        {availQ.data.conflicts.length} mission(s) ce jour
-      </span>
-      {availQ.data.conflicts.map((c) => (
-        <div key={c.id} className="text-[10px] text-amber-600">
-          {c.mission_type === 'pickup' ? 'Récup.' : 'Livrais.'} — {c.scheduled_start_at ? new Date(c.scheduled_start_at).toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' }) : '?'}
-          {c.reservation?.reservation_number ? ` (${c.reservation.reservation_number})` : ''}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// Create Mission modal content
-// ---------------------------------------------------------------------------
-type MissionFormState = { mission_type: string; assigned_user_id: string; scheduled_start_at: string; notes: string; create_return: boolean; return_assigned_user_id: string; return_scheduled_at: string; return_notes: string };
-
-const CreateMissionModalContent: React.FC<{
-  reservationId: string | null;
-  reservations: ReservationDto[];
-  vehicles: FleetVehicleDto[];
-  customers: CustomerDto[];
-  agents: { id: string; name: string; first_name?: string | null; last_name?: string | null; email: string }[];
-  form: MissionFormState;
-  setForm: React.Dispatch<React.SetStateAction<MissionFormState>>;
-  error: string | null;
-  isPending: boolean;
-  onSubmit: () => void;
-  onClose: () => void;
-}> = ({ reservationId, reservations, vehicles, customers, agents, form, setForm, error, isPending, onSubmit, onClose }) => {
-  const res = reservations.find((r) => r.id === reservationId);
-  if (!res) return null;
-  const veh = vehicles.find((v) => String(v.id) === String(res.vehicle_id));
-  const custRaw = customers.find((c) => String(c.id) === String(res.customer_id)) as unknown as { id: string | number; display_name?: string; individual_profile?: { first_name?: string; last_name?: string } | null; company_profile?: { trade_name?: string; legal_name?: string } | null } | undefined;
-  const custName = custRaw?.display_name || [custRaw?.individual_profile?.first_name, custRaw?.individual_profile?.last_name].filter(Boolean).join(' ') || custRaw?.company_profile?.trade_name || custRaw?.company_profile?.legal_name || '';
-  const agentName = (u: typeof agents[number]) => u.name || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email;
-
-  return (
-    <div className="space-y-4">
-      {/* Reservation context */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1 text-xs">
-        <div className="flex justify-between"><span className="text-slate-500">Réservation</span><span className="font-bold text-slate-800">{res.reservation_number}</span></div>
-        {veh && <div className="flex justify-between"><span className="text-slate-500">Véhicule</span><span className="font-bold text-slate-800">{[(veh as any).brand_name ?? veh.brand, (veh as any).model_name ?? veh.model].filter(Boolean).join(' ')} — {(veh as any).registration_number ?? veh.registration}</span></div>}
-        {custName && <div className="flex justify-between"><span className="text-slate-500">Client</span><span className="font-bold text-slate-800">{custName}</span></div>}
-        {res.pickup_address && <div className="flex justify-between items-center"><span className="text-slate-500">Départ</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.pickup_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.pickup_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">Carte</a></div>}
-        {res.delivery_address && <div className="flex justify-between items-center"><span className="text-slate-500">Livraison</span><span className="font-bold text-slate-800 max-w-[55%] truncate">{res.delivery_address}</span><a href={`https://www.google.com/maps/search/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700" title="Carte">Carte</a></div>}
-        {res.pickup_address && res.delivery_address && <div className="pt-1"><a href={`https://www.google.com/maps/dir/${encodeURIComponent(res.pickup_address)}/${encodeURIComponent(res.delivery_address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800">Voir itinéraire</a></div>}
-      </div>
-
-      {/* --- Mission Livraison --- */}
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 space-y-3">
-        <div className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Mission Livraison</div>
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1">Type *</label>
-          <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.mission_type} onChange={(e) => setForm((s) => ({ ...s, mission_type: e.target.value }))}>
-            <option value="delivery">Livraison</option>
-            <option value="pickup">Récupération</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1">Agent assigné</label>
-          <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.assigned_user_id} onChange={(e) => setForm((s) => ({ ...s, assigned_user_id: e.target.value }))}>
-            <option value="">— Non assigné —</option>
-            {agents.map((u) => <option key={u.id} value={u.id}>{agentName(u)}</option>)}
-          </select>
-          {form.assigned_user_id && form.scheduled_start_at && (
-            <div className="mt-1"><AgentAvailabilityBadge agentId={form.assigned_user_id} scheduledAt={form.scheduled_start_at} excludeReservationId={reservationId ?? undefined} /></div>
-          )}
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure prévue</label>
-          <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.scheduled_start_at} onChange={(dfValue) => setForm((s) => ({ ...s, scheduled_start_at: dfValue }))} />
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1">Notes</label>
-          <textarea className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm" rows={2} value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Instructions pour l'agent…" />
-        </div>
-      </div>
-
-      {/* --- Toggle return mission --- */}
-      <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50 transition">
-        <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-indigo-600 accent-indigo-600" checked={form.create_return} onChange={(e) => setForm((s) => ({ ...s, create_return: e.target.checked }))} />
-        <div>
-          <span className="text-sm font-bold text-slate-700">Créer aussi la mission Récupération</span>
-          <span className="block text-[10px] text-slate-400">Planifier le retour du véhicule en fin de location</span>
-        </div>
-      </label>
-
-      {/* --- Mission Récupération (conditional) --- */}
-      {form.create_return && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
-          <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Mission Récupération</div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Agent assigné</label>
-            <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.return_assigned_user_id} onChange={(e) => setForm((s) => ({ ...s, return_assigned_user_id: e.target.value }))}>
-              <option value="">— Même agent —</option>
-              {agents.map((u) => <option key={u.id} value={u.id}>{agentName(u)}</option>)}
-            </select>
-            {(form.return_assigned_user_id || form.assigned_user_id) && form.return_scheduled_at && (
-              <div className="mt-1"><AgentAvailabilityBadge agentId={form.return_assigned_user_id || form.assigned_user_id} scheduledAt={form.return_scheduled_at} excludeReservationId={reservationId ?? undefined} /></div>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Date & heure retour</label>
-            <DateField withTime className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" value={form.return_scheduled_at} onChange={(dfValue) => setForm((s) => ({ ...s, return_scheduled_at: dfValue }))} />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Notes retour</label>
-            <textarea className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm" rows={2} value={form.return_notes} onChange={(e) => setForm((s) => ({ ...s, return_notes: e.target.value }))} placeholder="Instructions pour la récupération…" />
-          </div>
-        </div>
-      )}
-
-      {error && <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-700">{error}</div>}
-      <div className="flex justify-end gap-3 pt-2">
-        <button type="button" className="rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50" onClick={onClose}>Annuler</button>
-        <button type="button" className="rounded-2xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-50" disabled={isPending} onClick={onSubmit}>
-          {isPending ? 'Création…' : form.create_return ? 'Créer 2 missions' : 'Créer la mission'}
-        </button>
-      </div>
-    </div>
-  );
-};

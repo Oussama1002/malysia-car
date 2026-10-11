@@ -599,7 +599,37 @@ class ContractController extends Controller
 
         $start = isset($data['start_date']) ? Carbon::parse($data['start_date']) : ($contract->start_date ? Carbon::parse($contract->start_date) : now());
         $months = (int) ($data['months'] ?? $contract->duration_months ?? 12);
-        $monthly = (float) ($data['monthly_amount'] ?? $contract->monthly_payment ?? 0);
+
+        // Si `monthly_payment` n'a pas ete saisi dans le wizard, on retombe
+        // d'abord sur `base_amount / duree` (montant global divise par le
+        // nombre de mois) puis sur `estimated_price` de la reservation liee.
+        // Sans ca, chaque echeance est generee a 0 MAD — ce qui donnait
+        // l'erreur "Tableau de bord des echeances : 0 / 0 / 0".
+        $explicitMonthly = $data['monthly_amount'] ?? $contract->monthly_payment;
+        $monthly = (float) ($explicitMonthly ?? 0);
+        if ($monthly <= 0 && $months > 0) {
+            $base = (float) ($contract->base_amount ?? 0);
+            if ($base > 0) {
+                $monthly = round($base / $months, 2);
+            }
+        }
+        if ($monthly <= 0 && $contract->customer_id && $contract->vehicle_id) {
+            $reservationPrice = \App\Models\Reservation::withoutGlobalScopes()
+                ->where('customer_id', $contract->customer_id)
+                ->where('vehicle_id', $contract->vehicle_id)
+                ->whereNotIn('status', ['cancelled', 'draft'])
+                ->orderByDesc('created_at')
+                ->value('estimated_price');
+            if ($reservationPrice && $months > 0) {
+                $monthly = round(((float) $reservationPrice) / $months, 2);
+            }
+        }
+        if ($monthly <= 0) {
+            return ApiResponse::error(
+                'Mensualité introuvable : renseignez le loyer / mensualité du contrat avant de générer l\'échéancier.',
+                422,
+            );
+        }
         $taxRate = (float) ($data['tax_rate'] ?? 0);
 
         $rows = DB::transaction(function () use ($contract, $start, $months, $monthly, $taxRate) {
