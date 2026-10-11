@@ -156,6 +156,7 @@ class EntityAuditEntryDto {
     required this.id,
     required this.action,
     this.actionLabel,
+    this.actorName,
     this.actorEmail,
     this.occurredAt,
     this.ipAddress,
@@ -167,6 +168,7 @@ class EntityAuditEntryDto {
   final String id;
   final String action;
   final String? actionLabel;
+  final String? actorName;
   final String? actorEmail;
   final DateTime? occurredAt;
   final String? ipAddress;
@@ -181,6 +183,7 @@ class EntityAuditEntryDto {
       id: json['id']?.toString() ?? '',
       action: json['action']?.toString() ?? 'event',
       actionLabel: json['action_label']?.toString(),
+      actorName: json['actor_name']?.toString(),
       actorEmail: json['actor_email']?.toString(),
       occurredAt: _date(json['occurred_at']) ?? _date(json['created_at']),
       ipAddress: json['ip_address']?.toString(),

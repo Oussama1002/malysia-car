@@ -911,82 +911,220 @@ class _HistoryTab extends ConsumerWidget {
   }
 }
 
-class _AuditTile extends StatelessWidget {
+class _AuditTile extends StatefulWidget {
   const _AuditTile({required this.entry});
   final EntityAuditEntryDto entry;
 
   @override
+  State<_AuditTile> createState() => _AuditTileState();
+}
+
+class _AuditTileState extends State<_AuditTile> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'fr');
     final title = _auditActionFr[entry.action] ??
         entry.actionLabel ??
         entry.action;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: entry.legalSignificance
-                      ? const Color(0xFFF59E0B)
-                      : const Color(0xFF6366F1),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              Expanded(
-                child: Text(title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 13)),
-              ),
-              if (entry.occurredAt != null)
-                Text(dateFmt.format(entry.occurredAt!),
-                    style: const TextStyle(
-                        color: Colors.black45, fontSize: 10.5)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  entry.actorEmail ?? 'Système',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.black54, fontSize: 11.5),
-                ),
-              ),
-              if (entry.legalSignificance)
+    final diffs = _summarizeChanges(entry.beforeData, entry.afterData);
+    final hasDiffs = diffs.isNotEmpty;
+
+    return GestureDetector(
+      onTap: hasDiffs ? () => setState(() => _expanded = !_expanded) : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Theme.of(context).dividerColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                  width: 10,
+                  height: 10,
+                  margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(999),
+                    color: entry.legalSignificance
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFF6366F1),
+                    shape: BoxShape.circle,
                   ),
-                  child: const Text('LÉGAL',
-                      style: TextStyle(
-                          color: Color(0xFF92400E),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1)),
                 ),
+                Expanded(
+                  child: Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 13)),
+                ),
+                if (entry.occurredAt != null)
+                  Text(dateFmt.format(entry.occurredAt!),
+                      style: const TextStyle(
+                          color: Colors.black45, fontSize: 10.5)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                        text: entry.actorName ?? entry.actorEmail ?? 'Système',
+                        style: const TextStyle(
+                            color: Colors.black54, fontSize: 11.5),
+                      ),
+                      if (entry.ipAddress != null)
+                        TextSpan(
+                          text: ' · ${entry.ipAddress}',
+                          style: const TextStyle(
+                              color: Colors.black38,
+                              fontSize: 10.5,
+                              fontFamily: 'monospace'),
+                        ),
+                    ]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (entry.legalSignificance)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text('LÉGAL',
+                        style: TextStyle(
+                            color: Color(0xFF92400E),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1)),
+                  ),
+              ],
+            ),
+            if (hasDiffs) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: const Color(0xFF4F46E5),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Voir les changements (${diffs.length})',
+                    style: const TextStyle(
+                      color: Color(0xFF4F46E5),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              if (_expanded) ...[
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                        ),
+                        child: const Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Text('Champ',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black45)),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text('Avant',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black45)),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text('Après',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black45)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      for (final d in diffs)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: Color(0xFFF1F5F9)),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Text(d.label,
+                                    style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF475569))),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(d.before,
+                                    style: const TextStyle(
+                                        fontSize: 10.5,
+                                        color: Colors.black38,
+                                        fontFamily: 'monospace')),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(d.after,
+                                    style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF1E293B),
+                                        fontFamily: 'monospace')),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1084,11 +1222,34 @@ const Map<String, String> _auditActionFr = {
   'schedule_generated': 'Échéancier généré',
   'pdf_generated': 'PDF généré',
   'payment_recorded': 'Paiement enregistré',
+  'confirmed': 'Confirmation',
+  'cancelled': 'Annulation',
+  'handed_over': 'Remise véhicule',
+  'returned': 'Retour véhicule',
+  'extended': 'Prolongation',
+  'damage_reported': 'Dommage signalé',
+  'billing_closed': 'Facturation clôturée',
+  'wallet_credited': 'Crédit portefeuille',
+  'wallet_debited': 'Débit portefeuille',
+  'wallet_adjusted': 'Ajustement portefeuille',
+  'vehicle_swap_approved_instant': 'Changement de véhicule (instantané)',
+  'vehicle_swap_approved': 'Changement de véhicule approuvé',
+  'vehicle_swap_requested': 'Changement de véhicule demandé',
+  'vehicle_swap_rejected': 'Changement de véhicule refusé',
+  'kyc_submitted': 'KYC soumis',
+  'kyc_approved': 'KYC approuvé',
+  'kyc_rejected': 'KYC rejeté',
+  'document_uploaded': 'Document téléversé',
+  'document_validated': 'Document validé',
+  'financial_action': 'Action financière',
+  'login': 'Connexion',
+  'logout': 'Déconnexion',
 };
 
 const Map<String, String> _businessActionFr = {
   'created': 'Création',
   'updated': 'Modification',
+  'deleted': 'Suppression',
   'status_changed': 'Changement de statut',
   'approved': 'Approbation',
   'activated': 'Activation',
@@ -1097,10 +1258,216 @@ const Map<String, String> _businessActionFr = {
   'sent_for_signature': 'Envoi pour signature',
   'cancelled': 'Annulation',
   'rejected': 'Rejet',
+  'confirmed': 'Confirmation',
+  'handed_over': 'Remise véhicule',
+  'returned': 'Retour véhicule',
+  'extended': 'Prolongation',
+  'damage_reported': 'Dommage signalé',
+  'billing_closed': 'Facturation clôturée',
   'schedule_generated': 'Échéancier généré',
   'pdf_generated': 'PDF généré',
   'payment_recorded': 'Paiement enregistré',
 };
+
+// ---------------------------------------------------------------------------
+// Diff helpers — mirrors EntityAuditTimeline.tsx on the web
+// ---------------------------------------------------------------------------
+
+const _hiddenAuditFields = <String>{
+  'id', 'company_id', 'branch_id', 'created_at', 'updated_at', 'deleted_at',
+  'sha256', 'storage_path', 'disk', 'password', 'remember_token',
+  'two_factor_secret',
+};
+
+const _fieldLabels = <String, String>{
+  'status': 'Statut',
+  'customer_id': 'Client',
+  'vehicle_id': 'Véhicule',
+  'contract_id': 'Contrat',
+  'reservation_id': 'Réservation',
+  'document_id': 'Document',
+  'invoice_id': 'Facture',
+  'user_id': 'Utilisateur',
+  'assigned_user_id': 'Assigné à',
+  'start_date': 'Date de début',
+  'end_date': 'Date de fin',
+  'desired_start_at': 'Début souhaité',
+  'desired_end_at': 'Fin souhaitée',
+  'activation_date': "Date d'activation",
+  'closure_date': 'Date de clôture',
+  'signed_at': 'Signé le',
+  'terminated_reason': 'Motif résiliation',
+  'monthly_payment': 'Mensualité',
+  'base_amount': 'Montant de base',
+  'down_payment_amount': 'Apport',
+  'deposit_amount': 'Caution',
+  'duration_months': 'Durée (mois)',
+  'allowed_km': 'Km autorisés',
+  'excess_km_rate': 'Tarif km excédent',
+  'payment_method': 'Mode de paiement',
+  'payment_terms': 'Conditions paiement',
+  'bank_reference': 'Réf. virement',
+  'cheque_number': 'N° chèque',
+  'notes': 'Notes',
+  'legal_status': 'Statut légal',
+  'signature_status': 'Statut signature',
+  'estimated_price': 'Prix estimé',
+  'reservation_type': 'Type réservation',
+  'handover_type': 'Type remise',
+  'fuel_level': 'Niveau carburant',
+  'odometer': 'Kilométrage',
+  'condition_notes': 'État / observations',
+  'daily_rental_price': 'Tarif / jour',
+  'monthly_rental_price': 'Tarif / mois',
+  'registration': 'Immatriculation',
+  'brand_name': 'Marque',
+  'model_name': 'Modèle',
+  'fuel_type': 'Carburant',
+  'mileage_current': 'Kilométrage',
+  'insurance_expiry': 'Exp. assurance',
+  'tech_control_expiry': 'Exp. visite technique',
+  'vignette_expiry': 'Exp. vignette',
+};
+
+const _valueTranslations = <String, String>{
+  'draft': 'Brouillon',
+  'pending': 'En attente',
+  'pending_approval': "En attente d'approbation",
+  'pending_created': 'Créé · en attente',
+  'approved': 'Approuvé',
+  'active': 'Actif',
+  'inactive': 'Inactif',
+  'completed': 'Terminé',
+  'cancelled': 'Annulé',
+  'rejected': 'Rejeté',
+  'expired': 'Expiré',
+  'terminated': 'Résilié',
+  'closed': 'Clôturé',
+  'suspended': 'Suspendu',
+  'blocked': 'Bloqué',
+  'pending_signature': 'En attente de signature',
+  'signed': 'Signé',
+  'sent_for_signature': 'Envoyé pour signature',
+  'reserved': 'Réservé',
+  'confirmed': 'Confirmé',
+  'pickup_scheduled': 'Remise planifiée',
+  'handed_over': 'Remis',
+  'extension_requested': 'Prolongation demandée',
+  'return_scheduled': 'Retour planifié',
+  'returned': 'Retourné',
+  'inspection_pending': 'Inspection en attente',
+  'damage_pending': 'Dommages en attente',
+  'billing_pending': 'Facturation en attente',
+  'under_review': 'En cours de vérification',
+  'incomplete': 'Incomplet',
+  'processing': 'Traitement en cours',
+  'extracted': 'Extrait',
+  'validated': 'Validé',
+  'failed': 'Échoué',
+  'true': 'Oui',
+  'false': 'Non',
+  '1': 'Oui',
+  '0': 'Non',
+  'LLD': 'Location Longue Durée',
+  'LOA': "Location avec Option d'Achat",
+  'CREDIT_AUTO': 'Crédit Automobile',
+  'VENTE_VO': 'Vente VO',
+  'LOCATION_COURTE': 'Location Courte Durée',
+  'virement': 'Virement',
+  'cheque': 'Chèque',
+  'espece': 'Espèce',
+  'cash': 'Espèce',
+  'carte': 'Carte bancaire',
+  'bank_transfer': 'Virement bancaire',
+  'owned': 'Propriété',
+  'leased': 'Loué',
+  'sub_rented': 'Sous-location',
+  'planned': 'Planifié',
+  'in_progress': 'En cours',
+  'done': 'Terminé',
+  'open': 'Ouvert',
+  'pickup': 'Remise',
+  'return': 'Retour',
+  'enabled': 'Activé',
+  'disabled': 'Désactivé',
+};
+
+final _uuidRe = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false);
+final _isoDateRe = RegExp(r'^\d{4}-\d{2}-\d{2}(T[\d:.Z+\-]+)?$');
+final _hexHashRe = RegExp(r'^[0-9a-f]{32,}$', caseSensitive: false);
+
+String _uuidPrefix(String key) {
+  final k = key.toLowerCase();
+  if (k.contains('customer')) return 'CLT';
+  if (k.contains('vehicle')) return 'VHL';
+  if (k.contains('contract')) return 'CTR';
+  if (k.contains('reservation')) return 'RSV';
+  if (k.contains('invoice')) return 'INV';
+  if (k.contains('document')) return 'DOC';
+  if (k.contains('user')) return 'USR';
+  return key.replaceAll(RegExp(r'_id$'), '').substring(0, key.length.clamp(0, 3)).toUpperCase();
+}
+
+String _formatFieldLabel(String field) {
+  return _fieldLabels[field] ??
+      field
+          .replaceAll('_', ' ')
+          .replaceAllMapped(RegExp(r'\b\w'), (m) => m[0]!.toUpperCase());
+}
+
+String _formatValue(String key, dynamic raw) {
+  if (raw == null || raw.toString().trim().isEmpty) return '—';
+  final s = raw is Map || raw is List ? raw.toString() : raw.toString();
+
+  if (_uuidRe.hasMatch(s.trim())) {
+    final prefix = _uuidPrefix(key);
+    return '$prefix-${s.replaceAll('-', '').substring(0, 8).toUpperCase()}';
+  }
+  if (_isoDateRe.hasMatch(s.trim())) {
+    final d = DateTime.tryParse(s);
+    if (d != null) {
+      return s.contains('T') &&
+              !s.endsWith('T00:00:00.000000Z') &&
+              !s.endsWith('T00:00:00Z')
+          ? DateFormat('dd/MM/yyyy HH:mm', 'fr').format(d)
+          : DateFormat('dd/MM/yyyy', 'fr').format(d);
+    }
+  }
+  if (_hexHashRe.hasMatch(s.trim()) && s.length > 20) {
+    return '${s.substring(0, 12)}…';
+  }
+  return _valueTranslations[s] ?? _valueTranslations[s.toLowerCase()] ?? s;
+}
+
+class _DiffLine {
+  const _DiffLine(this.label, this.before, this.after);
+  final String label;
+  final String before;
+  final String after;
+}
+
+List<_DiffLine> _summarizeChanges(
+    Map<String, dynamic>? beforeData, Map<String, dynamic>? afterData) {
+  final before = beforeData ?? {};
+  final after = afterData ?? {};
+  final keys = <String>{...before.keys, ...after.keys};
+  final lines = <_DiffLine>[];
+  for (final key in keys) {
+    if (_hiddenAuditFields.contains(key)) continue;
+    final bStr = (before[key] ?? '').toString();
+    final aStr = (after[key] ?? '').toString();
+    if (bStr == aStr) continue;
+    lines.add(_DiffLine(
+      _formatFieldLabel(key),
+      _formatValue(key, before[key]),
+      _formatValue(key, after[key]),
+    ));
+    if (lines.length >= 10) break;
+  }
+  return lines;
+}
 
 class _ActionsTab extends ConsumerStatefulWidget {
   const _ActionsTab({required this.contractId, required this.contract});
