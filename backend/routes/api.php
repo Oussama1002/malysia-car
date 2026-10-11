@@ -108,6 +108,14 @@ Route::prefix('v1')->group(function () {
         Route::post('public/signature/{token}/reject', [PublicSignatureController::class, 'reject']);
     });
 
+    // Site public de l'agence : aucune authentification
+    Route::get('public/site/vehicles', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'vehicles'])
+        ->middleware('throttle:60,1');
+    Route::get('public/site/catalog', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'catalog'])
+        ->middleware('throttle:60,1');
+    Route::post('public/site/reservation-requests', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'storeLead'])
+        ->middleware('throttle:10,1');
+
     // Public auth endpoints
     Route::post('auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');

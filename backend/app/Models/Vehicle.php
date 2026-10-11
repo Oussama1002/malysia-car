@@ -79,6 +79,10 @@ class Vehicle extends Model
         'date_immatriculation',
         'categorie',
         'immat_online',
+        'rental_price_tiers',
+        'equipments',
+        'nombre_places',
+        'nombre_portes',
     ];
 
     protected $casts = [
@@ -94,7 +98,37 @@ class Vehicle extends Model
         'book_value' => 'decimal:2',
         'daily_rental_price' => 'decimal:2',
         'monthly_rental_price' => 'decimal:2',
+        'rental_price_tiers' => 'array',
+        'equipments' => 'array',
     ];
+
+    public const RENTAL_PRICE_TIERS = [
+        'tier_1_2'   => ['min_days' => 1,  'max_days' => 2,    'label' => '1-2 jours'],
+        'tier_3_6'   => ['min_days' => 3,  'max_days' => 6,    'label' => '3-6 jours'],
+        'tier_7_14'  => ['min_days' => 7,  'max_days' => 14,   'label' => '7-14 jours'],
+        'tier_15_29' => ['min_days' => 15, 'max_days' => 29,   'label' => '15-29 jours'],
+        'tier_30'    => ['min_days' => 30, 'max_days' => null, 'label' => '30 jours et +'],
+    ];
+
+    public function minTierDailyPrice(): ?float
+    {
+        $tiers = $this->rental_price_tiers;
+        if (is_array($tiers)) {
+            $values = [];
+            foreach (self::RENTAL_PRICE_TIERS as $key => $_) {
+                $v = $tiers[$key] ?? null;
+                if (is_numeric($v) && (float) $v > 0) {
+                    $values[] = (float) $v;
+                }
+            }
+            if ($values !== []) {
+                return min($values);
+            }
+        }
+        return $this->daily_rental_price !== null
+            ? (float) $this->daily_rental_price
+            : null;
+    }
 
     protected static function booted(): void
     {
