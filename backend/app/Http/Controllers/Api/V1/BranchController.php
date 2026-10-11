@@ -87,10 +87,16 @@ class BranchController extends Controller
                 $lng = (float) $m[2];
             }
 
+            $address = null;
+            if (preg_match('#/place/([^/@]+)/@#', $finalUrl, $pm)) {
+                $address = urldecode(str_replace('+', ' ', $pm[1]));
+            }
+
             return ApiResponse::success([
                 'resolved_url' => $finalUrl,
                 'latitude' => $lat,
                 'longitude' => $lng,
+                'address' => $address,
             ]);
         } catch (\Throwable) {
             return ApiResponse::error('Impossible de résoudre le lien', 422);

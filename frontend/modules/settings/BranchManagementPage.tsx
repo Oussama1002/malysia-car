@@ -280,7 +280,9 @@ const BranchForm: React.FC<{
 
     const coords = extractCoordsFromUrl(url);
     if (coords) {
-      setForm((f) => ({ ...f, latitude: coords.lat, longitude: coords.lng }));
+      const addrMatch = url.match(/\/place\/([^/@]+)\/@/);
+      const addr = addrMatch ? decodeURIComponent(addrMatch[1].replace(/\+/g, ' ')) : null;
+      setForm((f) => ({ ...f, latitude: coords.lat, longitude: coords.lng, ...(addr ? { address: addr } : {}) }));
       return;
     }
 
@@ -291,9 +293,15 @@ const BranchForm: React.FC<{
         { method: 'POST', body: JSON.stringify({ url }) },
       )
         .then((res) => {
-          const d = res.data;
+          const d = res.data as { resolved_url: string; latitude: number | null; longitude: number | null; address: string | null };
           if (d.latitude != null && d.longitude != null) {
-            setForm((f) => ({ ...f, latitude: d.latitude, longitude: d.longitude, google_maps_url: d.resolved_url || url }));
+            setForm((f) => ({
+              ...f,
+              latitude: d.latitude,
+              longitude: d.longitude,
+              google_maps_url: d.resolved_url || url,
+              ...(d.address ? { address: d.address } : {}),
+            }));
           }
         })
         .catch(() => {})
@@ -376,6 +384,22 @@ const BranchForm: React.FC<{
         </div>
       </div>
       <div>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
+          Lien Google Maps
+        </label>
+        <input
+          className="df-input"
+          placeholder="https://maps.google.com/... ou maps.app.goo.gl/..."
+          value={form.google_maps_url ?? ''}
+          onChange={(e) => parseGoogleMapsUrl(e.target.value)}
+        />
+        <p className="mt-1 text-xs text-slate-400">
+          {resolving
+            ? '⏳ Résolution du lien en cours…'
+            : 'Collez un lien Google Maps — l\'adresse, la latitude et longitude seront extraites automatiquement.'}
+        </p>
+      </div>
+      <div>
         <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Adresse</label>
         <input
           className="df-input"
@@ -383,22 +407,6 @@ const BranchForm: React.FC<{
           value={form.address ?? ''}
           onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
         />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
-          Lien Google Maps
-        </label>
-        <input
-          className="df-input"
-          placeholder="https://maps.google.com/..."
-          value={form.google_maps_url ?? ''}
-          onChange={(e) => parseGoogleMapsUrl(e.target.value)}
-        />
-        <p className="mt-1 text-xs text-slate-400">
-          {resolving
-            ? '⏳ Résolution du lien en cours…'
-            : 'Collez un lien Google Maps — la latitude et longitude seront extraites automatiquement.'}
-        </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <div>
