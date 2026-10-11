@@ -24,7 +24,7 @@ class PublicSiteController extends Controller
                 ->whereNull('deleted_at')
                 ->whereIn('status', ['AVAILABLE', 'RENTED', 'RESERVED'])
                 ->orderBy('daily_rental_price')
-                ->limit(24)
+                ->limit(500)
                 ->get()
                 ->map(fn (Vehicle $v) => [
                     'id' => $v->id,
