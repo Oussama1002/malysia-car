@@ -46,7 +46,7 @@ class WebsiteLeadController extends Controller
             ->whereNull('deleted_at')
             ->whereIn('status', ['AVAILABLE', 'RENTED', 'RESERVED'])
             ->orderByRaw('daily_rental_price IS NOT NULL, daily_rental_price')
-            ->limit(50)
+            ->limit(500)
             ->get();
 
         $missingCount = $all->filter(fn (Vehicle $v) => $v->daily_rental_price === null

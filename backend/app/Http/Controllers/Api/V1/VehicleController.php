@@ -62,7 +62,7 @@ class VehicleController extends Controller
             });
         }
 
-        $per = min(100, max(1, (int) $request->query('per_page', 50)));
+        $per = min(500, max(1, (int) $request->query('per_page', 200)));
         $page = $q->orderByDesc('updated_at')->paginate($per);
 
         $rows = collect(VehicleResource::collection($page->items())->resolve($request))
