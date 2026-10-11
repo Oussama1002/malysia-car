@@ -434,6 +434,7 @@ const PricingTab: React.FC<{
   onSetPrice: (vehicleId: string, tiers: Record<string, number>) => Promise<unknown>;
   pending: boolean;
 }> = ({ vehicles, missingCount, loading, tierSchema, onSetPrice, pending }) => {
+  const [vSearch, setVSearch] = useState('');
   if (loading) {
     return <div className="df-card df-card__body text-sm text-slate-500">Chargement…</div>;
   }
@@ -444,6 +445,14 @@ const PricingTab: React.FC<{
       </div>
     );
   }
+  const q = vSearch.toLowerCase().trim();
+  const filtered = q
+    ? vehicles.filter((v) =>
+        [v.brand, v.model, v.registration, v.categorie, v.fuel, v.transmission, v.year?.toString()]
+          .filter(Boolean)
+          .some((f) => f!.toLowerCase().includes(q)),
+      )
+    : vehicles;
   return (
     <div className="space-y-3">
       {missingCount > 0 ? (
@@ -460,15 +469,27 @@ const PricingTab: React.FC<{
           <div className="font-black">✓ Tous les véhicules du site ont un tarif.</div>
         </div>
       )}
-      {vehicles.map((v) => (
-        <PricingRow
-          key={v.id}
-          v={v}
-          tierSchema={tierSchema}
-          onSetPrice={onSetPrice}
-          pending={pending}
-        />
-      ))}
+      <input
+        className="df-input w-full"
+        placeholder="Rechercher un véhicule (marque, modèle, immatriculation)…"
+        value={vSearch}
+        onChange={(e) => setVSearch(e.target.value)}
+      />
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+          Aucun véhicule ne correspond à « {vSearch} ».
+        </div>
+      ) : (
+        filtered.map((v) => (
+          <PricingRow
+            key={v.id}
+            v={v}
+            tierSchema={tierSchema}
+            onSetPrice={onSetPrice}
+            pending={pending}
+          />
+        ))
+      )}
     </div>
   );
 };
