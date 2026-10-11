@@ -410,8 +410,34 @@ const BranchForm: React.FC<{
         </div>
       </div>
       {form.latitude != null && form.longitude != null && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
-          📍 Position détectée : {form.latitude}, {form.longitude}
+        <div className="space-y-2">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+            📍 Position détectée : {form.latitude}, {form.longitude}
+          </div>
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <iframe
+              title="Aperçu carte"
+              width="100%"
+              height="200"
+              style={{ border: 0, display: 'block' }}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              src={`https://www.openstreetmap.org/export/embed.html?bbox=${form.longitude! - 0.01},${form.latitude! - 0.006},${form.longitude! + 0.01},${form.latitude! + 0.006}&layer=mapnik&marker=${form.latitude},${form.longitude}`}
+            />
+            <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5">
+              <span className="text-[10px] font-semibold text-slate-400">OpenStreetMap</span>
+              {form.google_maps_url && (
+                <a
+                  href={form.google_maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-bold text-indigo-600 hover:underline"
+                >
+                  Ouvrir dans Google Maps ↗
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       )}
       <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
