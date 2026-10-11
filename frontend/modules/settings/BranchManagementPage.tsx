@@ -124,15 +124,20 @@ export const BranchManagementPage: React.FC = () => {
             key: 'location',
             header: 'Localisation',
             render: (r) =>
-              r.google_maps_url ? (
-                <a
-                  href={r.google_maps_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-semibold text-indigo-600 hover:underline"
-                >
-                  📍 Voir sur Maps
-                </a>
+              r.address || r.google_maps_url ? (
+                <div className="flex flex-col gap-0.5">
+                  {r.address && <span className="text-xs font-medium text-slate-700">{r.address}</span>}
+                  {r.google_maps_url && (
+                    <a
+                      href={r.google_maps_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-semibold text-indigo-600 hover:underline"
+                    >
+                      📍 Voir sur Maps
+                    </a>
+                  )}
+                </div>
               ) : r.latitude != null ? (
                 <span className="text-xs text-slate-500">{r.latitude}, {r.longitude}</span>
               ) : (
