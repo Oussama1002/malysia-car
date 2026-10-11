@@ -229,6 +229,27 @@ class PublicSiteController extends Controller
         ], null, null, 201);
     }
 
+    public function branches(): JsonResponse
+    {
+        $branches = Cache::remember('public_site.branches', 3600, function () {
+            return \App\Models\Branch::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (\App\Models\Branch $b) => [
+                    'id' => $b->id,
+                    'name' => $b->name,
+                    'city' => $b->city,
+                    'phone' => $b->phone,
+                    'email' => $b->email,
+                ])
+                ->values()
+                ->all();
+        });
+
+        return ApiResponse::success($branches);
+    }
+
     private function defaultCompanyId(): ?string
     {
         return Cache::remember(

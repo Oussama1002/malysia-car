@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Notre flotte — Malysia Car</title>
+<meta name="description" content="Toute notre flotte de véhicules de location disponibles à Casablanca et au Maroc." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap nav__inner">
+    <a class="brand" href="index.html">
+      <img class="brand__logo" src="assets/logo.png" alt="Malysia Car" width="52" height="52" />
+      <span class="brand__text">Malysia<strong>Car</strong></span>
+    </a>
+    <nav class="nav__links" id="navLinks">
+      <a href="index.html">Accueil</a>
+      <a href="index.html#flotte">Flotte</a>
+      <a href="index.html#services">Services</a>
+      <a href="index.html#agences">Agences</a>
+      <a href="index.html#reserver">Réserver</a>
+    </nav>
+    <a class="btn btn--sm navCta" href="index.html#reserver">Réserver</a>
+    <button class="nav__burger" id="burger" aria-label="Ouvrir le menu">&#9776;</button>
+  </div>
+</header>
+
+<main class="flottePage">
+  <div class="wrap">
+    <header class="sectionHead">
+      <span class="eyebrow eyebrow--gold">Notre flotte</span>
+      <h2 class="serif">Tous nos véhicules</h2>
+      <p class="sectionHead__sub">
+        Berlines, SUV premium, sportives, citadines : parcourez toute notre flotte et réservez en 2 minutes.
+      </p>
+    </header>
+
+    <div id="datesBar"></div>
+
+    <div class="flottePage__layout">
+      <aside class="flottePage__sidebar">
+        <h3>Filtres</h3>
+        <div class="filterGroup">
+          <span class="filterGroup__label">Recherche</span>
+          <input type="search" id="fSearch" placeholder="Marque, modèle..." autocomplete="off" />
+        </div>
+        <div class="filterGroup">
+          <span class="filterGroup__label">Catégorie</span>
+          <select id="fCategory">
+            <option value="">Toutes</option>
+            <option value="citadine">Citadine</option>
+            <option value="berline">Berline</option>
+            <option value="suv">SUV</option>
+            <option value="premium">Premium</option>
+            <option value="sportive">Sportive</option>
+          </select>
+        </div>
+        <div class="filterGroup">
+          <span class="filterGroup__label">Carburant</span>
+          <select id="fFuel">
+            <option value="">Tous</option>
+            <option value="essence">Essence</option>
+            <option value="diesel">Diesel</option>
+            <option value="hybrid">Hybride</option>
+            <option value="electric">Électrique</option>
+          </select>
+        </div>
+        <div class="filterGroup">
+          <span class="filterGroup__label">Transmission</span>
+          <select id="fTrans">
+            <option value="">Toutes</option>
+            <option value="automatic">Automatique</option>
+            <option value="manual">Manuelle</option>
+          </select>
+        </div>
+        <div class="filterGroup">
+          <span class="filterGroup__label">Prix max / jour</span>
+          <input type="number" id="fMaxPrice" placeholder="Ex: 800" min="0" />
+        </div>
+      </aside>
+
+      <div class="flottePage__results">
+        <p class="flottePage__count" id="fCount"></p>
+        <div class="flottePage__grid" id="fGrid">
+          <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__inner">
+    <div>
+      <a class="brand" href="index.html">
+        <img class="brand__logo" src="assets/logo.png" alt="Malysia Car" width="44" height="44" />
+        <span class="brand__text">Malysia<strong>Car</strong></span>
+      </a>
+      <p class="footer__about">
+        Location de voitures de luxe courte et longue durée au Maroc.
+      </p>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <p><a id="telLinkFooter" href="#">&mdash;</a></p>
+      <p><a id="mailLinkFooter" href="#">&mdash;</a></p>
+    </div>
+    <div>
+      <h4>Horaires</h4>
+      <p>Lundi — Samedi · 8h30 – 20h00</p>
+      <p>Assistance routière · 24/7</p>
+    </div>
+    <div>
+      <h4>Navigation</h4>
+      <p><a href="index.html">Accueil</a></p>
+      <p><a href="index.html#agences">Agences</a></p>
+      <p><a href="index.html#reserver">Réserver</a></p>
+    </div>
+  </div>
+  <div class="wrap footer__legal">
+    <span>&copy; <span id="year"></span> Malysia Car. Tous droits réservés.</span>
+  </div>
+</footer>
+
+<script src="assets/config.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var CFG = window.MALYSIA || {};
+  var API = (CFG.apiBase || '').replace(/\/$/, '');
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Year
+  var year = $('year');
+  if (year) year.textContent = new Date().getFullYear();
+
+  // Footer contacts
+  ['telLinkFooter'].forEach(function (id) {
+    var el = $(id);
+    if (el && CFG.phone) { el.textContent = CFG.phone; el.href = 'tel:' + CFG.phone.replace(/\s/g, ''); }
+  });
+  ['mailLinkFooter'].forEach(function (id) {
+    var el = $(id);
+    if (el && CFG.email) { el.textContent = CFG.email; el.href = 'mailto:' + CFG.email; }
+  });
+
+  // Mobile menu
+  var burger = $('burger');
+  var links = $('navLinks');
+  if (burger && links) {
+    burger.addEventListener('click', function () { links.classList.toggle('is-open'); });
+    links.addEventListener('click', function (e) { if (e.target.tagName === 'A') links.classList.remove('is-open'); });
+  }
+
+  // Read stored dates
+  var storedPickup = null, storedReturn = null;
+  try {
+    storedPickup = sessionStorage.getItem('mc_pickup');
+    storedReturn = sessionStorage.getItem('mc_return');
+  } catch (_) {}
+
+  // Show dates bar
+  if (storedPickup || storedReturn) {
+    var bar = $('datesBar');
+    if (bar) {
+      function fmtDate(iso) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+        return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
+      }
+      var parts = [];
+      if (storedPickup) parts.push('<strong>Départ :</strong> ' + fmtDate(storedPickup));
+      if (storedReturn) parts.push('<strong>Retour :</strong> ' + fmtDate(storedReturn));
+      bar.innerHTML = '<div class="flottePage__dates">' +
+        '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>' +
+        parts.join(' &nbsp;·&nbsp; ') +
+        '</div>';
+    }
+  }
+
+  // Read URL params for initial category
+  var urlParams = new URLSearchParams(window.location.search);
+  var initCat = urlParams.get('cat') || '';
+  try {
+    var sessCat = sessionStorage.getItem('mc_category');
+    if (!initCat && sessCat) initCat = sessCat;
+  } catch (_) {}
+  if (initCat) {
+    var catSelect = $('fCategory');
+    if (catSelect) catSelect.value = initCat;
+  }
+
+  var FUEL_FR = {
+    diesel: 'Diesel', gasoline: 'Essence', petrol: 'Essence', essence: 'Essence',
+    hybrid: 'Hybride', electric: 'Électrique', lpg: 'GPL'
+  };
+  var TRANS_FR = {
+    manual: 'Manuelle', automatic: 'Automatique',
+    semi_automatic: 'Semi-automatique', cvt: 'Automatique'
+  };
+
+  function labelMap(map, value) {
+    if (!value) return null;
+    return map[String(value).toLowerCase()] || value;
+  }
+
+  function inferCategory(v) {
+    var raw = ((v.categorie || v.category || '') + '').toLowerCase();
+    var model = ((v.model || '') + ' ' + (v.brand || '')).toLowerCase();
+    if (raw.indexOf('suv') >= 0 || /range|x5|q5|q7|cayenne|touareg|land/i.test(model)) return 'suv';
+    if (raw.indexOf('sport') >= 0 || /gt-r|911|m3|m5|supra|amg/i.test(model)) return 'sportive';
+    if (raw.indexOf('premium') >= 0 || raw.indexOf('luxe') >= 0 ||
+        /mercedes|bmw|audi|porsche|lexus|jaguar|maserati|tesla/i.test(model)) return 'premium';
+    if (raw.indexOf('berline') >= 0 || /class|accord|camry|a4|a6|serie/i.test(model)) return 'berline';
+    if (raw.indexOf('citadine') >= 0 || /clio|208|polo|yaris|picanto|i10|sandero/i.test(model)) return 'citadine';
+    return 'all';
+  }
+
+  function iconSvg(name) {
+    var paths = {
+      fuel: '<path d="M3 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 11h10"/><path d="M14 7l3 3v8a2 2 0 1 0 4 0V9l-3-3"/>',
+      gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      seat: '<path d="M4 18V9a3 3 0 0 1 3-3h2v8H4z"/><path d="M4 18h16"/><path d="M14 6h3a3 3 0 0 1 3 3v9h-6V6z"/>',
+    };
+    return '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || '') + '</svg>';
+  }
+
+  function vehicleCard(v) {
+    var name = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
+    var el = document.createElement('article');
+    el.className = 'car';
+
+    var media = document.createElement('div');
+    media.className = 'car__photo';
+    var badge = document.createElement('span');
+    badge.className = 'car__badge';
+    badge.textContent = v.categorie || (v.year ? 'Année ' + v.year : 'Nouveau');
+    media.appendChild(badge);
+
+    function fallbackLogo() {
+      media.querySelectorAll('img').forEach(function (n) { n.remove(); });
+      var logo = document.createElement('img');
+      logo.src = 'assets/logo.png';
+      logo.alt = 'Malysia Car';
+      logo.loading = 'lazy';
+      logo.style.objectFit = 'contain';
+      logo.style.padding = '28px';
+      logo.style.background = 'linear-gradient(135deg, #fbf5e4, #ece2c6)';
+      media.appendChild(logo);
+    }
+    if (v.photo_url) {
+      var img = document.createElement('img');
+      img.src = API.replace(/\/api$/, '') + v.photo_url;
+      img.alt = name;
+      img.loading = 'lazy';
+      img.onerror = fallbackLogo;
+      media.appendChild(img);
+    } else {
+      fallbackLogo();
+    }
+
+    var body = document.createElement('div');
+    body.className = 'car__body';
+
+    var title = document.createElement('h3');
+    title.className = 'car__name';
+    title.textContent = name;
+    body.appendChild(title);
+
+    var sub = document.createElement('p');
+    sub.className = 'car__sub';
+    sub.textContent = [v.year, v.color].filter(Boolean).join(' · ') || '';
+    body.appendChild(sub);
+
+    var specs = document.createElement('div');
+    specs.className = 'car__specs';
+    [
+      { icon: 'fuel', text: labelMap(FUEL_FR, v.fuel) },
+      { icon: 'gear', text: labelMap(TRANS_FR, v.transmission) },
+      { icon: 'seat', text: v.seats ? v.seats + ' places' : null }
+    ].filter(function (s) { return s.text; }).forEach(function (s) {
+      var sp = document.createElement('span');
+      sp.className = 'car__spec';
+      sp.innerHTML = iconSvg(s.icon) + '<span>' + s.text + '</span>';
+      specs.appendChild(sp);
+    });
+    if (specs.children.length) body.appendChild(specs);
+
+    var foot = document.createElement('div');
+    foot.className = 'car__footer';
+
+    var price = document.createElement('div');
+    price.className = 'car__price';
+    var dayPrice = v.price_per_day ? Number(v.price_per_day) : null;
+    var fromPrice = v.price_from_per_day ? Number(v.price_from_per_day) : null;
+    if (dayPrice && fromPrice && fromPrice < dayPrice) {
+      price.innerHTML =
+        '<span class="car__priceLabel">À partir de</span>' +
+        '<span class="car__priceValue">' + fromPrice.toLocaleString('fr-MA') + ' MAD</span>' +
+        '<span class="car__priceLabel">/ jour</span>';
+    } else if (dayPrice) {
+      price.innerHTML =
+        '<span class="car__priceValue">' + dayPrice.toLocaleString('fr-MA') + ' MAD</span>' +
+        '<span class="car__priceLabel">/ jour</span>';
+    } else {
+      price.innerHTML =
+        '<span class="car__priceValue">Sur devis</span>' +
+        '<span class="car__priceLabel">tarif personnalisé</span>';
+    }
+    foot.appendChild(price);
+
+    var pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'car__cta';
+    pick.textContent = 'Réserver →';
+    pick.addEventListener('click', function (e) {
+      e.stopPropagation();
+      // Navigate to index.html reservation form with vehicle pre-selected
+      try {
+        sessionStorage.setItem('mc_vehicle_id', v.id);
+        sessionStorage.setItem('mc_vehicle_name', name);
+      } catch (_) {}
+      window.location.href = 'index.html#reserver';
+    });
+    foot.appendChild(pick);
+
+    body.appendChild(foot);
+    el.appendChild(media);
+    el.appendChild(body);
+    return el;
+  }
+
+  var allVehicles = [];
+
+  function applyFilters() {
+    var grid = $('fGrid');
+    var count = $('fCount');
+    if (!grid) return;
+
+    var q = ($('fSearch').value || '').toLowerCase().trim();
+    var cat = ($('fCategory').value || '').toLowerCase();
+    var fuel = ($('fFuel').value || '').toLowerCase();
+    var trans = ($('fTrans').value || '').toLowerCase();
+    var maxPrice = parseFloat($('fMaxPrice').value) || 0;
+
+    var filtered = allVehicles.filter(function (v) {
+      if (q) {
+        var haystack = [v.brand, v.model, v.categorie, v.fuel, v.transmission].filter(Boolean).join(' ').toLowerCase();
+        if (haystack.indexOf(q) < 0) return false;
+      }
+      if (cat && inferCategory(v) !== cat) return false;
+      if (fuel) {
+        var vFuel = (v.fuel || '').toLowerCase();
+        if (fuel === 'essence' && vFuel !== 'essence' && vFuel !== 'gasoline' && vFuel !== 'petrol') return false;
+        if (fuel === 'diesel' && vFuel !== 'diesel') return false;
+        if (fuel === 'hybrid' && vFuel.indexOf('hybrid') < 0) return false;
+        if (fuel === 'electric' && vFuel.indexOf('electr') < 0) return false;
+      }
+      if (trans) {
+        var vTrans = (v.transmission || '').toLowerCase();
+        if (trans === 'automatic' && vTrans.indexOf('auto') < 0 && vTrans.indexOf('cvt') < 0) return false;
+        if (trans === 'manual' && vTrans.indexOf('manu') < 0) return false;
+      }
+      if (maxPrice > 0) {
+        var p = v.price_per_day ? Number(v.price_per_day) : 0;
+        if (!p || p > maxPrice) return false;
+      }
+      return true;
+    });
+
+    grid.innerHTML = '';
+    if (count) {
+      count.innerHTML = '<strong>' + filtered.length + '</strong> véhicule' + (filtered.length > 1 ? 's' : '') +
+        (filtered.length !== allVehicles.length ? ' sur ' + allVehicles.length : '');
+    }
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="flottePage__empty">Aucun véhicule ne correspond à vos critères.</div>';
+      return;
+    }
+
+    filtered.forEach(function (v) {
+      grid.appendChild(vehicleCard(v));
+    });
+  }
+
+  // Wire filters
+  ['fSearch', 'fCategory', 'fFuel', 'fTrans', 'fMaxPrice'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener('input', applyFilters);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+
+  // Load vehicles
+  if (API) {
+    fetch(API + '/v1/public/site/vehicles', { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (payload) {
+        allVehicles = (payload && payload.data) || [];
+        applyFilters();
+      })
+      .catch(function () {
+        var grid = $('fGrid');
+        if (grid) grid.innerHTML = '<div class="flottePage__empty">Impossible de charger la flotte. Réessayez ou appelez-nous.</div>';
+      });
+  }
+})();
+</script>
+</body>
+</html>

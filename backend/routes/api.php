@@ -115,6 +115,8 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:60,1');
     Route::post('public/site/reservation-requests', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'storeLead'])
         ->middleware('throttle:10,1');
+    Route::get('public/site/branches', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'branches'])
+        ->middleware('throttle:60,1');
 
     // Public auth endpoints
     Route::post('auth/login', [AuthController::class, 'login'])
