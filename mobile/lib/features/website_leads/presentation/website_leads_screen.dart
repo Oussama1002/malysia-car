@@ -94,9 +94,10 @@ class _WebsiteLeadsScreenState extends ConsumerState<WebsiteLeadsScreen> {
                 _TabsBar(
                   current: _tab,
                   pricingCount: ref
-                          .watch(missingPriceVehiclesProvider)
+                          .watch(vehiclePricingProvider)
                           .valueOrNull
-                          ?.length ??
+                          ?.vehicles
+                          .length ??
                       0,
                   onChanged: (t) => setState(() => _tab = t),
                 ),
@@ -148,12 +149,12 @@ class _WebsiteLeadsScreenState extends ConsumerState<WebsiteLeadsScreen> {
                   ),
                 ] else
                   _PricingTab(
-                    onSetPrice: (id, price) async {
+                    onSetPrice: (id, tiers) async {
                       try {
                         await ref
                             .read(websiteLeadsRepoProvider)
-                            .setPrice(id, price);
-                        ref.invalidate(missingPriceVehiclesProvider);
+                            .setPrice(id, tiers);
+                        ref.invalidate(vehiclePricingProvider);
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Tarif enregistré.')));
@@ -709,7 +710,7 @@ class _PrimaryAction extends StatelessWidget {
 }
 
 // ───────────────────────────────────────────────────────────
-// Onglets : Demandes · Véhicules à tarifer
+// Onglets : Demandes · Véhicules
 // ───────────────────────────────────────────────────────────
 
 class _TabsBar extends StatelessWidget {
@@ -785,7 +786,7 @@ class _TabsBar extends StatelessWidget {
       child: Row(
         children: [
           tab(_LeadsTab.leads, 'Demandes'),
-          tab(_LeadsTab.pricing, 'Véhicules à tarifer',
+          tab(_LeadsTab.pricing, 'Véhicules',
               badge: pricingCount,
               badgeColor: pricingCount > 0 ? const Color(0xFFF59E0B) : null),
         ],
@@ -796,39 +797,26 @@ class _TabsBar extends StatelessWidget {
 
 class _PricingTab extends ConsumerStatefulWidget {
   const _PricingTab({required this.onSetPrice});
-  final Future<void> Function(String id, double price) onSetPrice;
+  final Future<void> Function(String id, Map<String, double> tiers) onSetPrice;
 
   @override
   ConsumerState<_PricingTab> createState() => _PricingTabState();
 }
 
 class _PricingTabState extends ConsumerState<_PricingTab> {
-  final Map<String, TextEditingController> _controllers = {};
-  final Set<String> _submitting = {};
-
-  @override
-  void dispose() {
-    for (final c in _controllers.values) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  TextEditingController _controllerFor(String id) {
-    return _controllers.putIfAbsent(id, () => TextEditingController());
-  }
+  String _vSearch = '';
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(missingPriceVehiclesProvider);
+    final async = ref.watch(vehiclePricingProvider);
     return async.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (e, _) => ModuleErrorView(message: '$e'),
-      data: (vehicles) {
-        if (vehicles.isEmpty) {
+      data: (page) {
+        if (page.vehicles.isEmpty) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: Container(
@@ -838,71 +826,134 @@ class _PricingTabState extends ConsumerState<_PricingTab> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('✓ Tous les véhicules du site ont un tarif.',
-                      style: TextStyle(
-                          color: Color(0xFF065F46),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13.5)),
-                  SizedBox(height: 4),
-                  Text("Rien ne saute à l'œil du visiteur — aucune action à faire.",
-                      style: TextStyle(color: Color(0xFF065F46), fontSize: 12)),
-                ],
-              ),
+              child: const Text('Aucun véhicule sur le site.',
+                  style: TextStyle(color: Color(0xFF065F46), fontSize: 13)),
             ),
           );
         }
+
+        final q = _vSearch.toLowerCase().trim();
+        final filtered = q.isEmpty
+            ? page.vehicles
+            : page.vehicles.where((v) {
+                return [v.brand, v.model, v.registration, v.fuel, v.transmission, v.categorie, v.year?.toString()]
+                    .where((f) => f != null && f.isNotEmpty)
+                    .any((f) => f!.toLowerCase().contains(q));
+              }).toList();
+
         return Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.warning_amber_rounded,
-                        color: Color(0xFFB45309), size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${vehicles.length} véhicule${vehicles.length > 1 ? 's' : ''} apparaissent sur le site sans tarif.',
-                        style: const TextStyle(
-                            color: Color(0xFF78350F),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900),
+            // Warning / success banner
+            if (page.missingCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded,
+                          color: Color(0xFFB45309), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${page.missingCount} véhicule${page.missingCount > 1 ? 's' : ''} sans tarif journalier.',
+                              style: const TextStyle(
+                                  color: Color(0xFF78350F),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Les visiteurs voient « Tarif sur demande ». Cliquez sur Tarif pour configurer les prix.',
+                              style: TextStyle(
+                                  color: Color(0xFF78350F), fontSize: 10.5),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: const Text(
+                    '✓ Tous les véhicules du site ont un tarif.',
+                    style: TextStyle(
+                        color: Color(0xFF065F46),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13),
+                  ),
+                ),
+              ),
+
+            // Search bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: TextField(
+                onChanged: (v) => setState(() => _vSearch = v),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Rechercher un véhicule (marque, modèle, immatriculation)…',
+                  hintStyle: const TextStyle(fontSize: 12.5),
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surface,
                 ),
               ),
             ),
-            for (final v in vehicles)
+
+            if (filtered.isEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: _PricingRow(
-                  vehicle: v,
-                  controller: _controllerFor(v.id),
-                  submitting: _submitting.contains(v.id),
-                  onSubmit: () async {
-                    final n = double.tryParse(_controllerFor(v.id).text.trim());
-                    if (n == null || n <= 0) return;
-                    setState(() => _submitting.add(v.id));
-                    try {
-                      await widget.onSetPrice(v.id, n);
-                      _controllerFor(v.id).clear();
-                    } finally {
-                      if (mounted) setState(() => _submitting.remove(v.id));
-                    }
-                  },
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Container(
+                  padding: const EdgeInsets.all(40),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: Colors.grey.shade200,
+                        style: BorderStyle.solid),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Aucun véhicule ne correspond à « $_vSearch ».',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Colors.black45, fontSize: 13),
+                    ),
+                  ),
                 ),
-              ),
+              )
+            else
+              for (final v in filtered)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: _PricingRow(
+                    vehicle: v,
+                    tierSchema: page.tierSchema,
+                    onSetPrice: widget.onSetPrice,
+                  ),
+                ),
           ],
         );
       },
@@ -913,115 +964,257 @@ class _PricingTabState extends ConsumerState<_PricingTab> {
 class _PricingRow extends StatelessWidget {
   const _PricingRow({
     required this.vehicle,
-    required this.controller,
-    required this.submitting,
-    required this.onSubmit,
+    required this.tierSchema,
+    required this.onSetPrice,
   });
   final MissingPriceVehicle vehicle;
-  final TextEditingController controller;
-  final bool submitting;
-  final VoidCallback onSubmit;
+  final List<TierSchemaItem> tierSchema;
+  final Future<void> Function(String id, Map<String, double> tiers) onSetPrice;
 
   @override
   Widget build(BuildContext context) {
     final sub = [
+      vehicle.registration,
       vehicle.year?.toString(),
-      vehicle.categorie,
       vehicle.fuel,
       vehicle.transmission,
     ].where((e) => e != null && e!.isNotEmpty).join(' · ');
     final photo = vehicle.photoUrl(AppConfig.apiBaseUrl);
+    final hasPrice = vehicle.hasPricing;
+
     return ModuleCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 72,
-                height: 54,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFF1F5F9), Color(0xFFE2E8F0)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+      child: Container(
+        decoration: !hasPrice
+            ? BoxDecoration(
+                border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
+                borderRadius: BorderRadius.circular(14),
+              )
+            : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 72,
+                  height: 54,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFF1F5F9), Color(0xFFE2E8F0)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: photo != null
+                      ? Image.network(
+                          photo,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const _VehicleLogoFallback(),
+                        )
+                      : const _VehicleLogoFallback(),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(vehicle.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text(sub,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.black54, fontSize: 11.5)),
+                    ],
                   ),
                 ),
-                child: photo != null
-                    ? Image.network(
-                        photo,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const _VehicleLogoFallback(),
-                      )
-                    : const _VehicleLogoFallback(),
+              ],
+            ),
+
+            // Price badges
+            if (vehicle.hasTiers) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final tier in tierSchema)
+                    if (vehicle.rentalPriceTiers!.containsKey(tier.key))
+                      _PriceBadge(
+                        label: tier.label,
+                        price: vehicle.rentalPriceTiers![tier.key]!,
+                      ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(vehicle.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w900, fontSize: 14)),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        if (vehicle.registration != null) vehicle.registration!,
-                        if (sub.isNotEmpty) sub,
-                      ].join(' · '),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: Colors.black54, fontSize: 11.5),
-                    ),
-                  ],
-                ),
+            ] else if (vehicle.hasDailyPrice) ...[
+              const SizedBox(height: 8),
+              _PriceBadge(
+                label: 'Jour',
+                price: vehicle.dailyRentalPrice!,
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: 'Tarif MAD / jour',
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
+
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: hasPrice
+                  ? OutlinedButton.icon(
+                      onPressed: () => _openTierDialog(context),
+                      icon: const Icon(Icons.edit, size: 14),
+                      label: const Text('Modifier'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF4F46E5),
+                        side: const BorderSide(color: Color(0xFFE0E7FF)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    )
+                  : FilledButton.icon(
+                      onPressed: () => _openTierDialog(context),
+                      icon: const Icon(Icons.attach_money, size: 14),
+                      label: const Text('Tarif'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openTierDialog(BuildContext context) {
+    final controllers = <String, TextEditingController>{};
+    for (final tier in tierSchema) {
+      final existing = vehicle.rentalPriceTiers?[tier.key];
+      controllers[tier.key] = TextEditingController(
+        text: existing != null ? existing.toStringAsFixed(0) : '',
+      );
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(vehicle.label,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 16)),
+            if (vehicle.registration != null)
+              Text(vehicle.registration!,
+                  style: const TextStyle(
+                      color: Colors.black54, fontSize: 13)),
+            const SizedBox(height: 16),
+            for (final tier in tierSchema) ...[
+              Text(tier.label,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 12)),
+              const SizedBox(height: 4),
+              TextField(
+                controller: controllers[tier.key],
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'MAD / jour',
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: submitting ? null : onSubmit,
+              const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  final tiers = <String, double>{};
+                  for (final tier in tierSchema) {
+                    final v = double.tryParse(
+                        controllers[tier.key]!.text.trim());
+                    if (v != null && v > 0) tiers[tier.key] = v;
+                  }
+                  if (tiers.isEmpty || !tiers.containsKey('tier_1_2')) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                              Text('Le palier 1-2 jours est obligatoire.')),
+                    );
+                    return;
+                  }
+                  Navigator.of(ctx).pop();
+                  onSetPrice(vehicle.id, tiers);
+                },
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF4F46E5),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                   textStyle: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 12),
+                      fontWeight: FontWeight.w900, fontSize: 13),
                 ),
-                child: Text(submitting ? '…' : 'Enregistrer'),
+                child: const Text('Enregistrer'),
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Clean up controllers when dialog dismissed
+  }
+}
+
+class _PriceBadge extends StatelessWidget {
+  const _PriceBadge({required this.label, required this.price});
+  final String label;
+  final double price;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF2FF),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$label : ${price.toStringAsFixed(0)} MAD',
+        style: const TextStyle(
+          color: Color(0xFF4338CA),
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
