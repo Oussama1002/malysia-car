@@ -40,17 +40,19 @@ class WebsiteLeadController extends Controller
 
     public function missingPrices(): JsonResponse
     {
-        $rows = Vehicle::query()
+        $all = Vehicle::query()
             ->withoutGlobalScopes()
             ->with(['brand', 'model'])
             ->whereNull('deleted_at')
             ->whereIn('status', ['AVAILABLE', 'RENTED', 'RESERVED'])
-            ->orderBy('daily_rental_price')
-            ->limit(24)
-            ->get()
-            ->filter(fn (Vehicle $v) => $v->daily_rental_price === null
-                || (float) $v->daily_rental_price <= 0)
-            ->map(fn (Vehicle $v) => [
+            ->orderByRaw('daily_rental_price IS NOT NULL, daily_rental_price')
+            ->limit(50)
+            ->get();
+
+        $missingCount = $all->filter(fn (Vehicle $v) => $v->daily_rental_price === null
+            || (float) $v->daily_rental_price <= 0)->count();
+
+        $rows = $all->map(fn (Vehicle $v) => [
                 'id' => $v->id,
                 'brand' => $v->brand?->name ?? $v->brand_name,
                 'model' => $v->model?->model_name ?? $v->model?->name ?? $v->model_name,
@@ -60,6 +62,7 @@ class WebsiteLeadController extends Controller
                 'transmission' => $v->transmission,
                 'categorie' => $v->categorie,
                 'photo_url' => $v->photo_file_id ? '/api/v1/files/'.$v->photo_file_id : null,
+                'daily_rental_price' => $v->daily_rental_price !== null ? (float) $v->daily_rental_price : null,
                 'rental_price_tiers' => $v->rental_price_tiers ?? [],
             ])
             ->values()
@@ -67,6 +70,7 @@ class WebsiteLeadController extends Controller
 
         return ApiResponse::success($rows, [
             'total' => count($rows),
+            'missing_count' => $missingCount,
             'tier_schema' => array_map(
                 fn ($k, $v) => ['key' => $k, 'min_days' => $v['min_days'], 'max_days' => $v['max_days'], 'label' => $v['label']],
                 array_keys(Vehicle::RENTAL_PRICE_TIERS),
