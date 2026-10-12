@@ -16,6 +16,14 @@ class CompanySettingsController extends Controller
         $companyId = optional($request->user())->company_id;
         $settings = CompanySetting::getAll($group, $companyId);
 
+        // Ne jamais renvoyer le mot de passe SMTP en clair : on expose
+        // seulement un indicateur « déjà renseigné ».
+        if ($group === 'integrations') {
+            $hasPwd = ! empty($settings['smtp_password']);
+            $settings['smtp_password'] = '';
+            $settings['smtp_password_set'] = $hasPwd ? '1' : '0';
+        }
+
         return ApiResponse::success(['group' => $group, 'settings' => $settings]);
     }
 
@@ -29,6 +37,14 @@ class CompanySettingsController extends Controller
 
         $settings = $data['settings'] ?? [];
         $input = collect($settings)->only($allowed)->map(fn ($v) => $v === null ? null : (string) $v)->toArray();
+
+        // Mot de passe SMTP : on ne l'écrase que si une nouvelle valeur est
+        // fournie (l'UI envoie vide quand l'admin ne change pas le secret).
+        if ($group === 'integrations' &&
+            (! isset($input['smtp_password']) || trim((string) $input['smtp_password']) === '')) {
+            unset($input['smtp_password']);
+        }
+
         $companyId = optional($request->user())->company_id;
 
         $before = CompanySetting::getAll($group, $companyId);
