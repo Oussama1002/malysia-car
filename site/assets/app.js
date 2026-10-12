@@ -317,15 +317,54 @@
     var modal = ensureVehicleDetailModal();
     var name = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
 
-    // Hero (photo ou dégradé fallback).
+    // Hero : catalogue d'images du véhicule. S'il n'y a aucune image,
+    // on affiche le logo. Supporte un tableau `v.photos` (galerie) et
+    // retombe sur `v.photo_url` (photo principale) sinon.
     var hero = $('vehDetailHero');
-    hero.querySelectorAll('img').forEach(function (n) { n.remove(); });
-    if (v.photo_url) {
-      var img = document.createElement('img');
-      img.src = API.replace(/\/api$/, '') + v.photo_url;
-      img.alt = name;
-      img.onerror = function () { img.remove(); };
-      hero.insertBefore(img, hero.firstChild);
+    hero.querySelectorAll('img, .vehDetail__gallery').forEach(function (n) { n.remove(); });
+
+    var base = API.replace(/\/api$/, '');
+    var photos = (Array.isArray(v.photos) && v.photos.length
+      ? v.photos
+      : (v.photo_url ? [v.photo_url] : []))
+      .filter(Boolean)
+      .map(function (p) { return /^https?:/i.test(p) ? p : base + p; });
+
+    function showHeroLogo() {
+      if (hero.querySelector('.vehDetail__logoFallback')) return;
+      var logo = document.createElement('img');
+      logo.className = 'vehDetail__logoFallback';
+      logo.src = 'assets/logo.png';
+      logo.alt = 'Malysia Car';
+      hero.insertBefore(logo, hero.firstChild);
+    }
+
+    if (photos.length) {
+      var main = document.createElement('img');
+      main.src = photos[0];
+      main.alt = name;
+      main.onerror = function () { main.remove(); showHeroLogo(); };
+      hero.insertBefore(main, hero.firstChild);
+
+      if (photos.length > 1) {
+        var strip = document.createElement('div');
+        strip.className = 'vehDetail__gallery';
+        photos.forEach(function (src, i) {
+          var thumb = document.createElement('img');
+          thumb.src = src;
+          thumb.alt = name + ' — ' + (i + 1);
+          if (i === 0) thumb.className = 'is-active';
+          thumb.addEventListener('click', function () {
+            main.src = src;
+            strip.querySelectorAll('img').forEach(function (x) { x.classList.remove('is-active'); });
+            thumb.classList.add('is-active');
+          });
+          strip.appendChild(thumb);
+        });
+        hero.appendChild(strip);
+      }
+    } else {
+      showHeroLogo();
     }
 
     // Prix affiché « À partir de X » si un palier existe, sinon prix /j.
