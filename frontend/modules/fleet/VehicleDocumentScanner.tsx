@@ -88,17 +88,15 @@ export const VehicleDocumentScanner: React.FC<{
         mapFields={mapVignette}
         onDocumentUploaded={(id) => onDocumentUploaded?.('vignette', id)}
       />
-      {carteGriseRecue && (
-        <div ref={carteGriseRef}>
-          <ScanSlot
-            title="Carte Grise"
-            description="Marque, modèle, châssis, carburant, puissance, fin validité"
-            onPrefill={onPrefill}
-            mapFields={mapCarteGrise}
-            onDocumentUploaded={(id) => onDocumentUploaded?.('registration_card', id)}
-          />
-        </div>
-      )}
+      <div ref={carteGriseRef}>
+        <ScanSlot
+          title="Carte Grise"
+          description="Marque, modèle, châssis, carburant, puissance, fin validité"
+          onPrefill={onPrefill}
+          mapFields={mapCarteGrise}
+          onDocumentUploaded={(id) => onDocumentUploaded?.('registration_card', id)}
+        />
+      </div>
     </div>
   </div>
 );
