@@ -45,8 +45,6 @@
 <main class="flottePage">
   <div class="wrap">
 
-    <div id="datesBar"></div>
-
     <div class="flottePage__layout">
       <aside class="flottePage__sidebar">
         <h3>Filtres</h3>
@@ -163,30 +161,13 @@
     links.addEventListener('click', function (e) { if (e.target.tagName === 'A') links.classList.remove('is-open'); });
   }
 
-  // Read stored dates
-  var storedPickup = null, storedReturn = null;
+  // Barre de dates retirée : la fonctionnalité n'est pas câblée (aucune date
+  // n'est stockée depuis la recherche), elle n'affichait que des valeurs
+  // résiduelles. On purge d'éventuelles clés obsolètes du navigateur.
   try {
-    storedPickup = sessionStorage.getItem('mc_pickup');
-    storedReturn = sessionStorage.getItem('mc_return');
+    sessionStorage.removeItem('mc_pickup');
+    sessionStorage.removeItem('mc_return');
   } catch (_) {}
-
-  // Show dates bar
-  if (storedPickup || storedReturn) {
-    var bar = $('datesBar');
-    if (bar) {
-      function fmtDate(iso) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-        return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
-      }
-      var parts = [];
-      if (storedPickup) parts.push('<strong>Départ :</strong> ' + fmtDate(storedPickup));
-      if (storedReturn) parts.push('<strong>Retour :</strong> ' + fmtDate(storedReturn));
-      bar.innerHTML = '<div class="flottePage__dates">' +
-        '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>' +
-        parts.join(' &nbsp;·&nbsp; ') +
-        '</div>';
-    }
-  }
 
   // Read URL params for initial category
   var urlParams = new URLSearchParams(window.location.search);
