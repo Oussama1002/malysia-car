@@ -1274,6 +1274,12 @@ const VehiclesList: React.FC = () => {
               <VehicleDocumentScanner
                 carteGriseRecue={formData.carteGriseStatus === 'recue'}
                 carteGriseRef={carteGriseRef}
+                onDocumentUploaded={(slot) => {
+                  // Uploader la carte grise => statut « Reçue » automatiquement.
+                  if (slot === 'registration_card') {
+                    setFormData(fd => ({ ...fd, carteGriseStatus: 'recue' }));
+                  }
+                }}
                 onPrefill={(data) => setFormData(fd => {
                   const plate = data.registration ? parsePlate(data.registration.replace(/\s+/g, '').toUpperCase()) : null;
                   // Match OCR brand/model text against the DB dropdown lists

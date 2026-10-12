@@ -425,6 +425,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           if (mec != null && _miseEnCirculation == null) {
             _miseEnCirculation = DateTime.tryParse(mec);
           }
+          // La carte grise a été uploadée → statut « Reçue » automatiquement.
+          _carteGriseStatus = _CarteGriseStatus.recue;
           break;
       }
       _scanNotice =
