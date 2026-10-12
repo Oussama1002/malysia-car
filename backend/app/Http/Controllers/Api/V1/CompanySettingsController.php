@@ -127,7 +127,16 @@ class CompanySettingsController extends Controller
                 new \App\Mail\TestEmailMail((string) $to),
             );
         } catch (\Throwable $e) {
-            return ApiResponse::message(\App\Services\CompanyMailer::translateError($e), 422);
+            \Illuminate\Support\Facades\Log::warning('smtp test failed', ['error' => $e->getMessage()]);
+            // L'endpoint est réservé aux admins : on renvoie l'erreur SMTP
+            // brute (tronquée) en plus du message traduit pour diagnostiquer.
+            $raw = trim($e->getMessage());
+            if (mb_strlen($raw) > 300) {
+                $raw = mb_substr($raw, 0, 300).'…';
+            }
+            $msg = \App\Services\CompanyMailer::translateError($e).' — '.$raw;
+
+            return ApiResponse::message($msg, 422);
         }
 
         return ApiResponse::success(['message' => "Email de test envoyé à {$to}."]);
