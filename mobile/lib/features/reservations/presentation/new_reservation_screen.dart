@@ -119,22 +119,46 @@ class _NewReservationScreenState
     final seed = widget.fromLead;
     if (seed != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        CustomerDto? matched;
         try {
           final digits = seed.phone.replaceAll(RegExp(r'\D'), '');
           if (digits.length >= 6) {
             final tailLen = digits.length < 8 ? digits.length : 8;
             final tail = digits.substring(digits.length - tailLen);
             final list = await ref.read(customersRepoProvider).list();
-            CustomerDto? match;
             for (final c in list) {
               final p = (c.phone ?? '').replaceAll(RegExp(r'\D'), '');
-              if (p.isNotEmpty && p.endsWith(tail)) { match = c; break; }
+              if (p.isNotEmpty && p.endsWith(tail)) { matched = c; break; }
             }
-            if (match != null && mounted && _customer == null) {
-              setState(() => _customer = match);
+            if (matched != null && mounted && _customer == null) {
+              setState(() => _customer = matched);
             }
           }
         } catch (_) { /* best-effort : l'agent peut toujours choisir à la main */ }
+
+        // Pas de client existant : on l'ajoute automatiquement à la table
+        // clients avec son nom et son téléphone (et email si fourni), puis
+        // on l'affiche dans le champ Client — c'est l'attente du client.
+        if (matched == null && mounted && _customer == null) {
+          try {
+            final body = <String, dynamic>{
+              'customer_type': 'PARTICULIER',
+              'source_channel': 'website_lead',
+              'individual_profile': {
+                'first_name': seed.firstName.isEmpty ? '—' : seed.firstName,
+                'last_name': seed.lastName.isEmpty ? seed.firstName : seed.lastName,
+              },
+              'contacts': [
+                {'contact_type': 'mobile', 'value': seed.phone, 'is_primary': true},
+                if (seed.email != null && seed.email!.isNotEmpty)
+                  {'contact_type': 'email', 'value': seed.email, 'is_primary': true},
+              ],
+            };
+            final created = await ref.read(customersRepoProvider).create(body: body);
+            ref.invalidate(customersListProvider);
+            if (mounted) setState(() => _customer = created);
+          } catch (_) { /* non-bloquant : l'agent peut cliquer « + Nouveau » */ }
+        }
 
         final hint = seed.vehicleLabel;
         if (hint != null && hint.trim().isNotEmpty && widget.initialVehicleId == null) {

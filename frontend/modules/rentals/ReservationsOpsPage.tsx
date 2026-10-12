@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, endpoints, getApiBase, apiClient } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
@@ -16,6 +16,29 @@ import { createCustomer, type CustomerCreatePayload } from '@/services/customers
 import { listBranches, getSettings } from '@/services/adminApi';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { MissionCreationDrawer } from '@/modules/rentals/MissionCreationDrawer';
+import type { FromLeadNavState } from '@/modules/rentals/WebsiteLeadsPage';
+
+/** Convertit un ISO date vers le format attendu par `<input type="datetime-local">`. */
+function isoToLocalInput(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => (n < 10 ? '0' + n : String(n));
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Décompose un `full_name` en prénom / nom pour le profil Particulier. */
+function splitFullName(full: string): { first: string; last: string } {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: '—', last: '—' };
+  if (parts.length === 1) return { first: parts[0], last: parts[0] };
+  return { first: parts[0], last: parts.slice(1).join(' ') };
+}
+
+/** Normalise un numéro de téléphone pour comparaison (chiffres uniquement). */
+function digitsOf(v: string | null | undefined): string {
+  return (v ?? '').replace(/\D/g, '');
+}
 
 const RENTAL_REASON_LABELS: Record<string, string> = {
   vehicle_not_found: 'Véhicule introuvable.',
@@ -60,7 +83,13 @@ const STATUS_FR: Record<string, string> = {
 
 export const ReservationsOpsPage: React.FC = () => {
   const nav = useNavigate();
+  const location = useLocation();
   const qc = useQueryClient();
+  // Lead à marquer `converted` après création réussie — alimenté quand on
+  // arrive depuis la page « Demandes du site ».
+  const [convertingLeadId, setConvertingLeadId] = useState<string | null>(null);
+  const [leadBanner, setLeadBanner] = useState<FromLeadNavState | null>(null);
+  const leadConsumedRef = useRef(false);
   const [q, setQ] = useState('');
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
   const [pickupForm, setPickupForm] = useState({ odometer: '', fuel_level: '', condition_notes: '', signature: '' });
@@ -247,6 +276,21 @@ export const ReservationsOpsPage: React.FC = () => {
       await qc.invalidateQueries({ queryKey: queryKeys.reservations });
       setForm((s) => ({ ...s, desired_start_at: '', desired_end_at: '' }));
       setNewResOpen(false);
+      // Si la création a été ouverte depuis une « Demande du site », on marque
+      // la demande comme traitée. Non-bloquant : la réservation est bien
+      // créée même si cette PATCH échoue.
+      if (convertingLeadId) {
+        const leadId = convertingLeadId;
+        setConvertingLeadId(null);
+        setLeadBanner(null);
+        try {
+          await apiClient(`/v1/website-leads/${leadId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'converted' }),
+          });
+          await qc.invalidateQueries({ queryKey: ['website-leads'] });
+        } catch { /* non-bloquant */ }
+      }
     },
     onError: (e: unknown) => {
       if (e instanceof ApiError && e.body && typeof e.body === 'object') {
@@ -385,6 +429,101 @@ export const ReservationsOpsPage: React.FC = () => {
       })),
     [vehiclesQ.data]
   );
+
+  // ── Pré-remplissage depuis une « Demande du site » ─────────────────────
+  // La page `WebsiteLeadsPage` navigue ici avec `location.state.fromLead`.
+  // On ouvre la modale « Nouvelle réservation » avec Véhicule / Début / Fin
+  // / Tarif pré-remplis et on ajoute le visiteur à la table clients.
+  useEffect(() => {
+    const state = location.state as { fromLead?: FromLeadNavState } | null;
+    const lead = state?.fromLead;
+    if (!lead || leadConsumedRef.current) return;
+    // On attend que clients + véhicules soient chargés pour pouvoir matcher.
+    if (customersQ.isLoading || vehiclesQ.isLoading) return;
+    leadConsumedRef.current = true;
+
+    setLeadBanner(lead);
+    setConvertingLeadId(lead.id);
+    setNewResOpen(true);
+
+    const startInput = isoToLocalInput(lead.pickup_at);
+    const endInput = isoToLocalInput(lead.return_at);
+
+    // 1) Véhicule : match "best-score" sur mots de ≥3 caractères.
+    let matchedVehicleId = '';
+    let matchedPrice = '';
+    const hint = (lead.vehicle_label ?? '').trim();
+    if (hint) {
+      const words = hint
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length >= 3);
+      let bestScore = 0;
+      let best: FleetVehicleDto | null = null;
+      for (const v of vehiclesQ.data ?? []) {
+        const hay = `${v.brand ?? ''} ${v.model ?? ''} ${v.registration ?? ''}`.toLowerCase();
+        const score = words.reduce((s, w) => s + (hay.includes(w) ? 1 : 0), 0);
+        if (score > bestScore) { bestScore = score; best = v; }
+      }
+      if (best) {
+        matchedVehicleId = String(best.id);
+        if (best.pricePerDay && best.pricePerDay > 0) {
+          matchedPrice = String(best.pricePerDay);
+        }
+      }
+    }
+
+    setForm((s) => ({
+      ...s,
+      desired_start_at: startInput || s.desired_start_at,
+      desired_end_at: endInput || s.desired_end_at,
+      vehicle_id: matchedVehicleId || s.vehicle_id,
+      daily_rate: matchedPrice || s.daily_rate,
+    }));
+
+    // 2) Client : match par les 8 derniers chiffres du téléphone, sinon on
+    //    crée un nouveau Particulier avec nom + téléphone + email éventuel,
+    //    puis on le présélectionne dans le formulaire.
+    (async () => {
+      const leadDigits = digitsOf(lead.phone);
+      if (leadDigits.length >= 6) {
+        const tail = leadDigits.slice(-Math.min(8, leadDigits.length));
+        const match = (customersQ.data ?? []).find((raw) => {
+          const c = raw as unknown as { contacts?: Array<{ contact_type?: string; value?: string }> };
+          return (c.contacts ?? []).some((ct) => {
+            const d = digitsOf(ct.value);
+            return d.length > 0 && d.endsWith(tail);
+          });
+        });
+        if (match) {
+          setForm((s) => ({ ...s, customer_id: String((match as unknown as { id: string | number }).id) }));
+          // Nettoie l'état de navigation pour ne pas re-déclencher au refresh.
+          nav(location.pathname, { replace: true });
+          return;
+        }
+      }
+
+      try {
+        const { first, last } = splitFullName(lead.full_name);
+        const payload: CustomerCreatePayload = {
+          customer_type: 'PARTICULIER',
+          source_channel: 'website_lead',
+          individual_profile: { first_name: first, last_name: last },
+          contacts: [
+            { contact_type: 'mobile', value: lead.phone, is_primary: true },
+            ...(lead.email ? [{ contact_type: 'email' as const, value: lead.email, is_primary: true }] : []),
+          ],
+        };
+        const res = await createCustomer(payload);
+        await qc.invalidateQueries({ queryKey: queryKeys.customers.all });
+        setForm((s) => ({ ...s, customer_id: String(res.data.id) }));
+      } catch (e) {
+        setCreateError(e instanceof Error ? e.message : 'Création du client impossible — sélectionnez-le manuellement.');
+      } finally {
+        nav(location.pathname, { replace: true });
+      }
+    })();
+  }, [location, customersQ.isLoading, customersQ.data, vehiclesQ.isLoading, vehiclesQ.data, nav, qc]);
 
   const rows = useMemo(() => {
     const data = (reservationsQ.data ?? []) as ReservationDto[];
@@ -648,8 +787,24 @@ export const ReservationsOpsPage: React.FC = () => {
       />
 
       {/* Nouvelle réservation modal */}
-      <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => setNewResOpen(false)} widthClass="max-w-2xl">
+      <Modal open={newResOpen} title="Nouvelle réservation" onClose={() => { setNewResOpen(false); setLeadBanner(null); setConvertingLeadId(null); }} widthClass="max-w-2xl">
         <div className="space-y-4">
+          {leadBanner && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm">
+              <div className="text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                Demande du site
+              </div>
+              <div className="mt-1 font-black text-slate-900">{leadBanner.full_name}</div>
+              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-600">
+                <a className="font-bold text-indigo-700" href={`tel:${leadBanner.phone}`}>{leadBanner.phone}</a>
+                {leadBanner.email && <a className="text-slate-500" href={`mailto:${leadBanner.email}`}>{leadBanner.email}</a>}
+                {leadBanner.vehicle_label && <span className="text-slate-500">Souhait : {leadBanner.vehicle_label}</span>}
+              </div>
+              <div className="mt-1.5 text-[11px] text-indigo-900/80">
+                Client ajouté à la fiche clients. Vérifiez le véhicule et les dates pré-remplis, puis créez la réservation — la demande sera marquée « traitée ».
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500">
@@ -835,7 +990,7 @@ export const ReservationsOpsPage: React.FC = () => {
           </div>
           {createError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{createError}</div>}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => setNewResOpen(false)}>Annuler</button>
+            <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-black text-slate-600 hover:bg-slate-50" onClick={() => { setNewResOpen(false); setLeadBanner(null); setConvertingLeadId(null); }}>Annuler</button>
             <button
               type="button"
               className={`inline-flex items-center justify-center rounded-2xl px-5 py-2.5 text-sm font-black text-white shadow-lg disabled:opacity-50 ${form.is_draft ? 'bg-amber-600 shadow-amber-100 hover:bg-amber-700' : 'bg-indigo-600 shadow-indigo-100 hover:bg-indigo-700'}`}
