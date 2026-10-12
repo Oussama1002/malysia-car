@@ -427,8 +427,18 @@ class DocumentParser
             }
         }
 
-        // --- Model: brand-specific models first, then generic fallback ---
+        // --- Model: match the user's real catalogue first (so any brand /
+        // model they created is detected — ex. Cupra Formentor — not only the
+        // built-in list below), then fall back to the hard-coded strategies. ---
         $model = null;
+        [$catBrand, $catModel] = $this->matchVehicleCatalog($flatUpper);
+        if ($catModel) {
+            $model = $catModel;
+        }
+        if ($catBrand && ! $brand) {
+            $brand = $catBrand;
+        }
+
         $brandModels = [
             'RENAULT' => ['CLIO', 'MEGANE', 'SCENIC', 'KANGOO', 'CAPTUR', 'KADJAR', 'KOLEOS', 'TALISMAN', 'TWINGO', 'ZOE', 'MASTER', 'TRAFIC', 'EXPRESS', 'ARKANA'],
             'DACIA'   => ['SANDERO', 'DUSTER', 'LOGAN', 'SPRING', 'JOGGER', 'STEPWAY'],
@@ -653,6 +663,71 @@ class DocumentParser
         Log::info('DocumentParser.parseCarteGrise', $result);
         Log::info('DocumentParser.parseCarteGrise.rawText', ['text' => mb_substr($text, 0, 2000)]);
         return $result;
+    }
+
+    /** @var array<string,mixed>|null */
+    private ?array $vehicleCatalog = null;
+
+    /**
+     * Cherche une marque / un modèle du catalogue réel (tables
+     * vehicle_brands / vehicle_models) dans le texte OCR — pour détecter
+     * n'importe quel modèle saisi par l'utilisateur, pas seulement la liste
+     * codée en dur.
+     *
+     * @return array{0:?string,1:?string} [marque, modèle] tels qu'en base.
+     */
+    private function matchVehicleCatalog(string $flatUpper): array
+    {
+        if ($this->vehicleCatalog === null) {
+            try {
+                $brands = \Illuminate\Support\Facades\DB::table('vehicle_brands')
+                    ->pluck('name', 'id');
+                $models = \Illuminate\Support\Facades\DB::table('vehicle_models')
+                    ->select('name', 'brand_id')->get();
+                $this->vehicleCatalog = ['brands' => $brands, 'models' => $models];
+            } catch (\Throwable) {
+                $this->vehicleCatalog = ['brands' => collect(), 'models' => collect()];
+            }
+        }
+        $brands = $this->vehicleCatalog['brands'];
+        $models = $this->vehicleCatalog['models'];
+
+        $foundModel = null;
+        $foundBrand = null;
+        $foundBrandId = null;
+
+        // Modèle d'abord (plus discriminant). On privilégie le libellé le plus
+        // long qui apparaît dans le texte pour éviter les faux positifs courts.
+        $bestLen = 0;
+        foreach ($models as $m) {
+            $name = trim((string) $m->name);
+            if (mb_strlen($name) < 3) {
+                continue;
+            }
+            if (str_contains($flatUpper, mb_strtoupper($name)) && mb_strlen($name) > $bestLen) {
+                $foundModel = $name;
+                $foundBrandId = $m->brand_id;
+                $bestLen = mb_strlen($name);
+            }
+        }
+        if ($foundBrandId !== null && isset($brands[$foundBrandId])) {
+            $foundBrand = (string) $brands[$foundBrandId];
+        }
+        if ($foundBrand === null) {
+            $bestLen = 0;
+            foreach ($brands as $name) {
+                $bn = trim((string) $name);
+                if (mb_strlen($bn) < 3) {
+                    continue;
+                }
+                if (str_contains($flatUpper, mb_strtoupper($bn)) && mb_strlen($bn) > $bestLen) {
+                    $foundBrand = $bn;
+                    $bestLen = mb_strlen($bn);
+                }
+            }
+        }
+
+        return [$foundBrand, $foundModel];
     }
 
     /** @return array<string, mixed> */
