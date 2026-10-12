@@ -969,9 +969,18 @@ export const ReservationsOpsPage: React.FC = () => {
                 </div>
               );
             })()}
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup (optionnel)" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison (optionnel)" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
-            <input className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Tarif / jour (MAD)" value={form.daily_rate} onChange={(e) => setForm((s) => ({ ...s, daily_rate: e.target.value }))} />
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Adresse pickup (optionnel)</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse pickup" value={form.pickup_address} onChange={(e) => setForm((s) => ({ ...s, pickup_address: e.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Adresse livraison (optionnel)</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Adresse livraison" value={form.delivery_address} onChange={(e) => setForm((s) => ({ ...s, delivery_address: e.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-500">Tarif / jour (MAD)</label>
+              <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" placeholder="Tarif / jour" value={form.daily_rate} onChange={(e) => setForm((s) => ({ ...s, daily_rate: e.target.value }))} />
+            </div>
             {(() => {
               const rate = parseFloat(form.daily_rate);
               const start = form.desired_start_at ? new Date(form.desired_start_at).getTime() : NaN;
