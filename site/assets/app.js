@@ -516,6 +516,77 @@
     });
   }
 
+  function loadBranches() {
+    var list = $('agenciesList');
+    var frame = $('agencyMapFrame');
+    if (!list || !API) return;
+
+    fetch(API + '/v1/public/site/branches')
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var branches = res.data || res;
+        if (!branches.length) return;
+
+        var loading = $('agenciesLoading');
+        if (loading) loading.remove();
+
+        branches.forEach(function (b, i) {
+          var lat = parseFloat(b.latitude);
+          var lng = parseFloat(b.longitude);
+          var art = document.createElement('article');
+          art.className = 'agency' + (i === 0 ? ' agency--active' : '');
+          if (!isNaN(lat)) art.dataset.lat = lat;
+          if (!isNaN(lng)) art.dataset.lng = lng;
+
+          var h3 = document.createElement('h3');
+          h3.textContent = b.name || 'Agence';
+          art.appendChild(h3);
+
+          var p = document.createElement('p');
+          var parts = [];
+          if (b.address) parts.push(b.address);
+          if (b.city) parts.push(b.city);
+          p.innerHTML = parts.join('<br/>') || '';
+          art.appendChild(p);
+
+          var info = [];
+          if (b.phone) info.push(b.phone);
+          if (b.email) info.push(b.email);
+          if (info.length) {
+            var sm = document.createElement('small');
+            sm.textContent = info.join(' · ');
+            art.appendChild(sm);
+          }
+
+          if (b.google_maps_url) {
+            var link = document.createElement('a');
+            link.href = b.google_maps_url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = 'Voir sur Google Maps ↗';
+            link.style.cssText = 'display:block;margin-top:6px;font-size:12px;color:#b8860b;font-weight:600;';
+            art.appendChild(link);
+          }
+
+          list.appendChild(art);
+        });
+
+        var first = branches[0];
+        var fLat = parseFloat(first.latitude);
+        var fLng = parseFloat(first.longitude);
+        if (frame && !isNaN(fLat) && !isNaN(fLng)) {
+          var dLat = 0.08, dLng = 0.15;
+          var bbox = (fLng - dLng) + ',' + (fLat - dLat) + ',' + (fLng + dLng) + ',' + (fLat + dLat);
+          frame.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox +
+            '&layer=mapnik&marker=' + fLat + ',' + fLng;
+        }
+      })
+      .catch(function () {
+        var loading = $('agenciesLoading');
+        if (loading) loading.textContent = 'Impossible de charger les agences.';
+      });
+  }
+
   // Catalogue complet marques + modeles charge depuis le backend. Les
   // selections courantes vivent dans deux Set() pour que le toggle d'une
   // chip soit immediat.
@@ -1090,6 +1161,7 @@
   wireSearchbar();
   wireDateFields();
   wireAgencies();
+  loadBranches();
   wireFleetFilters();
   loadFleet();
   loadCatalog();
