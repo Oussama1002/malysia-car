@@ -1021,3 +1021,67 @@ body:has(.df-overlay-backdrop) .df-copilot-fab { display: none; }
 
 /* Tailwind dark-mode bridge — let [data-theme="dark"] also trigger `dark:` utilities */
 [data-theme="dark"] { color-scheme: dark; }
+
+/* -----------------------------------------------------------------------------
+   Unified gold CTA buttons
+   Every filled call-to-action button/link in the app now wears the same
+   champagne-gold gradient as `.df-btn--primary` (the "Transformée en
+   réservation" button), regardless of which legacy Tailwind fill it used.
+   Scoped to <button>/<a> only so badges, chips and panels keep their fills.
+   Semantic red (danger) and green (success) buttons are intentionally left
+   untouched so destructive / confirm actions stay readable.
+   ----------------------------------------------------------------------------- */
+button.bg-indigo-500, a.bg-indigo-500,
+button.bg-indigo-600, a.bg-indigo-600,
+button.bg-indigo-700, a.bg-indigo-700,
+button.bg-violet-500, a.bg-violet-500,
+button.bg-violet-600, a.bg-violet-600,
+button.bg-violet-700, a.bg-violet-700,
+button.bg-purple-600, a.bg-purple-600,
+button.bg-blue-500, a.bg-blue-500,
+button.bg-blue-600, a.bg-blue-600,
+button.bg-blue-700, a.bg-blue-700,
+button.bg-sky-500, a.bg-sky-500,
+button.bg-sky-600, a.bg-sky-600,
+button.bg-cyan-600, a.bg-cyan-600,
+button.bg-amber-500, a.bg-amber-500,
+button.bg-amber-600, a.bg-amber-600,
+button.bg-amber-700, a.bg-amber-700,
+button.bg-slate-800, a.bg-slate-800,
+button.bg-slate-900, a.bg-slate-900,
+button.bg-gray-900, a.bg-gray-900,
+button.bg-neutral-900, a.bg-neutral-900 {
+  background-image: linear-gradient(135deg, #e3c77c 0%, #c9a24b 52%, #9a7b2e 100%) !important;
+  background-color: transparent !important;
+  color: #2a2111 !important;
+  border-color: transparent !important;
+  box-shadow: 0 10px 24px rgba(154, 123, 46, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+  transition: filter var(--df-dur-base) var(--df-ease), transform var(--df-dur-fast) var(--df-ease);
+}
+button.bg-indigo-500:hover, a.bg-indigo-500:hover,
+button.bg-indigo-600:hover, a.bg-indigo-600:hover,
+button.bg-indigo-700:hover, a.bg-indigo-700:hover,
+button.bg-violet-500:hover, a.bg-violet-500:hover,
+button.bg-violet-600:hover, a.bg-violet-600:hover,
+button.bg-violet-700:hover, a.bg-violet-700:hover,
+button.bg-purple-600:hover, a.bg-purple-600:hover,
+button.bg-blue-500:hover, a.bg-blue-500:hover,
+button.bg-blue-600:hover, a.bg-blue-600:hover,
+button.bg-blue-700:hover, a.bg-blue-700:hover,
+button.bg-sky-500:hover, a.bg-sky-500:hover,
+button.bg-sky-600:hover, a.bg-sky-600:hover,
+button.bg-cyan-600:hover, a.bg-cyan-600:hover,
+button.bg-amber-500:hover, a.bg-amber-500:hover,
+button.bg-amber-600:hover, a.bg-amber-600:hover,
+button.bg-amber-700:hover, a.bg-amber-700:hover,
+button.bg-slate-800:hover, a.bg-slate-800:hover,
+button.bg-slate-900:hover, a.bg-slate-900:hover,
+button.bg-gray-900:hover, a.bg-gray-900:hover,
+button.bg-neutral-900:hover, a.bg-neutral-900:hover {
+  filter: brightness(1.05) saturate(1.04);
+  transform: translateY(-1px);
+}
+/* Icons / SVGs inside these CTAs inherit the dark ink for contrast on gold. */
+button.bg-indigo-600 svg, a.bg-indigo-600 svg,
+button.bg-amber-600 svg, a.bg-amber-600 svg,
+button.bg-slate-900 svg, a.bg-slate-900 svg { color: #2a2111 !important; }
