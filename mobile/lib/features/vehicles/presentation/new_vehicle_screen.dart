@@ -20,7 +20,10 @@ class NewVehicleScreen extends ConsumerStatefulWidget {
   ConsumerState<NewVehicleScreen> createState() => _NewVehicleScreenState();
 }
 
-enum _VehDoc { carteGrise, assurance, facture, immatProv, techControl, vignette }
+// Mêmes documents OCR que le web (frontend/modules/fleet/VehicleDocumentScanner
+// .tsx) : Assurance, Autorisation de circulation, Visite technique, Vignette,
+// Carte Grise — avec les mêmes types canoniques (ReaderDocument::TYPE_*).
+enum _VehDoc { assurance, autorisation, techControl, vignette, carteGrise }
 
 enum _CarteGriseStatus { enAttente, recue }
 
@@ -214,22 +217,32 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   // OCR
   // ------------------------------------------------------------------
 
+  // Types canoniques du backend (ReaderDocument::TYPE_*), identiques au web.
   String _ocrType(_VehDoc d) => switch (d) {
-        _VehDoc.carteGrise => 'carte_grise',
-        _VehDoc.assurance => 'insurance_card',
-        _VehDoc.facture => 'invoice',
-        _VehDoc.immatProv => 'provisional_registration',
-        _VehDoc.techControl => 'tech_control',
-        _VehDoc.vignette => 'vignette',
+        _VehDoc.assurance => 'insurance',
+        _VehDoc.autorisation => 'autorisation_circulation',
+        _VehDoc.techControl => 'other',
+        _VehDoc.vignette => 'other',
+        _VehDoc.carteGrise => 'vehicle_registration',
       };
 
   String _ocrLabel(_VehDoc d) => switch (d) {
-        _VehDoc.carteGrise => 'Carte grise',
         _VehDoc.assurance => 'Assurance',
-        _VehDoc.facture => "Facture d'achat",
-        _VehDoc.immatProv => 'Immat. provisoire / WW',
+        _VehDoc.autorisation => 'Autorisation de circulation',
         _VehDoc.techControl => 'Visite technique',
         _VehDoc.vignette => 'Vignette',
+        _VehDoc.carteGrise => 'Carte Grise',
+      };
+
+  String _ocrHint(_VehDoc d) => switch (d) {
+        _VehDoc.assurance => 'N° police, période de garantie, immatriculation',
+        _VehDoc.autorisation =>
+          'Immat., N° WW, marque, carburant, mise en circulation, validité',
+        _VehDoc.techControl =>
+          'Immat., WW, carburant, mise en circulation, puissance (CV), validité',
+        _VehDoc.vignette => 'Année / date expiration',
+        _VehDoc.carteGrise =>
+          'Marque, modèle, châssis, carburant, puissance, fin validité',
       };
 
   Future<void> _scan({
@@ -264,68 +277,227 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     }
   }
 
+  /// Applique les champs extraits selon le document, en reprenant exactement
+  /// les mappings du web (frontend/modules/fleet/VehicleDocumentScanner.tsx :
+  /// mapAssurance / mapAutorisation / mapVisiteTech / mapVignette / mapCarteGrise).
   void _applyScanFields(Map<String, dynamic> result, {required _VehDoc doc}) {
     final fields = (result['fields'] as Map<String, dynamic>? ?? const {});
     _scanDocId[doc] = result['document_id']?.toString();
 
-    setState(() {
-      final numeroPolice = _s(fields['numero_police']) ?? _s(fields['police']);
-      final insuranceExpiry = _s(fields['insurance_expiry']) ??
-          _s(fields['expiry_date']) ??
-          _s(fields['date_expiration']);
-      final chassis = _s(fields['chassis']) ?? _s(fields['vin']);
-      final acquisition = _s(fields['acquisition_date']) ??
-          _s(fields['invoice_date']) ??
-          _s(fields['date']);
-      final montant = _s(fields['montant']) ?? _s(fields['amount']);
-      final immatProv =
-          _s(fields['immat_provisoire']) ?? _s(fields['provisional_number']);
-      final immatProvExpiry = _s(fields['immat_provisoire_expiry']) ??
-          _s(fields['provisional_expiry']);
-      final techExpiry = _s(fields['tech_control_expiry']) ??
-          _s(fields['tech_expiry']) ??
-          _s(fields['expiry_date']);
-      final vignetteExpiry =
-          _s(fields['vignette_expiry']) ?? _s(fields['expiry_date']);
+    String? pick(List<String> keys) {
+      for (final k in keys) {
+        final v = _s(fields[k]);
+        if (v != null) return v;
+      }
+      return null;
+    }
 
-      if (numeroPolice != null && _numeroPolice.text.isEmpty) {
-        _numeroPolice.text = numeroPolice;
-      }
-      final insuranceStart = _s(fields['insurance_start']) ??
-          _s(fields['start_date']) ??
-          _s(fields['date_debut']);
-      if (insuranceStart != null && _insuranceStart == null) {
-        _insuranceStart = DateTime.tryParse(insuranceStart);
-      }
-      if (insuranceExpiry != null && _insuranceExpiry == null) {
-        _insuranceExpiry = DateTime.tryParse(insuranceExpiry);
-      }
-      if (chassis != null && _vin.text.isEmpty) _vin.text = chassis;
-      if (acquisition != null && _acquisitionDate == null) {
-        _acquisitionDate = DateTime.tryParse(acquisition);
-      }
-      if (montant != null &&
-          _purchasePrice.text.isEmpty &&
-          double.tryParse(montant.replaceAll(',', '.')) != null) {
-        _purchasePrice.text = montant.replaceAll(',', '.');
-      }
-      if (immatProv != null && _immatOnline.text.isEmpty) {
-        _immatOnline.text = immatProv;
-      }
-      if (immatProvExpiry != null && _immatProvExpiry == null) {
-        _immatProvExpiry = DateTime.tryParse(immatProvExpiry);
-      }
-      if (doc == _VehDoc.techControl && techExpiry != null && _techExpiry == null) {
-        _techExpiry = DateTime.tryParse(techExpiry);
-      }
-      if (doc == _VehDoc.vignette &&
-          vignetteExpiry != null &&
-          _vignetteExpiry == null) {
-        _vignetteExpiry = DateTime.tryParse(vignetteExpiry);
+    setState(() {
+      switch (doc) {
+        case _VehDoc.assurance:
+          final police = pick(
+              ['policy_number', 'numero_police', 'policy_no', 'contract_number']);
+          final start = pick(
+              ['guarantee_start', 'date_effet', 'start_date', 'date_debut']);
+          final end = pick([
+            'guarantee_end',
+            'expiry_date',
+            'date_expiration',
+            'validity_date',
+            'date_fin'
+          ]);
+          final ww = _ww(pick([
+            'registration_number',
+            'immatriculation',
+            'plate_number',
+            'ww_number'
+          ]));
+          if (police != null && _numeroPolice.text.isEmpty) {
+            _numeroPolice.text = police;
+          }
+          if (start != null && _insuranceStart == null) {
+            _insuranceStart = DateTime.tryParse(start);
+          }
+          if (end != null && _insuranceExpiry == null) {
+            _insuranceExpiry = DateTime.tryParse(end);
+          }
+          if (ww != null && _immatOnline.text.isEmpty) _immatOnline.text = ww;
+          break;
+        case _VehDoc.autorisation:
+          final reg =
+              pick(['registration_number', 'immatriculation', 'plate_number']);
+          final ww = _ww(pick([
+            'ww_number',
+            'provisional_number',
+            'numero_provisoire',
+            'registration_number'
+          ]));
+          final brand = pick(['brand', 'marque', 'make']);
+          final fuel = pick(['fuel_type', 'carburant', 'energie']);
+          final mec = pick([
+            'first_registration_date',
+            'mise_en_circulation',
+            'date_circulation'
+          ]);
+          _applyPlate(reg);
+          if (ww != null && _immatOnline.text.isEmpty) _immatOnline.text = ww;
+          if (fuel != null) _fuelType = _matchFuel(fuel);
+          if (mec != null && _miseEnCirculation == null) {
+            _miseEnCirculation = DateTime.tryParse(mec);
+          }
+          _matchBrandModel(brand, null);
+          break;
+        case _VehDoc.techControl:
+          final exp = pick([
+            'expiry_date',
+            'date_expiration',
+            'validity_date',
+            'date_validite',
+            'valid_until',
+            'next_inspection'
+          ]);
+          final reg =
+              pick(['registration_number', 'immatriculation', 'plate_number']);
+          final ww = _ww(
+              pick(['ww_number', 'provisional_number', 'numero_provisoire']));
+          final fuel = pick(['fuel_type', 'carburant', 'energie']);
+          final mec = pick([
+            'first_registration_date',
+            'mise_en_circulation',
+            'date_circulation'
+          ]);
+          final cv =
+              pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
+          if (exp != null && _techExpiry == null) {
+            _techExpiry = DateTime.tryParse(exp);
+          }
+          _applyPlate(reg);
+          if (ww != null && _immatOnline.text.isEmpty) _immatOnline.text = ww;
+          if (fuel != null) _fuelType = _matchFuel(fuel);
+          if (mec != null && _miseEnCirculation == null) {
+            _miseEnCirculation = DateTime.tryParse(mec);
+          }
+          if (cv != null && _fiscalPower.text.isEmpty) _fiscalPower.text = cv;
+          break;
+        case _VehDoc.vignette:
+          final exp = pick([
+            'expiry_date',
+            'date_expiration',
+            'validity_date',
+            'date_validite',
+            'year',
+            'annee',
+            'valid_until'
+          ]);
+          if (exp != null && _vignetteExpiry == null) {
+            _vignetteExpiry = DateTime.tryParse(exp);
+          }
+          break;
+        case _VehDoc.carteGrise:
+          final brand = pick(['brand', 'marque', 'make']);
+          final model = pick(['model', 'modele']);
+          final vin =
+              pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
+          final fuel = pick(['fuel_type', 'carburant', 'energie']);
+          final cv = pick(['fiscal_power', 'puissance_fiscale']);
+          _matchBrandModel(brand, model);
+          if (vin != null && _vin.text.isEmpty) _vin.text = vin;
+          if (fuel != null) _fuelType = _matchFuel(fuel);
+          if (cv != null && _fiscalPower.text.isEmpty) _fiscalPower.text = cv;
+          break;
       }
       _scanNotice =
           'Champs détectés (${_ocrLabel(doc)}) — vérifiez avant d\'enregistrer.';
     });
+  }
+
+  /// Normalise un numéro WW éventuellement bruité par l'OCR → "WW<chiffres>".
+  String? _ww(String? v) {
+    if (v == null) return null;
+    final up = v.toUpperCase();
+    final m = RegExp(r'W[WMNAHVY][A-Z]?\s*[-.]?\s*(\d{4,7})').firstMatch(up) ??
+        RegExp(r'(\d{4,7})\s*W[WMNAHVY]').firstMatch(up);
+    return m != null ? 'WW${m.group(1)}' : null;
+  }
+
+  /// Décompose une plaque "12345-A-1" dans num / lettre / région.
+  void _applyPlate(String? reg) {
+    if (reg == null) return;
+    final cleaned = reg.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+    final m =
+        RegExp(r'(\d{1,5})\D+([A-Z])\D+(\d{1,2})').firstMatch(cleaned);
+    if (m != null) {
+      if (_platNum.text.isEmpty) _platNum.text = m.group(1)!;
+      final letter = m.group(2)!;
+      if (_plateLetters.contains(letter)) _platLetter = letter;
+      final region = int.tryParse(m.group(3)!);
+      if (region != null && region >= 1 && region <= 99) _platRegion = region;
+    } else if (_platNum.text.isEmpty) {
+      final digits = RegExp(r'\d{1,5}').firstMatch(cleaned);
+      if (digits != null) _platNum.text = digits.group(0)!;
+    }
+  }
+
+  String _matchFuel(String raw) {
+    final low = raw.toLowerCase();
+    if (low.contains('diesel') || low.contains('gasoil')) return 'Diesel';
+    if (low.contains('essence') ||
+        low.contains('petrol') ||
+        low.contains('gasoline')) {
+      return 'Essence';
+    }
+    if (low.contains('hybri')) return 'Hybride';
+    if (low.contains('electr') || low.contains('électr')) return 'Électrique';
+    if (low.contains('gpl') || low.contains('lpg')) return 'GPL';
+    for (final o in _fuelOptions) {
+      if (o.toLowerCase() == low) return o;
+    }
+    return _fuelType;
+  }
+
+  /// Rapproche le texte OCR marque/modèle des options du catalogue (exact →
+  /// sous-chaîne), comme `closestOption` côté web, pour pré-remplir les listes.
+  void _matchBrandModel(String? brandText, String? modelText) {
+    final brands = ref.read(vehicleBrandsProvider).valueOrNull ??
+        const <VehicleBrandDto>[];
+    if (brandText != null && _brandId == null && brands.isNotEmpty) {
+      final bt = brandText.toLowerCase().trim();
+      VehicleBrandDto? match;
+      for (final b in brands) {
+        if (b.name.toLowerCase() == bt) {
+          match = b;
+          break;
+        }
+      }
+      match ??= brands
+          .where((b) =>
+              b.name.toLowerCase().contains(bt) ||
+              bt.contains(b.name.toLowerCase()))
+          .firstOrNull;
+      if (match != null) {
+        _brandId = match.id;
+        _modelId = null;
+      }
+    }
+    if (modelText != null && _brandId != null) {
+      final models =
+          brands.where((b) => b.id == _brandId).firstOrNull?.models ??
+              const <VehicleModelDto>[];
+      final mt = modelText.toLowerCase().trim();
+      VehicleModelDto? mm;
+      for (final m in models) {
+        if (m.name.toLowerCase() == mt) {
+          mm = m;
+          break;
+        }
+      }
+      mm ??= models
+          .where((m) =>
+              m.name.toLowerCase().contains(mt) ||
+              mt.contains(m.name.toLowerCase()))
+          .firstOrNull;
+      if (mm != null) _modelId = mm.id;
+    }
   }
 
   // ------------------------------------------------------------------
@@ -550,6 +722,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           for (final d in _VehDoc.values) ...[
             _ScanSlot(
               title: _ocrLabel(d),
+              subtitle: _ocrHint(d),
               photoPath: _scanPath[d],
               scanning: _scanning == d,
               notice: _scanning == null && _scanNotice != null ? _scanNotice : null,
@@ -1348,6 +1521,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
 class _ScanSlot extends StatelessWidget {
   const _ScanSlot({
     required this.title,
+    this.subtitle,
     required this.photoPath,
     required this.scanning,
     required this.notice,
@@ -1357,6 +1531,7 @@ class _ScanSlot extends StatelessWidget {
   });
 
   final String title;
+  final String? subtitle;
   final String? photoPath;
   final bool scanning;
   final String? notice;
@@ -1388,6 +1563,11 @@ class _ScanSlot extends StatelessWidget {
               ),
             ],
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(subtitle!,
+                style: const TextStyle(fontSize: 10.5, color: Colors.black45)),
+          ],
           const SizedBox(height: 8),
           if (photoPath != null) ...[
             Stack(
