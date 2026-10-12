@@ -174,6 +174,17 @@ export const WebsiteLeadsPage: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['website-leads'] }),
   });
 
+  // Suppression définitive : « Annuler » retire la demande de la liste.
+  const [deleteTarget, setDeleteTarget] = useState<WebsiteLead | null>(null);
+  const deleteM = useMutation({
+    mutationFn: (id: string) =>
+      apiClient(`/v1/website-leads/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ['website-leads'] });
+    },
+  });
+
   const setPriceM = useMutation({
     mutationFn: (vars: { vehicleId: string; tiers: Record<string, number> }) =>
       apiClient(`/v1/website-leads/vehicles/${vars.vehicleId}/price`, {
@@ -402,16 +413,14 @@ export const WebsiteLeadsPage: React.FC = () => {
                       Marquer traitée
                     </button>
                   )}
-                  {lead.status !== 'rejected' && (
-                    <button
-                      type="button"
-                      className="df-btn df-btn--ghost text-xs text-rose-600"
-                      disabled={updateM.isPending}
-                      onClick={() => updateM.mutate({ id: lead.id, status: 'rejected' })}
-                    >
-                      Sans suite
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="df-btn df-btn--ghost text-xs text-rose-600"
+                    disabled={deleteM.isPending}
+                    onClick={() => setDeleteTarget(lead)}
+                  >
+                    Annuler
+                  </button>
                 </div>
               </div>
             </article>
@@ -419,6 +428,49 @@ export const WebsiteLeadsPage: React.FC = () => {
         </div>
       )}
       </>)}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={() => !deleteM.isPending && setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 px-6 py-5">
+              <div className="text-[10px] font-black uppercase tracking-widest text-rose-700">
+                Confirmation
+              </div>
+              <h3 className="mt-1 text-base font-black text-slate-900">
+                Supprimer la demande du site ?
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Êtes-vous sûr ? La demande de <strong>{deleteTarget.full_name}</strong> sera
+                définitivement supprimée de la liste.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4">
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteM.isPending}
+              >
+                Non, garder
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-rose-600 px-5 py-2 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-50"
+                onClick={() => deleteM.mutate(deleteTarget.id)}
+                disabled={deleteM.isPending}
+              >
+                {deleteM.isPending ? 'Suppression…' : 'Oui, supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

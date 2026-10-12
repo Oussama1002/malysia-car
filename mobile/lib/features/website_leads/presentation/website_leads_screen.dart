@@ -58,6 +58,40 @@ class _WebsiteLeadsScreenState extends ConsumerState<WebsiteLeadsScreen> {
     }
   }
 
+  Future<void> _confirmAndDelete(WebsiteLeadDto lead) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer la demande du site ?'),
+        content: Text(
+          'Êtes-vous sûr ? La demande de ${lead.fullName} sera définitivement '
+          'supprimée de la liste.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Non, garder'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Oui, supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(websiteLeadsRepoProvider).delete(lead.id);
+      ref.invalidate(websiteLeadsListProvider);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Suppression impossible.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(websiteLeadsListProvider);
@@ -141,7 +175,11 @@ class _WebsiteLeadsScreenState extends ConsumerState<WebsiteLeadsScreen> {
                             Padding(
                               padding:
                                   const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                              child: _LeadCard(lead: l, onUpdate: _update),
+                              child: _LeadCard(
+                                lead: l,
+                                onUpdate: _update,
+                                onDelete: _confirmAndDelete,
+                              ),
                             ),
                         ],
                       );
@@ -333,9 +371,14 @@ class _EmptyLeadsCard extends StatelessWidget {
 }
 
 class _LeadCard extends StatelessWidget {
-  const _LeadCard({required this.lead, required this.onUpdate});
+  const _LeadCard({
+    required this.lead,
+    required this.onUpdate,
+    required this.onDelete,
+  });
   final WebsiteLeadDto lead;
   final Future<void> Function(String id, String status) onUpdate;
+  final Future<void> Function(WebsiteLeadDto lead) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -464,7 +507,7 @@ class _LeadCard extends StatelessWidget {
           ],
 
           const SizedBox(height: 12),
-          _ActionButtons(lead: lead, onUpdate: onUpdate),
+          _ActionButtons(lead: lead, onUpdate: onUpdate, onDelete: onDelete),
         ],
       ),
     );
@@ -606,9 +649,14 @@ class _HandlerCard extends StatelessWidget {
 }
 
 class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({required this.lead, required this.onUpdate});
+  const _ActionButtons({
+    required this.lead,
+    required this.onUpdate,
+    required this.onDelete,
+  });
   final WebsiteLeadDto lead;
   final Future<void> Function(String, String) onUpdate;
+  final Future<void> Function(WebsiteLeadDto lead) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -644,13 +692,11 @@ class _ActionButtons extends StatelessWidget {
         },
       ));
     }
-    if (lead.status != 'rejected') {
-      buttons.add(_GhostAction(
-        label: 'Sans suite',
-        onTap: () => onUpdate(lead.id, 'rejected'),
-        destructive: true,
-      ));
-    }
+    buttons.add(_GhostAction(
+      label: 'Annuler',
+      onTap: () => onDelete(lead),
+      destructive: true,
+    ));
     return Wrap(
       spacing: 8,
       runSpacing: 8,

@@ -45,6 +45,10 @@ class WebsiteLeadsRepo {
     await _api.raw.patch('/website-leads/$id', data: {'status': status});
   }
 
+  Future<void> delete(String id) async {
+    await _api.raw.delete('/website-leads/$id');
+  }
+
   Future<VehiclePricingPage> vehiclePricing() async {
     final response = await _api.raw.get('/website-leads/missing-prices');
     final payload = response.data;

@@ -150,4 +150,12 @@ class WebsiteLeadController extends Controller
 
         return ApiResponse::success($lead->fresh('handler'));
     }
+
+    public function destroy(Request $request, WebsiteLead $lead): JsonResponse
+    {
+        AuditLogger::deleted($lead, $request->user(), request: $request);
+        $lead->delete();
+
+        return ApiResponse::success(['id' => $lead->id, 'deleted' => true]);
+    }
 }
