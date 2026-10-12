@@ -23,7 +23,14 @@ class NewVehicleScreen extends ConsumerStatefulWidget {
 // Mêmes documents OCR que le web (frontend/modules/fleet/VehicleDocumentScanner
 // .tsx) : Assurance, Autorisation de circulation, Visite technique, Vignette,
 // Carte Grise — avec les mêmes types canoniques (ReaderDocument::TYPE_*).
-enum _VehDoc { assurance, autorisation, techControl, vignette, carteGrise }
+enum _VehDoc {
+  assurance,
+  autorisation,
+  techControl,
+  vignette,
+  carteGriseRecto,
+  carteGriseVerso
+}
 
 enum _CarteGriseStatus { enAttente, recue }
 
@@ -219,7 +226,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.autorisation => 'autorisation_circulation',
         _VehDoc.techControl => 'other',
         _VehDoc.vignette => 'other',
-        _VehDoc.carteGrise => 'vehicle_registration',
+        _VehDoc.carteGriseRecto => 'vehicle_registration',
+        _VehDoc.carteGriseVerso => 'vehicle_registration',
       };
 
   String _ocrLabel(_VehDoc d) => switch (d) {
@@ -227,7 +235,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.autorisation => 'Autorisation de circulation',
         _VehDoc.techControl => 'Visite technique',
         _VehDoc.vignette => 'Vignette',
-        _VehDoc.carteGrise => 'Carte Grise',
+        _VehDoc.carteGriseRecto => 'Carte Grise — Recto',
+        _VehDoc.carteGriseVerso => 'Carte Grise — Verso',
       };
 
   String _ocrHint(_VehDoc d) => switch (d) {
@@ -237,8 +246,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.techControl =>
           'Immat., WW, carburant, mise en circulation, puissance (CV), validité',
         _VehDoc.vignette => 'Année / date expiration',
-        _VehDoc.carteGrise =>
-          'Marque, modèle, châssis, carburant, puissance, fin validité',
+        _VehDoc.carteGriseRecto =>
+          'Marque, modèle, immatriculation, 1ère mise en circulation',
+        _VehDoc.carteGriseVerso =>
+          'Châssis (VIN), carburant, puissance fiscale, fin de validité',
       };
 
   Future<void> _scan({
@@ -389,17 +400,31 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             _vignetteExpiry = DateTime.tryParse(exp);
           }
           break;
-        case _VehDoc.carteGrise:
+        case _VehDoc.carteGriseRecto:
+        case _VehDoc.carteGriseVerso:
+          // Recto et verso partagent le même mapping : chaque face ne renvoie
+          // que les champs qu'elle porte, et on ne remplit que ce qui manque.
           final brand = pick(['brand', 'marque', 'make']);
           final model = pick(['model', 'modele']);
           final vin =
               pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
           final fuel = pick(['fuel_type', 'carburant', 'energie']);
           final cv = pick(['fiscal_power', 'puissance_fiscale']);
+          final reg =
+              pick(['registration_number', 'immatriculation', 'plate_number']);
+          final mec = pick([
+            'first_registration_date',
+            'mise_en_circulation',
+            'date_circulation'
+          ]);
           _matchBrandModel(brand, model);
           if (vin != null && _vin.text.isEmpty) _vin.text = vin;
           if (fuel != null) _fuelType = _matchFuel(fuel);
           if (cv != null && _fiscalPower.text.isEmpty) _fiscalPower.text = cv;
+          _applyPlate(reg);
+          if (mec != null && _miseEnCirculation == null) {
+            _miseEnCirculation = DateTime.tryParse(mec);
+          }
           break;
       }
       _scanNotice =
