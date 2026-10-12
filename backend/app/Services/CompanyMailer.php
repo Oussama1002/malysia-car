@@ -23,6 +23,21 @@ class CompanyMailer
     {
         $s = CompanySetting::getAll('integrations', $companyId);
 
+        // Déploiement mono-agence : le SMTP a pu être enregistré sous un autre
+        // company_id (ou null) que celui de l'utilisateur ciblé. On retombe
+        // alors sur la première configuration SMTP renseignée, quelle que soit
+        // la société, pour que l'envoi marche quand même.
+        if (trim((string) ($s['smtp_host'] ?? '')) === '') {
+            $row = CompanySetting::where('group', 'integrations')
+                ->where('key', 'smtp_host')
+                ->whereNotNull('value')
+                ->where('value', '!=', '')
+                ->first();
+            if ($row) {
+                $s = CompanySetting::getAll('integrations', $row->company_id);
+            }
+        }
+
         $host = trim((string) ($s['smtp_host'] ?? ''));
         $user = trim((string) ($s['smtp_user'] ?? ''));
         $pass = (string) ($s['smtp_password'] ?? '');
