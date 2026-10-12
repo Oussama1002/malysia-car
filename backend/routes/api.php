@@ -138,6 +138,12 @@ Route::prefix('v1')->group(function () {
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/me/avatar', [AuthController::class, 'updateAvatar']);
 
+        // Réglages opérationnels en lecture (contracts, reservations…) :
+        // nécessaires aux pages Réservations/Contrats pour tout rôle. Les
+        // intégrations SMTP sont filtrées dans le contrôleur (admin only) ;
+        // l'écriture reste gated plus bas (role:ADMIN,DIRECTEUR).
+        Route::get('settings/{group}', [CompanySettingsController::class, 'show']);
+
         // Branches: read-only catalogue used by every screen filter
         Route::get('branches', [BranchController::class, 'index']);
 
@@ -1137,7 +1143,6 @@ Route::prefix('v1')->group(function () {
                 ->middleware('permission:branches.manage');
 
             Route::post('settings/integrations/test-email', [CompanySettingsController::class, 'testEmail']);
-            Route::get('settings/{group}', [CompanySettingsController::class, 'show']);
             Route::put('settings/{group}', [CompanySettingsController::class, 'update']);
         });
     });

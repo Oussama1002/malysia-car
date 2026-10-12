@@ -13,6 +13,16 @@ class CompanySettingsController extends Controller
 {
     public function show(Request $request, string $group): JsonResponse
     {
+        // Les réglages opérationnels (contracts, reservations…) sont lisibles
+        // par tout utilisateur authentifié — les pages Réservations/Contrats en
+        // ont besoin. Les intégrations (SMTP) restent réservées aux admins.
+        if ($group === 'integrations') {
+            $codes = $request->user()?->roleCodes() ?? [];
+            if (! array_intersect(['ADMIN', 'DIRECTEUR'], $codes)) {
+                abort(403);
+            }
+        }
+
         $companyId = optional($request->user())->company_id;
         $settings = CompanySetting::getAll($group, $companyId);
 
