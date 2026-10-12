@@ -93,6 +93,7 @@ export interface CustomerDto {
   phone: string;
   address?: string;
   idNumber?: string;
+  passportNumber?: string;
   ice?: string;
   rc?: string;
   complianceStatus: ComplianceStatus;

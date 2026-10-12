@@ -453,6 +453,7 @@ export const ContractWizardPage: React.FC = () => {
           : 'INCOMPLETE',
         createdAt: c.created_at ?? '',
         idNumber: c.individual_profile?.national_id_number ?? c.company_profile?.ice,
+        passportNumber: c.individual_profile?.passport_number,
         ice: c.company_profile?.ice,
         licenseNumber: c.individual_profile?.driving_license_number,
         licenseExpiry: c.individual_profile?.driving_license_expiry,
@@ -536,11 +537,27 @@ export const ContractWizardPage: React.FC = () => {
   const cinDoc = allClientDocs.find((d) =>
     ['cin', 'national_id', 'identit', 'cni'].some((k) => d.category?.toLowerCase().includes(k) || d.title?.toLowerCase().includes(k))
   );
+  const passportDoc = allClientDocs.find((d) =>
+    ['passport', 'passeport'].some((k) => d.category?.toLowerCase().includes(k) || d.title?.toLowerCase().includes(k))
+  );
   const permisDoc = allClientDocs.find((d) =>
     ['permis', 'driving', 'license', 'licence'].some((k) => d.category?.toLowerCase().includes(k) || d.title?.toLowerCase().includes(k))
   );
 
   const selectedClient = clients.data?.find((c) => String(c.id) === String(state.clientId));
+
+  // Un contrat ne peut pas être généré sans une pièce d'identité (CIN ou
+  // passeport) ET un permis — soit comme numéros saisis sur l'étape 1, soit
+  // comme documents attachés dans le centre des documents. Tant que les deux
+  // manquent, on bloque « Suivant » et le bouton final de création.
+  const hasIdentityForContract =
+    Boolean((selectedClient?.idNumber ?? '').trim()) ||
+    Boolean((selectedClient?.passportNumber ?? '').trim()) ||
+    Boolean(cinDoc) ||
+    Boolean(passportDoc);
+  const hasLicenseForContract =
+    Boolean((selectedClient?.licenseNumber ?? '').trim()) || Boolean(permisDoc);
+  const identityComplete = hasIdentityForContract && hasLicenseForContract;
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
 
@@ -555,11 +572,11 @@ export const ContractWizardPage: React.FC = () => {
   );
 
   const canNext = useMemo(() => {
-    if (step.key === 'client') return !!state.clientId;
+    if (step.key === 'client') return !!state.clientId && identityComplete;
     if (step.key === 'vehicle') return !!state.vehicleId;
     if (step.key === 'terms') return state.kmInclMonth > 0;
     return true;
-  }, [step, state]);
+  }, [step, state, identityComplete]);
 
   function patch<K extends keyof WizardState>(k: K, v: WizardState[K]): void {
     setState((s) => ({ ...s, [k]: v }));
@@ -712,6 +729,20 @@ export const ContractWizardPage: React.FC = () => {
   }
 
   async function submit(): Promise<void> {
+    // Garde-fou : la génération n'est pas possible tant qu'il manque une
+    // pièce d'identité ou le permis. L'étape 1 affiche déjà le détail de
+    // ce qui manque.
+    if (!identityComplete) {
+      setSaveError(
+        !hasIdentityForContract && !hasLicenseForContract
+          ? 'CIN/Passeport et permis du client manquants — complétez l\'étape 1 avant de générer le contrat.'
+          : !hasIdentityForContract
+            ? 'CIN ou passeport du client manquant — complétez l\'étape 1 avant de générer le contrat.'
+            : 'Permis du client manquant — complétez l\'étape 1 avant de générer le contrat.',
+      );
+      setStepIdx(0);
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     let createdId: string | null = null;
@@ -958,9 +989,26 @@ export const ContractWizardPage: React.FC = () => {
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-3 text-[12px] md:grid-cols-3">
                       <InfoBit label="CIN / ID" value={selectedClient.idNumber ?? '—'} />
+                      <InfoBit label="Passeport" value={selectedClient.passportNumber ?? '—'} />
                       <InfoBit label="ICE" value={selectedClient.ice ?? '—'} />
                       <InfoBit label="Permis" value={selectedClient.licenseNumber ?? '—'} />
                     </div>
+                    {!identityComplete && (
+                      <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[12px] text-rose-800">
+                        <div className="font-black">Documents obligatoires manquants</div>
+                        <ul className="mt-1 list-disc pl-5 text-[11.5px]">
+                          {!hasIdentityForContract && (
+                            <li>CIN ou passeport — ni numéro saisi ni document attaché.</li>
+                          )}
+                          {!hasLicenseForContract && (
+                            <li>Permis de conduire — ni numéro saisi ni document attaché.</li>
+                          )}
+                        </ul>
+                        <div className="mt-1 text-[11px]">
+                          Ajoutez les documents dans la fiche client puis revenez ici — le contrat ne peut pas être généré sans.
+                        </div>
+                      </div>
+                    )}
                     {selectedClient.complianceStatus !== 'VERIFIED' && (
                       <AIHint text="KYC incomplet. IA recommande : compléter l'attestation CNSS et scanner la CIN recto/verso avant de poursuivre." tone="warning" />
                     )}
@@ -1543,7 +1591,7 @@ export const ContractWizardPage: React.FC = () => {
               {stepIdx === STEPS.length - 1 ? (
                 <button
                   className="df-btn df-btn--primary"
-                  disabled={saving || !state.clientId || !state.vehicleId || state.kmInclMonth <= 0 || hasUsedCheque}
+                  disabled={saving || !state.clientId || !state.vehicleId || state.kmInclMonth <= 0 || hasUsedCheque || !identityComplete}
                   onClick={() => void submit()}
                 >
                   <Icon name="download" size={14} /> {saving ? 'Création…' : 'Sauvegarder & télécharger PDF'}
