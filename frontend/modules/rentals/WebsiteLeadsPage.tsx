@@ -240,7 +240,7 @@ export const WebsiteLeadsPage: React.FC = () => {
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Véhicules à tarifer
+          Véhicules
           {missingCount > 0 && (
             <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-700">
               {missingCount}
