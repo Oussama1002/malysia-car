@@ -12,7 +12,7 @@ class TestEmailMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public string $to) {}
+    public function __construct(public string $recipient) {}
 
     public function envelope(): Envelope
     {
@@ -29,7 +29,7 @@ class TestEmailMail extends Mailable
   <h2 style="margin:0 0 12px;font-weight:800">Configuration SMTP validée ✅</h2>
   <p style="color:#334155;line-height:1.55;margin:0 0 12px">
     Cet email confirme que l'envoi depuis DriveFlow fonctionne pour
-    <strong>{$this->to}</strong>.
+    <strong>{$this->recipient}</strong>.
   </p>
   <p style="color:#64748b;font-size:12px;margin:0">Envoyé le {$when}.</p>
 </div>
