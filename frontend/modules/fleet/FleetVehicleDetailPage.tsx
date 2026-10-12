@@ -735,7 +735,6 @@ export const FleetVehicleDetailPage: React.FC = () => {
               <Field label="Type" value={veh.acquisitionType} />
               <Field label="Prix d'achat" value={veh.purchaseCostMad ? formatCurrencyMad(veh.purchaseCostMad) : null} />
               <Field label="Valeur livre" value={veh.currentValueMad ? formatCurrencyMad(veh.currentValueMad) : null} />
-              <Field label="Prix/jour" value={veh.pricePerDay ? formatCurrencyMad(veh.pricePerDay) : null} />
             </div>
           </SectionCard>
         </div>

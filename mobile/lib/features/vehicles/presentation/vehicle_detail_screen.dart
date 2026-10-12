@@ -242,7 +242,6 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final v = detail.vehicle;
-    final money = NumberFormat.currency(locale: 'fr', symbol: 'MAD');
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -302,28 +301,6 @@ class _OverviewTab extends StatelessWidget {
             child: _ComplianceSummary(v: v),
           ),
         ],
-        const SizedBox(height: 12),
-        ModuleCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Acquisition',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              if (v.pricePerDay != null && v.pricePerDay! > 0)
-                ModuleKV(
-                    label: 'Prix / jour', value: money.format(v.pricePerDay)),
-              if (v.pricePerDay == null)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('Données d\'acquisition non disponibles.',
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.black54)),
-                ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -766,33 +743,10 @@ class _CostsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final money = NumberFormat.currency(locale: 'fr', symbol: 'MAD');
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: [
-        ModuleCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Tarification',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              if (v.pricePerDay != null && v.pricePerDay! > 0)
-                ModuleKV(
-                    label: 'Tarif / jour', value: money.format(v.pricePerDay))
-              else
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('Pas de tarif enregistré.',
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.black54)),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        const _StubTab(
+      children: const [
+        _StubTab(
           icon: Icons.analytics_outlined,
           text:
               'Analyse coûts & rentabilité (dépenses, CA, marge) — bientôt disponible.',
