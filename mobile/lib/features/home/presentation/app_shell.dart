@@ -9,6 +9,7 @@ import '../../../core/theme/theme_mode_provider.dart';
 import '../../customers/presentation/new_customer_screen.dart';
 import '../../reservations/presentation/new_contract_from_reservation_screen.dart';
 import '../../reservations/presentation/new_reservation_screen.dart';
+import '../../vehicles/presentation/new_vehicle_screen.dart';
 import '../../notifications/data/notification_dto.dart';
 import '../../notifications/data/notifications_repo.dart';
 import '../../notifications/presentation/notification_navigation.dart';
@@ -74,6 +75,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       'reservation' => const NewReservationScreen(),
       'customer' => const NewCustomerScreen(),
       'contract' => const NewContractFromReservationScreen(),
+      'vehicle' => const NewVehicleScreen(),
       _ => null,
     };
     if (target != null) {
@@ -769,6 +771,13 @@ class _QuickAddSheet extends StatelessWidget {
               title: 'Nouveau contrat',
               subtitle: 'LCD, LLD, LOA, crédit auto, vente VO',
               onTap: () => Navigator.of(context).pop('contract'),
+            ),
+            _QuickAddTile(
+              icon: Icons.directions_car,
+              color: const Color(0xFFB8933F),
+              title: 'Nouveau véhicule',
+              subtitle: 'Ajouter un véhicule à la flotte',
+              onTap: () => Navigator.of(context).pop('vehicle'),
             ),
             const SizedBox(height: 6),
             Padding(
