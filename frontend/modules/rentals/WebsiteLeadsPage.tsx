@@ -438,34 +438,50 @@ const PricingTab: React.FC<{
   }
   if (vehicles.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 p-10 text-center text-sm text-emerald-700">
-        <div className="mb-1 text-base font-black">✓ Tous les véhicules du site ont un tarif.</div>
-        <div className="text-xs">Aucune action à faire — rien ne saute à l'œil du visiteur.</div>
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
+        Aucun véhicule visible sur le site pour le moment.
       </div>
     );
   }
+  const missing = vehicles.filter(
+    (v) => fromPriceOf(v) === null,
+  ).length;
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <div className="font-black">
-          {vehicles.length} véhicule{vehicles.length > 1 ? 's' : ''} apparaissent sur le site sans tarif journalier.
+    <div className="space-y-4">
+      {missing > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="font-black">
+            {missing} véhicule{missing > 1 ? 's' : ''} sans tarif — « Tarif sur demande » côté site.
+          </div>
+          <div className="mt-0.5 text-xs">
+            Cliquez sur <strong>Tarif</strong> pour configurer les prix par durée.
+          </div>
         </div>
-        <div className="mt-0.5 text-xs">
-          Les visiteurs voient « Tarif sur demande ». Cliquez sur <strong>Tarif</strong> pour configurer les prix par durée — un prix /jour pour 1-2 j, puis les paliers plus longs si vous voulez remiser.
-        </div>
+      )}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {vehicles.map((v) => (
+          <PricingRow
+            key={v.id}
+            v={v}
+            tierSchema={tierSchema}
+            onSetPrice={onSetPrice}
+            pending={pending}
+          />
+        ))}
       </div>
-      {vehicles.map((v) => (
-        <PricingRow
-          key={v.id}
-          v={v}
-          tierSchema={tierSchema}
-          onSetPrice={onSetPrice}
-          pending={pending}
-        />
-      ))}
     </div>
   );
 };
+
+/** Plus petit prix /jour parmi les paliers remplis (sinon le tarif journalier). */
+function fromPriceOf(v: MissingPriceVehicle): number | null {
+  const tiers = Object.values(v.rental_price_tiers ?? {})
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (tiers.length) return Math.min(...tiers);
+  if (v.daily_rental_price && v.daily_rental_price > 0) return v.daily_rental_price;
+  return null;
+}
 
 const PricingRow: React.FC<{
   v: MissingPriceVehicle;
@@ -478,53 +494,78 @@ const PricingRow: React.FC<{
   const label = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
   const sub = [v.year, v.categorie, v.fuel, v.transmission].filter(Boolean).join(' · ');
   const img = photoUrl(v.photo_url);
+  const from = fromPriceOf(v);
+  const hasPrice = from !== null;
+  const filledTiers = tierSchema
+    .map((t) => ({ label: t.label, value: Number(v.rental_price_tiers?.[t.key]) }))
+    .filter((t) => Number.isFinite(t.value) && t.value > 0);
   return (
     <>
-      <article className="df-card">
-        <div className="df-card__body flex flex-wrap items-center gap-4">
-          <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200">
-            {img ? (
-              <img
-                src={img}
-                alt={label}
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/logo.png';
-                  (e.currentTarget as HTMLImageElement).className =
-                    'h-10 w-auto object-contain opacity-80';
-                }}
-              />
-            ) : (
-              <img
-                src="/logo.png"
-                alt="DriveFlow"
-                className="h-10 w-auto object-contain opacity-80"
-              />
-            )}
+      <article className="df-card flex h-full flex-col overflow-hidden">
+        <div className="relative flex h-36 items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
+          {img ? (
+            <img
+              src={img}
+              alt={label}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/logo.png';
+                (e.currentTarget as HTMLImageElement).className = 'h-12 w-auto object-contain opacity-80';
+              }}
+            />
+          ) : (
+            <img src="/logo.png" alt="DriveFlow" className="h-12 w-auto object-contain opacity-80" />
+          )}
+          <span className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-black ${
+            hasPrice ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+          }`}>
+            {hasPrice ? 'Tarifé' : 'Sans tarif'}
+          </span>
+        </div>
+        <div className="flex flex-1 flex-col p-4">
+          <div className="text-sm font-black text-slate-900">{label}</div>
+          <div className="mt-0.5 text-xs text-slate-500">
+            {v.registration ? <span className="font-mono">{v.registration}</span> : null}
+            {v.registration && sub ? ' · ' : null}
+            {sub}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-black text-slate-900">{label}</div>
-            <div className="text-xs text-slate-500">
-              {v.registration ? <span className="font-mono">{v.registration}</span> : null}
-              {v.registration && sub ? ' · ' : null}
-              {sub}
+
+          {hasPrice ? (
+            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">À partir de</div>
+              <div className="text-lg font-black text-emerald-800">
+                {from!.toLocaleString('fr-MA')} <span className="text-xs font-bold">MAD / j</span>
+              </div>
+              {filledTiers.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {filledTiers.map((t) => (
+                    <div key={t.label} className="flex justify-between text-[11px] text-slate-600">
+                      <span>{t.label}</span>
+                      <span className="font-bold">{t.value.toLocaleString('fr-MA')} MAD</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-          <div className="flex items-center gap-2">
+          ) : (
+            <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 p-2.5 text-xs font-semibold text-amber-700">
+              Tarif sur demande
+            </div>
+          )}
+
+          <div className="mt-auto flex items-center gap-2 pt-3">
             <button
               type="button"
               onClick={() => setOpen(true)}
               disabled={pending}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-40"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:opacity-40"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3.5 w-3.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-              Tarif
+              {hasPrice ? 'Modifier' : 'Tarif'}
             </button>
-            {savedAt && (
-              <span className="text-xs font-semibold text-emerald-600">✓ Enregistré</span>
-            )}
+            {savedAt && <span className="text-xs font-semibold text-emerald-600">✓</span>}
           </div>
         </div>
       </article>
