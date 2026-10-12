@@ -113,7 +113,7 @@ class ModuleSearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.4),
+          borderSide: const BorderSide(color: Color(0xFFB8933F), width: 1.4),
         ),
       ),
     );

@@ -228,7 +228,7 @@ class _KpiRow extends StatelessWidget {
             value: '${all.length}',
             hint: 'Dispositifs GPS',
             icon: Icons.directions_car_outlined,
-            color: const Color(0xFF4F46E5),
+            color: const Color(0xFFB8933F),
           ),
           _KpiBox(
             label: 'En circulation',
@@ -345,7 +345,7 @@ class _FilterChips extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
                   color: current == g.key
-                      ? const Color(0xFF4F46E5)
+                      ? const Color(0xFFB8933F)
                       : const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(999),
                 ),
@@ -399,8 +399,8 @@ class _MapView extends StatelessWidget {
         ),
         radius: 900,
         useRadiusInMeter: true,
-        color: const Color(0xFF4F46E5).withOpacity(0.08),
-        borderColor: const Color(0xFF4F46E5),
+        color: const Color(0xFFB8933F).withOpacity(0.08),
+        borderColor: const Color(0xFFB8933F),
         borderStrokeWidth: 1.4,
       ));
     }
@@ -625,7 +625,7 @@ class _VehicleTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: selected
-                  ? const Color(0xFF818CF8)
+                  ? const Color(0xFFD4AF5A)
                   : Theme.of(context).dividerColor),
         ),
         child: Row(

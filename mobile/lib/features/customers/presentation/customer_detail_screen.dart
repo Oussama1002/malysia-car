@@ -57,9 +57,9 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen>
                 controller: _tabs,
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                labelColor: const Color(0xFF4F46E5),
+                labelColor: const Color(0xFFB8933F),
                 unselectedLabelColor: Colors.black54,
-                indicatorColor: const Color(0xFF4F46E5),
+                indicatorColor: const Color(0xFFB8933F),
                 labelStyle: const TextStyle(
                     fontWeight: FontWeight.w800, fontSize: 13),
                 tabs: [
@@ -125,7 +125,7 @@ class _HeaderCard extends StatelessWidget {
                   height: 48,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                      colors: [Color(0xFFB8933F), Color(0xFF9A7B2E)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -370,7 +370,7 @@ class _ActionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: const Color(0xFF4F46E5)),
+            Icon(icon, size: 18, color: const Color(0xFFB8933F)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(value,
@@ -379,7 +379,7 @@ class _ActionRow extends StatelessWidget {
             ),
             Text(action,
                 style: const TextStyle(
-                    color: Color(0xFF4F46E5),
+                    color: Color(0xFFB8933F),
                     fontWeight: FontWeight.w700,
                     fontSize: 12)),
           ],
@@ -540,7 +540,7 @@ class _ContractsTab extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF4F46E5))),
+                              color: Color(0xFFB8933F))),
                     ),
                 ],
               ),
@@ -703,7 +703,7 @@ class _DocumentsTab extends ConsumerWidget {
                         : d.mimeType == 'application/pdf'
                             ? Icons.picture_as_pdf
                             : Icons.description_outlined,
-                    color: const Color(0xFF4F46E5),
+                    color: const Color(0xFFB8933F),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -731,7 +731,7 @@ class _DocumentsTab extends ConsumerWidget {
                     ),
                   ),
                   const Icon(Icons.open_in_new,
-                      color: Color(0xFF4F46E5), size: 18),
+                      color: Color(0xFFB8933F), size: 18),
                 ],
               ),
             );
@@ -857,7 +857,7 @@ class _NotesTabState extends ConsumerState<_NotesTab> {
                               strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.send),
                   style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFFB8933F),
                     foregroundColor: Colors.white,
                   ),
                 ),

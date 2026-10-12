@@ -299,7 +299,7 @@ class _StatusOption extends StatelessWidget {
     return ListTile(
       leading: Icon(
         selected ? Icons.radio_button_checked : Icons.radio_button_off,
-        color: selected ? const Color(0xFF6366F1) : Colors.black45,
+        color: selected ? const Color(0xFFB8933F) : Colors.black45,
       ),
       title: Text(label),
       onTap: () => Navigator.of(context).pop(value),
@@ -374,7 +374,7 @@ class _LeadCard extends StatelessWidget {
                               launchUrl(Uri.parse('tel:${lead.phone}')),
                           child: Text(lead.phone,
                               style: const TextStyle(
-                                  color: Color(0xFF4F46E5),
+                                  color: Color(0xFFB8933F),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13.5)),
                         ),
@@ -697,7 +697,7 @@ class _PrimaryAction extends StatelessWidget {
     return FilledButton(
       onPressed: onTap,
       style: FilledButton.styleFrom(
-        backgroundColor: const Color(0xFF6366F1),
+        backgroundColor: const Color(0xFFB8933F),
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -736,7 +736,7 @@ class _TabsBar extends StatelessWidget {
               border: Border(
                 bottom: BorderSide(
                   width: 2,
-                  color: active ? const Color(0xFF4F46E5) : Colors.transparent,
+                  color: active ? const Color(0xFFB8933F) : Colors.transparent,
                 ),
               ),
             ),
@@ -1072,7 +1072,7 @@ class _PricingRow extends StatelessWidget {
                       icon: const Icon(Icons.edit, size: 14),
                       label: const Text('Modifier'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF4F46E5),
+                        foregroundColor: const Color(0xFFB8933F),
                         side: const BorderSide(color: Color(0xFFE0E7FF)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
@@ -1175,7 +1175,7 @@ class _PricingRow extends StatelessWidget {
                   onSetPrice(vehicle.id, tiers);
                 },
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
+                  backgroundColor: const Color(0xFFB8933F),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(

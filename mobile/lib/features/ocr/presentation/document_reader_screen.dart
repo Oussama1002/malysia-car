@@ -181,7 +181,7 @@ class _UploadCard extends StatelessWidget {
               child: Column(
                 children: [
                   const Icon(Icons.cloud_upload_outlined,
-                      size: 36, color: Color(0xFF4F46E5)),
+                      size: 36, color: Color(0xFFB8933F)),
                   const SizedBox(height: 6),
                   const Text('Choisissez un fichier à analyser',
                       style: TextStyle(
@@ -206,7 +206,7 @@ class _UploadCard extends StatelessWidget {
                             size: 16),
                         label: const Text('Choisir une image'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF4F46E5),
+                          backgroundColor: const Color(0xFFB8933F),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 10),
@@ -248,7 +248,7 @@ class _UploadCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         Text(busyLabel ?? 'En cours…',
                             style: const TextStyle(
-                                color: Color(0xFF4F46E5),
+                                color: Color(0xFFB8933F),
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w800)),
                       ],
@@ -443,7 +443,7 @@ InputDecoration _dec() {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+      borderSide: const BorderSide(color: Color(0xFFB8933F), width: 1.5),
     ),
   );
 }

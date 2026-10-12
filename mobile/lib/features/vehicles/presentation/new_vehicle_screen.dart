@@ -509,7 +509,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                 FilledButton(
                   onPressed: _submitting ? null : _submit,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFFB8933F),
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -800,7 +800,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         TextButton(
           onPressed: () => setState(() => _addingBrand = !_addingBrand),
           style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF4F46E5),
+            foregroundColor: const Color(0xFFB8933F),
             padding: const EdgeInsets.symmetric(horizontal: 10),
           ),
           child: Text(_addingBrand ? 'Fermer' : '+ Ajouter',
@@ -837,7 +837,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               ? null
               : () => setState(() => _addingModel = !_addingModel),
           style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF4F46E5),
+            foregroundColor: const Color(0xFFB8933F),
             padding: const EdgeInsets.symmetric(horizontal: 10),
           ),
           child: Text(_addingModel ? 'Fermer' : '+ Ajouter',
@@ -868,7 +868,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         FilledButton(
           onPressed: pending ? null : () => onSubmit(),
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF4F46E5),
+            backgroundColor: const Color(0xFFB8933F),
             minimumSize: const Size(48, 44),
           ),
           child: pending
@@ -1138,7 +1138,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                 icon: const Icon(Icons.done_all, size: 14),
                 label: const Text('Tout sélectionner'),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: const Color(0xFFB8933F),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(0, 30),
                   textStyle: const TextStyle(
@@ -1151,7 +1151,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                   icon: const Icon(Icons.remove_done, size: 14),
                   label: const Text('Tout décocher'),
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: const Color(0xFFB8933F),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     minimumSize: const Size(0, 30),
                     textStyle: const TextStyle(
@@ -1190,7 +1190,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                       }
                     }),
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: const Color(0xFFB8933F),
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       minimumSize: const Size(0, 28),
                     ),
@@ -1505,7 +1505,7 @@ class _EquipmentChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: selected
-                ? const Color(0xFF818CF8)
+                ? const Color(0xFFD4AF5A)
                 : Theme.of(context).dividerColor,
           ),
         ),
@@ -1516,7 +1516,7 @@ class _EquipmentChip extends StatelessWidget {
               selected ? Icons.check_box : Icons.check_box_outline_blank,
               size: 16,
               color: selected
-                  ? const Color(0xFF4F46E5)
+                  ? const Color(0xFFB8933F)
                   : Colors.black45,
             ),
             const SizedBox(width: 6),

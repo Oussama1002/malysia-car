@@ -50,7 +50,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         },
         icon: const Icon(Icons.add),
         label: const Text('Nouveau client'),
-        backgroundColor: const Color(0xFF6366F1),
+        backgroundColor: const Color(0xFFB8933F),
         foregroundColor: Colors.white,
       ),
       body: ModuleBackground(
@@ -205,7 +205,7 @@ class _FilterPill extends StatelessWidget {
                           ? Icons.radio_button_checked
                           : Icons.radio_button_off,
                       color: selected == e.key
-                          ? const Color(0xFF6366F1)
+                          ? const Color(0xFFB8933F)
                           : Colors.black45,
                     ),
                     title: Text(e.value),
@@ -220,7 +220,7 @@ class _FilterPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF6366F1) : Colors.white,
+          color: isActive ? const Color(0xFFB8933F) : Colors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
               color: isActive ? Colors.transparent : Theme.of(context).dividerColor),
@@ -309,7 +309,7 @@ class _BlacklistPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF6366F1) : Colors.white,
+          color: isActive ? const Color(0xFFB8933F) : Colors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
               color: isActive ? Colors.transparent : Theme.of(context).dividerColor),
@@ -348,7 +348,7 @@ class _CustomerCard extends StatelessWidget {
                 height: 42,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                    colors: [Color(0xFFB8933F), Color(0xFF9A7B2E)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),

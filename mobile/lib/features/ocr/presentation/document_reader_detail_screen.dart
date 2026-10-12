@@ -589,7 +589,7 @@ InputDecoration _dec({String? hint}) {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+      borderSide: const BorderSide(color: Color(0xFFB8933F), width: 1.5),
     ),
   );
 }

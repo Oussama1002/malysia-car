@@ -55,7 +55,7 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
         },
         icon: const Icon(Icons.add),
         label: const Text('Nouveau contrat'),
-        backgroundColor: const Color(0xFF6366F1),
+        backgroundColor: const Color(0xFFB8933F),
         foregroundColor: Colors.white,
       ),
       body: ModuleBackground(
@@ -210,7 +210,7 @@ class _FilterDropdown extends StatelessWidget {
                           ? Icons.radio_button_checked
                           : Icons.radio_button_off,
                       color: selected == e.key
-                          ? const Color(0xFF6366F1)
+                          ? const Color(0xFFB8933F)
                           : Colors.black45,
                     ),
                     title: Text(e.value),
@@ -225,7 +225,7 @@ class _FilterDropdown extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF6366F1) : Colors.white,
+          color: isActive ? const Color(0xFFB8933F) : Colors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
               color: isActive ? Colors.transparent : Theme.of(context).dividerColor),
@@ -287,7 +287,7 @@ class _ContractCard extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF4F46E5))),
+                          color: Color(0xFFB8933F))),
                 ),
             ],
           ),

@@ -115,7 +115,7 @@ class _Header extends StatelessWidget {
             icon: const Icon(Icons.done_all, size: 16),
             label: const Text('Tout marquer lu'),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF4F46E5),
+              foregroundColor: const Color(0xFFB8933F),
               textStyle:
                   const TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
             ),
@@ -158,7 +158,7 @@ class _Tile extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF4F46E5),
+                  color: Color(0xFFB8933F),
                   shape: BoxShape.circle,
                 ),
               ),

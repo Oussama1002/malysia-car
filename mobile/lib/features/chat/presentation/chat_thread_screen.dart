@@ -160,7 +160,7 @@ class _Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mine = message.fromMe;
-    final bg = mine ? const Color(0xFF4F46E5) : Colors.white;
+    final bg = mine ? const Color(0xFFB8933F) : Colors.white;
     final fg = mine ? Colors.white : const Color(0xFF1F2937);
     final subFg = mine ? Colors.white70 : Colors.black45;
     return Align(
@@ -368,7 +368,7 @@ class _Composer extends StatelessWidget {
           FilledButton(
             onPressed: sending ? null : onSend,
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF4F46E5),
+              backgroundColor: const Color(0xFFB8933F),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               shape:
                   RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -394,12 +394,12 @@ class _Avatar extends StatelessWidget {
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-          color: const Color(0xFF4F46E5).withOpacity(0.12),
+          color: const Color(0xFFB8933F).withOpacity(0.12),
           borderRadius: BorderRadius.circular(999)),
       alignment: Alignment.center,
       child: Text(initialsOf(name),
           style: const TextStyle(
-              color: Color(0xFF4F46E5),
+              color: Color(0xFFB8933F),
               fontSize: 11,
               fontWeight: FontWeight.w900)),
     );

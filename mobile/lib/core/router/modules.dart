@@ -22,7 +22,7 @@ const List<ModuleDescriptor> kModules = [
       path: '/reservations',
       label: 'Réservations',
       icon: Icons.event,
-      color: Color(0xFF6366F1)),
+      color: Color(0xFFB8933F)),
   ModuleDescriptor(
       path: '/clients',
       label: 'Clients',

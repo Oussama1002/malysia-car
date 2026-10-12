@@ -210,7 +210,7 @@ class _AvailabilityCheckScreenState
                 FilledButton(
                   onPressed: _createReservation,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFFB8933F),
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),

@@ -64,9 +64,9 @@ class _ContractDetailScreenState extends ConsumerState<ContractDetailScreen>
                   controller: _tabs,
                   isScrollable: true,
                   tabAlignment: TabAlignment.start,
-                  labelColor: const Color(0xFF4F46E5),
+                  labelColor: const Color(0xFFB8933F),
                   unselectedLabelColor: Colors.black54,
-                  indicatorColor: const Color(0xFF4F46E5),
+                  indicatorColor: const Color(0xFFB8933F),
                   labelStyle: const TextStyle(
                       fontWeight: FontWeight.w800, fontSize: 13),
                   tabs: const [
@@ -138,7 +138,7 @@ class _HeaderCard extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF4F46E5))),
+                            color: Color(0xFFB8933F))),
                   ),
               ],
             ),
@@ -161,7 +161,7 @@ class _HeaderCard extends StatelessWidget {
                 if (c.baseAmount != null && c.baseAmount! > 0)
                   Text(money.format(c.baseAmount),
                       style: const TextStyle(
-                          color: Color(0xFF4F46E5),
+                          color: Color(0xFFB8933F),
                           fontWeight: FontWeight.w900,
                           fontSize: 18)),
               ],
@@ -401,7 +401,7 @@ class _ScheduleTab extends ConsumerWidget {
                     child: Text('${it.number}',
                         style: const TextStyle(
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF4F46E5))),
+                            color: Color(0xFFB8933F))),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -697,7 +697,7 @@ class _LegalTab extends ConsumerWidget {
                       Row(
                         children: [
                           const Icon(Icons.gavel,
-                              size: 14, color: Color(0xFF4F46E5)),
+                              size: 14, color: Color(0xFFB8933F)),
                           const SizedBox(width: 4),
                           Text(arrearsPhaseFr(a.phase),
                               style: const TextStyle(
@@ -823,7 +823,7 @@ class _DocumentsTab extends ConsumerWidget {
                         : d.mimeType == 'application/pdf'
                             ? Icons.picture_as_pdf
                             : Icons.description_outlined,
-                    color: const Color(0xFF4F46E5),
+                    color: const Color(0xFFB8933F),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -851,7 +851,7 @@ class _DocumentsTab extends ConsumerWidget {
                     ),
                   ),
                   const Icon(Icons.open_in_new,
-                      color: Color(0xFF4F46E5), size: 18),
+                      color: Color(0xFFB8933F), size: 18),
                 ],
               ),
             );
@@ -954,7 +954,7 @@ class _AuditTileState extends State<_AuditTile> {
                   decoration: BoxDecoration(
                     color: entry.legalSignificance
                         ? const Color(0xFFF59E0B)
-                        : const Color(0xFF6366F1),
+                        : const Color(0xFFB8933F),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1018,13 +1018,13 @@ class _AuditTileState extends State<_AuditTile> {
                   Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
-                    color: const Color(0xFF4F46E5),
+                    color: const Color(0xFFB8933F),
                   ),
                   const SizedBox(width: 4),
                   Text(
                     'Voir les changements (${diffs.length})',
                     style: const TextStyle(
-                      color: Color(0xFF4F46E5),
+                      color: Color(0xFFB8933F),
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1203,7 +1203,7 @@ class _BusinessHistoryList extends StatelessWidget {
       case 'rejected':
         return const Color(0xFFDC2626);
       default:
-        return const Color(0xFF6366F1);
+        return const Color(0xFFB8933F);
     }
   }
 }

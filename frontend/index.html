@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0B1020" />
+  <meta name="theme-color" content="#faf8f3" />
   <title>DriveFlow OS — Automobile & Leasing</title>
 
   <!-- Preconnect to fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-  <!-- Typography: Inter (UI), JetBrains Mono (numbers), IBM Plex Sans Arabic (RTL) -->
+  <!-- Typography: Cormorant Garamond (serif display), Inter (UI),
+       JetBrains Mono (numbers), IBM Plex Sans Arabic (RTL) -->
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap"
     rel="stylesheet"
   />
 
@@ -25,8 +26,34 @@
         extend: {
           fontFamily: {
             sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+            serif: ['Cormorant Garamond', 'Georgia', 'ui-serif', 'serif'],
             mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular'],
             arabic: ['IBM Plex Sans Arabic', 'Inter', 'ui-sans-serif'],
+          },
+          colors: {
+            // White & Gold luxury theme — remap the old indigo/violet/purple
+            // brand ramps to champagne gold so every existing
+            // bg-indigo-*/text-violet-* utility becomes gold automatically.
+            gold: {
+              50: '#fbf7ec', 100: '#f6edd2', 200: '#eedcab', 300: '#e3c77c',
+              400: '#d4af5a', 500: '#c9a24b', 600: '#9a7b2e', 700: '#7a5f22',
+              800: '#5c471a', 900: '#3d2f12', 950: '#241b0a',
+            },
+            indigo: {
+              50: '#fbf7ec', 100: '#f6edd2', 200: '#eedcab', 300: '#e3c77c',
+              400: '#d4af5a', 500: '#c9a24b', 600: '#9a7b2e', 700: '#7a5f22',
+              800: '#5c471a', 900: '#3d2f12', 950: '#241b0a',
+            },
+            violet: {
+              50: '#fbf7ec', 100: '#f6edd2', 200: '#eedcab', 300: '#e3c77c',
+              400: '#d4af5a', 500: '#c9a24b', 600: '#9a7b2e', 700: '#7a5f22',
+              800: '#5c471a', 900: '#3d2f12', 950: '#241b0a',
+            },
+            purple: {
+              50: '#fbf7ec', 100: '#f6edd2', 200: '#eedcab', 300: '#e3c77c',
+              400: '#d4af5a', 500: '#c9a24b', 600: '#9a7b2e', 700: '#7a5f22',
+              800: '#5c471a', 900: '#3d2f12', 950: '#241b0a',
+            },
           },
         },
       },

@@ -274,7 +274,7 @@ class _FilterPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF4F46E5) : const Color(0xFFF1F5F9),
+          color: selected ? const Color(0xFFB8933F) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
@@ -310,7 +310,7 @@ class _SubRentalCard extends StatelessWidget {
               Expanded(
                 child: Text(s.number,
                     style: const TextStyle(
-                        color: Color(0xFF4F46E5),
+                        color: Color(0xFFB8933F),
                         fontWeight: FontWeight.w800,
                         fontSize: 14.5)),
               ),

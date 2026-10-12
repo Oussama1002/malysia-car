@@ -68,7 +68,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
         },
         icon: const Icon(Icons.add),
         label: const Text('Nouveau véhicule'),
-        backgroundColor: const Color(0xFF6366F1),
+        backgroundColor: const Color(0xFFB8933F),
         foregroundColor: Colors.white,
       ),
       body: ModuleBackground(
@@ -240,7 +240,7 @@ class _FilterChip extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Material(
-        color: selected ? const Color(0xFF6366F1) : Colors.white,
+        color: selected ? const Color(0xFFB8933F) : Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
           side: BorderSide(

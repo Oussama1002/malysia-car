@@ -500,7 +500,7 @@ class _ActionsRow extends StatelessWidget {
             icon: const Icon(Icons.add, size: 14),
             label: const Text('Nouvelle rés.'),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF4F46E5),
+              backgroundColor: const Color(0xFFB8933F),
               foregroundColor: Colors.white,
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -545,7 +545,7 @@ class _SearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.4),
+          borderSide: const BorderSide(color: Color(0xFFB8933F), width: 1.4),
         ),
       ),
     );
@@ -748,7 +748,7 @@ class _StatusChip extends StatelessWidget {
 
 class _ActionBtn extends StatelessWidget {
   const _ActionBtn.primary({required this.label, required this.onTap})
-      : _color = const Color(0xFF6366F1),
+      : _color = const Color(0xFFB8933F),
         _fg = Colors.white;
   const _ActionBtn.orange({required this.label, required this.onTap})
       : _color = const Color(0xFFF59E0B),

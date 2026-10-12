@@ -66,7 +66,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       FilledButton.tonal(
                         onPressed: () => setState(() => _showNew = !_showNew),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF4F46E5),
+                          backgroundColor: const Color(0xFFB8933F),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
@@ -294,13 +294,13 @@ class _Avatar extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: const Color(0xFF4F46E5).withOpacity(0.12),
+        color: const Color(0xFFB8933F).withOpacity(0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       alignment: Alignment.center,
       child: Text(initialsOf(name),
           style: const TextStyle(
-              color: Color(0xFF4F46E5),
+              color: Color(0xFFB8933F),
               fontSize: 11,
               fontWeight: FontWeight.w900)),
     );

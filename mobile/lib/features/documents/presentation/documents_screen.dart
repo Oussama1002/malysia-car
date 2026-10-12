@@ -89,7 +89,7 @@ class _FiltersToggle extends StatelessWidget {
           child: Row(
             children: [
               const Icon(Icons.filter_alt_outlined,
-                  size: 18, color: Color(0xFF4F46E5)),
+                  size: 18, color: Color(0xFFB8933F)),
               const SizedBox(width: 10),
               const Expanded(
                 child: Text('Filtres',
@@ -203,7 +203,7 @@ class _FiltersCardState extends ConsumerState<_FiltersCard> {
                 icon: const Icon(Icons.filter_alt_off, size: 16),
                 label: const Text('Réinitialiser'),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: const Color(0xFFB8933F),
                   textStyle: const TextStyle(
                       fontWeight: FontWeight.w800, fontSize: 12),
                 ),
@@ -617,7 +617,7 @@ class _DocumentLine extends StatelessWidget {
                 icon: const Icon(Icons.open_in_new, size: 14),
                 label: const Text('Ouvrir'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: const Color(0xFFB8933F),
                   side: const BorderSide(color: Color(0xFFC7D2FE)),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 4),
@@ -693,7 +693,7 @@ InputDecoration _dec({String? hint}) {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+      borderSide: const BorderSide(color: Color(0xFFB8933F), width: 1.5),
     ),
   );
 }

@@ -217,7 +217,7 @@ class _ActionButtons extends StatelessWidget {
       buttons
         ..add(_GhostAction(
             label: '+ Paiement fournisseur',
-            borderColor: const Color(0xFF818CF8),
+            borderColor: const Color(0xFFD4AF5A),
             textColor: const Color(0xFF4338CA),
             onTap: onPayment))
         ..add(_PrimaryAction(
@@ -395,7 +395,7 @@ class _TabsBar extends StatelessWidget {
                       bottom: BorderSide(
                         width: 2,
                         color: current == it.$1
-                            ? const Color(0xFF4F46E5)
+                            ? const Color(0xFFB8933F)
                             : Colors.transparent,
                       ),
                     ),
@@ -690,7 +690,7 @@ class _PaymentsTab extends ConsumerWidget {
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Paiement'),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF4F46E5),
+                  foregroundColor: const Color(0xFFB8933F),
                   textStyle: const TextStyle(
                       fontWeight: FontWeight.w800, fontSize: 12),
                 ),
@@ -973,7 +973,7 @@ class _ReturnReportTab extends StatelessWidget {
               children: const [
                 Text('Effectuer le retour au fournisseur →',
                     style: TextStyle(
-                        color: Color(0xFF4F46E5),
+                        color: Color(0xFFB8933F),
                         fontWeight: FontWeight.w800,
                         fontSize: 13)),
               ],
@@ -1230,7 +1230,7 @@ class _PaymentSheetState extends State<_PaymentSheet> {
     return _SheetFrame(
       title: 'Paiement fournisseur',
       submitLabel: 'Enregistrer',
-      submitColor: const Color(0xFF4F46E5),
+      submitColor: const Color(0xFFB8933F),
       onSubmit: () {
         if (_formKey.currentState?.validate() != true) return;
         Navigator.pop(context, {
@@ -1427,7 +1427,7 @@ InputDecoration _dec({String? hint}) {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+      borderSide: const BorderSide(color: Color(0xFFB8933F), width: 1.5),
     ),
   );
 }

@@ -60,9 +60,9 @@ class _VehicleDetailScreenState extends ConsumerState<VehicleDetailScreen>
                   controller: _tabs,
                   isScrollable: true,
                   tabAlignment: TabAlignment.start,
-                  labelColor: const Color(0xFF4F46E5),
+                  labelColor: const Color(0xFFB8933F),
                   unselectedLabelColor: Colors.black54,
-                  indicatorColor: const Color(0xFF4F46E5),
+                  indicatorColor: const Color(0xFFB8933F),
                   labelStyle: const TextStyle(
                       fontWeight: FontWeight.w800, fontSize: 13),
                   tabs: [
@@ -463,7 +463,7 @@ class _MovementsTab extends StatelessWidget {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Nouveau mouvement'),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
+                backgroundColor: const Color(0xFFB8933F),
                 minimumSize: const Size.fromHeight(44),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -572,7 +572,7 @@ class _MaintenanceTab extends StatelessWidget {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Enregistrer un entretien'),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
+                backgroundColor: const Color(0xFFB8933F),
                 minimumSize: const Size.fromHeight(44),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -602,7 +602,7 @@ class _MaintenanceTab extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(Icons.build,
-                                size: 16, color: Color(0xFF4F46E5)),
+                                size: 16, color: Color(0xFFB8933F)),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -894,7 +894,7 @@ class _VehicleDocumentsTab extends ConsumerWidget {
                         : d.mimeType == 'application/pdf'
                             ? Icons.picture_as_pdf
                             : Icons.description_outlined,
-                    color: const Color(0xFF4F46E5),
+                    color: const Color(0xFFB8933F),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -922,7 +922,7 @@ class _VehicleDocumentsTab extends ConsumerWidget {
                     ),
                   ),
                   const Icon(Icons.open_in_new,
-                      color: Color(0xFF4F46E5), size: 18),
+                      color: Color(0xFFB8933F), size: 18),
                 ],
               ),
             );

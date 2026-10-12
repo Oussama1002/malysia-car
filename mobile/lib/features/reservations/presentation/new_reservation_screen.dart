@@ -609,7 +609,7 @@ class _NewReservationScreenState
                       selected: !_isDraft,
                       title: 'Réservation confirmée',
                       subtitle: '1 véhicule bloqué · créneau réservé',
-                      color: const Color(0xFF4F46E5),
+                      color: const Color(0xFFB8933F),
                       onTap: () => setState(() {
                         _isDraft = false;
                         if (_vehicleIds.length > 1) {
@@ -654,7 +654,7 @@ class _NewReservationScreenState
                     : _submit,
                 style: FilledButton.styleFrom(
                   backgroundColor:
-                      _isDraft ? const Color(0xFFD97706) : const Color(0xFF4F46E5),
+                      _isDraft ? const Color(0xFFD97706) : const Color(0xFFB8933F),
                   minimumSize: const Size.fromHeight(52),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
@@ -968,11 +968,11 @@ class _ClientPickerSheetState extends ConsumerState<_ClientPickerSheet> {
                     controller: ctrl,
                     children: [
                       ListTile(
-                        leading: const Icon(Icons.add, color: Color(0xFF4F46E5)),
+                        leading: const Icon(Icons.add, color: Color(0xFFB8933F)),
                         title: const Text('+ Nouveau client',
                             style: TextStyle(
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF4F46E5))),
+                                color: Color(0xFFB8933F))),
                         onTap: () => Navigator.of(context).pop(
                           const CustomerDto(
                             id: '__new__',
@@ -1130,7 +1130,7 @@ class _VehiclePickerSheetState extends ConsumerState<_VehiclePickerSheet> {
                     ),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(50),
-                      backgroundColor: const Color(0xFF6366F1),
+                      backgroundColor: const Color(0xFFB8933F),
                     ),
                     child: Text(
                       _picked.isEmpty

@@ -489,7 +489,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 FilledButton(
                   onPressed: _submitting ? null : _submit,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFFB8933F),
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -536,7 +536,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: _kind == k
-                          ? const Color(0xFF818CF8)
+                          ? const Color(0xFFD4AF5A)
                           : Theme.of(context).dividerColor,
                       width: _kind == k ? 1.6 : 1,
                     ),

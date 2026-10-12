@@ -248,7 +248,7 @@ class _TabsBar extends StatelessWidget {
                       bottom: BorderSide(
                         width: 2,
                         color: current == t
-                            ? const Color(0xFF4F46E5)
+                            ? const Color(0xFFB8933F)
                             : Colors.transparent,
                       ),
                     ),
@@ -464,7 +464,7 @@ class _TabContent extends ConsumerWidget {
                 ),
                 child: Icon(icon,
                     color: isTappable
-                        ? const Color(0xFF4F46E5)
+                        ? const Color(0xFFB8933F)
                         : Colors.black45,
                     size: 16),
               ),
@@ -499,7 +499,7 @@ class _TabContent extends ConsumerWidget {
               ),
               if (isTappable)
                 const Icon(Icons.chevron_right,
-                    color: Color(0xFF4F46E5), size: 20),
+                    color: Color(0xFFB8933F), size: 20),
             ],
           ),
         ),

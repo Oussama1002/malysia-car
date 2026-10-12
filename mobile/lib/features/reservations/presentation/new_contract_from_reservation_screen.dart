@@ -425,7 +425,7 @@ class _NewContractFromReservationScreenState
                   height: 2,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   color: i < current
-                      ? const Color(0xFF4F46E5)
+                      ? const Color(0xFFB8933F)
                       : Colors.grey.shade300,
                 ),
             ],
@@ -467,7 +467,7 @@ class _NewContractFromReservationScreenState
           Row(
             children: [
               const Icon(Icons.auto_awesome,
-                  color: Color(0xFF4F46E5), size: 16),
+                  color: Color(0xFFB8933F), size: 16),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -491,7 +491,7 @@ class _NewContractFromReservationScreenState
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(r.$1, size: 14, color: const Color(0xFF4F46E5)),
+                  Icon(r.$1, size: 14, color: const Color(0xFFB8933F)),
                   const SizedBox(width: 6),
                   SizedBox(
                     width: 68,
@@ -589,7 +589,7 @@ class _NewContractFromReservationScreenState
                   icon: const Icon(Icons.check, size: 16),
                   label: Text(_busy ? 'Création…' : 'Signer et créer'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
+                    backgroundColor: const Color(0xFFB8933F),
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(48),
                     textStyle: const TextStyle(
@@ -605,7 +605,7 @@ class _NewContractFromReservationScreenState
                   icon: const Icon(Icons.arrow_forward, size: 16),
                   label: const Text('Suivant'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
+                    backgroundColor: const Color(0xFFB8933F),
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(48),
                     textStyle: const TextStyle(
@@ -713,7 +713,7 @@ class _NewContractFromReservationScreenState
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: active
-                ? const Color(0xFF4F46E5)
+                ? const Color(0xFFB8933F)
                 : Colors.grey.shade200,
             width: active ? 2 : 1,
           ),
@@ -726,14 +726,14 @@ class _NewContractFromReservationScreenState
               decoration: BoxDecoration(
                 gradient: active
                     ? const LinearGradient(
-                        colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)])
+                        colors: [Color(0xFFB8933F), Color(0xFF9A7B2E)])
                     : null,
                 color: active ? null : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 data.$3,
-                color: active ? Colors.white : const Color(0xFF4F46E5),
+                color: active ? Colors.white : const Color(0xFFB8933F),
                 size: 20,
               ),
             ),
@@ -757,7 +757,7 @@ class _NewContractFromReservationScreenState
                 width: 22,
                 height: 22,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF4F46E5),
+                  color: Color(0xFFB8933F),
                   shape: BoxShape.circle,
                 ),
                 child:
@@ -820,7 +820,7 @@ class _NewContractFromReservationScreenState
             icon: const Icon(Icons.add, size: 14),
             label: const Text('Ajouter un mode'),
             style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF4F46E5),
+                foregroundColor: const Color(0xFFB8933F),
                 textStyle: const TextStyle(
                     fontWeight: FontWeight.w900, fontSize: 12)),
           ),
@@ -1203,7 +1203,7 @@ class _StepDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = active
-        ? const Color(0xFF4F46E5)
+        ? const Color(0xFFB8933F)
         : done
             ? const Color(0xFF10B981)
             : const Color(0xFFCBD5E1);
@@ -1404,7 +1404,7 @@ InputDecoration _dec({String? label, String? hint}) {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+      borderSide: const BorderSide(color: Color(0xFFB8933F), width: 1.5),
     ),
   );
 }

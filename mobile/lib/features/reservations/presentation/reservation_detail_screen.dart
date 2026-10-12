@@ -170,11 +170,11 @@ class _Breadcrumb extends StatelessWidget {
           children: const [
             Padding(
               padding: EdgeInsets.only(left: 4, right: 2),
-              child: Icon(Icons.arrow_back, size: 18, color: Color(0xFF4F46E5)),
+              child: Icon(Icons.arrow_back, size: 18, color: Color(0xFFB8933F)),
             ),
             Text('Retour aux réservations',
                 style: TextStyle(
-                    color: Color(0xFF4F46E5),
+                    color: Color(0xFFB8933F),
                     fontWeight: FontWeight.w800,
                     fontSize: 12.5)),
           ],
@@ -546,7 +546,7 @@ class _QuickActions extends StatelessWidget {
           _mini('Générer contrat', const Color(0xFFF59E0B), onGenerateContract));
     }
     if (s == 'reserved') {
-      actions.add(_mini('Confirmer', const Color(0xFF4F46E5), onConfirm));
+      actions.add(_mini('Confirmer', const Color(0xFFB8933F), onConfirm));
     }
     if (!r.isCancelled && !r.isClosed) {
       actions.add(_mini('Check-Out', const Color(0xFF10B981), onCheckout));
@@ -647,7 +647,7 @@ class _TabsBar extends StatelessWidget {
                       bottom: BorderSide(
                         width: 2,
                         color: current == t
-                            ? const Color(0xFF4F46E5)
+                            ? const Color(0xFFB8933F)
                             : Colors.transparent,
                       ),
                     ),
@@ -853,7 +853,7 @@ class _TabSummary extends StatelessWidget {
       _KpiTile(
           label: 'Durée location',
           value: '${days > 0 ? days : 1} jour${days > 1 ? 's' : ''}',
-          color: const Color(0xFF4F46E5)),
+          color: const Color(0xFFB8933F)),
       _KpiTile(
           label: 'Tarif / jour',
           value: totals.dailyRate > 0
@@ -895,7 +895,7 @@ class _TabSummary extends StatelessWidget {
       _KpiTile(
           label: 'Extensions',
           value: '${money.format(totals.extensionsTotal)} MAD',
-          color: const Color(0xFF7C3AED)),
+          color: const Color(0xFF9A7B2E)),
       _KpiTile(
           label: 'Dommages',
           value: '${money.format(totals.damagesTotal)} MAD',

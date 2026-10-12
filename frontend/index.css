@@ -14,24 +14,25 @@
 
   /* Fonts */
   --df-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  --df-font-serif: "Cormorant Garamond", Georgia, "Times New Roman", ui-serif, serif;
   --df-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --df-font-arabic: "IBM Plex Sans Arabic", "Inter", ui-sans-serif;
 
-  /* Brand — Electric Indigo */
-  --df-brand-50: #eef0ff;
-  --df-brand-100: #dfe3ff;
-  --df-brand-200: #c2c9ff;
-  --df-brand-300: #9ea7ff;
-  --df-brand-400: #7a82ff;
-  --df-brand-500: #5b5bf4;
-  --df-brand-600: #4c46db;
-  --df-brand-700: #3e38b5;
-  --df-brand-800: #2f2a85;
-  --df-brand-900: #1c1a52;
+  /* Brand — Champagne Gold */
+  --df-brand-50: #fbf7ec;
+  --df-brand-100: #f6edd2;
+  --df-brand-200: #eedcab;
+  --df-brand-300: #e3c77c;
+  --df-brand-400: #d4af5a;
+  --df-brand-500: #c9a24b;
+  --df-brand-600: #9a7b2e;
+  --df-brand-700: #7a5f22;
+  --df-brand-800: #5c471a;
+  --df-brand-900: #3d2f12;
 
-  /* Accent — Cyan-Aqua (secondary) */
-  --df-accent-500: #22d3ee;
-  --df-accent-600: #0891b2;
+  /* Accent — warm bronze (secondary) */
+  --df-accent-500: #b08d57;
+  --df-accent-600: #8c6d3f;
 
   /* Semantic — financial */
   --df-success-500: #10b981;
@@ -42,26 +43,26 @@
   --df-danger-600: #dc2626;
   --df-info-500: #3b82f6;
 
-  /* Neutrals */
-  --df-ink: #0b1020;
-  --df-text: #0b1220;
-  --df-text-muted: #475569;
-  --df-text-subtle: #64748b;
-  --df-text-faint: #94a3b8;
+  /* Neutrals — warm espresso ink on ivory */
+  --df-ink: #1a1510;
+  --df-text: #1f1a12;
+  --df-text-muted: #6b6253;
+  --df-text-subtle: #8a8070;
+  --df-text-faint: #b0a690;
 
-  /* Surfaces */
-  --df-bg: #f7f7fb;
-  --df-bg-soft: #fafafe;
-  --df-surface: rgba(255, 255, 255, 0.90);
+  /* Surfaces — warm white / ivory */
+  --df-bg: #f8f5ee;
+  --df-bg-soft: #fcfaf4;
+  --df-surface: rgba(255, 255, 255, 0.92);
   --df-surface-solid: #ffffff;
-  --df-surface-elev: rgba(255, 255, 255, 0.96);
-  --df-surface-sunk: #f1f3f9;
-  --df-glass: rgba(255, 255, 255, 0.68);
+  --df-surface-elev: rgba(255, 255, 255, 0.97);
+  --df-surface-sunk: #f3efe4;
+  --df-glass: rgba(255, 253, 248, 0.70);
 
-  /* Borders */
-  --df-border: rgba(15, 23, 42, 0.08);
-  --df-border-strong: rgba(15, 23, 42, 0.14);
-  --df-border-bold: rgba(15, 23, 42, 0.22);
+  /* Borders — warm gold-tinted */
+  --df-border: rgba(80, 61, 22, 0.10);
+  --df-border-strong: rgba(80, 61, 22, 0.16);
+  --df-border-bold: rgba(80, 61, 22, 0.26);
 
   /* Radii */
   --df-r-xs: 6px;
@@ -78,7 +79,7 @@
   --df-elev-3: 0 12px 30px rgba(2, 6, 23, 0.10), 0 3px 8px rgba(2, 6, 23, 0.06);
   --df-elev-4: 0 22px 60px rgba(2, 6, 23, 0.16), 0 10px 24px rgba(2, 6, 23, 0.10);
   --df-elev-5: 0 40px 100px rgba(2, 6, 23, 0.24), 0 20px 40px rgba(2, 6, 23, 0.14);
-  --df-glow-brand: 0 18px 50px rgba(91, 91, 244, 0.28), 0 8px 20px rgba(91, 91, 244, 0.18);
+  --df-glow-brand: 0 18px 50px rgba(201, 162, 75, 0.34), 0 8px 20px rgba(154, 123, 46, 0.22);
   --df-glow-success: 0 18px 50px rgba(16, 185, 129, 0.22);
   --df-glow-danger: 0 18px 50px rgba(239, 68, 68, 0.22);
 
@@ -91,7 +92,7 @@
   --df-dur-slow: 380ms;
 
   /* Focus */
-  --df-ring: 0 0 0 4px rgba(91, 91, 244, 0.22);
+  --df-ring: 0 0 0 4px rgba(201, 162, 75, 0.28);
   --df-ring-danger: 0 0 0 4px rgba(239, 68, 68, 0.22);
 
   /* Density (comfort default) */
@@ -114,35 +115,39 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --df-ink: #05060d;
-  --df-text: #e6eaf3;
-  --df-text-muted: #9aa4b8;
-  --df-text-subtle: #7b86a0;
-  --df-text-faint: #525d78;
+  --df-ink: #0a0806;
+  --df-text: #f3efe6;
+  --df-text-muted: #b8ab93;
+  --df-text-subtle: #938872;
+  --df-text-faint: #6b6250;
 
-  --df-bg: #06070f;
-  --df-bg-soft: #0a0c17;
-  --df-surface: rgba(18, 22, 36, 0.78);
-  --df-surface-solid: #0f1322;
-  --df-surface-elev: rgba(22, 27, 46, 0.92);
-  --df-surface-sunk: #0a0d18;
-  --df-glass: rgba(22, 27, 46, 0.55);
+  --df-bg: #0c0a07;
+  --df-bg-soft: #121009;
+  --df-surface: rgba(28, 23, 16, 0.80);
+  --df-surface-solid: #16130d;
+  --df-surface-elev: rgba(36, 30, 20, 0.94);
+  --df-surface-sunk: #0f0d08;
+  --df-glass: rgba(32, 27, 18, 0.58);
 
-  --df-border: rgba(148, 163, 184, 0.10);
-  --df-border-strong: rgba(148, 163, 184, 0.18);
-  --df-border-bold: rgba(148, 163, 184, 0.28);
+  --df-border: rgba(201, 162, 75, 0.12);
+  --df-border-strong: rgba(201, 162, 75, 0.20);
+  --df-border-bold: rgba(201, 162, 75, 0.32);
 
-  --df-brand-50: #1a1a3a;
-  --df-brand-100: #1f1f4a;
+  /* Gold reads brighter on black */
+  --df-brand-50: #2a2210;
+  --df-brand-100: #3d2f12;
+  --df-brand-500: #d8b65f;
+  --df-brand-600: #e3c77c;
+  --df-brand-700: #d4af5a;
 
-  --df-elev-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.30);
-  --df-elev-2: 0 4px 14px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  --df-elev-3: 0 14px 36px rgba(0, 0, 0, 0.50), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --df-elev-4: 0 28px 70px rgba(0, 0, 0, 0.60), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --df-elev-5: 0 50px 110px rgba(0, 0, 0, 0.70), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --df-glow-brand: 0 20px 60px rgba(91, 91, 244, 0.40);
+  --df-elev-1: 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 1px rgba(0, 0, 0, 0.35);
+  --df-elev-2: 0 4px 14px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --df-elev-3: 0 14px 36px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --df-elev-4: 0 28px 70px rgba(0, 0, 0, 0.66), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --df-elev-5: 0 50px 110px rgba(0, 0, 0, 0.74), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --df-glow-brand: 0 20px 60px rgba(201, 162, 75, 0.38);
 
-  --df-ring: 0 0 0 4px rgba(122, 130, 255, 0.30);
+  --df-ring: 0 0 0 4px rgba(216, 182, 95, 0.32);
 }
 
 /* -----------------------------------------------------------------------------
@@ -185,24 +190,40 @@ body {
 [data-theme="light"] body,
 [data-theme="light"] .df-body {
   background:
-    radial-gradient(1100px 700px at 15% -10%, rgba(91, 91, 244, 0.18), transparent 55%),
-    radial-gradient(900px 700px at 95% 0%, rgba(34, 211, 238, 0.14), transparent 55%),
-    radial-gradient(900px 800px at 50% 115%, rgba(91, 91, 244, 0.08), transparent 60%),
-    linear-gradient(180deg, #f6f7fc 0%, #f2f4fb 45%, #f6f7fc 100%);
+    radial-gradient(1100px 700px at 15% -10%, rgba(201, 162, 75, 0.20), transparent 55%),
+    radial-gradient(900px 700px at 95% 0%, rgba(176, 141, 87, 0.14), transparent 55%),
+    radial-gradient(900px 800px at 50% 115%, rgba(201, 162, 75, 0.10), transparent 60%),
+    linear-gradient(180deg, #faf7f0 0%, #f6f2e8 45%, #faf7f0 100%);
 }
 
 [data-theme="dark"] body,
 [data-theme="dark"] .df-body {
   background:
-    radial-gradient(1200px 800px at 10% -10%, rgba(91, 91, 244, 0.22), transparent 55%),
-    radial-gradient(1000px 700px at 100% 10%, rgba(34, 211, 238, 0.10), transparent 55%),
-    radial-gradient(900px 900px at 60% 120%, rgba(124, 58, 237, 0.14), transparent 60%),
-    linear-gradient(180deg, #05060d 0%, #06070f 40%, #070914 100%);
+    radial-gradient(1200px 800px at 10% -10%, rgba(201, 162, 75, 0.20), transparent 55%),
+    radial-gradient(1000px 700px at 100% 10%, rgba(176, 141, 87, 0.12), transparent 55%),
+    radial-gradient(900px 900px at 60% 120%, rgba(122, 95, 34, 0.16), transparent 60%),
+    linear-gradient(180deg, #0a0806 0%, #0c0a07 40%, #100d08 100%);
 }
 
 [dir="rtl"] { font-family: var(--df-font-arabic); }
 
-::selection { background: rgba(91, 91, 244, 0.28); color: inherit; }
+::selection { background: rgba(201, 162, 75, 0.30); color: inherit; }
+
+/* -----------------------------------------------------------------------------
+   Serif display — elegant luxury headings (Cormorant Garamond)
+   ----------------------------------------------------------------------------- */
+.df-serif { font-family: var(--df-font-serif); letter-spacing: 0.005em; }
+
+/* Page / section headings carry the serif voice for a boutique feel.
+   Arabic keeps its own sans face for legibility. */
+[dir="ltr"] h1,
+[dir="ltr"] h2 {
+  font-family: var(--df-font-serif);
+  letter-spacing: 0.004em;
+  font-feature-settings: "liga" 1, "dlig" 1;
+}
+[dir="ltr"] h1 { font-weight: 600; }
+[dir="ltr"] h2 { font-weight: 600; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb {
@@ -295,13 +316,14 @@ body {
 .df-btn--icon.df-btn--sm { width: var(--df-ctrl-h-sm); }
 
 .df-btn--primary {
-  color: #fff;
-  background: linear-gradient(135deg, var(--df-brand-500) 0%, var(--df-brand-700) 100%);
-  box-shadow: var(--df-glow-brand);
+  color: #2a2111;
+  background: linear-gradient(135deg, var(--df-brand-300) 0%, var(--df-brand-500) 52%, var(--df-brand-600) 100%);
+  box-shadow: var(--df-glow-brand), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.02em;
 }
 .df-btn--primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(1.06);
+  filter: brightness(1.05) saturate(1.05);
 }
 
 .df-btn--ghost {

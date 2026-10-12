@@ -168,7 +168,7 @@ class _NewMovementScreenState extends ConsumerState<NewMovementScreen> {
                 FilledButton(
                   onPressed: _submitting ? null : _submit,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFFB8933F),
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -218,7 +218,7 @@ class _TypeRow extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF6366F1) : Colors.white,
+              color: isSelected ? const Color(0xFFB8933F) : Colors.white,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: isSelected ? Colors.transparent : Colors.grey.shade300,

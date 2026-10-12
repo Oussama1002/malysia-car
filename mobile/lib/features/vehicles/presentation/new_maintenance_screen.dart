@@ -137,7 +137,7 @@ class _NewMaintenanceScreenState extends ConsumerState<NewMaintenanceScreen> {
                             label: Text(e.value),
                             selected: selected,
                             onSelected: (_) => setState(() => _type = e.key),
-                            selectedColor: const Color(0xFF6366F1),
+                            selectedColor: const Color(0xFFB8933F),
                             labelStyle: TextStyle(
                               color: selected ? Colors.white : Colors.black87,
                               fontWeight: FontWeight.w700,
@@ -318,7 +318,7 @@ class _NewMaintenanceScreenState extends ConsumerState<NewMaintenanceScreen> {
                 FilledButton(
                   onPressed: _submitting ? null : _submit,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: const Color(0xFFB8933F),
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),

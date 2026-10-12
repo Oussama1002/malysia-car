@@ -505,7 +505,7 @@ class _NotificationsSheet extends StatelessWidget {
                 TextButton(
                   onPressed: onViewAll,
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: const Color(0xFFB8933F),
                     textStyle: const TextStyle(
                         fontWeight: FontWeight.w900, fontSize: 11.5),
                   ),
@@ -677,14 +677,14 @@ class _QuickAddIcon extends StatelessWidget {
       height: 44,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+          colors: [Color(0xFFB8933F), Color(0xFF9A7B2E)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4F46E5).withOpacity(0.3),
+            color: const Color(0xFFB8933F).withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -745,7 +745,7 @@ class _QuickAddSheet extends StatelessWidget {
             ),
             _QuickAddTile(
               icon: Icons.event,
-              color: const Color(0xFF4F46E5),
+              color: const Color(0xFFB8933F),
               title: 'Nouvelle réservation',
               subtitle: 'Bloquer un véhicule pour un client',
               onTap: () => Navigator.of(context).pop('reservation'),

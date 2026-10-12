@@ -211,7 +211,7 @@ class _PaymentCard extends StatelessWidget {
             Row(
               children: [
                 const Icon(Icons.directions_car,
-                    size: 13, color: Color(0xFF4F46E5)),
+                    size: 13, color: Color(0xFFB8933F)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(p.vehicleLabel!,
