@@ -669,13 +669,6 @@ export const ReservationsOpsPage: React.FC = () => {
         <div className="flex gap-2 shrink-0">
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
-            onClick={() => setAvailCheckOpen(true)}
-          >
-            🔍 Vérifier disponibilité
-          </button>
-          <button
-            type="button"
             className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700"
             onClick={() => setNewResOpen(true)}
           >
