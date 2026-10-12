@@ -1557,3 +1557,100 @@ a { color: inherit; text-decoration: none; }
   font-weight: 700; cursor: pointer;
 }
 .car { cursor: pointer; }
+
+/* =========================================================
+   Page Flotte (flotte.html)
+   ========================================================= */
+.flotteHero {
+  position: relative;
+  padding: 150px 0 70px;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--white);
+}
+.flotteHero__bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(900px 500px at 15% -10%, rgba(201,164,76,.28), transparent 60%),
+    radial-gradient(800px 600px at 100% 0%, rgba(201,164,76,.14), transparent 55%),
+    linear-gradient(180deg, #0f1013 0%, #16171c 100%);
+}
+.flotteHero__veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(15,16,19,.6) 100%);
+}
+.flotteHero__content { position: relative; text-align: center; }
+.flotteHero__title {
+  margin: 10px 0 14px;
+  font-size: clamp(2.2rem, 5vw, 3.6rem);
+  font-weight: 600;
+  color: var(--white);
+}
+.flotteHero__lead {
+  max-width: 620px; margin: 0 auto;
+  color: rgba(255,255,255,.72);
+  font-size: 1.05rem; line-height: 1.6;
+}
+
+.flottePage { padding: 48px 0 90px; background: var(--cream); }
+
+.flottePage__dates {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 22px; padding: 10px 16px;
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: 999px; color: var(--slate);
+  font-size: .9rem; font-weight: 600; box-shadow: var(--shadow-sm);
+}
+.flottePage__dates svg { color: var(--gold-deep); }
+
+.flottePage__layout {
+  display: grid; grid-template-columns: 280px 1fr; gap: 28px; align-items: start;
+}
+
+.flottePage__sidebar {
+  position: sticky; top: 100px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  box-shadow: var(--shadow-sm);
+}
+.flottePage__sidebar h3 {
+  margin: 0 0 16px; font-size: 1rem; font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.filterGroup { margin-bottom: 16px; }
+.filterGroup__label {
+  display: block; margin-bottom: 6px;
+  font-size: .72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--mist);
+}
+.filterGroup input,
+.filterGroup select {
+  width: 100%; height: 42px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-md);
+  background: var(--ivory); color: var(--ink);
+  font-family: var(--sans); font-size: .92rem; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.filterGroup input:focus,
+.filterGroup select:focus {
+  border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-shadow);
+}
+
+.flottePage__count {
+  margin: 0 0 18px; color: var(--mist);
+  font-size: .95rem; font-weight: 600;
+}
+.flottePage__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 22px;
+}
+
+@media (max-width: 880px) {
+  .flottePage__layout { grid-template-columns: 1fr; }
+  .flottePage__sidebar { position: static; }
+  .flotteHero { padding: 120px 0 54px; }
+}
