@@ -1,25 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/auth/auth_notifier.dart';
 import '../../../core/auth/user_dto.dart';
 import '../../../core/auth/user_repo.dart';
+import '../../../core/router/modules.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../chat/data/chat_repo.dart';
 import '../../notifications/data/notifications_repo.dart';
-import '../../chat/presentation/chat_screen.dart';
-import '../../contracts/presentation/contracts_screen.dart';
-import '../../customers/presentation/customers_screen.dart';
-import '../../documents/presentation/documents_screen.dart';
-import '../../gps/presentation/gps_screen.dart';
-import '../../ocr/presentation/document_reader_screen.dart';
-import '../../payments/presentation/payments_screen.dart';
-import '../../sub_rentals/presentation/sub_rentals_screen.dart';
-import '../../used_cars/presentation/used_cars_screen.dart';
-import '../../vehicles/presentation/vehicles_screen.dart';
-import '../../website_leads/presentation/website_leads_screen.dart';
-import '../../reservations/presentation/reservations_screen.dart';
 
 /// Onglet Accueil : en-tête, bannière violette, grille de modules.
 /// Monté dans le Navigator imbriqué de l'onglet Accueil par `AppShell`,
@@ -223,36 +213,7 @@ class _ModulesGrid extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    void open(Widget target) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => target));
-    }
-
-    final modules = <_ModuleEntry>[
-      _ModuleEntry('Réservations', Icons.event, const Color(0xFF6366F1),
-          () => open(const ReservationsScreen())),
-      _ModuleEntry('Clients', Icons.people_outline, const Color(0xFF10B981),
-          () => open(const CustomersScreen())),
-      _ModuleEntry('Flotte', Icons.directions_car, const Color(0xFFF59E0B),
-          () => open(const VehiclesScreen())),
-      _ModuleEntry('Contrats', Icons.description_outlined,
-          const Color(0xFF14B8A6), () => open(const ContractsScreen())),
-      _ModuleEntry('Paiements', Icons.attach_money, const Color(0xFF22C55E),
-          () => open(const PaymentsScreen())),
-      _ModuleEntry('Documents', Icons.folder_open, const Color(0xFF8B5CF6),
-          () => open(const DocumentsScreen())),
-      _ModuleEntry('Scanner', Icons.qr_code_scanner, const Color(0xFFEC4899),
-          () => open(const DocumentReaderScreen())),
-      _ModuleEntry('GPS', Icons.map_outlined, const Color(0xFF3B82F6),
-          () => open(const GpsScreen())),
-      _ModuleEntry('Discussions', Icons.chat_bubble_outline,
-          const Color(0xFF0EA5E9), () => open(const ChatScreen())),
-      _ModuleEntry('Sous-location', Icons.vpn_key_outlined,
-          const Color(0xFFEF4444), () => open(const SubRentalsScreen())),
-      _ModuleEntry('Occasion', Icons.sell_outlined, const Color(0xFF2563EB),
-          () => open(const UsedCarsScreen())),
-      _ModuleEntry('Demandes', Icons.public, const Color(0xFF64748B),
-          () => open(const WebsiteLeadsScreen())),
-    ];
+    const modules = kModules;
 
     return Container(
       decoration: BoxDecoration(
@@ -293,17 +254,9 @@ class _ModulesGrid extends StatelessWidget {
   }
 }
 
-class _ModuleEntry {
-  const _ModuleEntry(this.label, this.icon, this.color, this.onTap);
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-}
-
 class _ModuleRow extends StatelessWidget {
   const _ModuleRow({required this.entry});
-  final _ModuleEntry entry;
+  final ModuleDescriptor entry;
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +264,7 @@ class _ModuleRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: entry.onTap,
+        onTap: () => context.go(entry.path),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(

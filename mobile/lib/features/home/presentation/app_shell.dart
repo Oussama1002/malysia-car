@@ -1,83 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:intl/intl.dart';
 
+import '../../../core/router/modules.dart';
 import '../../../core/theme/theme_mode_provider.dart';
-import '../../chat/presentation/chat_screen.dart';
 import '../../customers/presentation/new_customer_screen.dart';
 import '../../reservations/presentation/new_contract_from_reservation_screen.dart';
 import '../../reservations/presentation/new_reservation_screen.dart';
-import '../../contracts/presentation/contracts_screen.dart';
-import '../../customers/presentation/customers_screen.dart';
-import '../../documents/presentation/documents_screen.dart';
-import '../../gps/presentation/gps_screen.dart';
 import '../../notifications/data/notification_dto.dart';
 import '../../notifications/data/notifications_repo.dart';
 import '../../notifications/presentation/notifications_screen.dart';
-import '../../ocr/presentation/document_reader_screen.dart';
-import '../../payments/presentation/payments_screen.dart';
-import '../../reservations/presentation/reservations_screen.dart';
-import '../../sub_rentals/presentation/sub_rentals_screen.dart';
-import '../../used_cars/presentation/used_cars_screen.dart';
-import '../../vehicles/presentation/vehicles_screen.dart';
-import '../../website_leads/presentation/website_leads_screen.dart';
-import 'home_screen.dart';
 
-/// Shell persistant : garde la bottom bar visible sur toutes les pages.
-///
-/// Chaque onglet a son propre `Navigator` imbriqué. Les `push` déclenchés
-/// depuis un module n'écrasent plus le `Scaffold` racine, donc la barre
-/// reste affichée au-dessus de la pile de l'onglet actif.
+/// Shell persistant : garde la top bar et la bottom bar visibles autour du
+/// module courant. Le `child` est l'écran de la route active (fourni par
+/// go_router) ; chaque module ayant son propre chemin, l'URL de la version
+/// web change quand on navigue.
 class AppShell extends ConsumerStatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, required this.location, required this.child});
+
+  final String location;
+  final Widget child;
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _tab = 0;
-  final _navKeys =
-      List<GlobalKey<NavigatorState>>.generate(5, (_) => GlobalKey<NavigatorState>());
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  Future<bool> _handlePop() async {
-    final nav = _navKeys[_tab].currentState;
-    if (nav != null && nav.canPop()) {
-      nav.pop();
-      return false;
-    }
-    if (_tab != 0) {
-      setState(() => _tab = 0);
-      return false;
-    }
-    return true;
-  }
+  /// Index de l'onglet actif déduit du chemin courant. Les modules ouverts
+  /// depuis l'accueil gardent l'onglet Accueil surligné.
+  int get _tab => switch (widget.location) {
+        '/missions' => 1,
+        '/discussions' => 3,
+        '/profil' => 4,
+        _ => 0,
+      };
 
   void _select(int i) {
-    // L'onglet central (index 2) n'est plus un ecran : c'est le bouton
-    // d'action rapide. Un tap ouvre le dropup et NE change pas d'onglet.
-    if (i == 2) {
-      _openQuickAdd();
-      return;
+    switch (i) {
+      case 0:
+        context.go('/');
+        break;
+      case 1:
+        context.go('/missions');
+        break;
+      case 2:
+        // Bouton d'action rapide : ouvre le dropup, pas de navigation.
+        _openQuickAdd();
+        break;
+      case 3:
+        context.go('/discussions');
+        break;
+      case 4:
+        context.go('/profil');
+        break;
     }
-    if (i == _tab) {
-      _navKeys[i].currentState?.popUntil((r) => r.isFirst);
-    } else {
-      setState(() => _tab = i);
-    }
-  }
-
-  /// Pousse un module sur le Navigator de l'onglet Accueil pour que
-  /// la top bar et la bottom bar restent visibles.
-  void _pushOnHome(Widget target) {
-    if (_tab != 0) {
-      setState(() => _tab = 0);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _navKeys[0].currentState?.push(MaterialPageRoute(builder: (_) => target));
-    });
   }
 
   /// Dropup des creations rapides : nouvelle reservation / client / contrat.
@@ -89,85 +69,40 @@ class _AppShellState extends ConsumerState<AppShell> {
       builder: (_) => const _QuickAddSheet(),
     );
     if (choice == null || !mounted) return;
-    switch (choice) {
-      case 'reservation':
-        _pushOnHome(const NewReservationScreen());
-        break;
-      case 'customer':
-        _pushOnHome(const NewCustomerScreen());
-        break;
-      case 'contract':
-        _pushOnHome(const NewContractFromReservationScreen());
-        break;
+    Widget? target = switch (choice) {
+      'reservation' => const NewReservationScreen(),
+      'customer' => const NewCustomerScreen(),
+      'contract' => const NewContractFromReservationScreen(),
+      _ => null,
+    };
+    if (target != null) {
+      final page = target;
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
     }
-  }
-
-  /// Ouvre un écran de module en l'empilant sur le Navigator de l'onglet
-  /// Accueil, ce qui garde la bottom bar et le top bar visibles.
-  void _openModule(Widget target) {
-    Navigator.of(context).pop(); // referme le Drawer
-    if (_tab != 0) {
-      setState(() => _tab = 0);
-    }
-    // On empile après la fermeture du drawer pour éviter que la micro
-    // animation n'absorbe le push.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final nav = _navKeys[0].currentState;
-      nav?.push(MaterialPageRoute(builder: (_) => target));
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-        final shouldPop = await _handlePop();
-        if (shouldPop && mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-      child: Scaffold(
-        key: _scaffoldKey,
-        drawer: _ModulesDrawer(onOpen: _openModule),
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              _PersistentTopBar(
-                onMenu: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-              Expanded(
-                child: IndexedStack(
-                  index: _tab,
-                  children: [
-                    _TabNavigator(
-                        navigatorKey: _navKeys[0], child: const HomeTab()),
-                    _TabNavigator(
-                        navigatorKey: _navKeys[1],
-                        child: const _StubTab(
-                            label: 'Mes missions',
-                            icon: Icons.map_outlined)),
-                    _TabNavigator(
-                        navigatorKey: _navKeys[2],
-                        child: const DocumentReaderScreen()),
-                    _TabNavigator(
-                        navigatorKey: _navKeys[3], child: const ChatScreen()),
-                    _TabNavigator(
-                        navigatorKey: _navKeys[4], child: const ProfilTab()),
-                  ],
-                ),
-              ),
-            ],
-          ),
+    return Scaffold(
+      key: _scaffoldKey,
+      drawer: const _ModulesDrawer(),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _PersistentTopBar(
+              onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
+            Expanded(child: widget.child),
+          ],
         ),
-        bottomNavigationBar: NavigationBar(
-          // L'index 2 est le bouton d'action rapide (pas un ecran) : on
-          // ne le selectionne jamais, donc on reporte sur un autre onglet.
-          selectedIndex: _tab == 2 ? 0 : _tab,
-          onDestinationSelected: _select,
-          destinations: const [
+      ),
+      bottomNavigationBar: NavigationBar(
+        // L'index 2 est le bouton d'action rapide (pas un ecran) : on
+        // ne le selectionne jamais, donc on reporte sur un autre onglet.
+        selectedIndex: _tab,
+        onDestinationSelected: _select,
+        destinations: const [
             NavigationDestination(
                 icon: Icon(Icons.home_outlined),
                 selectedIcon: Icon(Icons.home),
@@ -194,8 +129,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 label: 'Profil'),
           ],
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -203,88 +137,8 @@ class _AppShellState extends ConsumerState<AppShell> {
 // Drawer latéral — tous les modules de l'accueil
 // ---------------------------------------------------------------------------
 
-/// Tuile d'un module tel qu'elle apparaît dans la grille de l'accueil : on
-/// réutilise exactement les mêmes libellés et couleurs pour que le drawer
-/// soit cohérent avec le dashboard.
-class _ModuleEntry {
-  const _ModuleEntry({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.open,
-  });
-  final String label;
-  final IconData icon;
-  final Color color;
-  final Widget Function(BuildContext) open;
-}
-
-final List<_ModuleEntry> _kModules = [
-  _ModuleEntry(
-      label: 'Réservations',
-      icon: Icons.event,
-      color: const Color(0xFF6366F1),
-      open: (_) => const ReservationsScreen()),
-  _ModuleEntry(
-      label: 'Clients',
-      icon: Icons.people_outline,
-      color: const Color(0xFF10B981),
-      open: (_) => const CustomersScreen()),
-  _ModuleEntry(
-      label: 'Flotte',
-      icon: Icons.directions_car,
-      color: const Color(0xFFF59E0B),
-      open: (_) => const VehiclesScreen()),
-  _ModuleEntry(
-      label: 'Contrats',
-      icon: Icons.description_outlined,
-      color: const Color(0xFF14B8A6),
-      open: (_) => const ContractsScreen()),
-  _ModuleEntry(
-      label: 'Paiements',
-      icon: Icons.attach_money,
-      color: const Color(0xFF22C55E),
-      open: (_) => const PaymentsScreen()),
-  _ModuleEntry(
-      label: 'Documents',
-      icon: Icons.folder_open,
-      color: const Color(0xFF8B5CF6),
-      open: (_) => const DocumentsScreen()),
-  _ModuleEntry(
-      label: 'Scanner',
-      icon: Icons.qr_code_scanner,
-      color: const Color(0xFFEC4899),
-      open: (_) => const DocumentReaderScreen()),
-  _ModuleEntry(
-      label: 'GPS',
-      icon: Icons.map_outlined,
-      color: const Color(0xFF3B82F6),
-      open: (_) => const GpsScreen()),
-  _ModuleEntry(
-      label: 'Discussions',
-      icon: Icons.chat_bubble_outline,
-      color: const Color(0xFF0EA5E9),
-      open: (_) => const ChatScreen()),
-  _ModuleEntry(
-      label: 'Sous-location',
-      icon: Icons.vpn_key_outlined,
-      color: const Color(0xFFEF4444),
-      open: (_) => const SubRentalsScreen()),
-  _ModuleEntry(
-      label: 'Occasion',
-      icon: Icons.sell_outlined,
-      color: const Color(0xFF2563EB),
-      open: (_) => const UsedCarsScreen()),
-  _ModuleEntry(
-      label: 'Demandes',
-      icon: Icons.public,
-      color: const Color(0xFF64748B),
-      open: (_) => const WebsiteLeadsScreen()),
-];
-
 class _ModulesDrawer extends StatelessWidget {
-  const _ModulesDrawer({required this.onOpen});
-  final void Function(Widget) onOpen;
+  const _ModulesDrawer();
 
   @override
   Widget build(BuildContext context) {
@@ -339,10 +193,10 @@ class _ModulesDrawer extends StatelessWidget {
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: _kModules.length,
+                itemCount: kModules.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 2),
                 itemBuilder: (ctx, i) {
-                  final m = _kModules[i];
+                  final m = kModules[i];
                   return ListTile(
                     leading: Container(
                       width: 38,
@@ -367,7 +221,10 @@ class _ModulesDrawer extends StatelessWidget {
                             color: cs.onSurface)),
                     trailing: Icon(Icons.chevron_right,
                         color: cs.onSurface.withOpacity(0.38), size: 20),
-                    onTap: () => onOpen(m.open(ctx)),
+                    onTap: () {
+                      Navigator.of(ctx).pop(); // referme le Drawer
+                      ctx.go(m.path);
+                    },
                   );
                 },
               ),
@@ -778,27 +635,9 @@ class _NotificationsSheet extends StatelessWidget {
   }
 }
 
-class _TabNavigator extends StatelessWidget {
-  const _TabNavigator({required this.navigatorKey, required this.child});
-  final GlobalKey<NavigatorState> navigatorKey;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Navigator(
-      key: navigatorKey,
-      onGenerateRoute: (settings) => MaterialPageRoute(
-        settings: settings,
-        builder: (_) => child,
-      ),
-    );
-  }
-}
-
-class _StubTab extends StatelessWidget {
-  const _StubTab({required this.label, required this.icon});
-  final String label;
-  final IconData icon;
+/// Onglet « Mes missions » — placeholder en attendant le module terrain.
+class MissionsScreen extends StatelessWidget {
+  const MissionsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -808,9 +647,10 @@ class _StubTab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 72, color: cs.onSurface.withOpacity(0.25)),
+            Icon(Icons.map_outlined,
+                size: 72, color: cs.onSurface.withOpacity(0.25)),
             const SizedBox(height: 16),
-            Text(label,
+            Text('Mes missions',
                 style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 18,

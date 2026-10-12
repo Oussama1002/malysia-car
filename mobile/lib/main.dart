@@ -1,16 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'core/auth/auth_notifier.dart';
+import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
-import 'features/auth/presentation/login_screen.dart';
-import 'features/home/presentation/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // URL propres sur le web (/flotte au lieu de /#/flotte) pour que chaque
+  // module ait un lien direct. Nginx renvoie index.html sur ces chemins.
+  if (kIsWeb) usePathUrlStrategy();
   // Charge les données locales FR pour les formats de date et de monnaie.
   await initializeDateFormatting('fr');
   runApp(const ProviderScope(child: DriveFlowApp()));
@@ -21,10 +24,10 @@ class DriveFlowApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final router = ref.watch(goRouterProvider);
 
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'DriveFlow',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
@@ -37,13 +40,7 @@ class DriveFlowApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      // Le routing suit l'état d'authentification : un seul interrupteur, deux
-      // écrans possibles. Dès qu'on ajoutera plus d'écrans, on passera à
-      // go_router avec des routes et des redirections.
-      home: switch (auth) {
-        AuthReady() => const AppShell(),
-        _ => const LoginScreen(),
-      },
+      routerConfig: router,
     );
   }
 }
