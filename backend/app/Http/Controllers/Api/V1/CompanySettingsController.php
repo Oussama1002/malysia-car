@@ -78,7 +78,42 @@ class CompanySettingsController extends Controller
                 'max_reservation_days',
                 'min_reservation_hours',
             ],
+            'integrations' => [
+                'smtp_host',
+                'smtp_port',
+                'smtp_user',
+                'smtp_password',
+                'smtp_encryption',
+                'smtp_sender_name',
+                'smtp_from_address',
+            ],
             default => [],
         };
+    }
+
+    /**
+     * Envoie un email de test via le SMTP configuré (Paramètres →
+     * Intégrations) à l'adresse de l'utilisateur courant, pour valider les
+     * réglages avant de compter dessus pour les resets de mot de passe.
+     */
+    public function testEmail(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $to = $request->input('to') ?: optional($user)->email;
+        if (! $to) {
+            return ApiResponse::message('Aucune adresse de destination.', 422);
+        }
+
+        try {
+            \App\Services\CompanyMailer::send(
+                optional($user)->company_id,
+                (string) $to,
+                new \App\Mail\TestEmailMail((string) $to),
+            );
+        } catch (\Throwable $e) {
+            return ApiResponse::message(\App\Services\CompanyMailer::translateError($e), 422);
+        }
+
+        return ApiResponse::success(['message' => "Email de test envoyé à {$to}."]);
     }
 }

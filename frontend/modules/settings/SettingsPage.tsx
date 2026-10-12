@@ -108,6 +108,11 @@ export const SettingsPage: React.FC = () => (
           subtitle="Fournisseur, endpoint API, clé, intervalle, alertes"
           href="/settings/parameters?tab=gps"
         />
+        <AdminCard
+          title="Intégrations — Email"
+          subtitle="SMTP d'envoi (réinitialisation de mot de passe, notifications)"
+          href="/settings/integrations"
+        />
       </div>
     </section>
   </div>

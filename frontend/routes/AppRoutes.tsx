@@ -81,6 +81,7 @@ import { RolesPermissionsPage } from '@/modules/settings/RolesPermissionsPage';
 import { BranchManagementPage } from '@/modules/settings/BranchManagementPage';
 import { VehicleBrandsPage } from '@/modules/settings/VehicleBrandsPage';
 import { ParametersPage } from '@/modules/settings/ParametersPage';
+import { IntegrationsPage } from '@/modules/settings/IntegrationsPage';
 import { AuditPage } from '@/modules/audit/AuditPage';
 import { DocumentsCenterPage } from '@/modules/documents/DocumentsCenterPage';
 import { DocumentReaderPage } from '@/modules/documents/DocumentReaderPage';
@@ -735,6 +736,16 @@ export default function AppRoutes(): React.ReactElement {
                 <ModuleGate module="settings">
                   <SettingsRoleGate>
                     <ParametersPage />
+                  </SettingsRoleGate>
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/settings/integrations"
+              element={
+                <ModuleGate module="settings">
+                  <SettingsRoleGate>
+                    <IntegrationsPage />
                   </SettingsRoleGate>
                 </ModuleGate>
               }

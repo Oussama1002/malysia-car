@@ -39,7 +39,13 @@ class PasswordResetController extends Controller
             $resetUrl = $this->buildResetUrl($email, $token);
 
             try {
-                Mail::to($email)->send(new PasswordResetLinkMail($email, $resetUrl));
+                // Envoi via le SMTP de la société (Paramètres → Intégrations),
+                // avec repli sur le mailer du .env s'il n'est pas configuré.
+                \App\Services\CompanyMailer::send(
+                    $user->company_id,
+                    $email,
+                    new PasswordResetLinkMail($email, $resetUrl),
+                );
             } catch (\Throwable $e) {
                 // Do not leak the failure to the caller (avoids enumeration and
                 // hides transient SMTP glitches from end-users), but log it so

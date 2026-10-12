@@ -391,6 +391,13 @@ export async function getSettings(group: string): Promise<{ data: { group: strin
   return apiClient<{ data: { group: string; settings: Record<string, string> } }>(`/v1/settings/${group}`);
 }
 
+export async function testIntegrationEmail(to?: string): Promise<{ data: { message: string } }> {
+  return apiClient<{ data: { message: string } }>(`/v1/settings/integrations/test-email`, {
+    method: 'POST',
+    body: JSON.stringify(to ? { to } : {}),
+  });
+}
+
 export async function updateSettings(group: string, settings: Record<string, string>): Promise<{ data: { group: string; settings: Record<string, string> } }> {
   return apiClient<{ data: { group: string; settings: Record<string, string> } }>(`/v1/settings/${group}`, {
     method: 'PUT',
