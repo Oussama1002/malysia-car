@@ -1107,10 +1107,7 @@
           list.forEach(function (v) {
             var opt = document.createElement('option');
             opt.value = v.id;
-            opt.textContent = [v.brand, v.model].filter(Boolean).join(' ')
-              + (v.price_from_per_day
-                  ? ' — dès ' + money(v.price_from_per_day) + '/j'
-                  : (v.price_per_day ? ' — ' + money(v.price_per_day) + '/j' : ''));
+            opt.textContent = [v.brand, v.model].filter(Boolean).join(' ');
             select.appendChild(opt);
           });
           // Véhicule choisi depuis la page flotte → pré-sélection + scroll,
