@@ -209,22 +209,6 @@ body {
 
 ::selection { background: rgba(201, 162, 75, 0.30); color: inherit; }
 
-/* -----------------------------------------------------------------------------
-   Serif display — elegant luxury headings (Cormorant Garamond)
-   ----------------------------------------------------------------------------- */
-.df-serif { font-family: var(--df-font-serif); letter-spacing: 0.005em; }
-
-/* Page / section headings carry the serif voice for a boutique feel.
-   Arabic keeps its own sans face for legibility. */
-[dir="ltr"] h1,
-[dir="ltr"] h2 {
-  font-family: var(--df-font-serif);
-  letter-spacing: 0.004em;
-  font-feature-settings: "liga" 1, "dlig" 1;
-}
-[dir="ltr"] h1 { font-weight: 600; }
-[dir="ltr"] h2 { font-weight: 600; }
-
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb {
   background: var(--df-border-bold);
