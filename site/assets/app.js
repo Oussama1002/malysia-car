@@ -927,17 +927,25 @@
           note.textContent = 'La flotte est en cours de mise à jour — appelez-nous, nous vous dirons ce qui est disponible.';
           return;
         }
+        // La landing n'affiche qu'un aperçu (data-limit) ; la flotte complète
+        // vit sur flotte.html. Le <select> du formulaire garde toute la liste.
+        var limit = parseInt(grid.getAttribute('data-limit'), 10) || 0;
+        var shown = limit > 0 ? list.slice(0, limit) : list;
         var select = $('vehicleSelect');
-        list.forEach(function (v) {
+        shown.forEach(function (v) {
           grid.appendChild(vehicleCard(v));
-          if (select) {
+        });
+        if (select) {
+          list.forEach(function (v) {
             var opt = document.createElement('option');
             opt.value = v.id;
             opt.textContent = [v.brand, v.model].filter(Boolean).join(' ')
               + (v.price_per_day ? ' — ' + money(v.price_per_day) + '/j' : '');
             select.appendChild(opt);
-          }
-        });
+          });
+        }
+        var more = $('fleetMore');
+        if (more) more.hidden = !(limit > 0 && list.length > limit);
         // Les marques et modeles du formulaire ne viennent plus de la flotte
         // visible : loadCatalog() les tire de l'API /public/site/catalog
         // pour couvrir tout le referentiel.
