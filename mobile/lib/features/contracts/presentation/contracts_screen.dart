@@ -20,6 +20,9 @@ class ContractsScreen extends ConsumerStatefulWidget {
 class _ContractsScreenState extends ConsumerState<ContractsScreen> {
   final _search = TextEditingController();
   String _query = '';
+  // Les contrats annulés sont déplacés dans l'onglet « Archive » : ils ne
+  // s'affichent plus dans la liste principale, comme sur le web.
+  bool _showArchive = false;
 
   @override
   void dispose() {
@@ -29,8 +32,12 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
 
   List<ContractDto> _filter(List<ContractDto> items) {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return items;
-    return items.where((c) {
+    final scoped = items.where((c) {
+      final s = c.status.toLowerCase();
+      return _showArchive ? s == 'cancelled' : s != 'cancelled';
+    }).toList();
+    if (q.isEmpty) return scoped;
+    return scoped.where((c) {
       return c.number.toLowerCase().contains(q) ||
           (c.customerName ?? '').toLowerCase().contains(q) ||
           (c.vehicleLabel ?? '').toLowerCase().contains(q) ||
@@ -67,6 +74,9 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
               error: (e, _) => ModuleErrorView(message: '$e'),
               data: (items) {
                 final list = _filter(items);
+                final cancelledCount = items
+                    .where((c) => c.status.toLowerCase() == 'cancelled')
+                    .length;
                 return ListView(
                   padding: const EdgeInsets.only(bottom: 100),
                   children: [
@@ -79,6 +89,15 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
                     const SizedBox(height: 18),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _TabBar(
+                        showArchive: _showArchive,
+                        archiveCount: cancelledCount,
+                        onChanged: (v) => setState(() => _showArchive = v),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: ModuleSearchField(
                         controller: _search,
                         hint: 'Filtrer (référence, type, statut)…',
@@ -86,20 +105,23 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _FilterRow(
-                      filters: filters,
-                      onType: (t) => ref
-                          .read(contractListFiltersProvider.notifier)
-                          .update((s) => s.copyWith(type: t)),
-                      onStatus: (st) => ref
-                          .read(contractListFiltersProvider.notifier)
-                          .update((s) => s.copyWith(status: st)),
-                    ),
+                    if (!_showArchive)
+                      _FilterRow(
+                        filters: filters,
+                        onType: (t) => ref
+                            .read(contractListFiltersProvider.notifier)
+                            .update((s) => s.copyWith(type: t)),
+                        onStatus: (st) => ref
+                            .read(contractListFiltersProvider.notifier)
+                            .update((s) => s.copyWith(status: st)),
+                      ),
                     const SizedBox(height: 16),
                     if (list.isEmpty)
-                      const ModuleEmptyView(
+                      ModuleEmptyView(
                         icon: Icons.description_outlined,
-                        message: 'Aucun contrat.',
+                        message: _showArchive
+                            ? 'Aucun contrat annulé.'
+                            : 'Aucun contrat.',
                       )
                     else
                       ...list.map((c) => Padding(
@@ -110,6 +132,77 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
                 );
               },
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabBar extends StatelessWidget {
+  const _TabBar({
+    required this.showArchive,
+    required this.archiveCount,
+    required this.onChanged,
+  });
+
+  final bool showArchive;
+  final int archiveCount;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _TabButton(
+          label: 'Contrats',
+          selected: !showArchive,
+          onTap: () => onChanged(false),
+        ),
+        const SizedBox(width: 6),
+        _TabButton(
+          label: archiveCount > 0 ? 'Archive ($archiveCount)' : 'Archive',
+          selected: showArchive,
+          onTap: () => onChanged(true),
+        ),
+      ],
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFB8933F) : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? Colors.transparent
+                : Theme.of(context).dividerColor,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w800,
+            fontSize: 12.5,
           ),
         ),
       ),

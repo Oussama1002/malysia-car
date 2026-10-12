@@ -104,10 +104,19 @@ function formatDuration(start?: string | null, end?: string | null, fallbackMont
 
 export const ContractsPage: React.FC = () => {
   const [filters, setFilters] = React.useState<{ q: string; type: string; status: string }>({ q: '', type: '', status: '' });
+  // Les contrats annulés sont déplacés dans l'onglet « Archive » : on ne
+  // les affiche jamais dans la liste principale.
+  const [showArchive, setShowArchive] = React.useState(false);
 
   const q = useQuery({
-    queryKey: [...queryKeys.contracts.all, filters],
-    queryFn: async () => contractsApi.list({ type: filters.type || undefined, status: filters.status || undefined }),
+    queryKey: [...queryKeys.contracts.all, filters, showArchive],
+    queryFn: async () => contractsApi.list({
+      type: filters.type || undefined,
+      // En onglet « Archive » on force le statut annulé côté API ; sinon on
+      // laisse le filtre libre et on retire les annulés côté client (voir
+      // `rows` plus bas).
+      status: showArchive ? 'cancelled' : (filters.status || undefined),
+    }),
   });
 
   // Customers + vehicles for display (name / plate resolution).
@@ -164,6 +173,8 @@ export const ContractsPage: React.FC = () => {
 
   const rows = useMemo(() => {
     return (q.data ?? []).filter((c: any) => {
+      const status = String(c.status ?? '').toLowerCase();
+      if (showArchive ? status !== 'cancelled' : status === 'cancelled') return false;
       if (!filters.q) return true;
       const cust = customerLabel(c.customerId ?? c.customer_id).toLowerCase();
       const veh = vehicleLabel(c.vehicleId ?? c.vehicle_id, c.vehicle);
@@ -177,7 +188,12 @@ export const ContractsPage: React.FC = () => {
       ].filter(Boolean).join(' ').toLowerCase();
       return hay.includes(filters.q.toLowerCase());
     });
-  }, [q.data, filters.q, customerById, vehicleById]);
+  }, [q.data, filters.q, customerById, vehicleById, showArchive]);
+
+  const cancelledCount = useMemo(
+    () => (q.data ?? []).filter((c: any) => String(c.status ?? '').toLowerCase() === 'cancelled').length,
+    [q.data],
+  );
 
   return (
     <div className="space-y-6">
@@ -192,6 +208,33 @@ export const ContractsPage: React.FC = () => {
         >
           + Nouveau contrat
         </Link>
+      </div>
+
+      {/* Onglets : contrats · archive (annulés) */}
+      <div className="flex gap-1 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setShowArchive(false)}
+          className={`px-4 py-2.5 text-sm font-black transition border-b-2 ${
+            !showArchive ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Contrats
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowArchive(true)}
+          className={`px-4 py-2.5 text-sm font-black transition border-b-2 ${
+            showArchive ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Archive
+          {cancelledCount > 0 && (
+            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+              {cancelledCount}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -210,22 +253,23 @@ export const ContractsPage: React.FC = () => {
           <option value="">Tous types</option>
           {Object.entries(TYPE_FR).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
-        <select
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
-          value={filters.status}
-          onChange={(e) => setFilters((s) => ({ ...s, status: e.target.value }))}
-        >
-          <option value="">Tous statuts</option>
-          <option value="draft">Brouillon</option>
-          <option value="pending_approval">En attente d'approbation</option>
-          <option value="approved">Approuvé</option>
-          <option value="awaiting_signature">En attente de signature</option>
-          <option value="active">Actif</option>
-          <option value="suspended">Suspendu</option>
-          <option value="closed">Clôturé</option>
-          <option value="terminated">Résilié</option>
-          <option value="cancelled">Annulé</option>
-        </select>
+        {!showArchive && (
+          <select
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold"
+            value={filters.status}
+            onChange={(e) => setFilters((s) => ({ ...s, status: e.target.value }))}
+          >
+            <option value="">Tous statuts</option>
+            <option value="draft">Brouillon</option>
+            <option value="pending_approval">En attente d'approbation</option>
+            <option value="approved">Approuvé</option>
+            <option value="awaiting_signature">En attente de signature</option>
+            <option value="active">Actif</option>
+            <option value="suspended">Suspendu</option>
+            <option value="closed">Clôturé</option>
+            <option value="terminated">Résilié</option>
+          </select>
+        )}
       </div>
 
       <DataTable
@@ -331,7 +375,7 @@ export const ContractsPage: React.FC = () => {
         ]}
         rows={rows}
         rowKey={(r: any) => r.id}
-        emptyTitle="Aucun contrat"
+        emptyTitle={showArchive ? 'Aucun contrat annulé' : 'Aucun contrat'}
       />
     </div>
   );
