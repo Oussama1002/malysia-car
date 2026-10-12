@@ -11,6 +11,7 @@ import '../../reservations/presentation/new_contract_from_reservation_screen.dar
 import '../../reservations/presentation/new_reservation_screen.dart';
 import '../../notifications/data/notification_dto.dart';
 import '../../notifications/data/notifications_repo.dart';
+import '../../notifications/presentation/notification_navigation.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 
 /// Shell persistant : garde la top bar et la bottom bar visibles autour du
@@ -446,13 +447,20 @@ class _NotificationsBellState extends ConsumerState<_NotificationsBell> {
               builder: (_) => const NotificationsScreen(),
             ));
           },
-          onMarkRead: (id) async {
-            try {
-              await sheetRef.read(notificationsRepoProvider).markRead(id);
-              sheetRef.invalidate(notificationsPreviewProvider);
-              sheetRef.invalidate(notificationsListProvider);
-              sheetRef.invalidate(notificationsUnreadProvider);
-            } catch (_) {}
+          onOpen: (n) {
+            final dest = notificationDestination(n);
+            Navigator.of(sheetCtx).pop();
+            if (n.isUnread) {
+              sheetRef.read(notificationsRepoProvider).markRead(n.id).then((_) {
+                sheetRef.invalidate(notificationsPreviewProvider);
+                sheetRef.invalidate(notificationsListProvider);
+                sheetRef.invalidate(notificationsUnreadProvider);
+              }).catchError((_) {});
+            }
+            if (dest != null && context.mounted) {
+              Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => dest));
+            }
           },
         );
       }),
@@ -464,11 +472,11 @@ class _NotificationsSheet extends StatelessWidget {
   const _NotificationsSheet({
     required this.async,
     required this.onViewAll,
-    required this.onMarkRead,
+    required this.onOpen,
   });
   final AsyncValue<List<NotificationDto>> async;
   final VoidCallback onViewAll;
-  final Future<void> Function(String id) onMarkRead;
+  final void Function(NotificationDto n) onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -550,9 +558,7 @@ class _NotificationsSheet extends StatelessWidget {
                       final dateFmt = DateFormat('dd/MM/yyyy HH:mm', 'fr');
                       final unread = n.isUnread;
                       return InkWell(
-                        onTap: () async {
-                          if (unread) await onMarkRead(n.id);
-                        },
+                        onTap: () => onOpen(n),
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
                           padding: const EdgeInsets.all(10),

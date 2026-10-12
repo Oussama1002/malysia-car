@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../data/notification_dto.dart';
 import '../data/notifications_repo.dart';
+import 'notification_navigation.dart';
 
 /// Centre notifications complet (ouvert depuis « Voir toutes » de la popover
 /// de la top bar). Reproduit `NotificationsPage` du web : liste + bouton
@@ -63,18 +64,24 @@ class NotificationsScreen extends ConsumerWidget {
                       padding: const EdgeInsets.all(12),
                       itemCount: items.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 6),
-                      itemBuilder: (_, i) => _Tile(
+                      itemBuilder: (ctx, i) => _Tile(
                         n: items[i],
                         onTap: () async {
-                          if (items[i].isUnread) {
+                          final n = items[i];
+                          if (n.isUnread) {
                             try {
                               await ref
                                   .read(notificationsRepoProvider)
-                                  .markRead(items[i].id);
+                                  .markRead(n.id);
                               ref.invalidate(notificationsListProvider);
                               ref.invalidate(notificationsPreviewProvider);
                               ref.invalidate(notificationsUnreadProvider);
                             } catch (_) {}
+                          }
+                          final dest = notificationDestination(n);
+                          if (dest != null && ctx.mounted) {
+                            Navigator.of(ctx).push(
+                                MaterialPageRoute(builder: (_) => dest));
                           }
                         },
                       ),
