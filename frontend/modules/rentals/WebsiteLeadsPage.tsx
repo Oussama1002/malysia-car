@@ -23,6 +23,12 @@ interface WebsiteLead {
   email?: string | null;
   city?: string | null;
   vehicle_label?: string | null;
+  /** Véhicule rattaché quand le visiteur a cliqué sur une fiche précise ;
+   *  sert à afficher la matricule de la voiture dans la carte. */
+  vehicle?: {
+    id: string;
+    registration_number?: string | null;
+  } | null;
   pickup_at?: string | null;
   return_at?: string | null;
   message?: string | null;
@@ -320,7 +326,14 @@ export const WebsiteLeadsPage: React.FC = () => {
                 <div className="grid gap-2 text-sm sm:grid-cols-3">
                   <div>
                     <div className="text-[10px] font-bold uppercase text-slate-400">Véhicule souhaité</div>
-                    <div className="font-semibold text-slate-700">{lead.vehicle_label || 'Peu importe'}</div>
+                    <div className="font-semibold text-slate-700">
+                      {lead.vehicle_label || 'Peu importe'}
+                      {lead.vehicle?.registration_number && (
+                        <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-slate-600">
+                          {lead.vehicle.registration_number}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <div className="text-[10px] font-bold uppercase text-slate-400">Départ</div>

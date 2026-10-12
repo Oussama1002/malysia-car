@@ -458,10 +458,16 @@ class _LeadCard extends StatelessWidget {
               Expanded(
                 child: _InfoBlock(
                   label: 'Véhicule souhaité',
-                  value: (lead.vehicleLabel == null ||
-                          lead.vehicleLabel!.isEmpty)
-                      ? 'Peu importe'
-                      : lead.vehicleLabel!,
+                  value: () {
+                    final base = (lead.vehicleLabel == null ||
+                            lead.vehicleLabel!.isEmpty)
+                        ? 'Peu importe'
+                        : lead.vehicleLabel!;
+                    final reg = lead.vehicleRegistration;
+                    return reg != null && reg.isNotEmpty
+                        ? '$base · $reg'
+                        : base;
+                  }(),
                 ),
               ),
               Expanded(

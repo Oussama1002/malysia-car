@@ -15,7 +15,9 @@ class WebsiteLeadController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $q = WebsiteLead::query()->with('handler')->orderByDesc('created_at');
+        $q = WebsiteLead::query()
+            ->with(['handler', 'vehicle:id,registration_number,brand_id,model_id'])
+            ->orderByDesc('created_at');
 
         if ($status = $request->query('status')) {
             $q->where('status', $status);

@@ -7,6 +7,7 @@ class WebsiteLeadDto {
     this.email,
     this.city,
     this.vehicleLabel,
+    this.vehicleRegistration,
     this.pickupAt,
     this.returnAt,
     this.message,
@@ -23,6 +24,9 @@ class WebsiteLeadDto {
   final String? email;
   final String? city;
   final String? vehicleLabel;
+  /// Matricule du véhicule souhaité quand la demande a été déposée depuis la
+  /// fiche d'un véhicule précis.
+  final String? vehicleRegistration;
   final DateTime? pickupAt;
   final DateTime? returnAt;
   final String? message;
@@ -41,6 +45,15 @@ class WebsiteLeadDto {
       email: json['email']?.toString(),
       city: json['city']?.toString(),
       vehicleLabel: json['vehicle_label']?.toString(),
+      vehicleRegistration: () {
+        final v = json['vehicle'];
+        if (v is Map) {
+          final r = v['registration_number'] ?? v['registration'];
+          final s = r?.toString();
+          return (s != null && s.isNotEmpty) ? s : null;
+        }
+        return null;
+      }(),
       pickupAt: _date(json['pickup_at']),
       returnAt: _date(json['return_at']),
       message: json['message']?.toString(),
