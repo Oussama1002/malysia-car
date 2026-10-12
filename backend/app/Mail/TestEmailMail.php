@@ -34,7 +34,6 @@ class TestEmailMail extends Mailable
   <p style="color:#64748b;font-size:12px;margin:0">Envoyé le {$when}.</p>
 </div>
 HTML,
-            textString: "DriveFlow — Email de test\n\nVotre configuration SMTP fonctionne. Envoyé le {$when}.",
         );
     }
 }

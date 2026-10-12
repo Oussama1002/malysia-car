@@ -29,7 +29,6 @@ class PasswordResetLinkMail extends Mailable
     {
         return new Content(
             htmlString: $this->buildHtml(),
-            textString: $this->buildText(),
         );
     }
 
