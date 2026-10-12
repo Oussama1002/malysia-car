@@ -243,7 +243,7 @@ const IdentityTab: React.FC<{
               <Info k="Nom" v={identity.individual_profile.last_name} />
               <Info k="CIN" v={identity.individual_profile.national_id_number ?? '—'} />
               <Info k="Nationalité" v={identity.individual_profile.nationality ?? '—'} />
-              <Info k="Date de naissance" v={identity.individual_profile.date_of_birth ?? '—'} />
+              <Info k="Date de naissance" v={formatDateOnly(identity.individual_profile.date_of_birth)} />
               <Info k="Profession" v={identity.individual_profile.profession ?? '—'} />
               <Info k="Employeur" v={identity.individual_profile.employer_name ?? '—'} />
               <Info
@@ -255,7 +255,7 @@ const IdentityTab: React.FC<{
                 }
               />
               <Info k="Permis" v={identity.individual_profile.driving_license_number ?? '—'} />
-              <Info k="Permis exp." v={identity.individual_profile.driving_license_expiry ?? '—'} />
+              <Info k="Permis exp." v={formatDateOnly(identity.individual_profile.driving_license_expiry)} />
             </dl>
           )}
           {c.customer_type === 'ENTREPRISE' && identity.company_profile && (
@@ -338,6 +338,16 @@ const IdentityTab: React.FC<{
     </div>
   );
 };
+
+// L'API renvoie des dates ISO complètes (…T00:00:00.000000Z) ; pour l'onglet
+// Identité on n'affiche que la date, pas l'heure, qui n'a aucun sens ici.
+function formatDateOnly(v: string | null | undefined): string {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  const pad = (n: number) => (n < 10 ? '0' + n : String(n));
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
 
 const Info: React.FC<{ k: string; v: string | null | undefined }> = ({ k, v }) => (
   <div>
