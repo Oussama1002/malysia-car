@@ -178,6 +178,14 @@
     if (catSelect) catSelect.value = initCat;
   }
 
+  // Filtre marque passé depuis le slider de logos de l'accueil
+  // (flotte.html?brand=renault) → on pré-remplit la recherche.
+  var initBrand = urlParams.get('brand') || '';
+  if (initBrand) {
+    var sInput = $('fSearch');
+    if (sInput) sInput.value = initBrand;
+  }
+
   var FUEL_FR = {
     diesel: 'Diesel', gasoline: 'Essence', petrol: 'Essence', essence: 'Essence',
     hybrid: 'Hybride', electric: 'Électrique', lpg: 'GPL'

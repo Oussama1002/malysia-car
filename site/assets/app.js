@@ -78,13 +78,21 @@
     // (translateX de -50% à 0 revient au point de départ sans à-coup).
     var render = function () {
       BRAND_FILES.forEach(function (file) {
+        // Nom de marque déduit du fichier (ex. "land-rover-123.png" → "land rover").
+        var brand = file.replace(/-\d+\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim();
+        var a = document.createElement('a');
+        a.href = 'flotte.html?brand=' + encodeURIComponent(brand);
+        a.title = 'Voir la flotte ' + brand;
+        a.style.display = 'inline-flex';
+        a.style.alignItems = 'center';
         var img = document.createElement('img');
         img.src = 'assets/brands/' + file;
-        img.alt = file.split('-')[0];
+        img.alt = brand;
         img.loading = 'lazy';
         img.width = 100;
         img.height = 42;
-        track.appendChild(img);
+        a.appendChild(img);
+        track.appendChild(a);
       });
     };
     render(); render();
