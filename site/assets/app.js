@@ -569,6 +569,20 @@
         var loading = $('agenciesLoading');
         if (loading) loading.remove();
 
+        // Remplit le filtre « Agence » de la barre de recherche avec les
+        // agences du système (plus de valeurs statiques).
+        var searchBranch = $('searchBranch');
+        if (searchBranch) {
+          branches.forEach(function (b) {
+            var opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name
+              || [b.city, b.address].filter(Boolean).join(' · ')
+              || 'Agence';
+            searchBranch.appendChild(opt);
+          });
+        }
+
         branches.forEach(function (b, i) {
           var lat = parseFloat(b.latitude);
           var lng = parseFloat(b.longitude);
