@@ -1010,8 +1010,8 @@
         // Les marques et modeles du formulaire ne viennent plus de la flotte
         // visible : loadCatalog() les tire de l'API /public/site/catalog
         // pour couvrir tout le referentiel.
-        var fact = $('factFleet');
-        if (fact) fact.textContent = list.length;
+        // Le compteur du hero reste statique « 300+ » (voir index.html) —
+        // on ne le remplace plus par le nombre réel de véhicules visibles.
         note.textContent = 'Tarifs à la journée, dégressifs à la semaine et au mois. Disponibilité confirmée par téléphone.';
       })
       .catch(function () {
