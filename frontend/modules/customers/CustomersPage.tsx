@@ -66,6 +66,36 @@ export const CustomersPage: React.FC = () => {
       }),
   });
 
+  // Audit « documents manquants » : on va chercher tous les particuliers
+  // (hors blacklist) pour détecter ceux à qui il manque la CIN/passeport ou
+  // le permis — l'agence a besoin de les relancer avant la prochaine
+  // réservation.
+  const auditQ = useQuery({
+    queryKey: ['customers', 'missing-docs'],
+    queryFn: () => listCustomers({ type: 'PARTICULIER', per_page: 500 }),
+    staleTime: 60_000,
+  });
+
+  const missingDocs = React.useMemo(() => {
+    const items = auditQ.data?.data ?? [];
+    return items
+      .filter((c) => c.customer_type === 'PARTICULIER' && !c.is_blacklisted)
+      .map((c) => {
+        const ip = c.individual_profile ?? ({} as NonNullable<Customer['individual_profile']>);
+        const hasIdDoc = Boolean(
+          (ip.national_id_number ?? '').trim() || (ip.passport_number ?? '').trim(),
+        );
+        const hasLicense = Boolean((ip.driving_license_number ?? '').trim());
+        const missing: Array<'id' | 'permis'> = [];
+        if (!hasIdDoc) missing.push('id');
+        if (!hasLicense) missing.push('permis');
+        return { c, missing };
+      })
+      .filter((x) => x.missing.length > 0);
+  }, [auditQ.data]);
+
+  const [bannerOpen, setBannerOpen] = useState(false);
+
   const branchesQ = useQuery({ queryKey: ['admin', 'branches'], queryFn: () => listBranches() });
 
   const createMut = useMutation({
@@ -114,6 +144,79 @@ export const CustomersPage: React.FC = () => {
           + Nouveau client
         </button>
       </header>
+
+      {/* Documents manquants — notification visible tant qu'il reste des
+          particuliers sans CIN/Passeport ou sans permis. L'agence peut
+          déplier la liste pour sauter dans le dossier concerné. */}
+      {missingDocs.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50">
+          <button
+            type="button"
+            onClick={() => setBannerOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🔔</span>
+              <div>
+                <div className="text-sm font-black text-amber-900">
+                  {missingDocs.length} client{missingDocs.length > 1 ? 's' : ''} sans pièce d'identité ou permis
+                </div>
+                <div className="text-xs text-amber-700">
+                  CIN / passeport et permis sont requis avant toute remise des clés — relancez le client.
+                </div>
+              </div>
+            </div>
+            <span className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-black text-amber-700">
+              {bannerOpen ? 'Masquer' : 'Voir la liste'}
+            </span>
+          </button>
+          {bannerOpen && (
+            <div className="divide-y divide-amber-200 border-t border-amber-200">
+              {missingDocs.slice(0, 50).map(({ c, missing }) => (
+                <Link
+                  key={c.id}
+                  to={`/customers/${c.id}`}
+                  className="flex flex-wrap items-center justify-between gap-3 bg-white/60 px-4 py-2.5 hover:bg-white"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-slate-900">
+                      {c.display_name || c.customer_code}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      <span className="font-mono font-bold">{c.customer_code}</span>
+                      {(c.contacts ?? []).find((ct) => ct.contact_type === 'mobile' || ct.contact_type === 'phone')?.value && (
+                        <span>
+                          <span className="mx-1 text-slate-300">·</span>
+                          <span className="font-mono">
+                            {(c.contacts ?? []).find((ct) => ct.contact_type === 'mobile' || ct.contact_type === 'phone')?.value}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {missing.includes('id') && (
+                      <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black text-rose-700">
+                        CIN / Passeport manquant
+                      </span>
+                    )}
+                    {missing.includes('permis') && (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-700">
+                        Permis manquant
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+              {missingDocs.length > 50 && (
+                <div className="bg-white/60 px-4 py-2.5 text-[11px] text-slate-500">
+                  … et {missingDocs.length - 50} autre{missingDocs.length - 50 > 1 ? 's' : ''}.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="df-card">

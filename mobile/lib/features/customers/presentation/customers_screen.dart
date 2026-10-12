@@ -17,6 +17,9 @@ class CustomersScreen extends ConsumerStatefulWidget {
 class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   final _search = TextEditingController();
   String _query = '';
+  // Notification « documents manquants » : repliée par défaut, l'agent la
+  // déplie pour voir la liste et sauter dans un dossier.
+  bool _missingDocsOpen = false;
 
   @override
   void dispose() {
@@ -62,6 +65,12 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               error: (e, _) => ModuleErrorView(message: '$e'),
               data: (items) {
                 final list = _filter(items);
+                final missing = items
+                    .where((c) =>
+                        !c.isCompany &&
+                        !c.isBlacklisted &&
+                        (!c.hasIdentityDocument || !c.hasDrivingLicense))
+                    .toList();
                 return ListView(
                   padding: const EdgeInsets.only(bottom: 100),
                   children: [
@@ -71,6 +80,18 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                           'Particuliers et entreprises — KYC, risque, blacklist.',
                       onBack: () => Navigator.of(context).maybePop(),
                     ),
+                    if (missing.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _MissingDocsBanner(
+                          clients: missing,
+                          open: _missingDocsOpen,
+                          onToggle: () => setState(
+                              () => _missingDocsOpen = !_missingDocsOpen),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -100,6 +121,162 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MissingDocsBanner extends StatelessWidget {
+  const _MissingDocsBanner({
+    required this.clients,
+    required this.open,
+    required this.onToggle,
+  });
+
+  final List<CustomerDto> clients;
+  final bool open;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = clients.length;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4D9),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF2D27A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_active_outlined,
+                      color: Color(0xFF8A6B16)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$n client${n > 1 ? 's' : ''} sans pièce d\'identité ou permis',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                              color: Color(0xFF8A6B16)),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'CIN / passeport et permis sont requis avant toute remise des clés.',
+                          style: TextStyle(
+                              fontSize: 11.5, color: Color(0xFF6B5312)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(open ? Icons.expand_less : Icons.expand_more,
+                      color: const Color(0xFF8A6B16)),
+                ],
+              ),
+            ),
+          ),
+          if (open)
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.vertical(bottom: Radius.circular(14)),
+              ),
+              child: Column(
+                children: [
+                  for (final c in clients.take(50))
+                    InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => CustomerDetailScreen(id: c.id)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(c.displayName ?? c.code,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13)),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    [
+                                      c.code,
+                                      if (c.phone != null && c.phone!.isNotEmpty) c.phone,
+                                    ].whereType<String>().join(' · '),
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Wrap(
+                              spacing: 4,
+                              children: [
+                                if (!c.hasIdentityDocument)
+                                  const _MissingChip(
+                                      label: 'CIN / Passeport',
+                                      color: Color(0xFFDC2626)),
+                                if (!c.hasDrivingLicense)
+                                  const _MissingChip(
+                                      label: 'Permis',
+                                      color: Color(0xFFB8933F)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (clients.length > 50)
+                    Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Text(
+                        '… et ${clients.length - 50} autre${clients.length - 50 > 1 ? 's' : ''}.',
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.black54),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MissingChip extends StatelessWidget {
+  const _MissingChip({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+            color: color, fontWeight: FontWeight.w800, fontSize: 10),
       ),
     );
   }

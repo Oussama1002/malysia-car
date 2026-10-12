@@ -8,6 +8,8 @@ class CustomerDto {
     required this.type,
     this.displayName,
     this.nationalId,
+    this.passportNumber,
+    this.drivingLicenseNumber,
     this.ice,
     this.kycStatus,
     this.riskLevel,
@@ -24,6 +26,8 @@ class CustomerDto {
   final String type; // PARTICULIER / ENTREPRISE
   final String? displayName;
   final String? nationalId;
+  final String? passportNumber;
+  final String? drivingLicenseNumber;
   final String? ice;
   final String? kycStatus;
   final String? riskLevel;
@@ -33,6 +37,13 @@ class CustomerDto {
   final String? branchName;
   final String? phone;
   final String? email;
+
+  bool get hasIdentityDocument =>
+      (nationalId?.trim().isNotEmpty ?? false) ||
+      (passportNumber?.trim().isNotEmpty ?? false);
+
+  bool get hasDrivingLicense =>
+      drivingLicenseNumber?.trim().isNotEmpty ?? false;
 
   bool get isCompany => type.toUpperCase() == 'ENTREPRISE';
 
@@ -59,6 +70,11 @@ class CustomerDto {
       type: json['customer_type']?.toString() ?? 'PARTICULIER',
       displayName: name,
       nationalId: ind is Map ? ind['national_id_number']?.toString() : null,
+      passportNumber:
+          ind is Map ? ind['passport_number']?.toString() : null,
+      drivingLicenseNumber: ind is Map
+          ? ind['driving_license_number']?.toString()
+          : null,
       ice: comp is Map ? comp['ice']?.toString() : null,
       kycStatus: json['kyc_status']?.toString() ??
           (kyc is Map ? kyc['kyc_status']?.toString() : null),
