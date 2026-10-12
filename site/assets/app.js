@@ -635,7 +635,18 @@
 
   function chooseVehicle(id, name) {
     var select = $('vehicleSelect');
-    if (select && id) select.value = id;
+    // Page sans formulaire (flotte.html) : on mémorise le véhicule et on
+    // rejoint le formulaire de l'accueil, qui pré-sélectionnera au chargement.
+    // => même comportement que « Réserver » sur l'accueil.
+    if (!select) {
+      try {
+        if (id) sessionStorage.setItem('mc_vehicle_id', id);
+        if (name) sessionStorage.setItem('mc_vehicle_name', name);
+      } catch (_) {}
+      window.location.href = 'index.html#reserver';
+      return;
+    }
+    if (id) select.value = id;
     togglePreferences();
     var form = $('quoteForm');
     if (form) {
@@ -982,6 +993,17 @@
               + (v.price_per_day ? ' — ' + money(v.price_per_day) + '/j' : '');
             select.appendChild(opt);
           });
+          // Véhicule choisi depuis la page flotte → pré-sélection + scroll,
+          // comme si on avait cliqué « Réserver » sur l'accueil.
+          try {
+            var pre = sessionStorage.getItem('mc_vehicle_id');
+            if (pre) {
+              var preName = sessionStorage.getItem('mc_vehicle_name') || '';
+              sessionStorage.removeItem('mc_vehicle_id');
+              sessionStorage.removeItem('mc_vehicle_name');
+              chooseVehicle(pre, preName);
+            }
+          } catch (_) {}
         }
         var more = $('fleetMore');
         if (more) more.hidden = !(limit > 0 && list.length > limit);
