@@ -118,6 +118,11 @@ Route::prefix('v1')->group(function () {
     Route::get('public/site/branches', [\App\Http\Controllers\Api\V1\PublicSiteController::class, 'branches'])
         ->middleware('throttle:60,1');
 
+    // Fichiers publics (avatars, photos de véhicule…) servis par id — pas
+    // d'auth : le contrôleur ne renvoie que les lignes is_public = 1.
+    Route::get('files/{id}', [\App\Http\Controllers\Api\V1\PublicFileController::class, 'show'])
+        ->middleware('throttle:120,1');
+
     // Public auth endpoints
     Route::post('auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');
