@@ -210,87 +210,83 @@ class _ModulesGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     const modules = kModules;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? cs.onSurface.withOpacity(0.08)
-              : Colors.black.withOpacity(0.06),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          children: [
-            for (int i = 0; i < modules.length; i++) ...[
-              _ModuleRow(entry: modules[i]),
-              if (i < modules.length - 1)
-                Divider(
-                  height: 0,
-                  thickness: 1,
-                  color: isDark
-                      ? cs.onSurface.withOpacity(0.06)
-                      : Colors.black.withOpacity(0.04),
-                ),
-            ],
-          ],
-        ),
-      ),
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 0.92,
+      children: [for (final m in modules) _ModuleTile(entry: m)],
     );
   }
 }
 
-class _ModuleRow extends StatelessWidget {
-  const _ModuleRow({required this.entry});
+class _ModuleTile extends StatelessWidget {
+  const _ModuleTile({required this.entry});
   final ModuleDescriptor entry;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
-      color: Colors.transparent,
+      color: cs.surface,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () => context.go(entry.path),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark
+                  ? cs.onSurface.withOpacity(0.08)
+                  : Colors.black.withOpacity(0.06),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   color: entry.color,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: entry.color.withOpacity(0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Icon(entry.icon, color: Colors.white, size: 20),
+                child: Icon(entry.icon, color: Colors.white, size: 24),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  entry.label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: cs.onSurface,
-                  ),
+              const SizedBox(height: 10),
+              Text(
+                entry.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11.5,
+                  height: 1.1,
+                  color: cs.onSurface,
                 ),
               ),
-              Icon(Icons.chevron_right,
-                  color: cs.onSurface.withOpacity(0.3), size: 22),
             ],
           ),
         ),
