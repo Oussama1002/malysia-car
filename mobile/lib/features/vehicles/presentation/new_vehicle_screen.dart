@@ -140,9 +140,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   final _nbPortes = TextEditingController();
   final _mileage = TextEditingController();
   final _numeroPolice = TextEditingController();
-  final _dailyPrice = TextEditingController();
-  final _monthlyPrice = TextEditingController();
-  final _purchasePrice = TextEditingController();
   final _insuranceDeductible = TextEditingController();
 
   // Dropdowns alignés sur le web — on garde '' = pas de choix.
@@ -172,9 +169,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   bool _creatingBrand = false;
   bool _creatingModel = false;
 
-  // Photo principale du véhicule — uploadée sur POST /vehicles/{id}/photo
-  // après la création, comme le fait le modal web.
-  XFile? _mainPhoto;
+  // Photos & vidéo du véhicule — comme la carte « Photos & Vidéo » du modal
+  // web. Seule la première photo est envoyée (POST /vehicles/{id}/photo) ;
+  // la vidéo est un aperçu local, non persistée (comme le web).
+  final List<XFile> _photos = [];
+  XFile? _video;
 
   // Équipements cochés — sous-ensemble des libellés de `_equipmentsGroups`.
   final Set<String> _equipments = <String>{};
@@ -201,9 +200,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     _nbPortes.dispose();
     _mileage.dispose();
     _numeroPolice.dispose();
-    _dailyPrice.dispose();
-    _monthlyPrice.dispose();
-    _purchasePrice.dispose();
     _insuranceDeductible.dispose();
     _newBrandName.dispose();
     _newModelName.dispose();
@@ -562,23 +558,17 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           'immat_online': _immatOnline.text.trim(),
         if (_immatProvExpiry != null)
           'immat_provisoire_expiry': _iso(_immatProvExpiry!),
-        if (double.tryParse(_dailyPrice.text.trim()) != null)
-          'daily_rental_price': double.parse(_dailyPrice.text.trim()),
-        if (double.tryParse(_monthlyPrice.text.trim()) != null)
-          'monthly_rental_price': double.parse(_monthlyPrice.text.trim()),
-        if (double.tryParse(_purchasePrice.text.trim()) != null)
-          'purchase_price': double.parse(_purchasePrice.text.trim()),
         if (_equipments.isNotEmpty) 'equipments': _equipments.toList(),
       };
       final id = await ref.read(vehiclesRepoProvider).create(body);
-      // Upload de la photo principale si l'utilisateur en a choisi une —
-      // non bloquant : la création du véhicule reste réussie même si la photo
-      // échoue, on remonte juste un message d'erreur.
-      if (_mainPhoto != null && id.isNotEmpty) {
+      // Upload de la première photo comme photo principale — non bloquant :
+      // la création du véhicule reste réussie même si l'upload échoue, comme
+      // le modal web qui n'envoie que la première photo.
+      if (_photos.isNotEmpty && id.isNotEmpty) {
         try {
           await ref
               .read(vehiclesRepoProvider)
-              .uploadMainPhoto(id: id, filePath: _mainPhoto!.path);
+              .uploadMainPhoto(id: id, filePath: _photos.first.path);
         } catch (e) {
           setState(() {
             _error =
@@ -658,8 +648,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                 _technicalSection(),
                 const SizedBox(height: 12),
                 _adminSection(),
-                const SizedBox(height: 12),
-                _pricingSection(),
                 const SizedBox(height: 12),
                 _equipmentsSection(),
                 const SizedBox(height: 12),
@@ -1239,43 +1227,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     );
   }
 
-  Widget _pricingSection() {
-    return ModuleCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Tarification',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 10),
-          _twoCols(
-            TextFormField(
-              controller: _dailyPrice,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration:
-                  const InputDecoration(labelText: 'Tarif / jour (MAD)'),
-            ),
-            TextFormField(
-              controller: _monthlyPrice,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration:
-                  const InputDecoration(labelText: 'Tarif / mois (MAD)'),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _purchasePrice,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            decoration:
-                const InputDecoration(labelText: "Prix d'achat (MAD)"),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Équipements — multi-sélection groupée par famille, comme le web.
   Widget _equipmentsSection() {
     return ModuleCard(
@@ -1399,58 +1350,26 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     );
   }
 
-  // Photo principale — « Prendre une photo » (caméra) ou « Choisir » (galerie),
-  // reflet des deux boutons de la carte « Photos & Vidéo » du modal web.
+  // Photos & Vidéo — comme la carte du modal web : plusieurs photos
+  // (caméra / galerie) + une vidéo. Seule la première photo est envoyée.
   Widget _photoSection() {
-    final preview = _mainPhoto;
     return ModuleCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Photo du véhicule',
+          const Text('Photos & Vidéo',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          const Text(
-            'Facultatif — sera envoyée après la création. Idéalement l\'avant du véhicule, en extérieur.',
-            style: TextStyle(color: Colors.black54, fontSize: 11.5),
-          ),
           const SizedBox(height: 10),
-          if (preview != null) ...[
-            Stack(
-              alignment: Alignment.topRight,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 10,
-                    child: df_img.fileImage(preview.path, fit: BoxFit.cover),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Material(
-                    color: Colors.red,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      onTap: () => setState(() => _mainPhoto = null),
-                      customBorder: const CircleBorder(),
-                      child: const Padding(
-                        padding: EdgeInsets.all(5),
-                        child: Icon(Icons.close,
-                            color: Colors.white, size: 16),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-          ],
+
+          // ---- Photos ----
+          const Text('Photos du véhicule',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _pickMainPhoto(ImageSource.camera),
+                  onPressed: () => _pickPhotos(ImageSource.camera),
                   icon: const Icon(Icons.photo_camera, size: 16),
                   label: const Text('Prendre une photo'),
                   style: OutlinedButton.styleFrom(
@@ -1460,7 +1379,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _pickMainPhoto(ImageSource.gallery),
+                  onPressed: () => _pickPhotos(ImageSource.gallery),
                   icon: const Icon(Icons.image_outlined, size: 16),
                   label: const Text('Galerie'),
                   style: OutlinedButton.styleFrom(
@@ -1469,21 +1388,141 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               ),
             ],
           ),
+          if (_photos.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              children: [
+                for (int i = 0; i < _photos.length; i++)
+                  Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: df_img.fileImage(_photos[i].path,
+                              fit: BoxFit.cover),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: Material(
+                          color: Colors.red,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            onTap: () =>
+                                setState(() => _photos.removeAt(i)),
+                            customBorder: const CircleBorder(),
+                            child: const Padding(
+                              padding: EdgeInsets.all(3),
+                              child: Icon(Icons.close,
+                                  color: Colors.white, size: 13),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          // ---- Vidéo ----
+          const Text('Vidéo du véhicule (optionnel)',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickVideo(ImageSource.camera),
+                  icon: const Icon(Icons.videocam_outlined, size: 16),
+                  label: const Text('Filmer'),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(40)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickVideo(ImageSource.gallery),
+                  icon: const Icon(Icons.video_library_outlined, size: 16),
+                  label: Text(_video == null ? 'Galerie' : 'Remplacer'),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(40)),
+                ),
+              ),
+            ],
+          ),
+          if (_video != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.movie_outlined,
+                      size: 18, color: Colors.black54),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(_video!.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12)),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _video = null),
+                    child: const Icon(Icons.close, size: 18, color: Colors.red),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Future<void> _pickMainPhoto(ImageSource source) async {
+  Future<void> _pickPhotos(ImageSource source) async {
     try {
       final picker = ImagePicker();
-      final f = await picker.pickImage(
-          source: source, maxWidth: 1600, imageQuality: 80);
-      if (f != null) setState(() => _mainPhoto = f);
+      if (source == ImageSource.gallery) {
+        final files =
+            await picker.pickMultiImage(maxWidth: 1600, imageQuality: 80);
+        if (files.isNotEmpty) setState(() => _photos.addAll(files));
+      } else {
+        final f = await picker.pickImage(
+            source: source, maxWidth: 1600, imageQuality: 80);
+        if (f != null) setState(() => _photos.add(f));
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Impossible d\'ouvrir la caméra.')),
+      );
+    }
+  }
+
+  Future<void> _pickVideo(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final f = await picker.pickVideo(source: source);
+      if (f != null) setState(() => _video = f);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir la vidéo.')),
       );
     }
   }
