@@ -846,7 +846,7 @@ export const ReservationsOpsPage: React.FC = () => {
           )}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500">
+              <label className="mb-1 flex min-h-[28px] items-center justify-between text-xs font-bold text-slate-500">
                 <span>Client</span>
                 <button
                   type="button"
@@ -868,7 +868,7 @@ export const ReservationsOpsPage: React.FC = () => {
               </select>
             </div>
             <div className="relative">
-              <label className="mb-1 block text-xs font-bold text-slate-500">
+              <label className="mb-1 flex min-h-[28px] items-center text-xs font-bold text-slate-500">
                 Véhicule{form.is_draft ? 's (plusieurs possibles)' : ''}
               </label>
               {form.is_draft && form.vehicle_ids.length > 0 && (
