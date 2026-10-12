@@ -179,6 +179,13 @@ export const CustomerForm: React.FC<{
                 onChange={(e) => setIndividual((p) => ({ ...p, national_id_number: e.target.value }))}
               />
             </Field>
+            <Field label="Passeport">
+              <input
+                className="df-input"
+                value={individual.passport_number ?? ''}
+                onChange={(e) => setIndividual((p) => ({ ...p, passport_number: e.target.value }))}
+              />
+            </Field>
             <Field label="Date de naissance">
               <DateField
                 className="df-input"

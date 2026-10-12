@@ -161,14 +161,16 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         }
         _scanningDoc = doc;
         _notice[doc] =
-            'OCR ${doc == _ScanDoc.cin ? 'CIN' : 'Permis'} en cours…';
+            'OCR ${doc == _ScanDoc.cin ? 'CIN / Passeport' : 'Permis'} en cours…';
         _duplicate = null;
       });
       final result = await ref.read(customersRepoProvider).scanDocument(
             filePath: kIsWeb ? null : f.path,
             fileBytes: bytes,
             fileName: f.name,
-            type: doc == _ScanDoc.cin ? 'cin' : 'driving_license',
+            // CIN ou passeport : on laisse le parser détecter (`null`).
+            // Pour le permis la nature est connue d'avance.
+            type: doc == _ScanDoc.cin ? null : 'driving_license',
           );
       await _applyScanFields(result, doc: doc);
     } catch (e) {
@@ -259,8 +261,15 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         if (licExp != null) _licenseExpiry = DateTime.tryParse(licExp);
         cinForLookup = nationalId;
       }
-      _notice[doc] =
-          'Champs détectés (${doc == _ScanDoc.cin ? 'CIN' : 'Permis'}) — vérifiez.';
+      final detected = result['document_type']?.toString();
+      final label = doc == _ScanDoc.permis
+          ? 'Permis'
+          : detected == 'passport'
+              ? 'Passeport'
+              : detected == 'cin'
+                  ? 'CIN'
+                  : 'CIN / Passeport';
+      _notice[doc] = 'Champs détectés ($label) — vérifiez.';
     });
 
     if (cinForLookup != null) {
@@ -638,14 +647,14 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           const Text(
-            "Prenez le recto de chaque pièce (CIN puis permis) : l'OCR remplit le formulaire. Ajoutez ensuite le verso — il sera attaché au dossier client.",
+            "Prenez le recto de chaque pièce (CIN ou passeport, puis permis) : l'OCR détecte automatiquement et remplit le formulaire. Ajoutez ensuite le verso — il sera attaché au dossier client.",
             style: TextStyle(color: Colors.black54, fontSize: 12),
           ),
           const SizedBox(height: 10),
 
-          // CIN — Recto (OCR)
+          // CIN / Passeport — Recto (OCR, type auto-détecté)
           _ScanSlot(
-            title: 'CIN — Recto',
+            title: 'CIN / Passeport — Recto',
             photoPath: _cinPhotoPath,
             scanning: _scanningDoc == _ScanDoc.cin,
             notice: _scanningDoc == _ScanDoc.cin ? null : _notice[_ScanDoc.cin],

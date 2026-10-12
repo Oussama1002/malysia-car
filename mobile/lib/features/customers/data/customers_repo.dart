@@ -115,7 +115,9 @@ class CustomersRepo {
     String? filePath,
     List<int>? fileBytes,
     String? fileName,
-    required String type,
+    /// Type d'indication envoyé au parser. `null` ou vide laisse le parser
+    /// détecter la nature du document (CIN vs passeport, par exemple).
+    String? type,
   }) async {
     final MultipartFile multipart;
     if (fileBytes != null) {
@@ -128,12 +130,11 @@ class CustomersRepo {
     } else {
       throw ArgumentError('scanDocument: filePath or fileBytes is required');
     }
+    final uploadForm = <String, dynamic>{'file': multipart};
+    if (type != null && type.isNotEmpty) uploadForm['document_type'] = type;
     final upload = await _api.raw.post(
       '/document-reader/uploads',
-      data: FormData.fromMap({
-        'file': multipart,
-        'document_type': type,
-      }),
+      data: FormData.fromMap(uploadForm),
     );
     final uploadData = upload.data['data'] ?? upload.data;
     final docId = (uploadData is Map ? uploadData['id'] : null)?.toString();
@@ -144,8 +145,10 @@ class CustomersRepo {
     // Déclenche l'OCR en mode synchrone (comme le web : évite les
     // faux négatifs si le worker de file tombe) puis on interroge jusqu'à
     // ce que le serveur ait fini.
+    final extractBody = <String, dynamic>{'sync': true};
+    if (type != null && type.isNotEmpty) extractBody['document_type'] = type;
     await _api.raw.post('/document-reader/documents/$docId/extract',
-        data: {'document_type': type, 'sync': true});
+        data: extractBody);
 
     const maxTries = 60;
     for (var i = 0; i < maxTries; i++) {
@@ -162,6 +165,9 @@ class CustomersRepo {
           final data = extraction is Map ? extraction['extracted_data'] : null;
           return {
             'document_id': docId,
+            // Le backend met à jour `document_type` avec le type détecté
+            // (ex. : scan passeport déposé sans indication).
+            'document_type': p['document_type']?.toString(),
             'fields': data is Map ? Map<String, dynamic>.from(data) : {},
           };
         }

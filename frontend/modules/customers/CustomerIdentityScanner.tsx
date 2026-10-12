@@ -10,6 +10,7 @@ export interface ScannedIdentity {
   first_name?: string;
   last_name?: string;
   national_id_number?: string;
+  passport_number?: string;
   date_of_birth?: string;
   nationality?: string;
   driving_license_number?: string;
@@ -117,9 +118,15 @@ const ScanSlot: React.FC<{
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [docType, setDocType] = useState<ReaderDocumentType>(defaultType);
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
   const [existing, setExisting] = useState<ExistingCustomer | null>(null);
+
+  // Quand un seul type est permis (ex. : permis de conduire), on le passe au
+  // parser comme indice ; sinon on laisse le serveur détecter — c'est ce qui
+  // permet de déposer indifféremment une CIN ou un passeport sans choisir
+  // dans un menu.
+  const hint: ReaderDocumentType | undefined =
+    allowedTypes.length === 1 ? allowedTypes[0] : undefined;
 
   // L'aperçu vit le temps du formulaire : on libère l'URL quand il change.
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview.url); }, [preview]);
@@ -140,12 +147,13 @@ const ScanSlot: React.FC<{
       });
       try {
         // 1. Upload the file — fast, just stores it.
-        const uploaded = await documentReaderApi.upload(file, docType);
+        const uploaded = await documentReaderApi.upload(file, hint);
         const docId = uploaded.data.id;
 
         // Register the document ID immediately so the parent can attach it
-        // to the customer even if OCR partially fails.
-        onScanComplete?.({ documentId: docId, documentType: docType });
+        // to the customer even if OCR partially fails. The resolved type is
+        // only known after extraction; we patch it below once detected.
+        onScanComplete?.({ documentId: docId, documentType: hint ?? 'other' });
 
         if (isPdf) {
           const thumb = await documentReaderApi.thumbnailObjectUrl(docId);
@@ -160,7 +168,7 @@ const ScanSlot: React.FC<{
         // 2. Trigger OCR — returns 202 instantly, OCR runs in a background worker.
         // For customer prefill, force synchronous OCR to avoid queue worker
         // crashes/timeouts causing false negatives in the UI.
-        await documentReaderApi.extract(docId, docType, { sync: true });
+        await documentReaderApi.extract(docId, hint, { sync: true });
 
         // 3. Poll until the worker finishes (extracted | failed).
         //    Each tick is 3 s; timeout after 5 min.
@@ -172,6 +180,11 @@ const ScanSlot: React.FC<{
         }
 
         const fields = (done.data.extraction?.extracted_data ?? {}) as Record<string, unknown>;
+        // Partage le type réellement détecté avec le parent — sans ça, la
+        // pièce reste enregistrée comme `other` pour l'attachement.
+        if (!hint && done.data.document_type) {
+          onScanComplete?.({ documentId: docId, documentType: done.data.document_type });
+        }
         const mapped = mapFields(fields);
         // Drop empty values so we never blank out existing form data.
         const cleaned = Object.fromEntries(
@@ -195,26 +208,13 @@ const ScanSlot: React.FC<{
         setLoading(false);
       }
     },
-    [docType, mapFields, onPrefill, onScanComplete],
+    [hint, mapFields, onPrefill, onScanComplete],
   );
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="text-xs font-bold text-slate-700">{title}</div>
-        {allowedTypes.length > 1 ? (
-          <select
-            value={docType}
-            onChange={(e) => setDocType(e.target.value as ReaderDocumentType)}
-            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]"
-          >
-            {allowedTypes.map((t) => (
-              <option key={t} value={t}>
-                {t === 'cin' ? 'CIN' : t === 'passport' ? 'Passeport' : t}
-              </option>
-            ))}
-          </select>
-        ) : null}
       </div>
       <div
         onDragOver={(e) => {
@@ -358,6 +358,7 @@ function frenchFieldLabel(key: string): string {
     first_name: 'Prénom',
     last_name: 'Nom',
     national_id_number: 'CIN',
+    passport_number: 'Passeport',
     date_of_birth: 'Date de naissance',
     nationality: 'Nationalité',
     driving_license_number: 'N° de permis',
@@ -368,13 +369,18 @@ function frenchFieldLabel(key: string): string {
 }
 
 function mapIdCardFields(extracted: Record<string, unknown>): ScannedIdentity {
-  // La CIN porte aussi le nom : scannée seule, elle laissait le formulaire
-  // vide. Les valeurs absentes sont écartées par l'appelant, donc le permis
-  // scanné ensuite complète sans rien effacer.
+  // La CIN et le passeport partagent la même case côté backend
+  // (`document_number`) ; on route selon `document_type` que le parser pose.
+  // Les valeurs absentes sont écartées par l'appelant, donc un scan permis
+  // qui vient ensuite complète sans rien effacer.
+  const docType = asString(extracted.document_type);
+  const number = asString(extracted.document_number);
+  const isPassport = docType === 'passport';
   return {
     first_name: titleCase(extracted.first_name),
     last_name: titleCase(extracted.last_name),
-    national_id_number: asString(extracted.document_number),
+    national_id_number: isPassport ? undefined : number,
+    passport_number: isPassport ? number : undefined,
     date_of_birth: asString(extracted.date_of_birth),
     nationality: normalizeNationality(extracted.nationality),
     address: asString(extracted.address),
