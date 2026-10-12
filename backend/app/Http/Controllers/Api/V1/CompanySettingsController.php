@@ -115,7 +115,12 @@ class CompanySettingsController extends Controller
     public function testEmail(Request $request): JsonResponse
     {
         $user = $request->user();
-        $to = $request->input('to') ?: optional($user)->email;
+        // Par défaut, on envoie le test à l'adresse SMTP configurée
+        // (smtp_from_address ou smtp_user), pas à l'email de login de l'admin.
+        $integrations = CompanySetting::getAll('integrations', optional($user)->company_id);
+        $configured = trim((string) ($integrations['smtp_from_address'] ?? ''))
+            ?: trim((string) ($integrations['smtp_user'] ?? ''));
+        $to = $request->input('to') ?: ($configured ?: optional($user)->email);
         if (! $to) {
             return ApiResponse::message('Aucune adresse de destination.', 422);
         }
