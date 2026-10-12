@@ -383,14 +383,15 @@ export const CustomersPage: React.FC = () => {
           {
             key: 'status',
             header: 'Statut',
-            render: (r) =>
-              r.status === 'active' ? (
-                <StatusBadge label="Actif" tone="success" />
-              ) : r.status === 'suspended' ? (
-                <StatusBadge label="Suspendu" tone="danger" />
-              ) : (
-                <StatusBadge label="Inactif" tone="default" />
-              ),
+            render: (r) => {
+              // Un client blacklisté n'est jamais affiché « Actif » : on
+              // écrase le statut même si une ligne historique est restée
+              // active en base.
+              if (r.is_blacklisted) return <StatusBadge label="Suspendu" tone="danger" />;
+              if (r.status === 'active') return <StatusBadge label="Actif" tone="success" />;
+              if (r.status === 'suspended') return <StatusBadge label="Suspendu" tone="danger" />;
+              return <StatusBadge label="Inactif" tone="default" />;
+            },
           },
           {
             key: 'created',

@@ -403,17 +403,22 @@ export const ReservationsOpsPage: React.FC = () => {
   // dropdown. Read the actual API fields with sensible fallbacks instead.
   const customerOptions = useMemo(
     () =>
-      (customersQ.data ?? []).map((raw) => {
-        const c = raw as unknown as {
-          id: string | number;
-          display_name?: string;
-          customer_code?: string;
-          customer_type?: string;
-        };
-        const name = c.display_name || c.customer_code || String(c.id);
-        const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
-        return { id: String(c.id), label: `${name} (${kind})` };
-      }),
+      (customersQ.data ?? [])
+        // Un client blacklisté ne peut pas prendre de nouvelle réservation :
+        // on l'exclut du dropdown. Il reste visible dans la fiche clients
+        // (avec un badge Blacklist) pour qu'il puisse être réhabilité.
+        .filter((raw) => !((raw as unknown as { is_blacklisted?: boolean }).is_blacklisted))
+        .map((raw) => {
+          const c = raw as unknown as {
+            id: string | number;
+            display_name?: string;
+            customer_code?: string;
+            customer_type?: string;
+          };
+          const name = c.display_name || c.customer_code || String(c.id);
+          const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
+          return { id: String(c.id), label: `${name} (${kind})` };
+        }),
     [customersQ.data],
   );
   const formSlotBlocked = Boolean(formAvailabilityQ.data && formAvailabilityQ.data.available === false);

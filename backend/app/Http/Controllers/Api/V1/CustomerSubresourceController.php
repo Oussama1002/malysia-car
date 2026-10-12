@@ -219,6 +219,7 @@ class CustomerSubresourceController extends Controller
             'severity' => ['sometimes', 'in:low,medium,high,critical'],
             'source_module' => ['nullable', 'string', 'max:100'],
         ]);
+        $previousStatus = $customer->status;
         DB::transaction(function () use ($customer, $data, $request) {
             $customer->blacklistEntries()->create([
                 'id' => (string) \Illuminate\Support\Str::uuid(),
@@ -230,6 +231,10 @@ class CustomerSubresourceController extends Controller
                 'created_at' => now(),
             ]);
             $customer->is_blacklisted = true;
+            // Un client en liste noire ne doit plus apparaître comme "actif" :
+            // on le suspend automatiquement pour qu'il sorte des listes de
+            // sélection (réservations, contrats, missions).
+            $customer->status = 'suspended';
             $customer->save();
         });
 
@@ -237,9 +242,10 @@ class CustomerSubresourceController extends Controller
             action: 'blacklist_added',
             subject: $customer->fresh(),
             user: $request->user(),
-            before: ['is_blacklisted' => false],
+            before: ['is_blacklisted' => false, 'status' => $previousStatus],
             after: [
                 'is_blacklisted' => true,
+                'status' => 'suspended',
                 'reason' => $data['reason'],
                 'severity' => $data['severity'] ?? 'high',
                 'source_module' => $data['source_module'] ?? null,
@@ -260,6 +266,7 @@ class CustomerSubresourceController extends Controller
         $data = $request->validate([
             'removal_reason' => ['required', 'string', 'max:255'],
         ]);
+        $previousStatus = $customer->status;
         DB::transaction(function () use ($customer, $data, $request) {
             $customer->blacklistEntries()
                 ->whereNull('removed_at')
@@ -269,6 +276,12 @@ class CustomerSubresourceController extends Controller
                     'removal_reason' => $data['removal_reason'],
                 ]);
             $customer->is_blacklisted = false;
+            // Suspension posée par la mise en liste noire : on la retire pour
+            // que le client redevienne sélectionnable. On ne touche pas à un
+            // statut 'inactive' réglé par ailleurs.
+            if ($customer->status === 'suspended') {
+                $customer->status = 'active';
+            }
             $customer->save();
         });
 
@@ -276,9 +289,10 @@ class CustomerSubresourceController extends Controller
             action: 'blacklist_removed',
             subject: $customer->fresh(),
             user: $request->user(),
-            before: ['is_blacklisted' => true],
+            before: ['is_blacklisted' => true, 'status' => $previousStatus],
             after: [
                 'is_blacklisted' => false,
+                'status' => $customer->fresh()->status,
                 'removal_reason' => $data['removal_reason'],
             ],
             request: $request,

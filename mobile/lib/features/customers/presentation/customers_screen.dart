@@ -582,9 +582,14 @@ class _CustomerCard extends StatelessWidget {
                 ),
               if (c.status != null)
                 ModuleStatusChip(
-                  label:
-                      kCustomerStatusFr[c.status!] ?? c.status!,
-                  tone: _statusTone(c.status!),
+                  // Blacklisté → jamais "Actif". La base peut encore porter
+                  // 'active' sur des lignes historiques, on l'écrase ici.
+                  label: c.isBlacklisted
+                      ? (kCustomerStatusFr['suspended'] ?? 'Suspendu')
+                      : (kCustomerStatusFr[c.status!] ?? c.status!),
+                  tone: c.isBlacklisted
+                      ? ModuleStatusTone.danger
+                      : _statusTone(c.status!),
                 ),
             ],
           ),

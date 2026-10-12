@@ -641,8 +641,10 @@ class _NewContractFromReservationScreenState
   }
 
   Widget _clientStep() {
-    final clients = ref.watch(customersListProvider).valueOrNull ??
+    final all = ref.watch(customersListProvider).valueOrNull ??
         const <CustomerDto>[];
+    // Clients blacklistés hors du choix.
+    final clients = all.where((c) => !c.isBlacklisted).toList();
     final selected = clients.where((c) => c.id == _clientId).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

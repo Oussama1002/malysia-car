@@ -430,7 +430,9 @@ export const ContractWizardPage: React.FC = () => {
         throw new Error('Backend API is required for contract wizard clients.');
       }
       const res = await apiClient<{ data: any[] }>('/v1/customers?per_page=200');
-      return res.data.map((c): CustomerDto => ({
+      // Un client en liste noire ne peut pas signer de nouveau contrat :
+      // on l'exclut du choix.
+      return res.data.filter((c) => !c.is_blacklisted).map((c): CustomerDto => ({
         id: c.id,
         kind: c.customer_type === 'ENTREPRISE' ? 'ENTREPRISE' : 'PARTICULIER',
         // display_name comes back empty on records whose profile carries the

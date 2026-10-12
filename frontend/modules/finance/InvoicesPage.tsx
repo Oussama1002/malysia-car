@@ -365,10 +365,10 @@ const InvoiceForm: React.FC<{
               <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
                 {customersQ.isLoading ? (
                   <div className="p-3 text-sm text-slate-500">Recherche…</div>
-                ) : (customersQ.data?.data ?? []).length === 0 ? (
+                ) : (customersQ.data?.data ?? []).filter((c) => !c.is_blacklisted).length === 0 ? (
                   <div className="p-3 text-sm text-slate-500">Aucun client</div>
                 ) : (
-                  customersQ.data!.data.map((c) => (
+                  customersQ.data!.data.filter((c) => !c.is_blacklisted).map((c) => (
                     <button
                       type="button"
                       key={c.id}

@@ -982,7 +982,11 @@ class _ClientPickerSheetState extends ConsumerState<_ClientPickerSheet> {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('$e')),
                 data: (items) {
-                  final list = items.where((c) {
+                  // Un client blacklisté est hors du choix : il reste
+                  // visible dans la fiche clients mais ne peut plus
+                  // apparaître dans la liste de sélection.
+                  final visible = items.where((c) => !c.isBlacklisted);
+                  final list = visible.where((c) {
                     if (_q.isEmpty) return true;
                     return (c.displayName ?? '').toLowerCase().contains(_q) ||
                         c.code.toLowerCase().contains(_q) ||

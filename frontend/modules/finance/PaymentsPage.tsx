@@ -79,6 +79,7 @@ interface CustomerMin {
   id: string;
   display_name?: string | null;
   customer_code?: string | null;
+  is_blacklisted?: boolean;
   individual_profile?: { first_name?: string | null; last_name?: string | null } | null;
   company_profile?: { legal_name?: string | null; trade_name?: string | null } | null;
 }
@@ -700,7 +701,7 @@ export const PaymentForm: React.FC<{
     },
   });
 
-  const customers = customersQ.data ?? [];
+  const customers = (customersQ.data ?? []).filter((c) => !c.is_blacklisted);
   const contracts = contractsQ.data ?? [];
   const reservations = reservationsQ.data ?? [];
   const invoices = invoicesQ.data ?? [];
