@@ -80,7 +80,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   String? _cinDocId;
   String? _permisDocId;
   _ScanDoc? _scanningDoc;
-  String? _scanNotice;
+  final Map<_ScanDoc, String?> _notice = {};
   CustomerDto? _duplicate;
 
   // Verso (pas d'OCR) : juste joint comme pièce au client après création
@@ -160,7 +160,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
           _permisPhotoPath = f.path;
         }
         _scanningDoc = doc;
-        _scanNotice =
+        _notice[doc] =
             'OCR ${doc == _ScanDoc.cin ? 'CIN' : 'Permis'} en cours…';
         _duplicate = null;
       });
@@ -173,7 +173,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
       await _applyScanFields(result, doc: doc);
     } catch (e) {
       setState(() {
-        _scanNotice =
+        _notice[doc] =
             'Scan impossible : ${_shortError(e)}. Saisissez les champs manuellement.';
       });
     } finally {
@@ -181,6 +181,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     }
   }
 
+  /// Applique les champs extraits selon le document, en reprenant les
+  /// mappings du web (frontend/modules/customers/CustomerIdentityScanner.tsx :
+  /// mapIdCardFields pour la CIN, mapLicenseFields pour le permis). La CIN ne
+  /// touche jamais aux champs du permis (et inversement), ce qui évite que la
+  /// date de validité de la CIN n'écrase l'expiration du permis.
   Future<void> _applyScanFields(
     Map<String, dynamic> result, {
     required _ScanDoc doc,
@@ -193,47 +198,110 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
       _permisDocId = docId;
     }
 
-    final firstName = _str(fields['first_name']);
-    final lastName = _str(fields['last_name']);
-    final cin = _str(fields['document_number']) ??
-        _str(fields['national_id_number']);
-    final birth = _str(fields['date_of_birth']);
-    final nationality = _str(fields['nationality']);
-    final address = _str(fields['address']);
-    final licNum = _str(fields['license_number']);
-    final licExp = _str(fields['expiry_date']);
+    String? cinForLookup;
 
     setState(() {
-      // Ne jamais ecraser une saisie manuelle existante.
-      if (firstName != null && _firstName.text.isEmpty) {
-        _firstName.text = _titleCase(firstName);
+      if (doc == _ScanDoc.cin) {
+        // ---- CIN : identité + adresse. Remplit les champs vides. ----
+        final firstName = _str(fields['first_name']);
+        final lastName = _str(fields['last_name']);
+        final cin = _str(fields['document_number']) ??
+            _str(fields['national_id_number']);
+        final birth = _str(fields['date_of_birth']);
+        final nationality = _str(fields['nationality']);
+        final address = _str(fields['address']);
+
+        if (firstName != null && _firstName.text.isEmpty) {
+          _firstName.text = _titleCase(firstName);
+        }
+        if (lastName != null && _lastName.text.isEmpty) {
+          _lastName.text = _titleCase(lastName);
+        }
+        if (cin != null && _cin.text.isEmpty) _cin.text = cin.toUpperCase();
+        if (nationality != null && _nationality.text.isEmpty) {
+          _nationality.text = _normalizeNationality(nationality);
+        }
+        if (address != null && _address.text.isEmpty) _address.text = address;
+        if (birth != null && _birthDate == null) {
+          _birthDate = DateTime.tryParse(birth);
+        }
+        cinForLookup = cin;
+      } else {
+        // ---- Permis : prénom/nom font autorité (étiquetés) → on écrase. ----
+        var first = _str(fields['first_name']);
+        var last = _str(fields['last_name']);
+        final fullName = _str(fields['full_name']);
+        if ((first == null || last == null) && fullName != null) {
+          final parts = fullName.split(RegExp(r'\s+'));
+          if (parts.length >= 2) {
+            first ??= parts.first;
+            last ??= parts.sublist(1).join(' ');
+          }
+        }
+        final nationalId = _str(fields['national_id_number']);
+        final nationality = _str(fields['nationality']);
+        final birth = _str(fields['date_of_birth']);
+        final licNum = _str(fields['license_number']);
+        final licExp = _str(fields['expiry_date']);
+
+        if (first != null) _firstName.text = _titleCase(first);
+        if (last != null) _lastName.text = _titleCase(last);
+        if (nationalId != null && _cin.text.isEmpty) {
+          _cin.text = nationalId.toUpperCase();
+        }
+        if (nationality != null && _nationality.text.isEmpty) {
+          _nationality.text = _normalizeNationality(nationality);
+        }
+        if (birth != null && _birthDate == null) {
+          _birthDate = DateTime.tryParse(birth);
+        }
+        if (licNum != null) _licenseNumber.text = licNum;
+        if (licExp != null) _licenseExpiry = DateTime.tryParse(licExp);
+        cinForLookup = nationalId;
       }
-      if (lastName != null && _lastName.text.isEmpty) {
-        _lastName.text = _titleCase(lastName);
-      }
-      if (cin != null && _cin.text.isEmpty) _cin.text = cin.toUpperCase();
-      if (nationality != null && _nationality.text.isEmpty) {
-        _nationality.text = _normalizeNationality(nationality);
-      }
-      if (address != null && _address.text.isEmpty) _address.text = address;
-      if (birth != null && _birthDate == null) {
-        _birthDate = DateTime.tryParse(birth);
-      }
-      if (licNum != null && _licenseNumber.text.isEmpty) {
-        _licenseNumber.text = licNum;
-      }
-      if (licExp != null && _licenseExpiry == null) {
-        _licenseExpiry = DateTime.tryParse(licExp);
-      }
-      _scanNotice =
+      _notice[doc] =
           'Champs détectés (${doc == _ScanDoc.cin ? 'CIN' : 'Permis'}) — vérifiez.';
     });
 
-    if (cin != null) {
-      final existing = await ref.read(customersRepoProvider).lookup(cin: cin);
+    if (cinForLookup != null) {
+      final existing =
+          await ref.read(customersRepoProvider).lookup(cin: cinForLookup!);
       if (existing != null && mounted) {
         setState(() => _duplicate = existing);
       }
+    }
+  }
+
+  /// OCR du verso de la CIN — en pratique la seule source de l'adresse
+  /// (le recto ne la porte pas). On ne remplit que l'adresse et les champs
+  /// d'identité encore vides, sans toucher au prénom/nom du recto.
+  Future<void> _scanCinVersoForAddress(String path) async {
+    try {
+      setState(() => _notice[_ScanDoc.cin] = 'Lecture du verso (adresse)…');
+      final result = await ref.read(customersRepoProvider).scanDocument(
+            filePath: kIsWeb ? null : path,
+            fileName: 'cin_verso.jpg',
+            type: 'cin',
+          );
+      final fields =
+          (result['fields'] as Map<String, dynamic>? ?? const {});
+      final address = _str(fields['address']);
+      final cin = _str(fields['document_number']) ??
+          _str(fields['national_id_number']);
+      final birth = _str(fields['date_of_birth']);
+      if (!mounted) return;
+      setState(() {
+        if (address != null && _address.text.isEmpty) _address.text = address;
+        if (cin != null && _cin.text.isEmpty) _cin.text = cin.toUpperCase();
+        if (birth != null && _birthDate == null) {
+          _birthDate = DateTime.tryParse(birth);
+        }
+        _notice[_ScanDoc.cin] = address != null
+            ? 'Adresse détectée (verso CIN) — vérifiez.'
+            : 'Verso CIN enregistré (aucune adresse détectée).';
+      });
+    } catch (_) {
+      // Non bloquant : le verso reste joint comme pièce.
     }
   }
 
@@ -580,7 +648,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
             title: 'CIN — Recto',
             photoPath: _cinPhotoPath,
             scanning: _scanningDoc == _ScanDoc.cin,
-            notice: _scanningDoc == null ? _scanNotice : null,
+            notice: _scanningDoc == _ScanDoc.cin ? null : _notice[_ScanDoc.cin],
             duplicate: _duplicate,
             onCamera: () =>
                 _scan(source: ImageSource.camera, doc: _ScanDoc.cin),
@@ -616,7 +684,9 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
             title: 'Permis — Recto',
             photoPath: _permisPhotoPath,
             scanning: _scanningDoc == _ScanDoc.permis,
-            notice: null,
+            notice: _scanningDoc == _ScanDoc.permis
+                ? null
+                : _notice[_ScanDoc.permis],
             duplicate: null,
             onCamera: () =>
                 _scan(source: ImageSource.camera, doc: _ScanDoc.permis),
@@ -656,6 +726,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
           _permisBackPath = f.path;
         }
       });
+      // Le verso de la CIN porte l'adresse : on l'OCR en complément, tout
+      // en gardant l'image jointe au dossier client.
+      if (doc == _ScanDoc.cin) {
+        await _scanCinVersoForAddress(f.path);
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -141,9 +141,11 @@ class CustomersRepo {
       throw Exception('Réponse upload sans identifiant.');
     }
 
-    // Déclenche l'OCR puis on interroge jusqu'à ce que le serveur ait fini.
+    // Déclenche l'OCR en mode synchrone (comme le web : évite les
+    // faux négatifs si le worker de file tombe) puis on interroge jusqu'à
+    // ce que le serveur ait fini.
     await _api.raw.post('/document-reader/documents/$docId/extract',
-        data: {'document_type': type});
+        data: {'document_type': type, 'sync': true});
 
     const maxTries = 60;
     for (var i = 0; i < maxTries; i++) {
