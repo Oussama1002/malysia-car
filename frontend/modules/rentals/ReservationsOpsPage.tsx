@@ -525,16 +525,26 @@ export const ReservationsOpsPage: React.FC = () => {
     })();
   }, [location, customersQ.isLoading, customersQ.data, vehiclesQ.isLoading, vehiclesQ.data, nav, qc]);
 
+  const [showArchive, setShowArchive] = useState(false);
+
   const rows = useMemo(() => {
     const data = (reservationsQ.data ?? []) as ReservationDto[];
-    if (!q.trim()) return data;
+    // Les réservations annulées sont déplacées dans l'onglet « Archive » :
+    // on ne les affiche jamais dans la liste principale.
+    const scoped = data.filter((r) => showArchive ? r.status === 'cancelled' : r.status !== 'cancelled');
+    if (!q.trim()) return scoped;
     const qq = q.toLowerCase();
-    return data.filter((r) => {
+    return scoped.filter((r) => {
       const clientName = customerOptions.find((c) => c.id === r.customer_id)?.label ?? '';
       const vehicleName = vehicleOptions.find((v) => v.id === r.vehicle_id)?.label ?? '';
       return `${r.reservation_number} ${r.status} ${clientName} ${vehicleName}`.toLowerCase().includes(qq);
     });
-  }, [reservationsQ.data, q, customerOptions, vehicleOptions]);
+  }, [reservationsQ.data, q, customerOptions, vehicleOptions, showArchive]);
+
+  const cancelledCount = useMemo(
+    () => ((reservationsQ.data ?? []) as ReservationDto[]).filter((r) => r.status === 'cancelled').length,
+    [reservationsQ.data],
+  );
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedReservationId) ?? null, [rows, selectedReservationId]);
   const timelineStatus = String(detail?.status ?? selected?.status ?? '');
@@ -671,6 +681,33 @@ export const ReservationsOpsPage: React.FC = () => {
 
       <SearchFilterBar placeholder="Filtrer réservations…" value={q} onChange={setQ} />
 
+      {/* Onglets : actives · archive (annulées) */}
+      <div className="flex gap-1 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setShowArchive(false)}
+          className={`px-4 py-2.5 text-sm font-black transition border-b-2 ${
+            !showArchive ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Réservations
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowArchive(true)}
+          className={`px-4 py-2.5 text-sm font-black transition border-b-2 ${
+            showArchive ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Archive
+          {cancelledCount > 0 && (
+            <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+              {cancelledCount}
+            </span>
+          )}
+        </button>
+      </div>
+
       <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
           {rows.map((r) => (
@@ -756,7 +793,11 @@ export const ReservationsOpsPage: React.FC = () => {
               </div>
             </div>
           ))}
-          {rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">Aucune réservation.</div>}
+          {rows.length === 0 && (
+            <div className="p-10 text-center text-sm text-slate-500">
+              {showArchive ? 'Aucune réservation annulée.' : 'Aucune réservation.'}
+            </div>
+          )}
         </div>
         {missionSuccess && (
           <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-semibold">
