@@ -131,6 +131,9 @@
 </footer>
 
 <script src="assets/config.js"></script>
+<!-- app.js fournit la fiche détail véhicule (window.MC_openVehicleDetail) et
+     câble le menu/burger + contacts. La grille filtrée reste gérée ci-dessous. -->
+<script src="assets/app.js"></script>
 <script>
 (function () {
   'use strict';
@@ -153,13 +156,7 @@
     if (el && CFG.email) { el.textContent = CFG.email; el.href = 'mailto:' + CFG.email; }
   });
 
-  // Mobile menu
-  var burger = $('burger');
-  var links = $('navLinks');
-  if (burger && links) {
-    burger.addEventListener('click', function () { links.classList.toggle('is-open'); });
-    links.addEventListener('click', function (e) { if (e.target.tagName === 'A') links.classList.remove('is-open'); });
-  }
+  // Menu mobile + contacts footer : gérés par app.js (chargé au-dessus).
 
   // Barre de dates retirée : la fonctionnalité n'est pas câblée (aucune date
   // n'est stockée depuis la recherche), elle n'affichait que des valeurs
@@ -220,6 +217,18 @@
     var name = [v.brand, v.model].filter(Boolean).join(' ') || 'Véhicule';
     var el = document.createElement('article');
     el.className = 'car';
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    // Clic sur la carte → même fiche détail que la landing (app.js).
+    el.addEventListener('click', function () {
+      if (window.MC_openVehicleDetail) window.MC_openVehicleDetail(v);
+    });
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (window.MC_openVehicleDetail) window.MC_openVehicleDetail(v);
+      }
+    });
 
     var media = document.createElement('div');
     media.className = 'car__photo';

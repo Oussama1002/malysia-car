@@ -1161,6 +1161,10 @@
     });
   }
 
+  // Exposé pour la page flotte.html (qui a sa propre grille) afin de
+  // rouvrir la même fiche détail véhicule au clic sur une carte.
+  window.MC_openVehicleDetail = openVehicleDetail;
+
   fillContacts();
   fillBrandsMarquee();
   wireMenu();
