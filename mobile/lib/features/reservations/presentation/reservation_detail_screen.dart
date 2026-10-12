@@ -380,7 +380,7 @@ class _StatusPill extends StatelessWidget {
       ),
       'active' || 'handed_over' => (
         const Color(0xFFE0E7FF),
-        const Color(0xFF3730A3)
+        const Color(0xFF5C471A)
       ),
       _ when s.contains('pending') || s == 'extension_requested' => (
         const Color(0xFFFEF3C7),
@@ -550,7 +550,7 @@ class _QuickActions extends StatelessWidget {
     }
     if (!r.isCancelled && !r.isClosed) {
       actions.add(_mini('Check-Out', const Color(0xFF10B981), onCheckout));
-      actions.add(_mini('Check-In', const Color(0xFF06B6D4), onCheckin));
+      actions.add(_mini('Check-In', const Color(0xFFB08D57), onCheckin));
       actions.add(_mini('+ Paiement', const Color(0xFF8B5CF6), onAddPayment));
       actions.add(_miniOutline('Générer facture', onInvoice));
       actions.add(_miniOutline('Annuler', onCancel,
@@ -655,7 +655,7 @@ class _TabsBar extends StatelessWidget {
                   child: Text(_tabLabels[t]!,
                       style: TextStyle(
                         color: current == t
-                            ? const Color(0xFF4338CA)
+                            ? const Color(0xFF7A5F22)
                             : Colors.black54,
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
@@ -861,7 +861,7 @@ class _TabSummary extends StatelessWidget {
               : (r.dailyRate != null
                   ? '${money.format(r.dailyRate)} MAD'
                   : '—'),
-          color: const Color(0xFF2563EB)),
+          color: const Color(0xFFB8933F)),
       _KpiTile(
           label: 'Montant total',
           value: '${money.format(grand)} MAD',
@@ -891,7 +891,7 @@ class _TabSummary extends StatelessWidget {
               : (r.allowedKmPerDay != null
                   ? '${r.allowedKmPerDay} km/jour'
                   : '—'),
-          color: const Color(0xFF06B6D4)),
+          color: const Color(0xFFB08D57)),
       _KpiTile(
           label: 'Extensions',
           value: '${money.format(totals.extensionsTotal)} MAD',

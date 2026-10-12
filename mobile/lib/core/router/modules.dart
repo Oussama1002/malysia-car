@@ -57,12 +57,12 @@ const List<ModuleDescriptor> kModules = [
       path: '/gps',
       label: 'GPS',
       icon: Icons.map_outlined,
-      color: Color(0xFF3B82F6)),
+      color: Color(0xFFB8933F)),
   ModuleDescriptor(
       path: '/discussions',
       label: 'Discussions',
       icon: Icons.chat_bubble_outline,
-      color: Color(0xFF0EA5E9)),
+      color: Color(0xFFB08D57)),
   ModuleDescriptor(
       path: '/sous-location',
       label: 'Sous-location',
@@ -72,7 +72,7 @@ const List<ModuleDescriptor> kModules = [
       path: '/occasion',
       label: 'Occasion',
       icon: Icons.sell_outlined,
-      color: Color(0xFF2563EB)),
+      color: Color(0xFFB8933F)),
   ModuleDescriptor(
       path: '/demandes',
       label: 'Demandes',

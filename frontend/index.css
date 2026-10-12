@@ -41,7 +41,7 @@
   --df-warning-600: #d97706;
   --df-danger-500: #ef4444;
   --df-danger-600: #dc2626;
-  --df-info-500: #3b82f6;
+  --df-info-500: #b08d57;
 
   /* Neutrals — warm espresso ink on ivory */
   --df-ink: #1a1510;
@@ -450,7 +450,7 @@ select.df-input { cursor: pointer; }
 [data-theme="dark"] .df-chip--success { color: #6ee7b7; }
 [data-theme="dark"] .df-chip--warning { color: #fcd34d; }
 [data-theme="dark"] .df-chip--danger { color: #fca5a5; }
-[data-theme="dark"] .df-chip--info { color: #93c5fd; }
+[data-theme="dark"] .df-chip--info { color: #e3c77c; }
 
 .df-chip__dot {
   width: 6px;
@@ -758,7 +758,7 @@ body:has(.df-overlay-backdrop) .df-copilot-fab { display: none; }
 .df-kpi--success::after { background: linear-gradient(90deg, var(--df-success-500), #6ee7b7); }
 .df-kpi--danger::after { background: linear-gradient(90deg, var(--df-danger-500), #fca5a5); }
 .df-kpi--warning::after { background: linear-gradient(90deg, var(--df-warning-500), #fcd34d); }
-.df-kpi--info::after { background: linear-gradient(90deg, var(--df-info-500), #93c5fd); }
+.df-kpi--info::after { background: linear-gradient(90deg, var(--df-info-500), #e3c77c); }
 
 .df-kpi__label {
   font-size: 11px;

@@ -1468,7 +1468,7 @@ class _ScanSlot extends StatelessWidget {
               ),
               child: Text(notice!,
                   style: const TextStyle(
-                      color: Color(0xFF4338CA),
+                      color: Color(0xFF7A5F22),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700)),
             ),
@@ -1526,7 +1526,7 @@ class _EquipmentChip extends StatelessWidget {
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
                 color: selected
-                    ? const Color(0xFF3730A3)
+                    ? const Color(0xFF5C471A)
                     : Theme.of(context).textTheme.bodyLarge?.color,
               ),
             ),

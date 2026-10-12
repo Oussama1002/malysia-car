@@ -722,7 +722,7 @@ class _StatusChip extends StatelessWidget {
       ),
       'active' || 'handed_over' => (
         const Color(0xFFE0E7FF),
-        const Color(0xFF3730A3)
+        const Color(0xFF5C471A)
       ),
       _ when s.contains('pending') || s == 'extension_requested' => (
         const Color(0xFFFEF3C7),

@@ -218,7 +218,7 @@ class _ActionButtons extends StatelessWidget {
         ..add(_GhostAction(
             label: '+ Paiement fournisseur',
             borderColor: const Color(0xFFD4AF5A),
-            textColor: const Color(0xFF4338CA),
+            textColor: const Color(0xFF7A5F22),
             onTap: onPayment))
         ..add(_PrimaryAction(
             label: 'Retourner au fournisseur',
@@ -404,7 +404,7 @@ class _TabsBar extends StatelessWidget {
                     it.$2,
                     style: TextStyle(
                         color: current == it.$1
-                            ? const Color(0xFF4338CA)
+                            ? const Color(0xFF7A5F22)
                             : Colors.black54,
                         fontWeight: FontWeight.w700,
                         fontSize: 12.5),

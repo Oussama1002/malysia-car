@@ -352,7 +352,7 @@ class _LinePair extends StatelessWidget {
               fontWeight: emphasis ? FontWeight.w800 : FontWeight.w700,
               fontSize: 13,
               color: emphasis
-                  ? const Color(0xFF3730A3)
+                  ? const Color(0xFF5C471A)
                   : Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
@@ -701,7 +701,7 @@ class _LegalTab extends ConsumerWidget {
                           const SizedBox(width: 4),
                           Text(arrearsPhaseFr(a.phase),
                               style: const TextStyle(
-                                  color: Color(0xFF4338CA),
+                                  color: Color(0xFF7A5F22),
                                   fontWeight: FontWeight.w800,
                                   fontSize: 12)),
                         ],

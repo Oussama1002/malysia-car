@@ -122,9 +122,9 @@ class VehicleStatusMeta {
 const Map<String, VehicleStatusMeta> kVehicleStatusMeta = {
   'AVAILABLE': VehicleStatusMeta('Disponible', 0xFF10B981),
   'RESERVED': VehicleStatusMeta('Réservé', 0xFF5B5BF4),
-  'RENTED': VehicleStatusMeta('En location', 0xFF22D3EE),
-  'UNDER_LOA': VehicleStatusMeta('LOA active', 0xFF22D3EE),
-  'UNDER_CREDIT': VehicleStatusMeta('Crédit auto', 0xFF22D3EE),
+  'RENTED': VehicleStatusMeta('En location', 0xFFD4AF5A),
+  'UNDER_LOA': VehicleStatusMeta('LOA active', 0xFFD4AF5A),
+  'UNDER_CREDIT': VehicleStatusMeta('Crédit auto', 0xFFD4AF5A),
   'IN_DELIVERY': VehicleStatusMeta('En livraison', 0xFFF59E0B),
   'MAINTENANCE': VehicleStatusMeta('Maintenance', 0xFFF59E0B),
   'BLOCKED': VehicleStatusMeta('Bloqué', 0xFFEF4444),

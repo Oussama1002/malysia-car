@@ -549,7 +549,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                       fontWeight: FontWeight.w900,
                       fontSize: 13,
                       color: _kind == k
-                          ? const Color(0xFF4338CA)
+                          ? const Color(0xFF7A5F22)
                           : Colors.black87,
                     ),
                   ),
@@ -1022,7 +1022,7 @@ class _ScanSlot extends StatelessWidget {
               ),
               child: Text(notice!,
                   style: const TextStyle(
-                      color: Color(0xFF4338CA),
+                      color: Color(0xFF7A5F22),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700)),
             ),

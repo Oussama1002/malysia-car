@@ -477,7 +477,7 @@ class _NewContractFromReservationScreenState
                   style: const TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF4338CA),
+                    color: Color(0xFF7A5F22),
                     letterSpacing: 0.3,
                   ),
                 ),

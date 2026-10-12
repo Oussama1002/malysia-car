@@ -1173,7 +1173,7 @@ class _FromLeadBanner extends StatelessWidget {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w900,
-              color: Color(0xFF4338CA),
+              color: Color(0xFF7A5F22),
               letterSpacing: 1.2,
             ),
           ),
@@ -1189,7 +1189,7 @@ class _FromLeadBanner extends StatelessWidget {
                 onTap: () => launchUrl(Uri.parse('tel:${seed.phone}')),
                 child: Text(seed.phone,
                     style: const TextStyle(
-                      color: Color(0xFF4338CA),
+                      color: Color(0xFF7A5F22),
                       fontWeight: FontWeight.w800,
                       fontSize: 13,
                     )),
@@ -1211,7 +1211,7 @@ class _FromLeadBanner extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Dates pré-remplies. Vérifiez le client (créé automatiquement avec ses infos si vous choisissez « + Nouveau ») et le véhicule, puis créez la réservation — la demande sera marquée « traitée ».',
-            style: TextStyle(fontSize: 11.5, color: Color(0xFF3730A3), height: 1.35),
+            style: TextStyle(fontSize: 11.5, color: Color(0xFF5C471A), height: 1.35),
           ),
         ],
       ),

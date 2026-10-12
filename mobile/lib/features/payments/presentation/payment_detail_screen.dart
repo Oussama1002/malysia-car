@@ -257,7 +257,7 @@ class _TabsBar extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: current == t
-                            ? const Color(0xFF4338CA)
+                            ? const Color(0xFF7A5F22)
                             : Colors.black54,
                         fontWeight: FontWeight.w900,
                         fontSize: 12,

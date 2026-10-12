@@ -235,7 +235,7 @@ class _KpiRow extends StatelessWidget {
             value: '$live',
             hint: 'Clients / livraison',
             icon: Icons.wifi_tethering,
-            color: const Color(0xFF22D3EE),
+            color: const Color(0xFFD4AF5A),
           ),
           _KpiBox(
             label: 'Alertes',

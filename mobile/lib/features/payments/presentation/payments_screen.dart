@@ -218,7 +218,7 @@ class _PaymentCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: Color(0xFF4338CA),
+                          color: Color(0xFF7A5F22),
                           fontWeight: FontWeight.w700,
                           fontSize: 11.5,
                           fontFamily: 'monospace')),

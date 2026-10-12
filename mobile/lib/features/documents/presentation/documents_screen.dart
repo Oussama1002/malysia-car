@@ -646,7 +646,7 @@ class _SourcePill extends StatelessWidget {
         : const Color(0xFFE0E7FF);
     final fg = isGenerated
         ? const Color(0xFF6D28D9)
-        : const Color(0xFF3730A3);
+        : const Color(0xFF5C471A);
     final label = isGenerated ? 'Généré' : 'Uploadé';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

@@ -750,7 +750,7 @@ class _TabsBar extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color:
-                            active ? const Color(0xFF4338CA) : Colors.black54,
+                            active ? const Color(0xFF7A5F22) : Colors.black54,
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
                       )),
@@ -1211,7 +1211,7 @@ class _PriceBadge extends StatelessWidget {
       child: Text(
         '$label : ${price.toStringAsFixed(0)} MAD',
         style: const TextStyle(
-          color: Color(0xFF4338CA),
+          color: Color(0xFF7A5F22),
           fontSize: 10.5,
           fontWeight: FontWeight.w800,
         ),
