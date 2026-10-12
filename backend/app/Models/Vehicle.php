@@ -114,6 +114,40 @@ class Vehicle extends Model
         'tier_30'    => ['min_days' => 30, 'max_days' => null, 'label' => '30 jours et +'],
     ];
 
+    /**
+     * Référentiel plat des équipements acceptés — doit rester synchrone avec
+     * les listes du web (frontend/screens/VehiclesList.tsx) et du mobile
+     * (new_vehicle_screen.dart). La validation refuse tout libellé hors liste.
+     */
+    public const EQUIPMENTS = [
+        // Sécurité active
+        'Airbags', 'ABS', 'ESP', 'Antipatinage', "Aide au freinage d'urgence",
+        'Antidémarrage électronique', 'Aide au démarrage en côte',
+        'Sélecteur de mode de conduite', 'Détection de fatigue',
+        'Maintien dans la voie', "Détecteur d'angle mort",
+        'Détecteur de sous-gonflage', 'Fermeture de portes auto.',
+        'Préparation ISOFIX', 'Phares antibrouillard', "Système d'alarme",
+        // Confort
+        'Climatisation', 'Start & Stop', 'Régulateur de vitesse',
+        'Détecteur de pluie', 'Allumage auto. des feux',
+        'Frein à main électrique', 'Aide au stationnement', 'Volant réglable',
+        'Rétros. électriques', 'Rétros. rabattables électriques',
+        'Coffre électrique', 'Sièges électriques', 'Sièges élec. avec mémoire',
+        'Banquette arrière rabattable 1/3-2/3',
+        // Multimédia & assistance
+        'Écran tactile', 'Caméra de recul', 'Cockpit digital',
+        'Commandes au volant', 'Commandes vocales',
+        'Reconnaissance de panneaux', 'Affichage Tête-Haute', 'Système audio',
+        'Ordinateur de bord', 'Navigation GPS', 'WiFi à bord', 'Bluetooth',
+        'Compatibilité smartphone', 'Apple CarPlay® & Android Auto®',
+        'Chargeur/mobile sans fil',
+        // Extérieur & finition
+        'Jantes aluminium', 'Sellerie Similicuir / Tissu', 'Volant cuir',
+        'Follow-me home', "Lumière d'ambiance", 'Feux de jour LED',
+        'Phares Full LED', 'Toit Panoramique ouvrant', 'Barres de toit',
+        'Vitres sur-teintées.',
+    ];
+
     public function minTierDailyPrice(): ?float
     {
         $tiers = $this->rental_price_tiers;
