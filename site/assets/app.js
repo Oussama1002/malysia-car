@@ -655,6 +655,99 @@
   var SELECTED_BRANDS = new Set();   // ids
   var SELECTED_MODELS = new Set();   // ids
 
+  // Véhicules indexés par id (avec paliers de prix) pour estimer le tarif
+  // selon la durée choisie dans le formulaire.
+  var FLEET_BY_ID = {};
+
+  // Paliers (jours) — mêmes bornes que Vehicle::RENTAL_PRICE_TIERS côté backend.
+  var PRICE_TIERS = [
+    { key: 'tier_1_2',   min: 1,  max: 2 },
+    { key: 'tier_3_6',   min: 3,  max: 6 },
+    { key: 'tier_7_14',  min: 7,  max: 14 },
+    { key: 'tier_15_29', min: 15, max: 29 },
+    { key: 'tier_30',    min: 30, max: null }
+  ];
+
+  // Prix /jour applicable à une durée donnée : on prend le palier qui couvre
+  // le nombre de jours (le plus proche rempli si celui-ci est vide), sinon le
+  // tarif journalier de base.
+  function dailyRateForDays(v, days) {
+    var tiers = v.rental_price_tiers || {};
+    var idx = 0;
+    for (var i = 0; i < PRICE_TIERS.length; i++) {
+      var t = PRICE_TIERS[i];
+      if (days >= t.min && (t.max === null || days <= t.max)) { idx = i; break; }
+      if (t.max !== null && days > t.max) idx = i;
+    }
+    // Du palier ciblé, on redescend vers le plus court si vide (jamais plus cher).
+    for (var j = idx; j >= 0; j--) {
+      var val = Number(tiers[PRICE_TIERS[j].key]);
+      if (isFinite(val) && val > 0) return val;
+    }
+    // Sinon on cherche vers le haut, puis le prix /jour de base.
+    for (var k = idx + 1; k < PRICE_TIERS.length; k++) {
+      var up = Number(tiers[PRICE_TIERS[k].key]);
+      if (isFinite(up) && up > 0) return up;
+    }
+    var base = Number(v.price_per_day);
+    return isFinite(base) && base > 0 ? base : null;
+  }
+
+  function daysBetween(pickup, ret) {
+    if (!pickup || !ret) return 0;
+    var a = new Date(pickup), b = new Date(ret);
+    if (isNaN(a) || isNaN(b)) return 0;
+    var d = Math.round((b - a) / 86400000);
+    return d > 0 ? d : 0;
+  }
+
+  // Met à jour l'estimation de prix du formulaire selon véhicule + dates.
+  function updateQuotePrice() {
+    var box = $('quotePrice');
+    if (!box) return;
+    var select = $('vehicleSelect');
+    var v = select && select.value ? FLEET_BY_ID[select.value] : null;
+    var days = daysBetween(
+      $('quotePickup') && $('quotePickup').value,
+      $('quoteReturn') && $('quoteReturn').value
+    );
+    if (!v) { box.hidden = true; box.innerHTML = ''; return; }
+
+    if (!days) {
+      // Pas encore de durée : on montre le tarif de départ.
+      var from = v.price_from_per_day || v.price_per_day;
+      box.hidden = false;
+      box.innerHTML = from
+        ? '<span class="quote__priceFrom">À partir de ' + money(from) + ' / jour</span>' +
+          '<span class="quote__priceHint">Choisissez vos dates pour l\'estimation.</span>'
+        : '<span class="quote__priceFrom">Tarif sur devis</span>';
+      return;
+    }
+
+    var rate = dailyRateForDays(v, days);
+    box.hidden = false;
+    if (!rate) {
+      box.innerHTML = '<span class="quote__priceFrom">Tarif sur devis</span>' +
+        '<span class="quote__priceHint">' + days + ' jour' + (days > 1 ? 's' : '') + '</span>';
+      return;
+    }
+    var total = rate * days;
+    box.innerHTML =
+      '<span class="quote__priceTotal">' + money(total) + '</span>' +
+      '<span class="quote__priceHint">' + money(rate) + ' / jour × ' + days +
+        ' jour' + (days > 1 ? 's' : '') + '</span>';
+  }
+
+  function wireQuotePrice() {
+    ['vehicleSelect', 'quotePickup', 'quoteReturn'].forEach(function (id) {
+      var el = $(id);
+      if (el) {
+        el.addEventListener('change', updateQuotePrice);
+        el.addEventListener('input', updateQuotePrice);
+      }
+    });
+  }
+
   function chooseVehicle(id, name) {
     var select = $('vehicleSelect');
     // Page sans formulaire (flotte.html) : on mémorise le véhicule et on
@@ -670,6 +763,7 @@
     }
     if (id) select.value = id;
     togglePreferences();
+    updateQuotePrice();
     var form = $('quoteForm');
     if (form) {
       form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1007,12 +1101,16 @@
         shown.forEach(function (v) {
           grid.appendChild(vehicleCard(v));
         });
+        // Index véhicule par id pour l'estimation de prix selon la durée.
+        list.forEach(function (v) { FLEET_BY_ID[v.id] = v; });
         if (select) {
           list.forEach(function (v) {
             var opt = document.createElement('option');
             opt.value = v.id;
             opt.textContent = [v.brand, v.model].filter(Boolean).join(' ')
-              + (v.price_per_day ? ' — ' + money(v.price_per_day) + '/j' : '');
+              + (v.price_from_per_day
+                  ? ' — dès ' + money(v.price_from_per_day) + '/j'
+                  : (v.price_per_day ? ' — ' + money(v.price_per_day) + '/j' : ''));
             select.appendChild(opt);
           });
           // Véhicule choisi depuis la page flotte → pré-sélection + scroll,
@@ -1258,6 +1356,7 @@
   wireAgencies();
   loadBranches();
   wireFleetFilters();
+  wireQuotePrice();
   loadFleet();
   loadCatalog();
 })();

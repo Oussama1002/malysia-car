@@ -1583,6 +1583,21 @@ a { color: inherit; text-decoration: none; }
 }
 .car { cursor: pointer; }
 
+/* Estimation de prix dans le formulaire de réservation (selon la durée) */
+.quote__price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 10px 0 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: linear-gradient(135deg, #fbf5e4, #f6edd2);
+}
+.quote__priceTotal { font-size: 1.35rem; font-weight: 800; color: var(--gold-deep); }
+.quote__priceFrom { font-size: 1.05rem; font-weight: 700; color: var(--gold-deep); }
+.quote__priceHint { font-size: 0.8rem; color: var(--mist); font-weight: 600; }
+
 /* =========================================================
    Page Flotte (flotte.html)
    ========================================================= */
