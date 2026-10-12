@@ -49,10 +49,11 @@ export const LoginPage: React.FC = () => {
       <div className="df-card df-card--elevated w-full max-w-md">
         <div className="df-card__body">
           <div className="mb-8 text-center">
-            <div className="df-heroMark mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] text-3xl font-black text-white">
-              D
-            </div>
-            <h1 className="text-2xl font-black text-slate-900">{t('app.name')}</h1>
+            <img
+              src="/logo.png"
+              alt={t('app.name')}
+              className="mx-auto mb-4 h-16 w-auto max-w-[220px] object-contain"
+            />
             <p className="text-sm text-slate-600">{t('app.tagline')}</p>
             {import.meta.env.DEV && getApiBase() && (
               <p className="mt-2 text-xs font-semibold text-emerald-700">API: {getApiBase()}</p>

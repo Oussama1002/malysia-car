@@ -220,13 +220,12 @@ export const AppLayout: React.FC = () => {
   const Sidebar = (
     <aside className="df-sidebar">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5">
-        <div className="df-heroMark flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-          <Icon name="bolt" size={18} />
-        </div>
-        {!sidebarCollapsed && (
-          <span className="text-[17px] font-bold tracking-tight text-[color:var(--df-text)]">DriveFlow</span>
-        )}
+      <div className="flex items-center justify-center px-4 py-5">
+        <img
+          src="/logo.png"
+          alt="DriveFlow"
+          className={sidebarCollapsed ? 'h-10 w-10 object-contain' : 'h-11 w-auto max-w-full object-contain'}
+        />
       </div>
 
       {/* Navigation */}
