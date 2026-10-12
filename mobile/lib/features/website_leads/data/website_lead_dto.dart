@@ -8,6 +8,8 @@ class WebsiteLeadDto {
     this.city,
     this.vehicleLabel,
     this.vehicleRegistration,
+    this.vehicleAvailable,
+    this.vehicleUnavailableReason,
     this.pickupAt,
     this.returnAt,
     this.message,
@@ -27,6 +29,11 @@ class WebsiteLeadDto {
   /// Matricule du véhicule souhaité quand la demande a été déposée depuis la
   /// fiche d'un véhicule précis.
   final String? vehicleRegistration;
+  /// `true`/`false` quand le backend a pu calculer la dispo sur la période ;
+  /// `null` quand les dates ou le véhicule manquent.
+  final bool? vehicleAvailable;
+  /// Raison lisible si indisponible (ex. : "Réservation concurrente").
+  final String? vehicleUnavailableReason;
   final DateTime? pickupAt;
   final DateTime? returnAt;
   final String? message;
@@ -53,6 +60,26 @@ class WebsiteLeadDto {
           return (s != null && s.isNotEmpty) ? s : null;
         }
         return null;
+      }(),
+      vehicleAvailable: () {
+        final a = json['availability'];
+        if (a is Map && a['available'] is bool) return a['available'] as bool;
+        return null;
+      }(),
+      vehicleUnavailableReason: () {
+        final a = json['availability'];
+        if (a is! Map) return null;
+        final reasons = a['reasons'];
+        final messages = a['messages'];
+        if (reasons is! List || reasons.isEmpty) return null;
+        final parts = <String>[];
+        for (final r in reasons) {
+          final code = r?.toString();
+          if (code == null) continue;
+          final msg = messages is Map ? messages[code]?.toString() : null;
+          parts.add(msg != null && msg.isNotEmpty ? msg : code);
+        }
+        return parts.isEmpty ? null : parts.join(' · ');
       }(),
       pickupAt: _date(json['pickup_at']),
       returnAt: _date(json['return_at']),

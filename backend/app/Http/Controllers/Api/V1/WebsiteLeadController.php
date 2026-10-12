@@ -7,12 +7,16 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Vehicle;
 use App\Models\WebsiteLead;
 use App\Services\AuditLogger;
+use App\Services\RentalAvailabilityService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class WebsiteLeadController extends Controller
 {
+    public function __construct(private readonly RentalAvailabilityService $availability) {}
+
     public function index(Request $request): JsonResponse
     {
         $q = WebsiteLead::query()
@@ -32,12 +36,47 @@ class WebsiteLeadController extends Controller
 
         $page = $q->paginate(min(100, max(1, (int) $request->query('per_page', 50))));
 
-        return ApiResponse::success($page->items(), [
+        // Pour chaque demande qui vise un véhicule précis sur une période
+        // donnée, on calcule la disponibilité à la volée. Le frontend affiche
+        // alors un avertissement si la voiture est déjà prise.
+        $items = collect($page->items())->map(function (WebsiteLead $lead) {
+            $arr = $lead->toArray();
+            $arr['availability'] = $this->computeAvailability($lead);
+            return $arr;
+        })->all();
+
+        return ApiResponse::success($items, [
             'current_page' => $page->currentPage(),
             'last_page' => $page->lastPage(),
             'total' => $page->total(),
             'new_count' => WebsiteLead::query()->where('status', WebsiteLead::STATUS_NEW)->count(),
         ]);
+    }
+
+    /**
+     * @return array{available: bool|null, reasons?: string[], messages?: array<string,string>}
+     */
+    private function computeAvailability(WebsiteLead $lead): array
+    {
+        if (! $lead->vehicle_id || ! $lead->pickup_at || ! $lead->return_at) {
+            return ['available' => null];
+        }
+        try {
+            $r = $this->availability->checkVehicleAvailability(
+                vehicleId: (string) $lead->vehicle_id,
+                startAt: Carbon::parse($lead->pickup_at),
+                endAt: Carbon::parse($lead->return_at),
+            );
+            return [
+                'available' => (bool) $r['available'],
+                'reasons' => $r['reasons'] ?? [],
+                'messages' => $r['messages'] ?? [],
+            ];
+        } catch (\Throwable $e) {
+            // La notif n'est pas critique — on reste silencieux pour ne pas
+            // casser la liste si la vérif échoue (véhicule introuvable, etc.).
+            return ['available' => null];
+        }
     }
 
     public function missingPrices(): JsonResponse

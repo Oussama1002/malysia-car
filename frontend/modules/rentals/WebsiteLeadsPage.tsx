@@ -29,6 +29,13 @@ interface WebsiteLead {
     id: string;
     registration_number?: string | null;
   } | null;
+  /** Résultat de la vérif de disponibilité sur la période souhaitée.
+   *  `null` quand le véhicule ou les dates ne sont pas renseignés. */
+  availability?: {
+    available: boolean | null;
+    reasons?: string[];
+    messages?: Record<string, string>;
+  } | null;
   pickup_at?: string | null;
   return_at?: string | null;
   message?: string | null;
@@ -344,6 +351,19 @@ export const WebsiteLeadsPage: React.FC = () => {
                     <div className="font-semibold text-slate-700">{fmtDate(lead.return_at)}</div>
                   </div>
                 </div>
+
+                {lead.availability?.available === false && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                    <span className="font-black">⚠ Véhicule indisponible</span>{' '}
+                    sur la période souhaitée
+                    {(() => {
+                      const msgs = lead.availability?.messages ?? {};
+                      const reasons = lead.availability?.reasons ?? [];
+                      const parts = reasons.map((c) => msgs[c] ?? c);
+                      return parts.length > 0 ? ` — ${parts.join(' · ')}.` : '.';
+                    })()}
+                  </div>
+                )}
 
                 {lead.message && (
                   <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{lead.message}</p>

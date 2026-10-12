@@ -489,6 +489,26 @@ class _LeadCard extends StatelessWidget {
             ],
           ),
 
+          if (lead.vehicleAvailable == false) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEE2E2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFCA5A5)),
+              ),
+              child: Text(
+                '⚠ Véhicule indisponible sur la période souhaitée'
+                '${lead.vehicleUnavailableReason != null ? ' — ${lead.vehicleUnavailableReason}.' : '.'}',
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF991B1B),
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+
           if (lead.message != null && lead.message!.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
