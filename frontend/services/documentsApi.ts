@@ -73,9 +73,17 @@ export const documentsApi = {
     const a = document.createElement('a');
     a.href = objectUrl;
     a.download = filename;
+    a.rel = 'noopener';
+    // Chrome / Edge sometimes cancel a programmatic download if the blob URL
+    // is revoked synchronously right after click() — give the download pipe
+    // 60 s before cleaning up, same as openInNewTab elsewhere. Also keeping
+    // the <a> in the DOM for one tick avoids a 'download blocked' race on
+    // Safari.
     document.body.appendChild(a);
     a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
+    window.setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    }, 60_000);
   },
 };
