@@ -418,18 +418,35 @@ export const ReservationsOpsPage: React.FC = () => {
             display_name?: string;
             customer_code?: string;
             customer_type?: string;
+            individual_profile?: {
+              national_id_number?: string | null;
+              passport_number?: string | null;
+            };
+            company_profile?: { ice?: string | null };
+            // Legacy fallbacks in case the shape ever flattens.
             id_number?: string | null;
+            national_id_number?: string | null;
             cin?: string | null;
             cin_passport?: string | null;
             idNumber?: string | null;
           };
           const name = c.display_name || c.customer_code || String(c.id);
           const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
-          // Show the CIN right next to the name so an agent picking from a
-          // long dropdown can disambiguate two "Oussama ELHADI" entries by
-          // ID. Just the value — no 'CIN' prefix — the agents know what
-          // they're reading.
-          const cin = (c.id_number || c.cin || c.cin_passport || c.idNumber || '').toString().trim();
+          // CIN right next to the name — just the value. The backend nests
+          // CIN under individual_profile.national_id_number (and ICE under
+          // company_profile.ice for entreprises) so read there first before
+          // falling back to any flattened shape.
+          const cin = (
+            c.individual_profile?.national_id_number
+            || c.individual_profile?.passport_number
+            || c.company_profile?.ice
+            || c.id_number
+            || c.national_id_number
+            || c.cin
+            || c.cin_passport
+            || c.idNumber
+            || ''
+          ).toString().trim();
           const suffix = cin ? ` · ${cin}` : '';
           return { id: String(c.id), label: `${name}${suffix} (${kind})` };
         }),
