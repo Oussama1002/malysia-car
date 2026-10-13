@@ -1261,23 +1261,21 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('securityDepositMad', Number(e.target.value))}
                     />
                   </Field>
-                  {state.securityDepositMad > 0 && (
-                    <Field label="Franchise encaissée par">
-                      <select
-                        className="df-input"
-                        value={state.depositMethod}
-                        onChange={(e) => patch('depositMethod', e.target.value as WizardState['depositMethod'])}
-                      >
-                        <option value="">— Pas encore encaissée —</option>
-                        <option value="cash">Espèces</option>
-                        <option value="cheque">Chèque</option>
-                        <option value="bank_transfer">Virement</option>
-                        <option value="card">Carte</option>
-                        <option value="other">Autre</option>
-                      </select>
-                    </Field>
-                  )}
-                  {state.securityDepositMad > 0 && state.depositMethod === 'cheque' && (
+                  <Field label="Franchise encaissée par">
+                    <select
+                      className="df-input"
+                      value={state.depositMethod}
+                      onChange={(e) => patch('depositMethod', e.target.value as WizardState['depositMethod'])}
+                    >
+                      <option value="">— Pas encore encaissée —</option>
+                      <option value="cash">Espèces</option>
+                      <option value="cheque">Chèque</option>
+                      <option value="bank_transfer">Virement</option>
+                      <option value="card">Carte</option>
+                      <option value="other">Autre</option>
+                    </select>
+                  </Field>
+                  {state.depositMethod === 'cheque' && (
                     <>
                       <Field label="N° chèque franchise">
                         <input
