@@ -592,7 +592,7 @@ class ReservationController extends Controller
             module: 'rentals',
         );
 
-        return ApiResponse::success(null, null, 'Réservation supprimée.');
+        return ApiResponse::success(null, ['message' => 'Réservation supprimée.']);
     }
 
     public function update(Request $request, Reservation $reservation): JsonResponse
