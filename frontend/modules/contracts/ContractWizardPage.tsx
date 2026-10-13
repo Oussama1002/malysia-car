@@ -40,6 +40,7 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import type { ContractType } from '@/services/dtos';
 import { contractsApi } from '@/services/contractsApi';
 import { documentsApi } from '@/services/documentsApi';
+import { createPayment, type PaymentCreatePayload, type PaymentMethod } from '@/services/financeApi';
 import { createEnvelope, sendEnvelope } from '@/services/signatureApi';
 import { useAuthSession } from '@/modules/auth/AuthContext';
 import { CustomerForm } from '@/modules/customers/CustomerForm';
@@ -787,6 +788,81 @@ export const ContractWizardPage: React.FC = () => {
         );
         navigate(`/contracts/${contractId}`);
         return;
+      }
+
+      // Record the actual payments collected on step 5 (and the deposit
+      // from step 4) as Payment rows so they show up on the Paiements page
+      // and feed the balance. Prior to this, the wizard was only writing
+      // the method/cheque fields as free-text onto the contract row, which
+      // meant no Payment entity was created and the money was invisible
+      // outside the contract detail. Each entry becomes one Payment; the
+      // franchise is tagged payment_type=deposit so it isn't counted as
+      // rent.
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const uiToApiMethod = (m: string): PaymentMethod => {
+        switch (m) {
+          case 'cheque':
+          case 'check':
+            return 'check';
+          case 'virement':
+          case 'bank_transfer':
+            return 'bank_transfer';
+          case 'carte':
+          case 'card':
+            return 'card';
+          case 'especes':
+          case 'cash':
+            return 'cash';
+          case 'compensation':
+            return 'compensation';
+          case 'wallet':
+            return 'wallet';
+          default:
+            return 'bank_transfer';
+        }
+      };
+
+      for (const p of state.payments) {
+        const amount = Number(p.amount);
+        if (!(amount > 0) || !state.clientId) continue;
+        const payload: PaymentCreatePayload = {
+          customer_id: state.clientId,
+          contract_id: contractId,
+          payment_method: uiToApiMethod(p.method),
+          amount,
+          payment_date: todayIso,
+          external_reference: p.reference || undefined,
+          check_number: p.chequeNumber || undefined,
+          check_bank: p.chequeBank || undefined,
+          check_date: p.chequeDate || undefined,
+          notes: 'Encaissement initial — signature contrat.',
+        };
+        try {
+          await createPayment(payload);
+        } catch (payErr) {
+          console.warn('[ContractWizard] payment create failed (non-blocking):', payErr);
+        }
+      }
+
+      // Franchise d'assurance / caution — the deposit is a Payment too, with
+      // payment_type=deposit so it doesn't inflate the rent total.
+      if (state.securityDepositMad > 0 && state.depositMethod && state.clientId) {
+        try {
+          await createPayment({
+            customer_id: state.clientId,
+            contract_id: contractId,
+            payment_method: uiToApiMethod(state.depositMethod),
+            payment_type: 'deposit',
+            amount: state.securityDepositMad,
+            payment_date: todayIso,
+            check_number: state.depositMethod === 'cheque' ? state.depositChequeNumber || undefined : undefined,
+            check_bank: state.depositMethod === 'cheque' ? state.depositChequeBank || undefined : undefined,
+            check_date: state.depositMethod === 'cheque' ? state.depositChequeDate || undefined : undefined,
+            notes: "Franchise d'assurance — signature contrat.",
+          });
+        } catch (depErr) {
+          console.warn('[ContractWizard] deposit payment failed (non-blocking):', depErr);
+        }
       }
 
       // Generate payment schedule
