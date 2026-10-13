@@ -75,6 +75,11 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
   const [stepIdx, setStepIdx] = useState(0);
   const [form, setForm] = useState<WizardState>(INITIAL_STATE);
   const [vehicleTab, setVehicleTab] = useState<string>('recommended');
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  // Opens the price popup after a vehicle card is clicked, keeping the pick
+  // and the daily rate decision together instead of making the agent hunt
+  // for the editable field on the next step.
+  const [pricePopup, setPricePopup] = useState<{ vehicle: any; rate: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,6 +91,8 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
       setStepIdx(0);
       setForm(INITIAL_STATE);
       setVehicleTab('recommended');
+      setVehicleSearch('');
+      setPricePopup(null);
       setError(null);
       setBusy(false);
     }
@@ -314,25 +321,69 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
 
   const renderVehicle = () => {
     const tabVehicles: any[] = categories[vehicleTab as keyof typeof categories] ?? [];
+    // Search spans ALL categories so an agent typing a plate finds it even if
+    // it fell outside the active tab (common with recommended which is narrow).
+    const q = vehicleSearch.trim().toLowerCase();
+    const searchPool: any[] = q
+      ? ((categories.all as any[]) ?? []).filter((v: any) => {
+          const hay = [
+            v.brand_name, v.model_name, v.registration_number,
+            v.categorie, v.gamme, v.fuel_type, v.transmission,
+          ].filter(Boolean).join(' ').toLowerCase();
+          return hay.includes(q);
+        })
+      : tabVehicles;
 
     return (
       <div className="space-y-4">
-        {/* Tabs */}
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
-          {VEHICLE_TABS.map(t => (
+        {/* Search */}
+        <div className="relative">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="text"
+            value={vehicleSearch}
+            onChange={e => setVehicleSearch(e.target.value)}
+            placeholder="Rechercher par marque, modèle, immatriculation…"
+            className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-9 py-2.5 text-sm placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+          />
+          {vehicleSearch && (
             <button
-              key={t.key}
               type="button"
-              onClick={() => setVehicleTab(t.key)}
-              className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
-                vehicleTab === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
+              onClick={() => setVehicleSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Effacer la recherche"
             >
-              {t.label}
-              <span className="ml-1 text-[10px] text-slate-400">({(categories[t.key as keyof typeof categories] ?? []).length})</span>
+              ✕
             </button>
-          ))}
+          )}
         </div>
+
+        {/* Tabs — hidden while searching so the result spans all categories */}
+        {!q && (
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+            {VEHICLE_TABS.map(t => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setVehicleTab(t.key)}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+                  vehicleTab === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t.label}
+                <span className="ml-1 text-[10px] text-slate-400">({(categories[t.key as keyof typeof categories] ?? []).length})</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {q && (
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Résultats : {searchPool.length} véhicule{searchPool.length > 1 ? 's' : ''}
+          </div>
+        )}
 
         {eligibleQ.isLoading && (
           <div className="flex items-center justify-center py-12 text-sm text-slate-500">Chargement des véhicules…</div>
@@ -341,10 +392,12 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
         {/* Vehicle cards grid */}
         {!eligibleQ.isLoading && (
           <div className="grid grid-cols-2 gap-3 max-h-[340px] overflow-y-auto pr-1">
-            {tabVehicles.length === 0 && (
-              <div className="col-span-2 py-8 text-center text-sm text-slate-400">Aucun véhicule dans cette catégorie.</div>
+            {searchPool.length === 0 && (
+              <div className="col-span-2 py-8 text-center text-sm text-slate-400">
+                {q ? 'Aucun véhicule ne correspond à la recherche.' : 'Aucun véhicule dans cette catégorie.'}
+              </div>
             )}
-            {tabVehicles.map((v: any) => {
+            {searchPool.map((v: any) => {
               const isSelected = form.selectedVehicleId === v.id;
               const isAvail = v.available;
               return (
@@ -352,7 +405,16 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
                   key={v.id}
                   type="button"
                   disabled={!isAvail}
-                  onClick={() => setForm(s => ({ ...s, selectedVehicleId: v.id }))}
+                  onClick={() => {
+                    // Open the price popup so the agent sets the new daily rate
+                    // right at pick time instead of hunting on the next step.
+                    setPricePopup({
+                      vehicle: v,
+                      rate: String(form.selectedVehicleId === v.id && form.newDailyRate !== ''
+                        ? form.newDailyRate
+                        : (v.daily_rental_price ?? '')),
+                    });
+                  }}
                   className={`relative rounded-xl border-2 p-3 text-left transition-all ${
                     isSelected
                       ? 'border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-200'
@@ -777,9 +839,99 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
     </div>
   );
 
+  /* ── Price popup (opens on vehicle card click) ───────────────────── */
+  const renderPricePopup = () => {
+    if (!pricePopup) return null;
+    const v = pricePopup.vehicle;
+    const vName = `${v?.brand_name ?? ''} ${v?.model_name ?? ''}`.trim() || 'Véhicule';
+    const defaultRate = Number(v?.daily_rental_price ?? 0);
+    const typedRate = pricePopup.rate !== '' ? Number(pricePopup.rate) : NaN;
+    const rateForMath = Number.isFinite(typedRate) ? typedRate : defaultRate;
+    const projectedRemaining = (Number(rentalPeriod?.remaining_days) || 0) * rateForMath;
+    return (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+        onClick={() => setPricePopup(null)}
+      >
+        <div
+          className="w-full max-w-sm rounded-2xl bg-white shadow-2xl"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="border-b border-slate-100 px-5 py-4">
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nouveau véhicule sélectionné</div>
+            <div className="mt-0.5 text-base font-black text-slate-900">{vName}</div>
+            <div className="text-[11px] font-semibold text-slate-500">{v?.registration_number ?? '—'}</div>
+          </div>
+
+          <div className="px-5 py-4 space-y-3">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500">Tarif par défaut</span>
+              <span className="text-sm font-black text-slate-700">{fmtPrice(defaultRate)}/jour</span>
+            </div>
+
+            <div>
+              <label htmlFor="swap-price-popup-rate" className="block text-[11px] font-bold text-slate-700 mb-1">
+                Tarif facturé au client (MAD / jour)
+              </label>
+              <input
+                id="swap-price-popup-rate"
+                type="number"
+                min="0"
+                step="1"
+                autoFocus
+                value={pricePopup.rate}
+                onChange={e => setPricePopup(p => (p ? { ...p, rate: e.target.value } : p))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base font-black text-indigo-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                placeholder={String(defaultRate)}
+              />
+              <div className="mt-1 text-[10px] text-slate-500">
+                Laissez vide pour reprendre le tarif par défaut. Vous pourrez le modifier à l'étape Impact.
+              </div>
+            </div>
+
+            {Number(rentalPeriod?.remaining_days) > 0 && (
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-indigo-700">
+                  Sous-total {rentalPeriod?.remaining_days} j restants
+                </span>
+                <span className="text-sm font-black text-indigo-700">{fmtPrice(projectedRemaining)}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setPricePopup(null)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setForm(s => ({
+                  ...s,
+                  selectedVehicleId: v.id,
+                  // '' means "use the default", keeping Impact's placeholder.
+                  newDailyRate: pricePopup.rate.trim() === '' ? '' : String(Number(pricePopup.rate) || 0),
+                }));
+                setPricePopup(null);
+              }}
+              className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-black text-white hover:bg-indigo-700"
+            >
+              Confirmer la sélection
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   /* ── Render ──────────────────────────────────────────────────────── */
   return (
     <DrawerPanel open={open} title="Changement de véhicule" onClose={onClose} widthClass="max-w-3xl">
+      {renderPricePopup()}
       <div className="flex h-full flex-col">
         {/* Stepper */}
         <div className="df-stepper mb-6">
