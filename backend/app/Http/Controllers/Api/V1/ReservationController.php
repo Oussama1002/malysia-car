@@ -1047,6 +1047,18 @@ class ReservationController extends Controller
             ));
         }
 
+        // The linked contract (if any) is the single source of truth for the
+        // economic terms: Montant total = monthly_payment × duration_months,
+        // Tarif / jour = that total ÷ days, Franchise = deposit_amount,
+        // Kilométrage = allowed_km. The reservation stops shaping its own
+        // numbers once a contract exists so the two views can't drift.
+        $linkedContract = Contract::withoutGlobalScopes()
+            ->where('customer_id', $reservation->customer_id)
+            ->where('vehicle_id', $reservation->vehicle_id)
+            ->whereNotIn('status', ['cancelled', 'terminated'])
+            ->orderByDesc('created_at')
+            ->first();
+
         // Tarif rule: the vehicle's fleet daily_rental_price only feeds the
         // public landing-page quote. On the reservation detail it must NEVER
         // leak as the daily rate or the estimated price — otherwise the
@@ -1055,38 +1067,52 @@ class ReservationController extends Controller
         // itself came from a website lead (source='website_lead'). Everything
         // else is tarif-less until the agent sets it on the contract.
         $allowVehicleFallback = $reservation->source === 'website_lead';
+        $vehicleFallback = $allowVehicleFallback ? (float) ($vehicle->daily_rental_price ?? 0) : 0.0;
+
+        // Estimated price (Montant total): contract first, then stored
+        // reservation value, then daily_rate × days.
+        $contractTotal = null;
+        if ($linkedContract) {
+            $monthly = (float) ($linkedContract->monthly_payment ?? 0);
+            $duration = (int) ($linkedContract->duration_months ?? 0);
+            if ($monthly > 0 && $duration > 0) {
+                $contractTotal = $monthly * $duration;
+            }
+        }
+        $estimatedPrice = (float) ($contractTotal
+            ?? $reservation->estimated_price
+            ?? 0);
+
+        // Daily rate: contract total ÷ days first (so the two numbers stay
+        // consistent), then stored reservation daily_rate, then website-lead
+        // vehicle fallback.
         $dailyRate = (float) (
-            $reservation->daily_rate
-                ?? ($allowVehicleFallback ? ($vehicle->daily_rental_price ?? 0) : 0)
-                ?? 0
+            ($contractTotal !== null && $days > 0 ? $contractTotal / $days : null)
+                ?? $reservation->daily_rate
+                ?? $vehicleFallback
         );
 
-        // Estimated price: use the stored value when present, derive from the
-        // daily rate × days only when we have a real daily rate (same rule).
-        $estimatedPrice = (float) ($reservation->estimated_price ?? 0);
+        // If we still have no estimated price but we do have a daily rate,
+        // derive the total from it (legacy website-lead reservations).
         if ($estimatedPrice <= 0 && $dailyRate > 0) {
             $estimatedPrice = $dailyRate * $days;
         }
 
-        // Deposit: reservation field > linked contract > company setting
-        $contractDeposit = Contract::withoutGlobalScopes()
-            ->where('customer_id', $reservation->customer_id)
-            ->where('vehicle_id', $reservation->vehicle_id)
-            ->whereNotIn('status', ['cancelled', 'terminated'])
-            ->value('deposit_amount');
-        $deposit = (float) ($reservation->deposit_amount ?? $contractDeposit ?? $this->getSetting($companyId, 'contracts', 'default_deposit_mad') ?? 0);
+        // Deposit: contract > reservation > company setting
+        $deposit = (float) (
+            ($linkedContract?->deposit_amount)
+                ?? $reservation->deposit_amount
+                ?? $this->getSetting($companyId, 'contracts', 'default_deposit_mad')
+                ?? 0
+        );
 
-        // Allowed km: reservation field > linked contract > company setting > default 250
-        $contractKm = null;
-        $linkedContract = Contract::withoutGlobalScopes()
-            ->where('customer_id', $reservation->customer_id)
-            ->where('vehicle_id', $reservation->vehicle_id)
-            ->whereNotIn('status', ['cancelled', 'terminated'])
-            ->value('allowed_km');
-        if ($linkedContract !== null) {
-            $contractKm = (float) $linkedContract;
-        }
-        $allowedKm = (float) ($reservation->allowed_km_per_day ?? $contractKm ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day') ?? 250);
+        // Allowed km: contract > reservation > company setting > default 250
+        $allowedKm = (float) (
+            ($linkedContract?->allowed_km)
+                ?? $reservation->allowed_km_per_day
+                ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day')
+                ?? 250
+        );
 
         $extensionsTotal = (float) $extensions->where('status', 'applied')->sum('additional_amount');
         $damagesTotal = (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0);
