@@ -223,6 +223,19 @@ Route::prefix('v1')->group(function () {
         Route::post('invoices/{invoice}/generate-pdf', [GeneratedDocumentController::class, 'generateInvoice'])
             ->middleware('permission:documents.generate');
 
+        // Paper-form field coordinates for the contract-wizard preview and the
+        // PDF generator. The screen preview and the PDF both read these so
+        // they can't drift. Open to any authenticated user — the config is
+        // static and carries no tenant data.
+        Route::get('contract-form-layout', function () {
+            return \App\Http\Responses\ApiResponse::success([
+                'fields' => config('contract_form.fields', []),
+                'offset_x' => (float) config('contract_form.offset_x', 0),
+                'offset_y' => (float) config('contract_form.offset_y', 0),
+                'font_size' => (float) config('contract_form.font_size', 8.5),
+            ]);
+        });
+
         // ==================================================================
         // Softnovation Document Reader (OCR-driven document ingestion)
         // ADMIN / DIRECTEUR / AGENT_COMMERCIAL only — validation is RBAC-gated.
