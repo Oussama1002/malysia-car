@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../contracts/data/contracts_repo.dart';
+import '../../contracts/presentation/contract_pdf_preview_screen.dart';
 import '../../customers/data/customer_dto.dart';
 import '../../customers/data/customers_repo.dart';
 import '../../vehicles/data/vehicle_dto.dart';
@@ -416,6 +417,21 @@ class _NewContractFromReservationScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(failedMsg)),
       );
+      // When a contract was finalised (not just a draft) and we got a
+      // contract id back, open the PDF preview straight away so the agent
+      // can read it over, hand it to the client, or hit Télécharger. On a
+      // plain draft save we just pop back to the previous screen.
+      if (!draft && contractId != null && contractId.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ContractPdfPreviewScreen(
+              contractId: contractId,
+              contractNumber: _prefilledNumber,
+            ),
+          ),
+        );
+        if (!mounted) return;
+      }
       Navigator.of(context).maybePop();
     } catch (e) {
       setState(() => _lastError = '$e');

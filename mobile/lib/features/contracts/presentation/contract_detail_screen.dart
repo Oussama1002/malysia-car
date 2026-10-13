@@ -9,6 +9,7 @@ import '../../payments/data/payment_dto.dart';
 import '../../payments/data/payments_repo.dart';
 import '../../payments/presentation/payment_detail_screen.dart';
 import '../data/contract_arrears_repo.dart';
+import 'contract_pdf_preview_screen.dart';
 import '../data/contract_detail_dto.dart';
 import '../data/contract_dto.dart';
 import '../data/contracts_repo.dart';
@@ -42,6 +43,25 @@ class _ContractDetailScreenState extends ConsumerState<ContractDetailScreen>
       appBar: AppBar(
         title: const Text('Contrat'),
         actions: [
+          IconButton(
+            tooltip: 'Aperçu / Télécharger PDF',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () {
+              // Re-opens the contract PDF preview any time — same generate +
+              // download flow the wizard runs on creation, so the agent can
+              // hand the client a signed copy whenever asked.
+              final data = async.value;
+              final number = data?.contract.number;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ContractPdfPreviewScreen(
+                    contractId: widget.id,
+                    contractNumber: number,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
