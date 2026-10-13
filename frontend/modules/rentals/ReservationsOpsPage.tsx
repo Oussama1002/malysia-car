@@ -455,8 +455,11 @@ export const ReservationsOpsPage: React.FC = () => {
     const endInput = isoToLocalInput(lead.return_at);
 
     // 1) Véhicule : match "best-score" sur mots de ≥3 caractères.
+    //    Tarif : NOT prefilled. Even for a lead coming from the landing
+    //    page the daily rate must be entered by the agent on the
+    //    réservation form; a vehicle's fleet tarif never flows here.
+    //    See feedback-no-vehicle-tarif.
     let matchedVehicleId = '';
-    let matchedPrice = '';
     const hint = (lead.vehicle_label ?? '').trim();
     if (hint) {
       const words = hint
@@ -472,9 +475,6 @@ export const ReservationsOpsPage: React.FC = () => {
       }
       if (best) {
         matchedVehicleId = String(best.id);
-        if (best.pricePerDay && best.pricePerDay > 0) {
-          matchedPrice = String(best.pricePerDay);
-        }
       }
     }
 
@@ -483,7 +483,6 @@ export const ReservationsOpsPage: React.FC = () => {
       desired_start_at: startInput || s.desired_start_at,
       desired_end_at: endInput || s.desired_end_at,
       vehicle_id: matchedVehicleId || s.vehicle_id,
-      daily_rate: matchedPrice || s.daily_rate,
     }));
 
     // 2) Client : match par les 8 derniers chiffres du téléphone, sinon on
@@ -924,15 +923,18 @@ export const ReservationsOpsPage: React.FC = () => {
                           type="button"
                           className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${selected ? 'bg-indigo-50 font-bold' : ''}`}
                           onClick={() => {
-                            const raw = (vehiclesQ.data ?? []).find((x) => String(x.id) === v.id) as any;
+                            // Picking a vehicle must NOT pull a tarif off its
+                            // fleet record — the price is landing-page only
+                            // (see feedback-no-vehicle-tarif memory). The
+                            // agent types the daily rate manually.
                             if (form.is_draft) {
                               setForm((s) => {
                                 const ids = s.vehicle_ids.includes(v.id) ? s.vehicle_ids.filter((x) => x !== v.id) : [...s.vehicle_ids, v.id];
-                                return { ...s, vehicle_ids: ids, vehicle_id: ids[0] ?? '', daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate };
+                                return { ...s, vehicle_ids: ids, vehicle_id: ids[0] ?? '' };
                               });
                               setVehicleSearch('');
                             } else {
-                              setForm((s) => ({ ...s, vehicle_id: v.id, daily_rate: raw?.pricePerDay ? String(raw.pricePerDay) : s.daily_rate }));
+                              setForm((s) => ({ ...s, vehicle_id: v.id }));
                               setVehicleSearch('');
                               setVehicleDropdownOpen(false);
                             }
