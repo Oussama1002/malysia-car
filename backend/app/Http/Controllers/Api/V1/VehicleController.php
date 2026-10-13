@@ -343,7 +343,33 @@ class VehicleController extends Controller
                 request: $request,
             );
         }
-        AuditLogger::updated($v, $request->user(), before: array_intersect_key($before, $v->getAttributes()), after: array_diff_assoc($v->getAttributes(), $before), request: $request);
+        // Build the diff by hand: array_diff_assoc stringifies each value to
+        // compare, which blows up as "Array to string conversion" the moment
+        // a cast turns a JSON column into an array. We also skip timestamps,
+        // which are noise.
+        $after = $v->getAttributes();
+        $changed = [];
+        foreach ($after as $k => $newValue) {
+            if (in_array($k, ['updated_at', 'created_at'], true)) {
+                continue;
+            }
+            $oldValue = $before[$k] ?? null;
+            if (is_array($newValue) || is_array($oldValue) || is_object($newValue) || is_object($oldValue)) {
+                if (json_encode($oldValue) === json_encode($newValue)) {
+                    continue;
+                }
+            } elseif ((string) $oldValue === (string) $newValue) {
+                continue;
+            }
+            $changed[$k] = $newValue;
+        }
+        AuditLogger::updated(
+            $v,
+            $request->user(),
+            before: array_intersect_key($before, $changed),
+            after: $changed,
+            request: $request,
+        );
 
         return ApiResponse::success((new VehicleResource($v))->resolve($request));
     }
