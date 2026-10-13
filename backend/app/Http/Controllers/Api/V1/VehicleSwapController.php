@@ -512,7 +512,16 @@ class VehicleSwapController extends Controller
             }
         }
 
-        $remainingDays = max(0, (int) now()->startOfDay()->diffInDays($endAt->copy()->startOfDay(), false));
+        $today = now()->startOfDay();
+        $startDay = $startAt->copy()->startOfDay();
+        $endDay = $endAt->copy()->startOfDay();
+        $totalDays = max(0, (int) $startDay->diffInDays($endDay, false));
+        $remainingDays = max(0, (int) $today->diffInDays($endDay, false));
+        // Days already consumed on the current vehicle before the swap. Clamp
+        // so a reservation whose period is entirely in the future reports 0
+        // elapsed and 100% remaining, which is what the UI needs to split.
+        $elapsedDays = max(0, min($totalDays, $totalDays - $remainingDays));
+        $pivot = $today->greaterThan($startDay) ? ($today->lessThan($endDay) ? $today : $endDay) : $startDay;
 
         return ApiResponse::success([
             'current_vehicle' => $currentVehicle ? $this->formatVehicleForSwap($currentVehicle, ['available' => true, 'reasons' => []]) : null,
@@ -525,6 +534,9 @@ class VehicleSwapController extends Controller
             'rental_period' => [
                 'start' => $startAt->toDateTimeString(),
                 'end' => $endAt->toDateTimeString(),
+                'pivot' => $pivot->toDateTimeString(),
+                'total_days' => $totalDays,
+                'elapsed_days' => $elapsedDays,
                 'remaining_days' => $remainingDays,
             ],
         ]);

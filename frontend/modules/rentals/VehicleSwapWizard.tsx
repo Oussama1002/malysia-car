@@ -170,7 +170,24 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
   const oldDailyRate = Number(currentV?.daily_rental_price ?? reservation?.daily_rate ?? contract?.daily_rate ?? 0);
   const newDailyRate = form.newDailyRate !== '' ? Number(form.newDailyRate) : Number(selectedVehicle?.daily_rental_price ?? 0);
   const finRemainingDays = Number(rentalPeriod?.remaining_days ?? summaryData.remainingDays) || 0;
-  const totalDifference = finRemainingDays * (newDailyRate - oldDailyRate);
+  // Period split — the old vehicle covers the days already elapsed, the new
+  // one covers the days remaining. elapsed_days is clamped on the backend so
+  // a swap scheduled before the rental starts shows 0 jours utilisés.
+  const totalDays = Number(rentalPeriod?.total_days
+    ?? (summaryData.periodStart && summaryData.periodEnd
+      ? Math.max(0, Math.ceil(
+          (new Date(summaryData.periodEnd as string).getTime()
+            - new Date(summaryData.periodStart as string).getTime()) / 86400000,
+        ))
+      : 0)) || 0;
+  const elapsedDays = Number(rentalPeriod?.elapsed_days ?? Math.max(0, totalDays - finRemainingDays)) || 0;
+  const pivotDate = rentalPeriod?.pivot ?? new Date().toISOString();
+
+  const oldSubtotal = elapsedDays * oldDailyRate;         // locked — already consumed
+  const newSubtotal = finRemainingDays * newDailyRate;    // to be charged on the new vehicle
+  const originalPlan = totalDays * oldDailyRate;          // what the booking was priced at
+  const newPlan = oldSubtotal + newSubtotal;              // what the booking ends up at
+  const totalDifference = newPlan - originalPlan;         // same as finRemainingDays * (new - old)
 
   const canAdvance = (): boolean => {
     if (step.key === 'reason') return !!form.reason && (form.reason !== 'other' || !!form.reasonDescription.trim());
@@ -456,44 +473,176 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
     );
   };
 
-  const renderFinancial = () => (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-500">Tarif actuel</span>
-          <span className="font-bold text-slate-900">{fmtPrice(oldDailyRate)}/jour</span>
+  const renderFinancial = () => {
+    // Pct used to render the horizontal split bar.
+    const elapsedPct = totalDays > 0 ? Math.round((elapsedDays / totalDays) * 100) : 0;
+    const remainingPct = Math.max(0, 100 - elapsedPct);
+
+    const VehicleColumn: React.FC<{
+      tone: 'old' | 'new';
+      heading: string;
+      v: any;
+      periodStart: string | undefined;
+      periodEnd: string | undefined;
+      days: number;
+      daysLabel: string;
+      dailyRate: number;
+      subtotal: number;
+      editableRate?: boolean;
+    }> = ({ tone, heading, v, periodStart, periodEnd, days, daysLabel, dailyRate, subtotal, editableRate }) => {
+      const chrome = tone === 'old'
+        ? 'border-slate-200 bg-slate-50/60'
+        : 'border-indigo-200 bg-indigo-50/40';
+      const headingTone = tone === 'old' ? 'text-slate-500' : 'text-indigo-600';
+      const subtotalTone = tone === 'old' ? 'text-slate-900' : 'text-indigo-700';
+      return (
+        <div className={`rounded-xl border ${chrome} p-4 flex flex-col gap-3`}>
+          <div className={`text-[10px] font-black uppercase tracking-widest ${headingTone}`}>{heading}</div>
+
+          {/* Identity */}
+          <div>
+            <div className="text-sm font-black text-slate-900 truncate">
+              {v?.brand_name ?? v?.brand?.name ?? '—'} {v?.model_name ?? v?.model?.model_name ?? v?.model?.name ?? ''}
+            </div>
+            <div className="text-[10px] font-semibold text-slate-500">{v?.registration_number ?? '—'}</div>
+          </div>
+
+          {/* Period span */}
+          <div className="rounded-lg bg-white/70 border border-white px-3 py-2">
+            <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Période couverte</div>
+            <div className="text-xs font-bold text-slate-800">
+              {fmtDate(periodStart)} <span className="text-slate-400">→</span> {fmtDate(periodEnd)}
+            </div>
+          </div>
+
+          {/* Days + rate */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-white/70 border border-white px-3 py-2">
+              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{daysLabel}</div>
+              <div className="text-base font-black text-slate-900">{days}<span className="text-xs text-slate-500 font-bold"> j</span></div>
+            </div>
+            <div className="rounded-lg bg-white/70 border border-white px-3 py-2">
+              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Tarif / jour</div>
+              {editableRate ? (
+                <input
+                  id="new_daily_rate"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder={String(selectedVehicle?.daily_rental_price ?? 0)}
+                  value={form.newDailyRate}
+                  onChange={e => setForm(s => ({ ...s, newDailyRate: e.target.value }))}
+                  className="w-full bg-transparent text-base font-black text-indigo-700 outline-none"
+                />
+              ) : (
+                <div className="text-base font-black text-slate-900">{fmtPrice(dailyRate)}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Subtotal */}
+          <div className="border-t border-white/80 pt-2 flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sous-total</span>
+            <span className={`text-lg font-black ${subtotalTone}`}>{fmtPrice(subtotal)}</span>
+          </div>
         </div>
-        <div className="flex items-center justify-between text-sm gap-3">
-          <label htmlFor="new_daily_rate" className="text-slate-500 shrink-0">Nouveau tarif (MAD/jour)</label>
-          <input
-            id="new_daily_rate"
-            type="number"
-            min="0"
-            step="1"
-            placeholder={String(selectedVehicle?.daily_rental_price ?? 0)}
-            value={form.newDailyRate}
-            onChange={e => setForm(s => ({ ...s, newDailyRate: e.target.value }))}
-            className="w-36 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-bold text-indigo-700 text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+      );
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Period split bar — visual share of the booking covered by each car */}
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Répartition du séjour</div>
+            <div className="text-[10px] font-bold text-slate-500">
+              {totalDays} jour{totalDays > 1 ? 's' : ''} au total
+            </div>
+          </div>
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="bg-slate-400 h-full" style={{ width: `${elapsedPct}%` }} title={`Ancien — ${elapsedDays} j`} />
+            <div className="bg-indigo-500 h-full" style={{ width: `${remainingPct}%` }} title={`Nouveau — ${finRemainingDays} j`} />
+          </div>
+          <div className="mt-1.5 flex items-center justify-between text-[10px] font-bold">
+            <span className="text-slate-500">{fmtDate(summaryData.periodStart as string)}</span>
+            <span className="text-slate-400">⇵ bascule le {fmtDate(pivotDate)}</span>
+            <span className="text-slate-500">{fmtDate(summaryData.periodEnd as string)}</span>
+          </div>
+        </div>
+
+        {/* Two-column split — old vehicle | new vehicle */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <VehicleColumn
+            tone="old"
+            heading="Ancien véhicule"
+            v={currentV}
+            periodStart={summaryData.periodStart as string}
+            periodEnd={pivotDate}
+            days={elapsedDays}
+            daysLabel="Jours utilisés"
+            dailyRate={oldDailyRate}
+            subtotal={oldSubtotal}
+          />
+          <VehicleColumn
+            tone="new"
+            heading="Nouveau véhicule"
+            v={selectedVehicle}
+            periodStart={pivotDate}
+            periodEnd={summaryData.periodEnd as string}
+            days={finRemainingDays}
+            daysLabel="Jours restants"
+            dailyRate={newDailyRate}
+            subtotal={newSubtotal}
+            editableRate
           />
         </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-500">Jours restants</span>
-          <span className="font-bold text-slate-900">{finRemainingDays} jours</span>
-        </div>
-        <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-700">Différence totale</span>
-          <span className={`text-lg font-black ${totalDifference > 0 ? 'text-rose-600' : totalDifference < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
-            {totalDifference > 0 ? '+' : ''}{fmtPrice(totalDifference)}
-          </span>
-        </div>
-      </div>
 
-      <div className="rounded-xl border-2 border-indigo-500 bg-indigo-50/50 p-3">
-        <div className="text-xs font-bold text-slate-900">Facturer au client</div>
-        <div className="text-[10px] text-slate-500">La différence sera ajoutée automatiquement à la facture</div>
+        {/* Reconciliation */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Récapitulatif financier</div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-500">Plan initial ({totalDays} j × {fmtPrice(oldDailyRate)})</span>
+            <span className="font-bold text-slate-700">{fmtPrice(originalPlan)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-500">Nouveau plan ({elapsedDays} j ancien + {finRemainingDays} j nouveau)</span>
+            <span className="font-bold text-slate-900">{fmtPrice(newPlan)}</span>
+          </div>
+          <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+            <span className="text-sm font-bold text-slate-700">Différence à facturer</span>
+            <span className={`text-xl font-black ${totalDifference > 0 ? 'text-rose-600' : totalDifference < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+              {totalDifference > 0 ? '+' : ''}{fmtPrice(totalDifference)}
+            </span>
+          </div>
+        </div>
+
+        {/* Action */}
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { k: 'charge',       lbl: 'Facturer',       hint: 'Ajouter la différence à la facture' },
+            { k: 'free_upgrade', lbl: 'Geste commercial', hint: 'Aucune refacturation client' },
+            { k: 'refund',       lbl: 'Rembourser',     hint: 'Avoir / remboursement' },
+            { k: 'ignore',       lbl: 'Ignorer',        hint: 'Pas d\'impact financier' },
+          ] as const).map(opt => {
+            const active = form.financialAction === opt.k;
+            return (
+              <button
+                key={opt.k}
+                type="button"
+                onClick={() => setForm(s => ({ ...s, financialAction: opt.k }))}
+                className={`rounded-xl border-2 p-3 text-left transition-colors ${
+                  active ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="text-xs font-black text-slate-900">{opt.lbl}</div>
+                <div className="text-[10px] text-slate-500">{opt.hint}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderOperations = () => (
     <div className="space-y-4">
