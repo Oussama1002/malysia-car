@@ -2,62 +2,15 @@ import React, { lazy, Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
-import { apiClient, getApiBase } from '@/services/apiClient';
+import { apiClient } from '@/services/apiClient';
 import { ApiError } from '@/services/apiError';
 import { queryKeys } from '@/services/queryKeys';
 
-/**
- * Map backend rental / reservation error codes and English fallbacks to
- * French sentences so users see readable messages instead of raw enum values
- * (e.g. "overlapping_reservation") or Laravel English messages.
- */
-const RENTAL_ERROR_FR: Record<string, string> = {
-  overlapping_reservation: 'Une autre réservation se chevauche sur cette période.',
-  active_contract_overlap: 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
-  overlapping_mission: 'Une mission est planifiée pour ce véhicule sur ce créneau.',
-  vehicle_in_maintenance: 'Un ordre de réparation est en cours sur ce véhicule.',
-  vehicle_in_scheduled_maintenance: 'Maintenance planifiée en cours.',
-  vehicle_accident_hold: 'Dossier sinistre ouvert sur ce véhicule.',
-  vehicle_not_found: 'Véhicule introuvable.',
-  invalid_range: 'Plage de dates invalide.',
-  vehicle_status_unavailable: 'Statut flotte : véhicule non louable.',
-  vehicle_availability_flag: 'Véhicule marqué indisponible à la location.',
-  // Common Laravel English messages
-  'Another reservation overlaps this period.': 'Une autre réservation se chevauche sur cette période.',
-  'An active finance or lease contract overlaps this period.': 'Un contrat actif (crédit / LOA) se chevauche sur cette période.',
-  'A mission is scheduled for this vehicle during this period.': 'Une mission est planifiée pour ce véhicule sur ce créneau.',
-  'Vehicle has an open repair order.': 'Un ordre de réparation est en cours sur ce véhicule.',
-};
-
-function translateError(msg: string): string {
-  return RENTAL_ERROR_FR[msg] ?? msg;
-}
-
-/**
- * Turn any error (Laravel 422 validation body included) into a full list of
- * French messages, so the drawer shows every problem instead of the first
- * one followed by "(and N more errors)".
- */
-function formatErrorList(err: unknown, fallback: string): string[] {
-  if (err instanceof ApiError && err.body && typeof err.body === 'object') {
-    const body = err.body as { errors?: Record<string, string[]>; message?: string };
-    const bag = body.errors ?? {};
-    const items: string[] = [];
-    for (const list of Object.values(bag)) {
-      if (Array.isArray(list)) {
-        for (const raw of list) items.push(translateError(String(raw)));
-      }
-    }
-    if (items.length > 0) return Array.from(new Set(items));
-    if (body.message) return [translateError(body.message).replace(/\s*\(and \d+ more errors?\)\.?$/i, '')];
-  }
-  if (err instanceof Error) return [translateError(err.message)];
-  return [fallback];
-}
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { PaymentForm } from '@/modules/finance/PaymentsPage';
 import { createPayment, type PaymentCreatePayload } from '@/services/financeApi';
+import { VehicleSwapWizard } from './VehicleSwapWizard';
 
 /* ─── lazy tab components ─────────────────────────────────────────── */
 const TabSummary      = lazy(() => import('./tabs/TabSummary'));
@@ -126,26 +79,10 @@ export const ReservationDetailPage: React.FC = () => {
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [swapOpen, setSwapOpen] = useState(false);
-  const [swapVehicleId, setSwapVehicleId] = useState('');
-  const [swapReason, setSwapReason] = useState('');
-  const [swapError, setSwapError] = useState<string[] | null>(null);
-  const [swapMode, setSwapMode] = useState<'instant' | 'request'>('instant');
 
   const detailQ = useQuery({
     queryKey: ['reservation', rid],
     queryFn: () => opsApi.reservation(rid!),
-    enabled: !!rid,
-  });
-
-  const vehiclesQ = useQuery({
-    queryKey: ['fleet', 'all-vehicles'],
-    queryFn: async () => (await apiClient<{ data: any[] }>('/v1/vehicles?per_page=200')).data,
-    enabled: swapOpen && !!getApiBase(),
-  });
-
-  const swapsQ = useQuery({
-    queryKey: ['vehicle-swaps', rid],
-    queryFn: () => opsApi.vehicleSwaps({ reservation_id: rid }),
     enabled: !!rid,
   });
 
@@ -232,24 +169,6 @@ export const ReservationDetailPage: React.FC = () => {
     },
   });
 
-  const swapInstantM = useMutation({
-    mutationFn: () => opsApi.instantVehicleSwap({ reservation_id: rid!, new_vehicle_id: swapVehicleId, reason: swapReason || undefined }),
-    onSuccess: () => {
-      setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
-      qc.invalidateQueries({ queryKey: ['reservation', rid] });
-      qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
-      qc.invalidateQueries({ queryKey: queryKeys.reservations });
-    },
-    onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors du changement')),
-  });
-  const swapRequestM = useMutation({
-    mutationFn: () => opsApi.requestVehicleSwap({ reservation_id: rid!, new_vehicle_id: swapVehicleId, reason: swapReason || undefined }),
-    onSuccess: () => {
-      setSwapOpen(false); setSwapError(null); setSwapVehicleId(''); setSwapReason('');
-      qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
-    },
-    onError: (e) => setSwapError(formatErrorList(e, 'Erreur lors de la demande')),
-  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['reservation', rid] });
@@ -404,7 +323,7 @@ export const ReservationDetailPage: React.FC = () => {
           )}
           {!['cancelled', 'closed', 'draft'].includes(status) && (
             <button
-              onClick={() => { setSwapError(null); setSwapOpen(true); }}
+              onClick={() => setSwapOpen(true)}
               className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-slate-900 shrink-0"
             >
               Changer véhicule
@@ -631,218 +550,18 @@ export const ReservationDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── Vehicle swap modal ── */}
-      {swapOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:items-center"
-          onClick={() => setSwapOpen(false)}
-        >
-          <div
-            className="my-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex-1 overflow-y-auto p-6">
-            <h3 className="mb-1 text-sm font-black text-slate-900">Changer de véhicule</h3>
-            <p className="mb-4 text-xs text-slate-500">
-              Véhicule actuel : <span className="font-bold text-slate-700">{d?.vehicle_name ?? '—'}</span> ({d?.vehicle_registration ?? '—'})
-            </p>
-
-            {/* Mode toggle */}
-            <div className="mb-4 flex gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" checked={swapMode === 'instant'} onChange={() => setSwapMode('instant')} className="accent-indigo-600" />
-                <div>
-                  <div className="text-xs font-black text-slate-800">Changement immédiat</div>
-                  <div className="text-[10px] text-slate-500">Approuver et appliquer maintenant</div>
-                </div>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" checked={swapMode === 'request'} onChange={() => setSwapMode('request')} className="accent-amber-600" />
-                <div>
-                  <div className="text-xs font-black text-slate-800">Demande (approbation requise)</div>
-                  <div className="text-[10px] text-slate-500">En attente de validation</div>
-                </div>
-              </label>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-400">Nouveau véhicule *</label>
-                <select
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                  value={swapVehicleId}
-                  onChange={(e) => setSwapVehicleId(e.target.value)}
-                >
-                  <option value="">— Sélectionner un véhicule —</option>
-                  {(vehiclesQ.data ?? [])
-                    .filter((v: any) => v.id !== r?.vehicle_id)
-                    .map((v: any) => {
-                      const brand = v.brand?.name ?? v.brand ?? v.brand_name ?? '';
-                      const model = v.model?.model_name ?? v.model?.name ?? v.model ?? v.model_name ?? '';
-                      const reg = v.registration_number ?? v.registration ?? '';
-                      const ownership = String(v.ownership_status ?? v.ownershipStatus ?? '').toLowerCase();
-                      const isSL = ownership === 'sub_rented' || ownership === 'sub_rental';
-                      // Take the derived availability first (server already
-                      // considers live reservations/contracts); fall back to the
-                      // raw fleet status only when it's missing.
-                      const availability = String(v.availability_status ?? v.availabilityStatus ?? '').toLowerCase();
-                      const fleetStatus  = String(v.status ?? '').toLowerCase();
-                      // Prefer the freshly computed flags from the list endpoint
-                      // (hasActiveReservation / hasActiveContract) because the
-                      // vehicles.current_* columns are only updated manually and
-                      // frequently go stale in production.
-                      const hasCurrentReservation = !!(v.hasActiveReservation ?? v.current_reservation_id ?? v.currentReservationId);
-                      const hasCurrentContract    = !!(v.hasActiveContract    ?? v.current_contract_id    ?? v.currentContractId);
-                      const effective = hasCurrentContract
-                        ? 'rented'
-                        : hasCurrentReservation
-                        ? 'reserved'
-                        : (availability || fleetStatus);
-                      const statusFr =
-                        effective === 'available'          ? 'Disponible'
-                        : effective === 'rented'           ? 'Loué'
-                        : effective === 'reserved'         ? 'Réservé'
-                        : effective === 'maintenance'      ? 'Maintenance'
-                        : effective === 'in_repair'        ? 'Réparation'
-                        : effective === 'blocked' || effective === 'unavailable' ? 'Indisponible'
-                        : effective || 'Inconnu';
-                      const isAvailable = effective === 'available';
-                      const nameLabel = [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule';
-                      const prefix = isSL ? '🟣 SL · ' : '';
-                      return (
-                        <option key={v.id} value={v.id} disabled={!isAvailable}>
-                          {prefix}{nameLabel} · {reg} ({statusFr})
-                        </option>
-                      );
-                    })}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-bold text-slate-400">Motif (optionnel)</label>
-                <input
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                  placeholder="Ex: panne, demande client, upgrade…"
-                  value={swapReason}
-                  onChange={(e) => setSwapReason(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {swapError && swapError.length > 0 && (
-              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
-                <div className="mb-1 font-black">
-                  {swapError.length === 1 ? 'Changement impossible' : `Changement impossible (${swapError.length} problèmes)`}
-                </div>
-                <ul className="list-inside list-disc space-y-0.5">
-                  {swapError.map((m, i) => <li key={i}>{m}</li>)}
-                </ul>
-              </div>
-            )}
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setSwapOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-600">Annuler</button>
-              <button
-                onClick={() => swapMode === 'instant' ? swapInstantM.mutate() : swapRequestM.mutate()}
-                disabled={!swapVehicleId || swapInstantM.isPending || swapRequestM.isPending}
-                className={`rounded-xl px-5 py-2.5 text-xs font-black text-white disabled:opacity-50 ${swapMode === 'instant' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-600 hover:bg-amber-700'}`}
-              >
-                {(swapInstantM.isPending || swapRequestM.isPending)
-                  ? 'Traitement…'
-                  : swapMode === 'instant' ? 'Appliquer le changement' : 'Envoyer la demande'}
-              </button>
-            </div>
-
-            {/* Swap history */}
-            {(swapsQ.data ?? []).length > 0 && (
-              <div className="mt-5 border-t border-slate-100 pt-4">
-                <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Historique des changements ({(swapsQ.data ?? []).length})
-                </div>
-                <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
-                  {(swapsQ.data ?? []).map((s: any) => {
-                    const vehLabel = (v: any) => {
-                      const brand = v?.brand?.name ?? v?.brand_name ?? v?.brand ?? '';
-                      const model = v?.model?.model_name ?? v?.model?.name ?? v?.model_name ?? v?.model ?? '';
-                      const reg = v?.registration_number ?? v?.registration ?? '—';
-                      return { name: [brand, model].filter(Boolean).join(' ').trim() || 'Véhicule', plate: reg };
-                    };
-                    const userName = (u: any) =>
-                      u ? ([u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || '—') : '—';
-                    const fmtDT = (iso?: string | null) => {
-                      if (!iso) return '—';
-                      const d = new Date(iso);
-                      return d.toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    };
-                    const oldV = vehLabel(s.old_vehicle);
-                    const newV = vehLabel(s.new_vehicle);
-                    const tone =
-                      s.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                      : s.status === 'rejected' ? 'bg-rose-100 text-rose-700 border-rose-200'
-                      : 'bg-amber-100 text-amber-700 border-amber-200';
-                    const statusFr = s.status === 'approved' ? 'Validé' : s.status === 'rejected' ? 'Refusé' : 'En attente';
-                    return (
-                      <div key={s.id} className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ancien véhicule</div>
-                            <div className="font-bold text-slate-700">{oldV.name}</div>
-                            <div className="font-mono text-[11px] text-slate-500">{oldV.plate}</div>
-                          </div>
-                          <div className="mt-4 text-slate-400">→</div>
-                          <div className="min-w-0 text-right">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nouveau véhicule</div>
-                            <div className="font-black text-slate-900">{newV.name}</div>
-                            <div className="font-mono text-[11px] text-slate-500">{newV.plate}</div>
-                          </div>
-                          <span className={`ms-auto rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${tone}`}>
-                            {statusFr}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-2 text-[11px]">
-                          <div>
-                            <span className="font-bold text-slate-400">Demandé par :</span>{' '}
-                            <span className="font-semibold text-slate-700">{userName(s.requested_by_user)}</span>
-                          </div>
-                          <div>
-                            <span className="font-bold text-slate-400">Le :</span>{' '}
-                            <span className="font-semibold text-slate-700">{fmtDT(s.requested_at ?? s.created_at)}</span>
-                          </div>
-                          {(s.status === 'approved' || s.status === 'rejected') && (
-                            <>
-                              <div>
-                                <span className="font-bold text-slate-400">{s.status === 'approved' ? 'Validé par :' : 'Refusé par :'}</span>{' '}
-                                <span className="font-semibold text-slate-700">{userName(s.resolved_by_user)}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold text-slate-400">Le :</span>{' '}
-                                <span className="font-semibold text-slate-700">{fmtDT(s.resolved_at)}</span>
-                              </div>
-                            </>
-                          )}
-                          {s.reason && (
-                            <div className="col-span-2">
-                              <span className="font-bold text-slate-400">Motif :</span>{' '}
-                              <span className="italic text-slate-700">{s.reason}</span>
-                            </div>
-                          )}
-                          {s.status === 'rejected' && s.rejection_reason && (
-                            <div className="col-span-2">
-                              <span className="font-bold text-slate-400">Motif de refus :</span>{' '}
-                              <span className="italic text-rose-700">{s.rejection_reason}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Vehicle swap wizard (6-step flow with period-split financial impact) ── */}
+      <VehicleSwapWizard
+        open={swapOpen}
+        onClose={() => setSwapOpen(false)}
+        source={rid ? { type: 'reservation', id: rid } : null}
+        reservation={r ? { ...r, customer_name: d?.customer_name, vehicle_name: d?.vehicle_name, vehicle_registration: d?.vehicle_registration, contract_number: d?.contract_number } : undefined}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['reservation', rid] });
+          qc.invalidateQueries({ queryKey: ['vehicle-swaps', rid] });
+          qc.invalidateQueries({ queryKey: queryKeys.reservations });
+        }}
+      />
     </div>
   );
 };
