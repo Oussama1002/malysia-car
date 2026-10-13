@@ -713,6 +713,17 @@ export const ContractWizardPage: React.FC = () => {
       throw new Error('Sélectionnez un véhicule avant de sauvegarder le brouillon.');
     }
     if (draftContractId) {
+      // Push the latest state onto the existing draft before returning. The
+      // auto-save at step-6 entry captured whatever was in state back then —
+      // without this update, any later edit to Loyer / Franchise / dates /
+      // payments would NOT reach the DB and the activated contract would
+      // keep the stale (often 0) numbers. See the 'Montant total 0 MAD' /
+      // 'Aucun paiement' bug.
+      try {
+        await contractsApi.update(draftContractId, buildCreatePayload('draft'));
+      } catch (e) {
+        console.warn('[ContractWizard] draft refresh failed:', e);
+      }
       return draftContractId;
     }
     const created = await contractsApi.create(buildCreatePayload('draft'));
@@ -829,8 +840,19 @@ export const ContractWizardPage: React.FC = () => {
       const linkedReservationId = state.sourceReservationId ?? undefined;
       const paymentErrors: string[] = [];
 
-      for (const p of state.payments) {
-        const amount = Number(p.amount);
+      // The amount input on step 5 is labelled "optionnel" so agents
+      // sometimes leave it blank, assuming the wizard will pick up the
+      // Loyer / Mensualité automatically. Honour that: when there is a
+      // single payment entry with no amount, default it to the monthly
+      // rent so the first encaissement always lands. Explicit zeros still
+      // skip (an agent can mark a payment-mode row with no money).
+      const defaultRentAmount = state.monthlyRentMad > 0 ? state.monthlyRentMad : 0;
+      const nonEmptyPayments = state.payments.filter(p => p.amount !== '' || p.method);
+      for (const [idx, p] of nonEmptyPayments.entries()) {
+        const raw = Number(p.amount);
+        const amount = Number.isFinite(raw) && raw > 0
+          ? raw
+          : (idx === 0 ? defaultRentAmount : 0);
         if (!(amount > 0) || !state.clientId) continue;
         const payload: PaymentCreatePayload = {
           customer_id: state.clientId,
