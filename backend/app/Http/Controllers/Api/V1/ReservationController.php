@@ -1069,14 +1069,25 @@ class ReservationController extends Controller
         $allowVehicleFallback = $reservation->source === 'website_lead';
         $vehicleFallback = $allowVehicleFallback ? (float) ($vehicle->daily_rental_price ?? 0) : 0.0;
 
-        // Estimated price (Montant total): contract first, then stored
-        // reservation value, then daily_rate × days.
+        // Estimated price (Montant total): the contract's base_amount is the
+        // single source of truth once a contract exists. It is computed by
+        // the wizard as monthly × months for long rentals AND as daily × days
+        // for Location Courte Durée (where duration_months is 0), so reading
+        // monthly_payment × duration_months here under-reported LCD rentals
+        // to 0. Fall back to the monthly × duration product only when the
+        // base_amount isn't set, and finally to the reservation's own
+        // estimated_price for truly contract-less reservations.
         $contractTotal = null;
         if ($linkedContract) {
-            $monthly = (float) ($linkedContract->monthly_payment ?? 0);
-            $duration = (int) ($linkedContract->duration_months ?? 0);
-            if ($monthly > 0 && $duration > 0) {
-                $contractTotal = $monthly * $duration;
+            $base = (float) ($linkedContract->base_amount ?? 0);
+            if ($base > 0) {
+                $contractTotal = $base;
+            } else {
+                $monthly = (float) ($linkedContract->monthly_payment ?? 0);
+                $duration = (int) ($linkedContract->duration_months ?? 0);
+                if ($monthly > 0 && $duration > 0) {
+                    $contractTotal = $monthly * $duration;
+                }
             }
         }
         $estimatedPrice = (float) ($contractTotal
@@ -1116,7 +1127,16 @@ class ReservationController extends Controller
 
         $extensionsTotal = (float) $extensions->where('status', 'applied')->sum('additional_amount');
         $damagesTotal = (float) $damages->sum(fn ($d) => $d->final_cost ?? $d->estimated_cost ?? 0);
-        $paidTotal = (float) $payments->sum('amount');
+        // 'caution' is the Franchise d'assurance — it belongs to the deposit
+        // bucket, not to Payé (location). If we lump it in with the rent, the
+        // Solde restant drops artificially the moment the client hands over
+        // the franchise. Split the sum so the UI can show each separately.
+        $paidTotal = (float) $payments
+            ->filter(fn ($p) => (string) ($p->payment_type ?? '') !== 'caution')
+            ->sum('amount');
+        $depositPaid = (float) $payments
+            ->filter(fn ($p) => (string) ($p->payment_type ?? '') === 'caution')
+            ->sum('amount');
 
         return [
             'estimated_price' => $estimatedPrice,
@@ -1124,6 +1144,7 @@ class ReservationController extends Controller
             'damages_total' => $damagesTotal,
             'paid' => $paidTotal,
             'deposit_amount' => $deposit,
+            'deposit_paid' => $depositPaid,
             'allowed_km' => $allowedKm,
             'daily_rate' => $dailyRate,
             'days' => $days,

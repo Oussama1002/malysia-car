@@ -80,6 +80,10 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
   if (!data) return null;
   const payments = data.payments ?? [];
   const totals = data.totals ?? { estimated_price: 0, extensions_total: 0, damages_total: 0, paid: 0 };
+  // deposit_paid is new in the backend totals and may not exist on older
+  // builds. Fallback to 0 so the UI reads clean on stale servers.
+  const depositPaid = Number((totals as { deposit_paid?: number }).deposit_paid ?? 0);
+  const depositDue = Number((totals as { deposit_amount?: number }).deposit_amount ?? 0);
   const grandTotal = totals.estimated_price + totals.extensions_total + totals.damages_total;
   const balance = grandTotal - totals.paid;
 
@@ -93,7 +97,14 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
         </div>
         <div className="rounded-xl bg-violet-50 px-4 py-4">
           <div className="text-[10px] font-bold uppercase tracking-widest text-violet-400">Caution</div>
-          <div className="mt-1 text-lg font-black text-violet-700">—</div>
+          <div className="mt-1 text-lg font-black text-violet-700">
+            {depositPaid > 0 || depositDue > 0 ? fmtMad(depositPaid > 0 ? depositPaid : depositDue) : '—'}
+          </div>
+          {depositPaid > 0 && depositDue > depositPaid && (
+            <div className="mt-0.5 text-[10px] font-semibold text-violet-500">
+              sur {fmtMad(depositDue)} prévus
+            </div>
+          )}
         </div>
         <div className="rounded-xl bg-emerald-50 px-4 py-4">
           <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Payé</div>
