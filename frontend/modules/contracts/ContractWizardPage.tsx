@@ -1169,12 +1169,11 @@ export const ContractWizardPage: React.FC = () => {
                       the contract comes from a reservation these are already
                       set from the reservation window (see prefill effect). */}
                   <Field label="Date de début">
-                    <input
-                      type="date"
+                    <DateField
                       className="df-input"
                       value={state.startDate ?? ''}
-                      onChange={(e) => {
-                        const v = e.target.value || null;
+                      onChange={(dfValue) => {
+                        const v = dfValue || null;
                         setState((s) => {
                           const next = { ...s, startDate: v };
                           if (v && s.endDate) {
@@ -1188,12 +1187,11 @@ export const ContractWizardPage: React.FC = () => {
                     />
                   </Field>
                   <Field label="Date de fin">
-                    <input
-                      type="date"
+                    <DateField
                       className="df-input"
                       value={state.endDate ?? ''}
-                      onChange={(e) => {
-                        const v = e.target.value || null;
+                      onChange={(dfValue) => {
+                        const v = dfValue || null;
                         setState((s) => {
                           const next = { ...s, endDate: v };
                           if (v && s.startDate) {
