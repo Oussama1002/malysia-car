@@ -259,12 +259,111 @@ class _NewContractFromReservationScreenState
                 })
             .toList(),
       };
+      // Thread the source reservation through so the backend can gate the
+      // tarif propagation + the activate() reservation-exclusion fix.
+      if (widget.reservationId != null) {
+        payload['reservation_id'] = widget.reservationId;
+      }
       final created = await ref
           .read(apiClientProvider)
           .postData('/contracts', body: payload);
       final contractId = created is Map
           ? (created['id'] ?? created['contract']?['id'])?.toString()
           : null;
+
+      // ─── Payments: same flow as the web wizard ────────────────────
+      // The backend auto-promotes draft → approved on every Payment that
+      // lands with contract_id (see PaymentController@maybePromoteContract),
+      // so we must create payments BEFORE trying to activate. The caution
+      // (franchise d'assurance) is sent as its own row with payment_type
+      // 'caution' so it's split out of the Payé total on the Paiements tab.
+      final paymentErrors = <String>[];
+      if (contractId != null && contractId.isNotEmpty) {
+        String uiToApiMethod(String m) {
+          switch (m) {
+            case 'cheque':
+            case 'check':
+              return 'check';
+            case 'virement':
+            case 'bank_transfer':
+              return 'bank_transfer';
+            case 'carte':
+            case 'card':
+              return 'card';
+            case 'especes':
+            case 'cash':
+              return 'cash';
+            default:
+              return 'bank_transfer';
+          }
+        }
+
+        final todayIso = DateTime.now().toIso8601String().split('T').first;
+
+        // 1. Rent payments collected on step 5. First empty-amount row
+        //    defaults to the monthly rent so a quick save still records
+        //    the signing-time encaissement.
+        final defaultRent = double.tryParse(_monthly.text) ?? 0.0;
+        for (var i = 0; i < _payments.length; i++) {
+          final p = _payments[i];
+          final raw = double.tryParse(p.amount.toString()) ?? 0.0;
+          final amount = raw > 0 ? raw : (i == 0 ? defaultRent : 0.0);
+          if (amount <= 0 || _clientId == null) continue;
+          final body = <String, dynamic>{
+            'customer_id': _clientId,
+            'contract_id': contractId,
+            if (widget.reservationId != null)
+              'reservation_id': widget.reservationId,
+            'payment_method': uiToApiMethod(p.method),
+            'payment_type': 'paiement_location',
+            'amount': amount,
+            'payment_date': todayIso,
+            if (p.reference.isNotEmpty) 'external_reference': p.reference,
+            if (p.chequeNumber.isNotEmpty) 'check_number': p.chequeNumber,
+            'notes': 'Encaissement initial — signature contrat.',
+          };
+          try {
+            await ref.read(apiClientProvider).postData('/payments', body: body);
+          } catch (e) {
+            paymentErrors.add(e.toString());
+          }
+        }
+
+        // 2. Franchise d'assurance (caution) — separate row so it feeds
+        //    deposit_paid instead of inflating Payé location.
+        final depositAmount = double.tryParse(_deposit.text) ?? 0.0;
+        final depositMethod = _payments.isNotEmpty
+            ? uiToApiMethod(_payments.first.method)
+            : 'bank_transfer';
+        if (depositAmount > 0 && _clientId != null) {
+          try {
+            await ref.read(apiClientProvider).postData('/payments', body: {
+              'customer_id': _clientId,
+              'contract_id': contractId,
+              if (widget.reservationId != null)
+                'reservation_id': widget.reservationId,
+              'payment_method': depositMethod,
+              'payment_type': 'caution',
+              'amount': depositAmount,
+              'payment_date': todayIso,
+              'notes': "Franchise d'assurance — signature contrat.",
+            });
+          } catch (e) {
+            paymentErrors.add('Franchise : $e');
+          }
+        }
+
+        // 3. Best-effort activate — payments already promoted the contract
+        //    to Approuvé, so a 422 here is non-fatal.
+        try {
+          await ref
+              .read(apiClientProvider)
+              .postData('/contracts/$contractId/activate', body: const {});
+        } catch (_) {
+          // Contrat déjà Approuvé via les paiements — pas d'alerte.
+        }
+      }
+
       // Upload des annexes : non bloquant pour la création du contrat. On
       // remonte un snack si une pièce n'a pas pu partir, pour que l'agent
       // sache qu'il reste à les charger depuis la fiche contrat.
@@ -300,12 +399,14 @@ class _NewContractFromReservationScreenState
       ref.invalidate(reservationsListProvider);
       ref.invalidate(enrichedReservationsProvider);
       if (!mounted) return;
+      final successMsg = draft
+          ? 'Brouillon enregistré.'
+          : 'Contrat créé et paiements enregistrés — statut Approuvé.';
+      final failedMsg = paymentErrors.isEmpty
+          ? successMsg
+          : '$successMsg ${paymentErrors.length} encaissement(s) n\'ont pas pu être créés — ressaisissez-les depuis Paiements.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(draft
-              ? 'Brouillon enregistré.'
-              : 'Contrat créé (brouillon). Signez pour finaliser.'),
-        ),
+        SnackBar(content: Text(failedMsg)),
       );
       Navigator.of(context).maybePop();
     } catch (e) {
