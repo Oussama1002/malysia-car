@@ -174,8 +174,12 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
     return { number: '—', customerName: '—', vehicleName: '—', plate: '—', remainingDays: '—', contractNumber: '—', periodStart: '—', periodEnd: '—' };
   }, [source, reservation, contract, currentV, rentalPeriod]);
 
-  const oldDailyRate = Number(currentV?.daily_rental_price ?? reservation?.daily_rate ?? contract?.daily_rate ?? 0);
-  const newDailyRate = form.newDailyRate !== '' ? Number(form.newDailyRate) : Number(selectedVehicle?.daily_rental_price ?? 0);
+  // Tarif never comes from the vehicle fleet record. The old rate is what
+  // the booking was actually priced at (reservation.daily_rate or
+  // contract.daily_rate); the new rate is 0 until the agent types one in
+  // the popup or the Impact step.
+  const oldDailyRate = Number(reservation?.daily_rate ?? contract?.daily_rate ?? 0);
+  const newDailyRate = form.newDailyRate !== '' ? Number(form.newDailyRate) : 0;
   const finRemainingDays = Number(rentalPeriod?.remaining_days ?? summaryData.remainingDays) || 0;
   // Period split — the old vehicle covers the days already elapsed, the new
   // one covers the days remaining. elapsed_days is clamped on the backend so
@@ -410,9 +414,12 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
                     // right at pick time instead of hunting on the next step.
                     setPricePopup({
                       vehicle: v,
-                      rate: String(form.selectedVehicleId === v.id && form.newDailyRate !== ''
-                        ? form.newDailyRate
-                        : (v.daily_rental_price ?? '')),
+                      // Blank by default — the vehicle carries no tarif;
+                      // the agent types it. Keep whatever was typed before
+                      // if the same card is re-opened.
+                      rate: form.selectedVehicleId === v.id && form.newDailyRate !== ''
+                        ? String(form.newDailyRate)
+                        : '',
                     });
                   }}
                   className={`relative rounded-xl border-2 p-3 text-left transition-all ${
@@ -591,7 +598,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
                   type="number"
                   min="0"
                   step="1"
-                  placeholder={String(selectedVehicle?.daily_rental_price ?? 0)}
+                  placeholder="0"
                   value={form.newDailyRate}
                   onChange={e => setForm(s => ({ ...s, newDailyRate: e.target.value }))}
                   className="w-full bg-transparent text-base font-black text-indigo-700 outline-none"
@@ -844,10 +851,12 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
     if (!pricePopup) return null;
     const v = pricePopup.vehicle;
     const vName = `${v?.brand_name ?? ''} ${v?.model_name ?? ''}`.trim() || 'Véhicule';
-    const defaultRate = Number(v?.daily_rental_price ?? 0);
-    const typedRate = pricePopup.rate !== '' ? Number(pricePopup.rate) : NaN;
-    const rateForMath = Number.isFinite(typedRate) ? typedRate : defaultRate;
-    const projectedRemaining = (Number(rentalPeriod?.remaining_days) || 0) * rateForMath;
+    // Vehicles don't carry a tarif anymore; the agent types the rate for
+    // this booking. The projection only shows up once something is typed.
+    const typedRate = pricePopup.rate.trim() !== '' ? Number(pricePopup.rate) : NaN;
+    const projectedRemaining = Number.isFinite(typedRate)
+      ? (Number(rentalPeriod?.remaining_days) || 0) * typedRate
+      : null;
     return (
       <div
         className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
@@ -864,11 +873,6 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
           </div>
 
           <div className="px-5 py-4 space-y-3">
-            <div className="rounded-lg bg-slate-50 px-3 py-2 flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500">Tarif par défaut</span>
-              <span className="text-sm font-black text-slate-700">{fmtPrice(defaultRate)}/jour</span>
-            </div>
-
             <div>
               <label htmlFor="swap-price-popup-rate" className="block text-[11px] font-bold text-slate-700 mb-1">
                 Tarif facturé au client (MAD / jour)
@@ -882,14 +886,14 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
                 value={pricePopup.rate}
                 onChange={e => setPricePopup(p => (p ? { ...p, rate: e.target.value } : p))}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base font-black text-indigo-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-                placeholder={String(defaultRate)}
+                placeholder="0"
               />
               <div className="mt-1 text-[10px] text-slate-500">
-                Laissez vide pour reprendre le tarif par défaut. Vous pourrez le modifier à l'étape Impact.
+                Entrez le tarif journalier pour cette réservation. Il sera modifiable à l'étape Impact.
               </div>
             </div>
 
-            {Number(rentalPeriod?.remaining_days) > 0 && (
+            {projectedRemaining !== null && Number(rentalPeriod?.remaining_days) > 0 && (
               <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 flex items-center justify-between">
                 <span className="text-[11px] font-bold text-indigo-700">
                   Sous-total {rentalPeriod?.remaining_days} j restants

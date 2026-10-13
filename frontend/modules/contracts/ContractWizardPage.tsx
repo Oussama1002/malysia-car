@@ -480,7 +480,11 @@ export const ContractWizardPage: React.FC = () => {
         fuel: v.fuel_type ?? v.fuel,
         mileageKm: v.mileage_current ?? v.mileage_km,
         currentValueMad: v.book_value ?? v.current_value_mad,
-        pricePerDay: v.daily_rental_price ?? v.price_per_day,
+        // Tarif no longer rides on the vehicle: a daily rate is only
+        // meaningful when it comes from a landing-page reservation (where
+        // the public form captured a price) or when the agent types it on
+        // the contract. Vehicles in the fleet carry no price.
+        pricePerDay: undefined,
         insuranceExpiry: v.insurance_expiry,
         techControlExpiry: v.tech_control_expiry,
         vignetteExpiry: v.vignette_expiry,
