@@ -14,7 +14,10 @@
     <style>
         @page { margin: 0; }
         body { margin: 0; font-family: DejaVu Sans, sans-serif; color: #000; }
-        .v { position: absolute; white-space: nowrap; }
+        /* Match the facsimile weight so what prints over the pre-printed
+           form reads as crisply as the printed labels around each cell. */
+        .v { position: absolute; white-space: nowrap; font-weight: 700; letter-spacing: 0.02em; }
+        .v--strong { font-weight: 900; }
         .grid-line { position: absolute; background: #e3342f; opacity: .35; }
         .grid-label { position: absolute; font-size: 5px; color: #e3342f; }
     </style>
@@ -31,15 +34,18 @@
         if (! $spot || $value === null || $value === '' || $value === '—') {
             return '';
         }
-        $size = $spot['size'] ?? $baseSize;
-        $weight = ! empty($spot['bold']) ? 'font-weight:bold;' : '';
+        // Same +15% size and -0.8 mm baseline nudge as the facsimile so the
+        // overlaid value lines up with the printed label on the paper form.
+        $size = ($spot['size'] ?? $baseSize) * 1.15;
+        $topMm = $spot['y'] + $dy - 0.8;
+        $cls = ! empty($spot['bold']) ? 'v v--strong' : 'v';
 
         return sprintf(
-            '<div class="v" style="left:%.2fmm; top:%.2fmm; font-size:%.1fpx; %s">%s</div>',
+            '<div class="%s" style="left:%.2fmm; top:%.2fmm; font-size:%.1fpx;">%s</div>',
+            $cls,
             $spot['x'] + $dx,
-            $spot['y'] + $dy,
+            $topMm,
             $size * 1.333, // pt → px, dompdf raisonne en px
-            $weight,
             e((string) $value),
         );
     };

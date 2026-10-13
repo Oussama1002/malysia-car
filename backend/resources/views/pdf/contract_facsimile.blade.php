@@ -12,7 +12,14 @@
     <style>
         @page { margin: 0; }
         body { margin: 0; font-family: DejaVu Sans, sans-serif; color: #000; }
-        .v { position: absolute; white-space: nowrap; }
+        /*
+          Default weight for every overlaid value is now bold so the typed
+          data reads as crisply as the printed labels next to it. Fields
+          declared `bold => true` in config/contract_form.php (contract no,
+          totals…) get an extra-black weight to stand out from the body.
+        */
+        .v { position: absolute; white-space: nowrap; font-weight: 700; letter-spacing: 0.02em; }
+        .v--strong { font-weight: 900; }
         .form-bg { position: absolute; left: 0; top: 0; width: 210mm; height: 297mm; }
         .grid-line { position: absolute; background: #e3342f; opacity: .35; }
         .grid-label { position: absolute; font-size: 5px; color: #e3342f; }
@@ -32,15 +39,24 @@
         if (! $spot || $value === null || $value === '' || $value === '—') {
             return '';
         }
-        $size = $spot['size'] ?? $baseSize;
-        $weight = ! empty($spot['bold']) ? 'font-weight:bold;' : '';
+        // Pump the base font size by ~15% so handwritten-looking values sit
+        // visually on the same line as the printed labels next to them —
+        // without this the overlay text reads smaller than the pre-printed
+        // text and the two misalign on the baseline.
+        $size = ($spot['size'] ?? $baseSize) * 1.15;
+        // Nudge every value 0.8 mm up: the config coordinates target the
+        // middle of each cell, but typed text in DomPDF renders from the
+        // top of the line box — the result sat below the baseline. Lifting
+        // by 0.8 mm snaps the glyphs flush with the label line.
+        $topMm = $spot['y'] + $dy - 0.8;
+        $cls = ! empty($spot['bold']) ? 'v v--strong' : 'v';
 
         return sprintf(
-            '<div class="v" style="left:%.2fmm; top:%.2fmm; font-size:%.1fpx; %s">%s</div>',
+            '<div class="%s" style="left:%.2fmm; top:%.2fmm; font-size:%.1fpx;">%s</div>',
+            $cls,
             $spot['x'] + $dx,
-            $spot['y'] + $dy,
+            $topMm,
             $size * 1.333, // pt → px, dompdf raisonne en px
-            $weight,
             e((string) $value),
         );
     };
