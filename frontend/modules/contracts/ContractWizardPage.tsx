@@ -1050,14 +1050,16 @@ export const ContractWizardPage: React.FC = () => {
                     >
                       <option value="">— Sélectionner —</option>
                       {(clients.data ?? []).map((c) => {
-                        // CIN next to the name so agents can tell apart two
-                        // clients with the same name — just the value, no
-                        // 'CIN' prefix.
+                        // CIN next to the name — just the value, no 'CIN'
+                        // prefix. complianceStatus (verified / incomplete)
+                        // was dropped from the dropdown label: it belongs
+                        // to the selected-client card below, not to a line
+                        // in a long picker list.
                         const cin = (c.idNumber ?? '').toString().trim();
                         const cinSuffix = cin ? ` · ${cin}` : '';
                         return (
                           <option key={c.id} value={c.id}>
-                            {c.name}{cinSuffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}
+                            {c.name}{cinSuffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
                           </option>
                         );
                       })}
