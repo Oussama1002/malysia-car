@@ -822,13 +822,24 @@ export const ContractWizardPage: React.FC = () => {
         }
       };
 
+      // Carry the reservation link too so the payments show up both on the
+      // contract detail (filtered by contract_id) and on the reservation
+      // detail (filtered by reservation_id). sourceReservationId is set
+      // when the wizard was opened from a reservation.
+      const linkedReservationId = state.sourceReservationId ?? undefined;
+      const paymentErrors: string[] = [];
+
       for (const p of state.payments) {
         const amount = Number(p.amount);
         if (!(amount > 0) || !state.clientId) continue;
         const payload: PaymentCreatePayload = {
           customer_id: state.clientId,
           contract_id: contractId,
+          reservation_id: linkedReservationId,
           payment_method: uiToApiMethod(p.method),
+          // Rent payment — matches the backend's French enum, which rejects
+          // the English 'deposit' / 'rent' labels. See PaymentController@store.
+          payment_type: 'paiement_location',
           amount,
           payment_date: todayIso,
           external_reference: p.reference || undefined,
@@ -840,19 +851,23 @@ export const ContractWizardPage: React.FC = () => {
         try {
           await createPayment(payload);
         } catch (payErr) {
-          console.warn('[ContractWizard] payment create failed (non-blocking):', payErr);
+          const msg = payErr instanceof Error ? payErr.message : 'erreur inconnue';
+          paymentErrors.push(msg);
+          console.warn('[ContractWizard] payment create failed:', payErr);
         }
       }
 
       // Franchise d'assurance / caution — the deposit is a Payment too, with
-      // payment_type=deposit so it doesn't inflate the rent total.
+      // payment_type='caution' (NOT 'deposit' — that one is rejected by the
+      // backend enum). Shows under the Caution column on Paiements views.
       if (state.securityDepositMad > 0 && state.depositMethod && state.clientId) {
         try {
           await createPayment({
             customer_id: state.clientId,
             contract_id: contractId,
+            reservation_id: linkedReservationId,
             payment_method: uiToApiMethod(state.depositMethod),
-            payment_type: 'deposit',
+            payment_type: 'caution',
             amount: state.securityDepositMad,
             payment_date: todayIso,
             check_number: state.depositMethod === 'cheque' ? state.depositChequeNumber || undefined : undefined,
@@ -861,8 +876,21 @@ export const ContractWizardPage: React.FC = () => {
             notes: "Franchise d'assurance — signature contrat.",
           });
         } catch (depErr) {
-          console.warn('[ContractWizard] deposit payment failed (non-blocking):', depErr);
+          const msg = depErr instanceof Error ? depErr.message : 'erreur inconnue';
+          paymentErrors.push(`Franchise : ${msg}`);
+          console.warn('[ContractWizard] deposit payment failed:', depErr);
         }
+      }
+
+      if (paymentErrors.length > 0) {
+        // Non-fatal — the contract itself is activated. But surface the
+        // specific error(s) so the agent knows the payments didn't land
+        // and can retry them from the Paiements page.
+        setSaveError(
+          `Contrat enregistré, mais ${paymentErrors.length} encaissement(s) n'ont pas pu être créés : `
+            + paymentErrors.join(' · ')
+            + '. Vous pouvez les ressaisir depuis la page Paiements.',
+        );
       }
 
       // Generate payment schedule
