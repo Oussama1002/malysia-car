@@ -105,9 +105,9 @@ class _NewReservationScreenState
           setState(() {
             _singleVehicle = v.first;
             _vehicleIds.add(v.first.id);
-            if (v.first.pricePerDay != null && v.first.pricePerDay! > 0) {
-              _dailyRate.text = v.first.pricePerDay!.toStringAsFixed(0);
-            }
+            // Tarif rule: a vehicle's fleet daily_rental_price only feeds
+            // the landing-page quote; it never auto-fills _dailyRate on
+            // an agent-driven reservation. The agent types the price.
           });
           _recheckAvailability();
         }
@@ -188,10 +188,8 @@ class _NewReservationScreenState
               setState(() {
                 _singleVehicle = chosen;
                 _vehicleIds.add(chosen.id);
-                if (chosen.pricePerDay != null && chosen.pricePerDay! > 0 &&
-                    _dailyRate.text.isEmpty) {
-                  _dailyRate.text = chosen.pricePerDay!.toStringAsFixed(0);
-                }
+                // Même règle : pas d'auto-fill du tarif depuis le véhicule,
+                // même sur un lead du site — l'agent saisit le prix.
               });
               _recheckAvailability();
             }
@@ -318,11 +316,8 @@ class _NewReservationScreenState
         _vehicleIds
           ..clear()
           ..add(result.single!.id);
-        if (result.single!.pricePerDay != null &&
-            result.single!.pricePerDay! > 0 &&
-            _dailyRate.text.isEmpty) {
-          _dailyRate.text = result.single!.pricePerDay!.toStringAsFixed(0);
-        }
+        // Même règle : pas d'auto-fill du tarif depuis le véhicule
+        // sélectionné (voir feedback-no-vehicle-tarif).
       }
     });
     _recheckAvailability();
@@ -385,6 +380,10 @@ class _NewReservationScreenState
         if (_dailyRate.text.trim().isNotEmpty)
           'daily_rate': double.tryParse(_dailyRate.text),
         if (_estimatedPrice != null) 'estimated_price': _estimatedPrice,
+        // Origine : 'website_lead' quand la réservation vient d'une demande
+        // du site, 'manual' sinon. Seul 'website_lead' autorise le backend
+        // à injecter le tarif du véhicule — voir feedback-no-vehicle-tarif.
+        'source': widget.fromLead != null ? 'website_lead' : 'manual',
       };
       final draftIds = _isDraft && _vehicleIds.isNotEmpty
           ? _vehicleIds.toList()
@@ -1017,7 +1016,14 @@ class _ClientPickerSheetState extends ConsumerState<_ClientPickerSheet> {
                           title: Text(c.displayName ?? '—',
                               style:
                                   const TextStyle(fontWeight: FontWeight.w700)),
-                          subtitle: Text(c.code),
+                          // Show CIN right under the name so an agent can
+                          // disambiguate two homonyms at a glance. Falls
+                          // back to the customer code when CIN is absent.
+                          subtitle: Text(
+                            (c.nationalId ?? '').trim().isNotEmpty
+                                ? '${c.code} · CIN ${c.nationalId}'
+                                : c.code,
+                          ),
                           onTap: () => Navigator.of(context).pop(c),
                         ),
                     ],

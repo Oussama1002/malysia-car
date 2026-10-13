@@ -157,10 +157,16 @@ class _NewContractFromReservationScreenState
     final isShort = _type == 'LOCATION_COURTE';
     final duration = isShort ? rawDays : max(1, (rawDays / 30).round());
     _duration.text = '${max(duration, 0)}';
-    if (r.estimatedPrice != null && duration > 0) {
-      _monthly.text = (r.estimatedPrice! / duration).round().toString();
-    } else if (r.dailyRate != null) {
-      _monthly.text = r.dailyRate!.round().toString();
+    // Tarif rule: the monthly rent only prefills from the reservation when
+    // that reservation came from a landing-page lead (source=website_lead).
+    // Agent-created reservations force the agent to type the price here.
+    // See feedback-no-vehicle-tarif.
+    if (r.source == 'website_lead') {
+      if (r.estimatedPrice != null && duration > 0) {
+        _monthly.text = (r.estimatedPrice! / duration).round().toString();
+      } else if (r.dailyRate != null) {
+        _monthly.text = r.dailyRate!.round().toString();
+      }
     }
     if (r.depositAmount != null) {
       _deposit.text = r.depositAmount!.round().toString();
@@ -179,6 +185,13 @@ class _NewContractFromReservationScreenState
         return _clientId != null;
       case _Step.vehicle:
         return _vehicleId != null;
+      case _Step.terms:
+        // Loyer, Franchise, Date de début and Date de fin must all be
+        // set to a strictly positive value / non-null date before the
+        // agent can leave the Conditions step.
+        final hasMonthly = (double.tryParse(_monthly.text) ?? 0) > 0;
+        final hasDeposit = (double.tryParse(_deposit.text) ?? 0) > 0;
+        return hasMonthly && hasDeposit && _startDate != null && _endDate != null;
       default:
         return true;
     }
@@ -654,8 +667,16 @@ class _NewContractFromReservationScreenState
           items: clients,
           value: _clientId,
           toId: (c) => c.id,
-          toLabel: (c) =>
-              '${c.displayName ?? c.code} ${c.type == 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}',
+          toLabel: (c) {
+            final name = c.displayName ?? c.code;
+            final cin = (c.nationalId ?? '').trim();
+            // CIN right next to the name so an agent picking from a long
+            // list can tell two homonyms apart. Entreprises using an ICE
+            // instead of a CIN keep the plain name.
+            final cinSuffix = cin.isNotEmpty ? ' · CIN $cin' : '';
+            final kind = c.type == 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)';
+            return '$name$cinSuffix $kind';
+          },
           onChanged: (id) => setState(() => _clientId = id),
           hint: 'Sélectionner un client…',
         ),
@@ -785,30 +806,36 @@ class _NewContractFromReservationScreenState
         const SizedBox(height: 6),
         _Section(isShort ? 'Durée (jours)' : 'Durée (mois)'),
         _NumberField(controller: _duration),
-        _Section(_type == 'CREDIT_AUTO'
-            ? 'Mensualité (MAD)'
+        _Section('${_type == 'CREDIT_AUTO'
+            ? 'Mensualité'
             : isShort
-                ? 'Prix par jour (MAD)'
-                : 'Loyer mensuel (MAD)'),
-        _NumberField(controller: _monthly),
+                ? 'Prix par jour'
+                : 'Loyer mensuel'} (MAD) *'),
+        _NumberField(
+          controller: _monthly,
+          onChanged: (_) => setState(() {}),
+        ),
         _Section(isShort
             ? 'Kilométrage journalier inclus'
             : 'Kilométrage mensuel inclus'),
         _NumberField(controller: _kmIncluded),
-        const _Section('Caution / garantie (MAD)'),
-        _NumberField(controller: _deposit),
+        const _Section('Franchise d\'assurance (MAD) *'),
+        _NumberField(
+          controller: _deposit,
+          onChanged: (_) => setState(() {}),
+        ),
         if (_type == 'LOA') ...[
           const _Section('Valeur résiduelle (%)'),
           _NumberField(controller: _residual),
         ],
-        const _Section('Période'),
+        const _Section('Période *'),
         _DateField(
-            label: 'Début',
+            label: 'Date de début',
             value: _startDate,
             onChanged: (d) => setState(() => _startDate = d),
             dateFmt: dateFmt),
         _DateField(
-            label: 'Fin',
+            label: 'Date de fin',
             value: _endDate,
             onChanged: (d) => setState(() => _endDate = d),
             dateFmt: dateFmt),
@@ -1263,8 +1290,12 @@ class _Section extends StatelessWidget {
 }
 
 class _NumberField extends StatelessWidget {
-  const _NumberField({required this.controller});
+  const _NumberField({required this.controller, this.onChanged});
   final TextEditingController controller;
+  // Optional callback so the parent (contract wizard) can re-evaluate
+  // _canAdvance() the moment a required field is edited. Dart text
+  // controllers don't trigger parent setState on their own.
+  final ValueChanged<String>? onChanged;
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1273,6 +1304,7 @@ class _NumberField extends StatelessWidget {
         controller: controller,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: _dec(),
+        onChanged: onChanged,
       ),
     );
   }

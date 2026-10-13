@@ -23,6 +23,7 @@ class ReservationDto {
     this.dailyRate,
     this.allowedKmPerDay,
     this.depositAmount,
+    this.source,
   });
 
   final String id;
@@ -44,6 +45,10 @@ class ReservationDto {
   final double? dailyRate;
   final int? allowedKmPerDay;
   final double? depositAmount;
+  /// Origin of the reservation. 'website_lead' when converted from a public
+  /// landing-page lead, 'manual' / null for agent-created ones. Only
+  /// 'website_lead' carries a tarif forward to the contract wizard.
+  final String? source;
 
   bool get isDraft => status.toLowerCase() == 'draft';
   bool get isCancelled => status.toLowerCase() == 'cancelled';
@@ -74,6 +79,7 @@ class ReservationDto {
       dailyRate: dailyRate,
       allowedKmPerDay: allowedKmPerDay,
       depositAmount: depositAmount,
+      source: source,
     );
   }
 
@@ -107,6 +113,7 @@ class ReservationDto {
       allowedKmPerDay:
           int.tryParse(json['allowed_km_per_day']?.toString() ?? ''),
       depositAmount: _toDouble(json['deposit_amount']),
+      source: json['source']?.toString(),
     );
   }
 
