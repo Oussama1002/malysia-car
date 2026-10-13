@@ -324,7 +324,13 @@ export const ContractWizardPage: React.FC = () => {
           endDate,
           durationMonths,
           durationExtraDays,
-          monthlyRentMad: r.estimated_price ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths)) : prev.monthlyRentMad,
+          // Tarif rule: a reservation's estimated_price only flows into the
+          // contract when the reservation itself came from the public landing
+          // page (Demandes du site, source=website_lead). Any other origin
+          // forces the agent to type the price here.
+          monthlyRentMad: (r.source === 'website_lead' && r.estimated_price)
+            ? Math.round(Number(r.estimated_price) / Math.max(1, durationMonths))
+            : prev.monthlyRentMad,
           securityDepositMad: r.deposit_amount ? Number(r.deposit_amount) : prev.securityDepositMad,
           payments: [{ id: String(Date.now()), method: paymentMethod, amount: '', reference: '', chequeNumber: '' }],
         }));

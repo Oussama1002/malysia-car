@@ -73,13 +73,20 @@ export const opsApi = {
   async createReservation(input: {
     customer_id: string;
     vehicle_id: string;
+    vehicle_ids?: string[];
     reservation_type: string;
     desired_start_at: string;
     desired_end_at: string;
     pickup_address?: string;
     delivery_address?: string;
     estimated_price?: number;
+    daily_rate?: number;
+    deposit_amount?: number;
+    allowed_km_per_day?: number;
     is_draft?: boolean;
+    /** 'website_lead' when converted from a public landing-page lead;
+     *  only this origin lets the backend carry a tarif forward. */
+    source?: 'website_lead' | 'manual';
   }): Promise<ReservationDto> {
     const res = await apiClient<{ data: ReservationDto }>(endpoints.reservations.create, { method: 'POST', body: JSON.stringify(input) });
     return res.data;

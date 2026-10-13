@@ -269,6 +269,10 @@ export const ReservationsOpsPage: React.FC = () => {
         ...base,
         vehicle_id: draftIds ? draftIds[0] : form.vehicle_id,
         ...(draftIds && draftIds.length > 1 ? { vehicle_ids: draftIds } : {}),
+        // Only tag the origin when the form was opened from a website lead
+        // (Demandes du site). This is the sole case where the backend is
+        // allowed to carry a tarif through to the contract.
+        source: convertingLeadId ? 'website_lead' : 'manual',
       });
     },
     onMutate: () => setCreateError(null),

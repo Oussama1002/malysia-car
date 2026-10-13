@@ -115,6 +115,10 @@ class ReservationController extends Controller
             'branch_id' => ['nullable', 'uuid'],
             // 'draft' = non-valid intent (non-blocking), 'reserved' = confirmed booking (blocking)
             'is_draft' => ['nullable', 'boolean'],
+            // Origin — only 'website_lead' is allowed to carry a tarif
+            // forward; everything else is treated as agent-created and
+            // must have the price typed on the contract.
+            'source' => ['nullable', 'string', 'in:website_lead,manual'],
         ]);
 
         $isDraft = (bool) ($data['is_draft'] ?? false);
@@ -146,7 +150,18 @@ class ReservationController extends Controller
 
             $vehicle = Vehicle::find($data['vehicle_id']);
             $companyId = $data['company_id'] ?? $request->user()?->company_id;
-            $dailyRate = $data['daily_rate'] ?? ($vehicle->daily_rental_price ?? null);
+            $source = $data['source'] ?? 'manual';
+
+            // Tarif rule: the vehicle's fleet daily_rental_price only feeds
+            // the public landing-page quote, so it may fall back into the
+            // reservation ONLY when the reservation itself comes from a
+            // website lead. Agent-created reservations stay priceless
+            // until the price is typed on the contract.
+            $vehiclePriceFallback = $source === 'website_lead'
+                ? ($vehicle->daily_rental_price ?? null)
+                : null;
+            $dailyRate = $data['daily_rate'] ?? $vehiclePriceFallback;
+
             $depositAmount = $data['deposit_amount'] ?? $this->getSetting($companyId, 'contracts', 'default_deposit_mad');
             $allowedKm = $data['allowed_km_per_day'] ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day');
 
@@ -165,6 +180,7 @@ class ReservationController extends Controller
                     : []),
                 'reservation_type' => $data['reservation_type'],
                 'status' => $isDraft ? 'draft' : 'reserved',
+                ...(\Schema::hasColumn('reservations', 'source') ? ['source' => $source] : []),
                 'desired_start_at' => $data['desired_start_at'],
                 'desired_end_at' => $data['desired_end_at'],
                 'pickup_address' => $data['pickup_address'] ?? null,

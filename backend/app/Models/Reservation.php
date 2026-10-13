@@ -39,6 +39,10 @@ class Reservation extends Model
         'candidate_vehicle_ids',
         'reservation_type',
         'status',
+        // Origin tag ('website_lead' when converted from a public landing-
+        // page lead, null for an agent-created reservation). The contract
+        // wizard reads this to decide whether to carry a tarif forward.
+        'source',
         'desired_start_at',
         'desired_end_at',
         'pickup_address',
