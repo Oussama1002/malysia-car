@@ -78,8 +78,14 @@ export const ContractPaperPreview: React.FC<{
 
   return (
     <div className="rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-5">
-      <div className="df-card__hint mb-3">
-        Aperçu du contrat — le formulaire de l'agence, rempli comme à l'impression
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="df-card__hint">
+          Aperçu du contrat — le formulaire de l'agence, rempli comme à l'impression
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-blue-700">
+          <span className="h-2 w-2 rounded-full bg-blue-500" />
+          Valeurs saisies
+        </span>
       </div>
 
       <div
@@ -89,20 +95,35 @@ export const ContractPaperPreview: React.FC<{
       >
         <img src="/contract-form.jpg" alt="Contrat de location" className="absolute inset-0 h-full w-full object-fill" />
 
-        {marks.map(([key, spot, text]) => (
-          <span
-            key={key}
-            className="absolute whitespace-nowrap text-slate-900"
-            style={{
-              left: `${(spot.x / A4_WIDTH_MM) * 100}%`,
-              top: `${(spot.y / A4_HEIGHT_MM) * 100}%`,
-              fontSize: mmToPx > 0 ? `${(spot.size ?? 8.5) * 0.3528 * mmToPx}px` : undefined,
-              fontWeight: spot.bold ? 800 : 600,
-            }}
-          >
-            {text}
-          </span>
-        ))}
+        {marks.map(([key, spot, text]) => {
+          // Checklist Oui/Non marks are single-glyph 'X' marks on the paper
+          // form — rendering them with a background chip would overflow the
+          // tick box. Keep those as a bold inked glyph; everything else is
+          // the real customer/vehicle data that benefits from standing out.
+          const isCheckMark = key.startsWith('papers_');
+          return (
+            <span
+              key={key}
+              className={
+                isCheckMark
+                  ? 'absolute whitespace-nowrap text-blue-700'
+                  : 'absolute whitespace-nowrap rounded-sm bg-blue-50/80 px-[2px] text-blue-700 ring-1 ring-blue-200/70'
+              }
+              style={{
+                left: `${(spot.x / A4_WIDTH_MM) * 100}%`,
+                top: `${(spot.y / A4_HEIGHT_MM) * 100}%`,
+                fontSize: mmToPx > 0 ? `${(spot.size ?? 8.5) * 0.3528 * mmToPx}px` : undefined,
+                fontWeight: spot.bold || !isCheckMark ? 800 : 700,
+                // Font-fallback stack with a monospace hint — handwritten
+                // ERP values read more "filled-in" than Blade default.
+                fontFamily: '"Courier New", "SFMono-Regular", ui-monospace, monospace',
+                letterSpacing: '0.01em',
+              }}
+            >
+              {text}
+            </span>
+          );
+        })}
 
         {layoutQ.isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-semibold text-slate-500">
