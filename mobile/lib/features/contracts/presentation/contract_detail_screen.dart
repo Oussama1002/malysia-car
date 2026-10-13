@@ -1300,7 +1300,7 @@ const _fieldLabels = <String, String>{
   'monthly_payment': 'Mensualité',
   'base_amount': 'Montant de base',
   'down_payment_amount': 'Apport',
-  'deposit_amount': 'Caution',
+  'deposit_amount': "Franchise d'assurance",
   'duration_months': 'Durée (mois)',
   'allowed_km': 'Km autorisés',
   'excess_km_rate': 'Tarif km excédent',

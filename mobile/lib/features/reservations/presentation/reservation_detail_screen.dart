@@ -877,7 +877,7 @@ class _TabSummary extends StatelessWidget {
               ? const Color(0xFFE11D48)
               : const Color(0xFF059669)),
       _KpiTile(
-          label: 'Caution',
+          label: "Franchise d'assurance",
           value: totals.depositAmount > 0
               ? '${money.format(totals.depositAmount)} MAD'
               : (r.depositAmount != null
@@ -1023,7 +1023,7 @@ class _TabContract extends StatelessWidget {
         _InfoRow(label: 'Numéro', value: c.number),
         _InfoRow(label: 'Statut', value: c.status),
         _InfoRow(
-            label: 'Caution',
+            label: "Franchise d'assurance",
             value: c.depositAmount != null
                 ? '${money.format(c.depositAmount)} MAD'
                 : '—'),

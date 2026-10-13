@@ -98,6 +98,10 @@ class _NewContractFromReservationScreenState
   final _monthly = TextEditingController(text: '0');
   final _kmIncluded = TextEditingController(text: '0');
   final _deposit = TextEditingController(text: '0');
+  // Mode de paiement dédié à la Franchise d'assurance — l'agent peut l'avoir
+  // encaissée par un canal différent du loyer (ex. espèces pour la franchise,
+  // virement pour le loyer). Reste indépendant du mode de paiement du loyer.
+  String _depositMethod = 'virement';
   final _residual = TextEditingController(text: '38');
   DateTime? _startDate;
   DateTime? _endDate;
@@ -229,6 +233,9 @@ class _NewContractFromReservationScreenState
           'monthly_payment': double.parse(_monthly.text),
         if (double.tryParse(_deposit.text) != null)
           'deposit_amount': double.parse(_deposit.text),
+        // Carried onto the contract row so the detail page and the
+        // generated PDF show how the franchise was collected.
+        'deposit_method': _depositMethod,
         if (int.tryParse(_kmIncluded.text) != null)
           'allowed_km': int.parse(_kmIncluded.text),
         if (_type == 'LOA' && double.tryParse(_residual.text) != null)
@@ -330,11 +337,12 @@ class _NewContractFromReservationScreenState
         }
 
         // 2. Franchise d'assurance (caution) — separate row so it feeds
-        //    deposit_paid instead of inflating Payé location.
+        //    deposit_paid instead of inflating Payé location. The agent
+        //    picks its own payment mode on the Franchise section — a client
+        //    often hands over the franchise in cash while paying the loyer
+        //    by cheque or virement.
         final depositAmount = double.tryParse(_deposit.text) ?? 0.0;
-        final depositMethod = _payments.isNotEmpty
-            ? uiToApiMethod(_payments.first.method)
-            : 'bank_transfer';
+        final depositMethod = uiToApiMethod(_depositMethod);
         if (depositAmount > 0 && _clientId != null) {
           try {
             await ref.read(apiClientProvider).postData('/payments', body: {
@@ -923,6 +931,25 @@ class _NewContractFromReservationScreenState
           controller: _deposit,
           onChanged: (_) => setState(() {}),
         ),
+        const _Section('Franchise encaissée par'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: DropdownButtonFormField<String>(
+            value: _depositMethod,
+            isExpanded: true,
+            decoration: _dec(),
+            items: const [
+              DropdownMenuItem(value: 'virement', child: Text('Virement')),
+              DropdownMenuItem(value: 'cheque', child: Text('Chèque')),
+              DropdownMenuItem(value: 'especes', child: Text('Espèces')),
+              DropdownMenuItem(value: 'carte', child: Text('Carte')),
+              DropdownMenuItem(value: 'autre', child: Text('Autre')),
+            ],
+            onChanged: (v) {
+              if (v != null) setState(() => _depositMethod = v);
+            },
+          ),
+        ),
         if (_type == 'LOA') ...[
           const _Section('Valeur résiduelle (%)'),
           _NumberField(controller: _residual),
@@ -1233,7 +1260,7 @@ class _NewContractFromReservationScreenState
             : 'Km / mois inclus',
         _kmIncluded.text
       ),
-      ('Caution', '${money.format(double.tryParse(_deposit.text) ?? 0)} MAD'),
+      ("Franchise d'assurance", '${money.format(double.tryParse(_deposit.text) ?? 0)} MAD'),
       if (_type == 'LOA') ('Valeur résiduelle', '${_residual.text} %'),
       ('Modes de paiement',
           _payments.map((p) => _paymentMethodLabels[p.method] ?? p.method).join(' + ')),
