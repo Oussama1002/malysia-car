@@ -316,7 +316,7 @@ export const ReservationDetailPage: React.FC = () => {
               Valider
             </button>
           )}
-          {!['cancelled', 'closed'].includes(status) && (
+          {!['cancelled', 'closed'].includes(status) && !d?.has_contract && (
             <Link
               to={`/contracts/new?from_reservation=${rid}`}
               className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-amber-700 transition-colors shrink-0"
