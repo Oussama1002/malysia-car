@@ -545,9 +545,11 @@ class _QuickActions extends StatelessWidget {
       actions.add(
           _mini('Générer contrat', const Color(0xFFF59E0B), onGenerateContract));
     }
-    if (s == 'reserved') {
-      actions.add(_mini('Confirmer', const Color(0xFFB8933F), onConfirm));
-    }
+    // 'Confirmer' intentionally removed: a reservation is only confirmed as
+    // a side-effect of finishing the contract wizard with at least one
+    // payment (backend maybePromoteContract flips the linked reservation
+    // too). A manual Confirmer here used to create orphan 'reserved' rows
+    // with no contract. Mirror the web ReservationDetailPage behaviour.
     if (!r.isCancelled && !r.isClosed) {
       actions.add(_mini('Check-Out', const Color(0xFF10B981), onCheckout));
       actions.add(_mini('Check-In', const Color(0xFFB08D57), onCheckin));
