@@ -113,6 +113,15 @@ class ContractController extends Controller
             $c->contract_type = $data['contract_type'];
             $c->customer_id = $data['customer_id'];
             $c->vehicle_id = $data['vehicle_id'] ?? null;
+            // Persist the source reservation on the contract row. Without this
+            // $locked->reservation_id is always null, which means the
+            // activate() / update() availability check never excludes the
+            // reservation this contract was built from — the contract is
+            // then rejected with 'overlapping_reservation' and stays in
+            // Brouillon forever.
+            if (\Schema::hasColumn('contracts', 'reservation_id')) {
+                $c->reservation_id = $data['reservation_id'] ?? null;
+            }
             $c->template_id = $data['template_id'] ?? null;
             $c->credit_application_id = $data['credit_application_id'] ?? null;
             $c->status = $data['status'] ?? 'draft';
