@@ -945,11 +945,17 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('clientId', e.target.value || null)}
                     >
                       <option value="">— Sélectionner —</option>
-                      {(clients.data ?? []).map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}
-                        </option>
-                      ))}
+                      {(clients.data ?? []).map((c) => {
+                        // CIN next to the name so agents can tell apart two
+                        // clients with the same name in a long list.
+                        const cin = (c.idNumber ?? '').toString().trim();
+                        const cinSuffix = cin ? ` · CIN ${cin}` : '';
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {c.name}{cinSuffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}
+                          </option>
+                        );
+                      })}
                     </select>
                     <button
                       type="button"

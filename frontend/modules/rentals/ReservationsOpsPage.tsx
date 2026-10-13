@@ -414,10 +414,20 @@ export const ReservationsOpsPage: React.FC = () => {
             display_name?: string;
             customer_code?: string;
             customer_type?: string;
+            id_number?: string | null;
+            cin?: string | null;
+            cin_passport?: string | null;
+            idNumber?: string | null;
           };
           const name = c.display_name || c.customer_code || String(c.id);
           const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
-          return { id: String(c.id), label: `${name} (${kind})` };
+          // Show the CIN right next to the name so an agent picking from a
+          // long dropdown can disambiguate two "Oussama ELHADI" entries by
+          // ID. Fallbacks cover both API snake_case shapes and the mapped
+          // CustomerDto's `idNumber`.
+          const cin = (c.id_number || c.cin || c.cin_passport || c.idNumber || '').toString().trim();
+          const suffix = cin ? ` · CIN ${cin}` : '';
+          return { id: String(c.id), label: `${name}${suffix} (${kind})` };
         }),
     [customersQ.data],
   );
