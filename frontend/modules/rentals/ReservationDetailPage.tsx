@@ -97,10 +97,13 @@ export const ReservationDetailPage: React.FC = () => {
     mutationFn: () => opsApi.validateReservation(rid!),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
   });
-  const confirmM = useMutation({
-    mutationFn: () => opsApi.confirmReservation(rid!),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservation', rid] }); qc.invalidateQueries({ queryKey: queryKeys.reservations }); },
-  });
+  // NOTE: confirming a reservation is NOT a one-click action from the detail
+  // page. A reservation is only confirmed as a side-effect of finishing the
+  // contract wizard (étape 6/6) and recording at least one payment — doing
+  // it manually here lets agents mark the reservation as "reserved" without
+  // the contract/payment actually existing, which was generating orphan
+  // contracts. The Confirmer button is removed; see the Contrat tab to
+  // start the contract wizard instead.
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; reason: string; error: string | null }>({
     open: false,
     reason: '',
@@ -327,15 +330,6 @@ export const ReservationDetailPage: React.FC = () => {
               className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-slate-900 shrink-0"
             >
               Changer véhicule
-            </button>
-          )}
-          {status === 'reserved' && (
-            <button
-              onClick={() => confirmM.mutate()}
-              disabled={confirmM.isPending}
-              className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-indigo-700 disabled:opacity-50 shrink-0"
-            >
-              Confirmer
             </button>
           )}
           {!['cancelled', 'closed'].includes(status) && (
