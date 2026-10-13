@@ -351,7 +351,13 @@ class RbacSeeder extends Seeder
                 ['reservations.view', 'reservations.create', 'reservations.create_mission'],
                 ['reservations.confirm', 'reservations.cancel', 'rentals.availability', 'rentals.extension', 'rentals.damage_report'],
                 ['credit.view', 'credit.create'],
-                ['invoices.view', 'invoices.generate_from_contract', 'customer_balance.view', 'payments.view'],
+                // Agents collect the initial encaissement when a contract is
+                // signed (Loyer + Franchise d'assurance posted straight from
+                // the Paiement step of the contract wizard). Without
+                // payments.create those POSTs return 403 and the Paiements
+                // reçus panel stays empty on both contract and reservation
+                // details. Allocation is kept for the same signing flow.
+                ['invoices.view', 'invoices.generate_from_contract', 'customer_balance.view', 'payments.view', 'payments.create', 'payments.allocate'],
                 ['dashboard.fleet']
             )],
 
