@@ -293,11 +293,14 @@ class ContractController extends Controller
             }
             if ((string) $locked->status === 'active' && $locked->vehicle_id) {
                 [$windowStart, $windowEnd] = $this->rentalAvailability->contractActiveWindow($locked);
+                // Same chicken-and-egg as activate(): exclude the source
+                // reservation from the overlap check — it is this contract's
+                // own origin, not a competing booking.
                 $this->rentalAvailability->assertVehicleAvailableWithLock(
                     (string) $locked->vehicle_id,
                     $windowStart,
                     $windowEnd,
-                    null,
+                    $locked->reservation_id ? (string) $locked->reservation_id : null,
                     (string) $locked->id,
                 );
             }
@@ -421,11 +424,17 @@ class ContractController extends Controller
 
             if ($locked->vehicle_id) {
                 [$windowStart, $windowEnd] = $this->rentalAvailability->contractActiveWindow($locked);
+                // The reservation this contract was built from already holds
+                // the vehicle for the exact same window — without excluding
+                // it the activation always fails with 'overlapping_reservation'
+                // and the contract stays in Brouillon. The payment loop in the
+                // wizard that runs after activate() then never fires either,
+                // which is why 'Paiements reçus' stayed empty.
                 $this->rentalAvailability->assertVehicleAvailableWithLock(
                     (string) $locked->vehicle_id,
                     $windowStart,
                     $windowEnd,
-                    null,
+                    $locked->reservation_id ? (string) $locked->reservation_id : null,
                     (string) $locked->id,
                 );
             }
@@ -433,6 +442,20 @@ class ContractController extends Controller
             $locked->status = 'active';
             $locked->activation_date = now();
             $locked->save();
+
+            // Flip the source reservation to 'active' too so the two rows
+            // stay in sync and the Montant total on the reservation detail
+            // (now driven by the contract) stops reading as 0 after sign.
+            if ($locked->reservation_id) {
+                try {
+                    \App\Models\Reservation::query()
+                        ->whereKey($locked->reservation_id)
+                        ->where('status', '!=', 'cancelled')
+                        ->update(['status' => 'active']);
+                } catch (\Throwable) {
+                    // Non-blocking: the contract activation already succeeded.
+                }
+            }
 
             ContractHistory::query()->create([
                 'id' => (string) Str::uuid(),
