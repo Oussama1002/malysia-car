@@ -902,7 +902,6 @@ export const ContractWizardPage: React.FC = () => {
                     <span className="block text-[10px] font-semibold text-[color:var(--df-text-faint)]">{s.hint}</span>
                   </span>
                 </button>
-                {i < STEPS.length - 1 && <span className={`df-step__rail ${done ? 'df-step__rail--done' : ''}`} />}
               </React.Fragment>
             );
           })}
