@@ -182,16 +182,16 @@ class PaymentController extends Controller
                 $this->allocatePayment($payment, $data['allocations'], optional($request->user())->id);
             }
 
-            // Auto-promotion : des qu'un paiement (location, avance, solde)
-            // OU une caution/franchise d'assurance est enregistre contre un
-            // contrat encore en `draft`, on le passe automatiquement en
-            // `signed` (= Approuve cote UI). Un contrat « brouillon » n'est
-            // qu'une saisie en cours : l'argent recu scelle l'engagement.
+            // Auto-promotion : un contrat « brouillon » n'est qu'une saisie
+            // en cours. Dès qu'un paiement (loyer, avance, solde) OU une
+            // franchise d'assurance / caution est encaissé, l'argent scelle
+            // l'engagement et le contrat passe directement en `approved`.
             if (!empty($payment->contract_id)) {
                 $this->maybePromoteContract($payment->contract_id, optional($request->user())->id);
             }
-            // Meme logique quand le paiement est rattache a une reservation :
-            // on promeut n'importe quel contrat `draft` du meme client+vehicule.
+            // Même logique quand le paiement est rattaché à une réservation :
+            // on promeut n'importe quel contrat brouillon/signé du même
+            // client+véhicule.
             if (!empty($payment->reservation_id)) {
                 $reservation = \App\Models\Reservation::withoutGlobalScopes()
                     ->find($payment->reservation_id);
@@ -199,7 +199,7 @@ class PaymentController extends Controller
                     $linkedDraft = Contract::withoutGlobalScopes()
                         ->where('customer_id', $reservation->customer_id)
                         ->where('vehicle_id', $reservation->vehicle_id)
-                        ->where('status', 'draft')
+                        ->whereIn('status', ['draft', 'signed'])
                         ->orderByDesc('created_at')
                         ->first();
                     if ($linkedDraft) {
@@ -351,15 +351,29 @@ class PaymentController extends Controller
      * `contract_history`. Un contrat qui a reçu de l'argent n'est plus
      * un brouillon : il engage les deux parties.
      */
+    /**
+     * Dès qu'un encaissement — loyer, avance, solde OU franchise d'assurance /
+     * caution — est enregistré contre un contrat brouillon, on le passe
+     * directement en `approved` : l'argent reçu scelle l'engagement et il n'y
+     * a plus de raison de laisser le dossier en « brouillon » dans l'UI.
+     *
+     * Règle métier : brouillon → approuvé est automatique à partir du
+     * premier paiement reçu. L'étape « signed » historique (signature
+     * physique du client) est aussi marquée pour la cohérence des exports,
+     * mais le statut visible côté agents est `approved`.
+     */
     private function maybePromoteContract(string $contractId, ?string $actorUserId): void
     {
         $contract = Contract::withoutGlobalScopes()->find($contractId);
-        if (!$contract || $contract->status !== 'draft') {
+        if (!$contract || !in_array($contract->status, ['draft', 'signed'], true)) {
             return;
         }
         $previous = $contract->status;
-        $contract->status = 'signed';
+        $contract->status = 'approved';
         $contract->signed_at = $contract->signed_at ?? now();
+        if (\Schema::hasColumn('contracts', 'approved_by')) {
+            $contract->approved_by = $actorUserId;
+        }
         $contract->save();
 
         try {
