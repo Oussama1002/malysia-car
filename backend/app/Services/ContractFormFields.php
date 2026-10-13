@@ -116,7 +116,12 @@ class ContractFormFields
                 ? trim(($pickup?->odometer ?? '—').' / '.($return?->odometer ?? '—'))
                 : null,
             'days' => $days,
-            'insurance' => $contract->insurance_included ? 'Incluse' : null,
+            // "Assurance" row on the paper form holds the Franchise
+            // d'assurance (contract deposit) — the agreed deductible,
+            // not the boolean "included / excluded" flag.
+            'insurance' => $contract->deposit_amount
+                ? $money((float) $contract->deposit_amount)
+                : ($contract->insurance_included ? 'Incluse' : null),
             'unit_price' => $days ? $money(((float) ($contract->base_amount ?? 0)) / $days) : null,
             'total_ttc' => $money($contract->base_amount),
             'payment_method' => [

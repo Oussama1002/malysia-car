@@ -1698,6 +1698,12 @@ export const ContractWizardPage: React.FC = () => {
                     state.durationMonths * 30 + state.durationExtraDays > 0
                       ? formatCurrencyMad(totalAmount / (state.durationMonths * 30 + state.durationExtraDays))
                       : null,
+                  // 'Assurance' row on the paper form carries the Franchise
+                  // d'assurance amount — the agency's agreed deductible, not
+                  // the fleet-level insurance expiry.
+                  insurance: state.securityDepositMad > 0
+                    ? formatCurrencyMad(state.securityDepositMad)
+                    : null,
                   total_ttc: formatCurrencyMad(totalAmount),
                   payment_method: state.depositMethod
                     ? ({ cash: 'Espèces', cheque: 'Chèque', bank_transfer: 'Virement', card: 'Carte', other: 'Autre' } as Record<string, string>)[state.depositMethod]
