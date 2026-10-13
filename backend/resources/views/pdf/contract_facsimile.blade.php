@@ -44,11 +44,11 @@
         // without this the overlay text reads smaller than the pre-printed
         // text and the two misalign on the baseline.
         $size = ($spot['size'] ?? $baseSize) * 1.15;
-        // Nudge every value 0.8 mm up: the config coordinates target the
+        // Nudge every value 2 mm up: the config coordinates target the
         // middle of each cell, but typed text in DomPDF renders from the
         // top of the line box — the result sat below the baseline. Lifting
-        // by 0.8 mm snaps the glyphs flush with the label line.
-        $topMm = $spot['y'] + $dy - 0.8;
+        // by ~2 mm snaps the glyphs flush with the printed label line.
+        $topMm = $spot['y'] + $dy - 2.0;
         $cls = ! empty($spot['bold']) ? 'v v--strong' : 'v';
 
         return sprintf(

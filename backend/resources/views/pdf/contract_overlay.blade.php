@@ -34,10 +34,10 @@
         if (! $spot || $value === null || $value === '' || $value === '—') {
             return '';
         }
-        // Same +15% size and -0.8 mm baseline nudge as the facsimile so the
+        // Same +15% size and -2 mm baseline nudge as the facsimile so the
         // overlaid value lines up with the printed label on the paper form.
         $size = ($spot['size'] ?? $baseSize) * 1.15;
-        $topMm = $spot['y'] + $dy - 0.8;
+        $topMm = $spot['y'] + $dy - 2.0;
         $cls = ! empty($spot['bold']) ? 'v v--strong' : 'v';
 
         return sprintf(

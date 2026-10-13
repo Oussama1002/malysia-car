@@ -60,12 +60,15 @@ return [
         // whitespace instead of touching the label.
         'vehicle_brand' => ['x' => 142, 'y' => 45.5],
         'vehicle_plate' => ['x' => 155, 'y' => 50.5],
-        'start_date' => ['x' => 152, 'y' => 55.5],
+        // Date de départ / Date de retour run flush with the 'Heure :' pill
+        // on the paper form; pull them left so the last digit stops short of
+        // the Heure label and nothing crashes into the time field at x=186.
+        'start_date' => ['x' => 145, 'y' => 55.5],
         'start_time' => ['x' => 186, 'y' => 55.5],
-        'end_date' => ['x' => 152, 'y' => 60.5],
+        'end_date' => ['x' => 145, 'y' => 60.5],
         'end_time' => ['x' => 186, 'y' => 60.5],
-        'extension_1' => ['x' => 152, 'y' => 65.5],
-        'extension_2' => ['x' => 152, 'y' => 70.5],
+        'extension_1' => ['x' => 145, 'y' => 65.5],
+        'extension_2' => ['x' => 145, 'y' => 70.5],
         'delivered_at' => ['x' => 140, 'y' => 75.5],
         'returned_at' => ['x' => 140, 'y' => 80.5],
         'fuel' => ['x' => 142, 'y' => 85.5],
@@ -80,16 +83,20 @@ return [
         'intermediary' => ['x' => 148, 'y' => 130.5],
 
         // ── Contrôle papiers : une croix dans Oui ou dans Non ─────
-        'papers_insurance_yes' => ['x' => 181, 'y' => 160],
-        'papers_insurance_no' => ['x' => 196, 'y' => 160],
-        'papers_registration_yes' => ['x' => 181, 'y' => 167],
-        'papers_registration_no' => ['x' => 196, 'y' => 167],
-        'papers_circulation_yes' => ['x' => 181, 'y' => 174],
-        'papers_circulation_no' => ['x' => 196, 'y' => 174],
-        'papers_vignette_yes' => ['x' => 181, 'y' => 182],
-        'papers_vignette_no' => ['x' => 196, 'y' => 182],
-        'papers_inspection_yes' => ['x' => 181, 'y' => 189],
-        'papers_inspection_no' => ['x' => 196, 'y' => 189],
+        // Each X must sit INSIDE its Oui/Non tick box. The grid starts
+        // ~7 mm lower than the previous config (the first value row was
+        // landing on the 'Oui / Non' header), and each tick box is a
+        // 7 mm step. x shifted slightly to centre inside the box.
+        'papers_insurance_yes' => ['x' => 180, 'y' => 168],
+        'papers_insurance_no' => ['x' => 198, 'y' => 168],
+        'papers_registration_yes' => ['x' => 180, 'y' => 175],
+        'papers_registration_no' => ['x' => 198, 'y' => 175],
+        'papers_circulation_yes' => ['x' => 180, 'y' => 182],
+        'papers_circulation_no' => ['x' => 198, 'y' => 182],
+        'papers_vignette_yes' => ['x' => 180, 'y' => 189],
+        'papers_vignette_no' => ['x' => 198, 'y' => 189],
+        'papers_inspection_yes' => ['x' => 180, 'y' => 196],
+        'papers_inspection_no' => ['x' => 198, 'y' => 196],
 
         // ── Check-list état du véhicule ──────────────────────────
         'departure_fuel' => ['x' => 95, 'y' => 172],
