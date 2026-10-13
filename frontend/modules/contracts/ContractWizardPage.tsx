@@ -1051,9 +1051,10 @@ export const ContractWizardPage: React.FC = () => {
                       <option value="">— Sélectionner —</option>
                       {(clients.data ?? []).map((c) => {
                         // CIN next to the name so agents can tell apart two
-                        // clients with the same name in a long list.
+                        // clients with the same name — just the value, no
+                        // 'CIN' prefix.
                         const cin = (c.idNumber ?? '').toString().trim();
-                        const cinSuffix = cin ? ` · CIN ${cin}` : '';
+                        const cinSuffix = cin ? ` · ${cin}` : '';
                         return (
                           <option key={c.id} value={c.id}>
                             {c.name}{cinSuffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'} — {c.complianceStatus}

@@ -1019,9 +1019,10 @@ class _ClientPickerSheetState extends ConsumerState<_ClientPickerSheet> {
                           // Show CIN right under the name so an agent can
                           // disambiguate two homonyms at a glance. Falls
                           // back to the customer code when CIN is absent.
+                          // Just the value — no 'CIN' prefix.
                           subtitle: Text(
                             (c.nationalId ?? '').trim().isNotEmpty
-                                ? '${c.code} · CIN ${c.nationalId}'
+                                ? '${c.code} · ${c.nationalId}'
                                 : c.code,
                           ),
                           onTap: () => Navigator.of(context).pop(c),

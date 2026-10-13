@@ -670,10 +670,8 @@ class _NewContractFromReservationScreenState
           toLabel: (c) {
             final name = c.displayName ?? c.code;
             final cin = (c.nationalId ?? '').trim();
-            // CIN right next to the name so an agent picking from a long
-            // list can tell two homonyms apart. Entreprises using an ICE
-            // instead of a CIN keep the plain name.
-            final cinSuffix = cin.isNotEmpty ? ' · CIN $cin' : '';
+            // CIN right next to the name — just the value, no 'CIN' prefix.
+            final cinSuffix = cin.isNotEmpty ? ' · $cin' : '';
             final kind = c.type == 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)';
             return '$name$cinSuffix $kind';
           },

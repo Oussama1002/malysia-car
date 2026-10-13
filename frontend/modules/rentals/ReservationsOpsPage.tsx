@@ -427,10 +427,10 @@ export const ReservationsOpsPage: React.FC = () => {
           const kind = c.customer_type === 'ENTREPRISE' ? 'Entreprise' : 'Particulier';
           // Show the CIN right next to the name so an agent picking from a
           // long dropdown can disambiguate two "Oussama ELHADI" entries by
-          // ID. Fallbacks cover both API snake_case shapes and the mapped
-          // CustomerDto's `idNumber`.
+          // ID. Just the value — no 'CIN' prefix — the agents know what
+          // they're reading.
           const cin = (c.id_number || c.cin || c.cin_passport || c.idNumber || '').toString().trim();
-          const suffix = cin ? ` · CIN ${cin}` : '';
+          const suffix = cin ? ` · ${cin}` : '';
           return { id: String(c.id), label: `${name}${suffix} (${kind})` };
         }),
     [customersQ.data],
