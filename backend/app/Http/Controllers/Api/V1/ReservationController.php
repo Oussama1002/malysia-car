@@ -17,6 +17,7 @@ use App\Models\ReservationDriver;
 use App\Models\CustomerContact;
 use App\Models\Vehicle;
 use App\Services\AuditLogger;
+use App\Services\AuditTrailPresenter;
 use App\Services\RentalAvailabilityService;
 use App\Support\PaymentMethodNormalizer;
 use Carbon\Carbon;
@@ -377,29 +378,19 @@ class ReservationController extends Controller
             // JSON query might fail on some DB configs
         }
 
-        // Audit trail
-        $history = collect();
+        // Audit trail — raw rows mean nothing to an agent (action_type,
+        // before_data, …) so we normalise them through AuditTrailPresenter:
+        // French label, status-change detail, field-level diff in `changes[]`.
+        $history = [];
         try {
-            $history = DB::table('audit_logs')
+            $rows = DB::table('audit_logs')
                 ->where('entity_type', (new Reservation)->getMorphClass())
                 ->where('entity_id', $reservation->id)
                 ->orderByDesc('created_at')
                 ->limit(100)
                 ->get();
 
-            // Resolve actor names (schema-agnostic: the User model normalises
-            // `name` vs `first_name`/`last_name` via its accessor).
-            $userIds = $history->pluck('user_id')->filter()->unique()->values();
-            if ($userIds->isNotEmpty()) {
-                $names = \App\Models\User::query()
-                    ->whereIn('id', $userIds)
-                    ->get()
-                    ->mapWithKeys(fn ($u) => [(string) $u->getKey() => $u->name ?? $u->email]);
-                $history = $history->map(function ($row) use ($names) {
-                    $row->user_name = $names[(string) ($row->user_id ?? '')] ?? null;
-                    return $row;
-                });
-            }
+            $history = (new AuditTrailPresenter)->present($rows);
         } catch (\Throwable) {
             // table might not exist or have different columns
         }
@@ -629,14 +620,20 @@ class ReservationController extends Controller
         }
 
         $previousStatus = null;
+        // Snapshot the fields we're about to touch so AuditTrailPresenter can
+        // render a real "ancien → nouveau" diff instead of an empty before.
+        $beforeSnapshot = [];
 
-        DB::transaction(function () use ($reservation, $data, $request, &$previousStatus): void {
+        DB::transaction(function () use ($reservation, $data, $request, &$previousStatus, &$beforeSnapshot): void {
             $locked = Reservation::withoutGlobalScopes()
                 ->whereKey((string) $reservation->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
             $previousStatus = $locked->status;
+            $beforeSnapshot = collect($data)
+                ->mapWithKeys(fn ($_, $k) => [$k => $locked->getAttribute($k)])
+                ->all();
 
             $blocking = RentalAvailabilityService::blockingReservationStatuses();
             $entersBlocking = isset($data['status'])
@@ -661,9 +658,20 @@ class ReservationController extends Controller
 
         if (isset($data['status']) && $previousStatus !== null && $previousStatus !== $data['status']) {
             AuditLogger::statusChanged($reservation->fresh(), $previousStatus, $data['status'], $request->user(), $request, module: 'rentals');
+            // statusChanged already recorded the transition; drop it from the
+            // generic updated() row so the journal doesn't show it twice.
+            unset($data['status'], $beforeSnapshot['status']);
         }
 
-        AuditLogger::updated($reservation->fresh(), $request->user(), before: [], after: $data, request: $request);
+        if (! empty($data)) {
+            AuditLogger::updated(
+                $reservation->fresh(),
+                $request->user(),
+                before: $beforeSnapshot,
+                after: $data,
+                request: $request,
+            );
+        }
 
         return ApiResponse::success($reservation->fresh());
     }
