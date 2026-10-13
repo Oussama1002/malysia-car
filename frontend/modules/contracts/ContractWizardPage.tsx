@@ -877,12 +877,23 @@ export const ContractWizardPage: React.FC = () => {
         // Non-blocking — schedule can be generated later
       }
 
-      // Generate and download PDF
+      // Generate and download PDF. The generated row carries entity_type=
+      // Contract so it surfaces automatically under 'Documents du contrat'
+      // on both the Contract detail page and the Contrat tab of the
+      // reservation. If generation fails we flag it to the agent — the
+      // contract itself is already activated above, so this failure is
+      // non-fatal, but silently swallowing it meant 'the PDF is missing
+      // from Documents du contrat' bugs went unnoticed.
+      let pdfError: string | null = null;
       try {
         const generatedDoc = await documentsApi.generateContractPdf(contractId);
         await documentsApi.downloadWithAuth(generatedDoc.data.id, `contrat-${contractId.slice(0, 8)}.pdf`);
       } catch (pdfErr) {
         console.warn('[ContractWizard] PDF generation error (non-blocking):', pdfErr);
+        pdfError = pdfErr instanceof Error ? pdfErr.message : 'Erreur inconnue';
+      }
+      if (pdfError) {
+        setSaveError(`Contrat enregistré, mais le PDF n'a pas pu être généré : ${pdfError}. Vous pouvez le régénérer depuis la fiche du contrat.`);
       }
 
       navigate(`/contracts/${createdId}`);
