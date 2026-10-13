@@ -29,7 +29,7 @@ async function downloadReceipt(paymentId: string, paymentNumber?: string): Promi
 }
 
 const TYPE_FR: Record<string, string> = {
-  rent: 'Loyer', deposit: 'Caution', down_payment: 'Acompte', installment: 'Échéance',
+  rent: 'Loyer', deposit: "Franchise d'assurance", caution: "Franchise d'assurance", down_payment: 'Acompte', installment: 'Échéance',
   penalty: 'Pénalité', extension: 'Prolongation', damage: 'Dommage', refund: 'Remboursement',
   balance: 'Solde', other: 'Autre',
 };
@@ -96,7 +96,7 @@ const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
           <div className="mt-1 text-lg font-black text-slate-800">{fmtMad(totals.estimated_price)}</div>
         </div>
         <div className="rounded-xl bg-violet-50 px-4 py-4">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-violet-400">Caution</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-violet-400">Franchise d'assurance</div>
           <div className="mt-1 text-lg font-black text-violet-700">
             {depositPaid > 0 || depositDue > 0 ? fmtMad(depositPaid > 0 ? depositPaid : depositDue) : '—'}
           </div>

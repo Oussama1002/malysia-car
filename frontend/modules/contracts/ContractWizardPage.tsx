@@ -125,7 +125,7 @@ const CONTRACT_TYPES: {
     label: 'LCD',
     sub: 'Location Courte Durée — journalière / hebdomadaire',
     icon: 'play',
-    legal: 'DOC · Caution obligatoire',
+    legal: "DOC · Franchise d'assurance obligatoire",
   },
 ];
 
