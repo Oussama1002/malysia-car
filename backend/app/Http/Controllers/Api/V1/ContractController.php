@@ -90,6 +90,26 @@ class ContractController extends Controller
         $actorRole = method_exists($request->user(), 'primaryRoleCode') ? $request->user()->primaryRoleCode() : '';
         $isDirectorLevel = in_array($actorRole, ['ADMIN', 'DIRECTEUR'], true);
 
+        // Refuse to create a second contract for a reservation that already
+        // has one. The wizard was happily POST-ing a fresh contract on each
+        // 'Sauvegarder' click, so a reservation ended up with CTR-0031
+        // (Approuvé) + CTR-0032 (Actif) + ... for the same client+vehicle
+        // period. The agent should finish or cancel the existing one, not
+        // duplicate it. Draft and cancelled are allowed to recycle.
+        if (!empty($data['reservation_id'])) {
+            $existing = Contract::query()
+                ->where('reservation_id', $data['reservation_id'])
+                ->whereNotIn('status', ['draft', 'cancelled', 'terminated', 'rejected', 'expired'])
+                ->orderByDesc('created_at')
+                ->first();
+            if ($existing) {
+                return ApiResponse::error(
+                    "Un contrat existe déjà pour cette réservation ({$existing->contract_number}, statut : {$existing->status}). Ouvrez le contrat existant au lieu d'en créer un autre.",
+                    409,
+                );
+            }
+        }
+
         if (!empty($data['credit_application_id'])) {
             $credit = CreditApplication::query()->find($data['credit_application_id']);
             if ($credit) {
