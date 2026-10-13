@@ -103,10 +103,12 @@ class GeneratedDocumentController extends Controller
                 ->get()
             : collect();
 
-        // Par défaut : seules les valeurs, pour imprimer sur le formulaire
-        // pré-imprimé de l'agence. `?layout=full` ajoute le formulaire vierge
-        // scanné en fond, pour une impression sur papier blanc.
-        $overlay = $request->query('layout') !== 'full';
+        // Par défaut : fac-similé complet (formulaire vierge en fond + valeurs
+        // par-dessus) — c'est ce que l'agent envoie au client par e-mail /
+        // WhatsApp ou archive au dossier. Pour imprimer directement sur le
+        // formulaire pré-imprimé de l'agence, passer ?layout=overlay : seules
+        // les valeurs sortent, placées aux mêmes coordonnées.
+        $overlay = $request->query('layout') === 'overlay';
 
         $doc = $this->pdf->render(
             view: $overlay ? 'pdf.contract_overlay' : 'pdf.contract_facsimile',
