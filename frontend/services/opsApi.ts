@@ -225,6 +225,30 @@ export const opsApi = {
     return res.data;
   },
 
+  /**
+   * Vehicles eligible for a swap, grouped by category (recommended / upgrade /
+   * downgrade / all) and bundled with the rental period split (start, end,
+   * pivot, total_days, elapsed_days, remaining_days) and the current vehicle
+   * snapshot — everything VehicleSwapWizard needs for steps 3 (Véhicule) and
+   * 4 (Impact financier).
+   */
+  async swapEligibleVehicles(params: { contract_id?: string; reservation_id?: string }): Promise<any> {
+    const qs = new URLSearchParams();
+    if (params.contract_id) qs.set('contract_id', params.contract_id);
+    if (params.reservation_id) qs.set('reservation_id', params.reservation_id);
+    const path = `${endpoints.vehicleSwaps.eligibleVehicles}${qs.toString() ? `?${qs}` : ''}`;
+    const res = await apiClient<{ data: any }>(path);
+    return res.data;
+  },
+
+  async swapFinancialImpact(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string }): Promise<any> {
+    const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.financialImpact, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res.data;
+  },
+
   async requestVehicleSwap(payload: { contract_id?: string; reservation_id?: string; new_vehicle_id: string; reason?: string }): Promise<any> {
     const res = await apiClient<{ data: any }>(endpoints.vehicleSwaps.create, { method: 'POST', body: JSON.stringify(payload) });
     return res.data;
