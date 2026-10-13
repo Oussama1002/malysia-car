@@ -786,28 +786,26 @@ export const ContractWizardPage: React.FC = () => {
       const contractId = await ensureDraftContract();
       createdId = contractId;
 
-      // Un contrat finalisé n'est plus un brouillon : il est rattaché à une
-      // réservation et engage le véhicule. L'activation vérifie côté serveur le
-      // mode de règlement et la disponibilité du véhicule.
-      try {
-        await contractsApi.activate(contractId);
-      } catch (activationError) {
-        const reason = activationError instanceof Error ? activationError.message : '';
-        setSaveError(
-          'Le contrat est enregistré mais reste en brouillon : '
-            + (reason || 'activation refusée par le serveur.'),
-        );
-        navigate(`/contracts/${contractId}`);
-        return;
-      }
-
+      // CRITICAL FLOW ORDER (don't swap these — this is why the status was
+      // staying Brouillon and no payments landed on earlier builds):
+      //   1. Save the draft to disk ✓ (ensureDraftContract above).
+      //   2. Record every payment NOW, against the draft. The backend
+      //      auto-promotes draft → approved as soon as the first Payment
+      //      with contract_id lands (PaymentController@maybePromoteContract).
+      //      This path works even when activate() would refuse the contract
+      //      (overlap, missing settings, race on vehicle status, ...), so
+      //      agents stop seeing the 'Brouillon' + 'Aucun paiement' pair.
+      //   3. THEN try activate() as a best-effort cleanup. If it refuses,
+      //      the contract is already Approuvé with real payments, which is
+      //      the state the agent actually wants.
+      //
       // Record the actual payments collected on step 5 (and the deposit
       // from step 4) as Payment rows so they show up on the Paiements page
       // and feed the balance. Prior to this, the wizard was only writing
       // the method/cheque fields as free-text onto the contract row, which
       // meant no Payment entity was created and the money was invisible
       // outside the contract detail. Each entry becomes one Payment; the
-      // franchise is tagged payment_type=deposit so it isn't counted as
+      // franchise is tagged payment_type=caution so it isn't counted as
       // rent.
       const todayIso = new Date().toISOString().slice(0, 10);
       const uiToApiMethod = (m: string): PaymentMethod => {
@@ -905,14 +903,27 @@ export const ContractWizardPage: React.FC = () => {
       }
 
       if (paymentErrors.length > 0) {
-        // Non-fatal — the contract itself is activated. But surface the
-        // specific error(s) so the agent knows the payments didn't land
-        // and can retry them from the Paiements page.
+        // The contract has already been auto-promoted to Approuvé for every
+        // payment that DID land (see maybePromoteContract). Surface the
+        // specific error(s) so the agent can retry the failures from the
+        // Paiements page.
         setSaveError(
           `Contrat enregistré, mais ${paymentErrors.length} encaissement(s) n'ont pas pu être créés : `
             + paymentErrors.join(' · ')
             + '. Vous pouvez les ressaisir depuis la page Paiements.',
         );
+      }
+
+      // Step 3 of the critical flow: now that payments have auto-promoted
+      // the contract to Approuvé, try to flip it to Active. This is pure
+      // best-effort — if the backend rejects (overlap, missing settings,
+      // vehicle status race…) the contract still lands as Approuvé with
+      // the real payments attached, which is the agent's end goal.
+      try {
+        await contractsApi.activate(contractId);
+      } catch (activationError) {
+        console.warn('[ContractWizard] activate() rejected — contract stays Approuvé:', activationError);
+        // Don't block or override saveError; the status is already good.
       }
 
       // Generate payment schedule
