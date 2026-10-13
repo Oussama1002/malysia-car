@@ -584,7 +584,18 @@ export const ContractWizardPage: React.FC = () => {
   const canNext = useMemo(() => {
     if (step.key === 'client') return !!state.clientId && identityComplete;
     if (step.key === 'vehicle') return !!state.vehicleId;
-    if (step.key === 'terms') return state.kmInclMonth > 0;
+    if (step.key === 'terms') {
+      // Terms step gating: on top of the kilometrage, Date de début, Date
+      // de fin, Loyer and Franchise d'assurance are all required before
+      // the agent can move on. A loyer of 0 is treated as not entered.
+      return (
+        state.kmInclMonth > 0 &&
+        !!state.startDate &&
+        !!state.endDate &&
+        state.monthlyRentMad > 0 &&
+        state.securityDepositMad > 0
+      );
+    }
     return true;
   }, [step, state, identityComplete]);
 
@@ -1168,10 +1179,11 @@ export const ContractWizardPage: React.FC = () => {
                       window directly and the Durée is derived from it. When
                       the contract comes from a reservation these are already
                       set from the reservation window (see prefill effect). */}
-                  <Field label="Date de début">
+                  <Field label="Date de début *">
                     <DateField
                       className="df-input"
                       value={state.startDate ?? ''}
+                      required
                       onChange={(dfValue) => {
                         const v = dfValue || null;
                         setState((s) => {
@@ -1185,11 +1197,17 @@ export const ContractWizardPage: React.FC = () => {
                         });
                       }}
                     />
+                    {!state.startDate && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
+                      </div>
+                    )}
                   </Field>
-                  <Field label="Date de fin">
+                  <Field label="Date de fin *">
                     <DateField
                       className="df-input"
                       value={state.endDate ?? ''}
+                      required
                       onChange={(dfValue) => {
                         const v = dfValue || null;
                         setState((s) => {
@@ -1203,6 +1221,11 @@ export const ContractWizardPage: React.FC = () => {
                         });
                       }}
                     />
+                    {!state.endDate && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
+                      </div>
+                    )}
                   </Field>
                   <Field label="Durée (calculée)">
                     <div className="flex items-stretch gap-2">
@@ -1243,13 +1266,20 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
-                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer journalier' : 'Loyer mensuel'} (MAD)`}>
+                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer journalier' : 'Loyer mensuel'} (MAD) *`}>
                     <input
                       type="number"
+                      min={1}
+                      required
                       className="df-input"
-                      value={state.monthlyRentMad}
+                      value={state.monthlyRentMad || ''}
                       onChange={(e) => patch('monthlyRentMad', Number(e.target.value))}
                     />
+                    {!state.monthlyRentMad && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
+                      </div>
+                    )}
                   </Field>
                   <Field label="Kilométrage mensuel inclus *">
                     <input
@@ -1266,13 +1296,20 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
-                  <Field label="Franchise d'assurance (MAD)">
+                  <Field label="Franchise d'assurance (MAD) *">
                     <input
                       type="number"
+                      min={1}
+                      required
                       className="df-input"
-                      value={state.securityDepositMad}
+                      value={state.securityDepositMad || ''}
                       onChange={(e) => patch('securityDepositMad', Number(e.target.value))}
                     />
+                    {!state.securityDepositMad && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
+                      </div>
+                    )}
                   </Field>
                   <Field label="Franchise encaissée par">
                     <select
