@@ -1039,9 +1039,6 @@ class ReservationController extends Controller
     {
         $companyId = $reservation->company_id;
 
-        // Daily rate: reservation field > vehicle field > 0
-        $dailyRate = (float) ($reservation->daily_rate ?? $vehicle->daily_rental_price ?? 0);
-
         // Days
         $days = 1;
         if ($reservation->desired_start_at && $reservation->desired_end_at) {
@@ -1050,7 +1047,22 @@ class ReservationController extends Controller
             ));
         }
 
-        // Estimated price: reservation field, or daily_rate × days
+        // Tarif rule: the vehicle's fleet daily_rental_price only feeds the
+        // public landing-page quote. On the reservation detail it must NEVER
+        // leak as the daily rate or the estimated price — otherwise the
+        // detail header shows a tarif / montant total that was never agreed
+        // with the client. Fall back to the vehicle ONLY when the reservation
+        // itself came from a website lead (source='website_lead'). Everything
+        // else is tarif-less until the agent sets it on the contract.
+        $allowVehicleFallback = $reservation->source === 'website_lead';
+        $dailyRate = (float) (
+            $reservation->daily_rate
+                ?? ($allowVehicleFallback ? ($vehicle->daily_rental_price ?? 0) : 0)
+                ?? 0
+        );
+
+        // Estimated price: use the stored value when present, derive from the
+        // daily rate × days only when we have a real daily rate (same rule).
         $estimatedPrice = (float) ($reservation->estimated_price ?? 0);
         if ($estimatedPrice <= 0 && $dailyRate > 0) {
             $estimatedPrice = $dailyRate * $days;
