@@ -652,6 +652,66 @@ class DocumentParser
             $vin = strtr($vin, ['I' => '1', 'O' => '0', 'Q' => '0']);
         }
 
+        // --- Plaque d'immatriculation définitive (recto) ---
+        // Format marocain : "XXXXX-ب-YY" ou "XXXXX-A-YY". Dans la carte grise
+        // la lettre arabe peut être lue par Tesseract comme un caractère non
+        // latin ou disparaître. On capture donc "XXXXX" + un ou deux
+        // caractères non chiffres + "YY" pour couvrir les deux cas.
+        $registration = null;
+        if (preg_match('/\b(\d{1,5})\s*[-ـ\s]\s*([^\d\s]{1,3})\s*[-ـ\s]\s*(\d{1,2})\b/u', $flat, $rm)) {
+            // Normalise en "XXXXX-A-YY" quand la lettre centrale est latine,
+            // sinon on la laisse telle quelle (le mobile tolère).
+            $center = trim($rm[2]);
+            $registration = $rm[1].'-'.$center.'-'.$rm[3];
+        }
+        if (! $registration) {
+            // Après le label "Numéro d'immatriculation" / "N° d'immatriculation"
+            $registration = $this->labelValue(
+                $flat,
+                [
+                    'Num[eé]ro\s+d[\'\']?immatriculation',
+                    'N[°o]?\s*d[\'\']?immatriculation',
+                    'Immatriculation',
+                ],
+                '\d{1,5}\s*[-ـ\s]\s*[^\d\s]{1,3}\s*[-ـ\s]\s*\d{1,2}',
+            );
+        }
+
+        // --- Immatriculation antérieure / WW (recto) ---
+        // "WW539032", "WW 539032", "WM539032" (OCR noise), etc.
+        $wwNumber = null;
+        if (preg_match('/\b(W[WMNAHVY][A-Z]?)\s*[-.]?\s*(\d{4,7})\b/u', $flatUpper, $wm)) {
+            $wwNumber = 'WW'.$wm[2];
+        }
+
+        // --- Première mise en circulation (recto) ---
+        $firstRegistration = $this->extractDate($text, [
+            'Premi[èe]re\s+mise\s+en\s+circulation',
+            '1[èe]?re?\s+mise\s+en\s+circulation',
+            'Mise\s+en\s+circulation',
+            'M\.?C\.?\s+au\s+Maroc',
+            'First\s+registration',
+        ]);
+
+        // --- Nombre de portes (verso, rare sur la carte grise marocaine
+        // mais Tesseract peut le remonter via "Nombre de portes : 5"). ---
+        $nbPortes = null;
+        if (preg_match('/[Nn]ombre\s+de\s+portes[^\d]{0,15}(\d{1,2})/u', $flat, $npm)) {
+            $nbPortes = (int) $npm[1];
+        }
+
+        // --- Nombre de places (verso, utilisé par la fiche véhicule). ---
+        $nbPlaces = null;
+        if (preg_match('/[Nn]ombre\s+de\s+places[^\d]{0,15}(\d{1,2})/u', $flat, $nsm)) {
+            $nbPlaces = (int) $nsm[1];
+        }
+
+        // --- Nombre de cylindres (verso). ---
+        $nbCylindres = null;
+        if (preg_match('/[Nn]ombre\s+de\s+cylindres[^\d]{0,15}(\d{1,2})/u', $flat, $ncm)) {
+            $nbCylindres = (int) $ncm[1];
+        }
+
         $result = [
             'vin_number' => $vin,
             'brand' => $brand,
@@ -659,6 +719,14 @@ class DocumentParser
             'fuel_type' => $fuelType,
             'fiscal_power' => $fiscalPower ? (int) $fiscalPower : null,
             'expiry_date' => $expiryDate,
+            // Recto fields
+            'registration_number' => $registration,
+            'ww_number' => $wwNumber,
+            'first_registration_date' => $firstRegistration,
+            // Verso fields
+            'nombre_portes' => $nbPortes,
+            'nombre_places' => $nbPlaces,
+            'nombre_cylindres' => $nbCylindres,
         ];
         Log::info('DocumentParser.parseCarteGrise', $result);
         Log::info('DocumentParser.parseCarteGrise.rawText', ['text' => mb_substr($text, 0, 2000)]);

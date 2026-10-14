@@ -484,39 +484,34 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           }
           break;
         case _VehDoc.carteGriseRecto:
-        case _VehDoc.carteGriseVerso:
-          // Recto et verso partagent le même mapping : chaque face ne renvoie
-          // que les champs qu'elle porte, et on ne remplit que ce qui manque.
-          final brand = pick(['brand', 'marque', 'make']);
-          final model = pick(['model', 'modele']);
-          final vin =
-              pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
-          final fuel = pick(['fuel_type', 'carburant', 'energie']);
-          final cv = pick(['fiscal_power', 'puissance_fiscale']);
+          // Recto : plaque définitive, immatriculation antérieure (WW),
+          // 1ère mise en circulation, fin de validité.
           final reg =
               pick(['registration_number', 'immatriculation', 'plate_number']);
+          final ww = _ww(pick([
+            'ww_number',
+            'provisional_number',
+            'numero_provisoire',
+            'immatriculation_anterieure'
+          ]));
           final mec = pick([
             'first_registration_date',
             'mise_en_circulation',
-            'date_circulation'
+            'date_circulation',
+            'premiere_mise_en_circulation',
           ]);
-          note(_matchBrandModel(brand, model), 'Marque / Modèle');
-          if (vin != null && _vin.text.isEmpty) {
-            _vin.text = vin;
-            note(true, 'VIN / Châssis');
-          }
-          if (fuel != null) {
-            final matched = _matchFuel(fuel);
-            if (matched != _fuelType) {
-              _fuelType = matched;
-              note(true, 'Carburant');
-            }
-          }
-          if (cv != null && _fiscalPower.text.isEmpty) {
-            _fiscalPower.text = cv;
-            note(true, 'Puissance fiscale');
-          }
+          final exp = pick([
+            'expiry_date',
+            'fin_validite',
+            'validity_date',
+            'date_validite',
+            'date_expiration',
+          ]);
           note(_applyPlate(reg), 'Immatriculation');
+          if (ww != null && _immatOnline.text.isEmpty) {
+            _immatOnline.text = ww;
+            note(true, 'Immat. provisoire / WW');
+          }
           if (mec != null && _miseEnCirculation == null) {
             final parsed = DateTime.tryParse(mec);
             if (parsed != null) {
@@ -524,7 +519,62 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               note(true, 'Mise en circulation');
             }
           }
+          // La fin de validité détectée sur la carte grise est posée sur
+          // `date_immatriculation` : le formulaire mobile n'a pas de champ
+          // dédié à la fin de validité de la carte grise, et cette date est
+          // le témoin le plus proche sur la fiche véhicule — l'agent corrige
+          // si besoin avant d'enregistrer.
+          if (exp != null && _dateImmatriculation == null) {
+            final parsed = DateTime.tryParse(exp);
+            if (parsed != null) {
+              _dateImmatriculation = parsed;
+              note(true, 'Fin de validité');
+            }
+          }
           // La carte grise a été uploadée → statut « Reçue » automatiquement.
+          _carteGriseStatus = _CarteGriseStatus.recue;
+          break;
+        case _VehDoc.carteGriseVerso:
+          // Verso : marque, modèle, carburant, VIN/châssis, puissance
+          // fiscale, nombre de portes / places / cylindres.
+          final brand = pick(['brand', 'marque', 'make']);
+          final model = pick(['model', 'modele']);
+          final vin =
+              pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
+          final fuel = pick(['fuel_type', 'carburant', 'energie']);
+          final cv = pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
+          final nbPortes = pick(['nombre_portes', 'number_of_doors', 'doors']);
+          final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
+          final nbCylindres = pick(
+              ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
+          note(_matchBrandModel(brand, model), 'Marque / Modèle');
+          if (fuel != null) {
+            final matched = _matchFuel(fuel);
+            if (matched != _fuelType) {
+              _fuelType = matched;
+              note(true, 'Carburant');
+            }
+          }
+          if (vin != null && _vin.text.isEmpty) {
+            _vin.text = vin;
+            note(true, 'VIN / Châssis');
+          }
+          if (cv != null && _fiscalPower.text.isEmpty) {
+            _fiscalPower.text = cv;
+            note(true, 'Puissance fiscale');
+          }
+          if (nbPortes != null && _nbPortes.text.isEmpty) {
+            _nbPortes.text = nbPortes;
+            note(true, 'Nombre de portes');
+          }
+          if (nbPlaces != null && _nbPlaces.text.isEmpty) {
+            _nbPlaces.text = nbPlaces;
+            note(true, 'Nombre de places');
+          }
+          if (nbCylindres != null && _cylinders.text.isEmpty) {
+            _cylinders.text = nbCylindres;
+            note(true, 'Nombre de cylindres');
+          }
           _carteGriseStatus = _CarteGriseStatus.recue;
           break;
       }
