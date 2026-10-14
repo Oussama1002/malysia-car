@@ -202,7 +202,8 @@ const Map<String, String> kPaymentTypeLabel = {
   'avance': 'Avance',
   'paiement_location': 'Paiement location',
   'solde': 'Solde',
-  'caution': 'Caution',
+  'caution': "Franchise d'assurance",
+  'deposit': "Franchise d'assurance",
   'penalite': 'Pénalité',
   'utilisation_avoir': 'Utilisation avoir',
 };
