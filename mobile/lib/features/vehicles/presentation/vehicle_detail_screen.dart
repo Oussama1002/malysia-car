@@ -57,6 +57,10 @@ class _VehicleDetailScreenState extends ConsumerState<VehicleDetailScreen>
             return Column(
               children: [
                 _HeaderCard(detail: detail),
+                VehicleAlertsBanner(
+                  vehicleId: widget.id,
+                  complianceAlerts: detail.complianceAlerts,
+                ),
                 TabBar(
                   controller: _tabs,
                   isScrollable: true,

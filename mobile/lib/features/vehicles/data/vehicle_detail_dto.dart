@@ -16,12 +16,18 @@ class VehicleDetailDto {
     this.currentReservationNumber,
     this.currentReservationId,
     this.currentReservationStatus,
+    this.complianceAlerts = const [],
   });
 
   final VehicleDto vehicle;
   final List<MaintenanceEventDto> maintenanceEvents;
   final List<VehicleMovementDto> movements;
   final List<OdometerReadingDto> odometerReadings;
+  /// Alertes conformité (assurance/visite/vignette…) retournées par
+  /// `/v1/vehicles/{id}` dans la clé `complianceAlerts`. Chaque entrée a
+  /// `title`, `description`, `severity`, `triggered_at`. On garde la map
+  /// brute pour éviter un DTO en plus — la bannière lit par clés.
+  final List<Map<String, dynamic>> complianceAlerts;
   final String? currentCustomerName;
   final String? currentCustomerCode;
   final String? currentContractNumber;
@@ -87,6 +93,13 @@ class VehicleDetailDto {
       currentReservationNumber: reservationNumber,
       currentReservationId: reservationId,
       currentReservationStatus: reservationStatus,
+      complianceAlerts: json['complianceAlerts'] is List
+          ? [
+              for (final a in json['complianceAlerts'])
+                if (a is Map)
+                  a.map((k, v) => MapEntry(k.toString(), v)),
+            ]
+          : const [],
     );
   }
 

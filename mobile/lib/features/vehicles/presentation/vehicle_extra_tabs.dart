@@ -91,6 +91,29 @@ final vehicleAuditProvider =
     FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>(
         (ref, id) => ref.watch(_extrasRepoProvider).audit('vehicle', id));
 
+/// `/v1/maintenance/alerts` renvoie `{data: {alerts: [...]}}` (toutes
+/// voitures confondues). On ne garde que celles du véhicule courant,
+/// comme le web (`maintenanceVehicleAlerts`).
+final vehicleMaintenanceAlertsProvider =
+    FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>(
+        (ref, id) async {
+  final api = ref.watch(apiClientProvider);
+  final resp = await api.raw.get('/maintenance/alerts');
+  final body = resp.data;
+  final data = body is Map ? body['data'] : null;
+  final alerts = data is Map ? data['alerts'] : null;
+  if (alerts is! List) return const [];
+  final out = <Map<String, dynamic>>[];
+  for (final a in alerts) {
+    if (a is! Map) continue;
+    final m = a.map((k, v) => MapEntry(k.toString(), v));
+    final veh = m['vehicle'];
+    final vehId = veh is Map ? veh['id']?.toString() : null;
+    if (vehId == id) out.add(m);
+  }
+  return out;
+});
+
 // ---------------------------------------------------------------------------
 // Formatters & helpers
 // ---------------------------------------------------------------------------
@@ -812,6 +835,209 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ModuleStatusChip(label: label, tone: tone);
+  }
+}
+
+/// Bannière « Alertes automatiques » affichée au-dessus des tabs du détail
+/// véhicule, identique à celle du web : agrège les alertes compliance
+/// (expédiées par le /vehicles/{id} dans `complianceAlerts`) et les alertes
+/// de maintenance (filtrées depuis `/maintenance/alerts`) en une seule liste
+/// avec chip de sévérité et horodatage.
+class VehicleAlertsBanner extends ConsumerWidget {
+  const VehicleAlertsBanner({
+    super.key,
+    required this.vehicleId,
+    required this.complianceAlerts,
+  });
+  final String vehicleId;
+  final List<Map<String, dynamic>> complianceAlerts;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final maintAsync =
+        ref.watch(vehicleMaintenanceAlertsProvider(vehicleId));
+    final maint = maintAsync.valueOrNull ?? const <Map<String, dynamic>>[];
+    final alerts = <_Alert>[
+      for (final a in maint)
+        _Alert(
+          id: a['id']?.toString() ?? '',
+          source: 'maintenance',
+          title: a['title']?.toString() ?? 'Alerte maintenance',
+          description: a['description']?.toString(),
+          severity: a['severity']?.toString(),
+          triggeredAt: _parseDate(a['triggeredAt'] ?? a['triggered_at']),
+        ),
+      for (final a in complianceAlerts)
+        _Alert(
+          id: a['id']?.toString() ?? '',
+          source: 'compliance',
+          title: a['title']?.toString() ?? 'Alerte conformité',
+          description:
+              (a['description'] ?? a['message'])?.toString(),
+          severity: a['severity']?.toString(),
+          triggeredAt: _parseDate(
+              a['triggered_at'] ?? a['triggeredAt'] ?? a['created_at']),
+        ),
+    ];
+    if (alerts.isEmpty) return const SizedBox.shrink();
+    final shown = alerts.take(6).toList();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.notifications_active_outlined,
+                  size: 16, color: Color(0xFF991B1B)),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text('Alertes automatiques',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF991B1B))),
+              ),
+              Text(
+                '${alerts.length} alerte${alerts.length > 1 ? 's' : ''}',
+                style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFB91C1C)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final a in shown) ...[
+            _AlertTile(alert: a),
+            if (a != shown.last) const SizedBox(height: 6),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Alert {
+  _Alert({
+    required this.id,
+    required this.source,
+    required this.title,
+    this.description,
+    this.severity,
+    this.triggeredAt,
+  });
+  final String id;
+  final String source;
+  final String title;
+  final String? description;
+  final String? severity;
+  final DateTime? triggeredAt;
+}
+
+class _AlertTile extends StatelessWidget {
+  const _AlertTile({required this.alert});
+  final _Alert alert;
+
+  @override
+  Widget build(BuildContext context) {
+    final sev = (alert.severity ?? '').toLowerCase();
+    final (sevBg, sevFg, sevLabel) = switch (sev) {
+      'critical' => (const Color(0xFFDC2626), Colors.white, 'CRITIQUE'),
+      'high' => (const Color(0xFFFEE2E2), const Color(0xFF991B1B), 'ÉLEVÉE'),
+      'normal' =>
+        (const Color(0xFFFEF3C7), const Color(0xFF92400E), 'NORMALE'),
+      'low' => (const Color(0xFFF1F5F9), const Color(0xFF475569), 'FAIBLE'),
+      _ => (const Color(0xFFF1F5F9), const Color(0xFF475569), '—'),
+    };
+    final when = alert.triggeredAt == null
+        ? null
+        : _dateTimeFmt.format(alert.triggeredAt!);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(alert.title,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF7F1D1D))),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: sevBg,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(sevLabel,
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
+                        color: sevFg)),
+              ),
+            ],
+          ),
+          if (alert.description != null &&
+              alert.description!.trim().isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(alert.description!,
+                style:
+                    const TextStyle(fontSize: 11, color: Colors.black87)),
+          ],
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: alert.source == 'maintenance'
+                      ? const Color(0xFFE0E7FF)
+                      : const Color(0xFFFFEDD5),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  alert.source == 'maintenance'
+                      ? 'Maintenance'
+                      : 'Conformité',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: alert.source == 'maintenance'
+                        ? const Color(0xFF3730A3)
+                        : const Color(0xFF9A3412),
+                  ),
+                ),
+              ),
+              if (when != null) ...[
+                const SizedBox(width: 8),
+                Text(when,
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black45)),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
