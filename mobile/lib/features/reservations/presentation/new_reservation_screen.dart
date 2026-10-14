@@ -1010,23 +1010,24 @@ class _ClientPickerSheetState extends ConsumerState<_ClientPickerSheet> {
                       ),
                       const Divider(height: 1),
                       for (final c in list)
-                        ListTile(
-                          leading:
-                              Icon(c.isCompany ? Icons.business : Icons.person),
-                          title: Text(c.displayName ?? '—',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700)),
-                          // Show CIN right under the name so an agent can
-                          // disambiguate two homonyms at a glance. Falls
-                          // back to the customer code when CIN is absent.
-                          // Just the value — no 'CIN' prefix.
-                          subtitle: Text(
-                            (c.nationalId ?? '').trim().isNotEmpty
-                                ? '${c.code} · ${c.nationalId}'
-                                : c.code,
-                          ),
-                          onTap: () => Navigator.of(context).pop(c),
-                        ),
+                        () {
+                          // CIN right next to the name (same layout as the
+                          // web and the contract-wizard dropdown): the title
+                          // reads 'Oussama ELHADI · AB123456' when a CIN is
+                          // on file, falls back to the plain name otherwise.
+                          final name = c.displayName ?? '—';
+                          final cin = (c.nationalId ?? '').trim();
+                          final title = cin.isNotEmpty ? '$name · $cin' : name;
+                          return ListTile(
+                            leading: Icon(
+                                c.isCompany ? Icons.business : Icons.person),
+                            title: Text(title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                            subtitle: Text(c.code),
+                            onTap: () => Navigator.of(context).pop(c),
+                          );
+                        }(),
                     ],
                   );
                 },
