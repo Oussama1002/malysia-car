@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/auth/user_repo.dart';
 import '../../contracts/data/contracts_repo.dart';
 import '../../contracts/presentation/contract_pdf_preview_screen.dart';
 import '../../customers/data/customer_dto.dart';
@@ -959,9 +960,27 @@ class _NewContractFromReservationScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Section('Agent commercial assigné'),
-        TextField(
-          decoration: _dec(hint: 'Nom de l\'agent (optionnel)'),
-          onChanged: (v) => _assignedAgent = v,
+        // Verrouillé sur l'utilisateur courant : un contrat est généré par
+        // l'agent qui le signe. Le champ reste visible pour la traçabilité,
+        // mais il est en lecture seule et pré-rempli avec le nom de la
+        // session (ou l'email si le nom n'est pas renseigné).
+        Consumer(
+          builder: (context, ref, _) {
+            final me = ref.watch(currentUserProvider).valueOrNull;
+            if (me != null) {
+              final label = me.displayName.trim().isNotEmpty
+                  ? me.displayName.trim()
+                  : me.email;
+              if (_assignedAgent != label) {
+                _assignedAgent = label;
+              }
+            }
+            return TextField(
+              controller: TextEditingController(text: _assignedAgent),
+              enabled: false,
+              decoration: _dec(hint: 'Agent connecté'),
+            );
+          },
         ),
         const SizedBox(height: 6),
         _Section(isShort ? 'Durée (jours)' : 'Durée (mois)'),

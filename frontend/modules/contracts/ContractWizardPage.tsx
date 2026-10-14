@@ -384,18 +384,34 @@ export const ContractWizardPage: React.FC = () => {
     enabled: !!getApiBase(),
   });
 
-  // Agent assigné = par défaut l'utilisateur de la session. On attend que la
-  // liste des users soit chargée pour s'assurer que l'id correspond à une
-  // option du <select> (sinon le select rejette la valeur et retombe sur
-  // « — Choix — »). On ne touche pas si l'agent a déjà choisi autre chose,
-  // ni en mode édition (le PATCH précédent a posé la valeur).
+  // Agent assigné = toujours l'utilisateur de la session, non modifiable.
+  // Un contrat est généré par l'agent qui le signe — pas d'intérêt à laisser
+  // le champ sélectionnable. On réécrit le label (nom + prénom, puis email
+  // en secours) à chaque changement du user de session OU dès que la liste
+  // des users est disponible, pour que le label matche une option du <select>
+  // et évite le fallback « — Non assigné — ».
   useEffect(() => {
-    if (state.assignedAgent) return;
-    const sessionUserId = (session as any)?.user?.id;
-    if (sessionUserId == null) return;
-    const list = (usersQ.data?.data ?? []) as Array<{ id: string | number }>;
-    const match = list.find((u) => String(u.id) === String(sessionUserId));
-    if (match) patch('assignedAgent', String(sessionUserId));
+    const sessionUser = (session as any)?.user as
+      | { id?: string | number; name?: string; first_name?: string; last_name?: string; email?: string }
+      | undefined;
+    if (!sessionUser?.id) return;
+    const list = (usersQ.data?.data ?? []) as Array<{
+      id: string | number;
+      name?: string;
+      first_name?: string;
+      last_name?: string;
+      email?: string;
+    }>;
+    const match = list.find((u) => String(u.id) === String(sessionUser.id));
+    const u = match ?? sessionUser;
+    const label = (u.name?.trim()
+      || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
+      || u.email
+      || '')
+      .trim();
+    if (label && state.assignedAgent !== label) {
+      patch('assignedAgent', label);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usersQ.data, (session as any)?.user?.id]);
 
@@ -1709,24 +1725,23 @@ export const ContractWizardPage: React.FC = () => {
                     />
                   </Field>
                   <Field label="Agent assigné">
+                    {/* Verrouillé sur l'utilisateur courant : un contrat est
+                        généré par l'agent qui le signe. Le select est
+                        désactivé pour laisser l'option de ré-ouvrir si on
+                        change d'avis plus tard, mais c'est une valeur
+                        choisie par l'app, pas par l'agent. */}
                     <select
-                      className="df-input"
+                      className="df-input cursor-not-allowed opacity-80"
                       value={state.assignedAgent}
-                      onChange={(e) => patch('assignedAgent', e.target.value)}
+                      disabled
+                      aria-disabled
+                      title="L'agent assigné est automatiquement l'utilisateur connecté."
                     >
-                      <option value="">— Non assigné —</option>
-                      {(usersQ.data?.data ?? [])
-                        .filter((u) => u.status === 'active')
-                        .map((u) => {
-                          const label = u.name?.trim()
-                            || `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
-                            || u.email;
-                          return (
-                            <option key={u.id} value={label}>
-                              {label}
-                            </option>
-                          );
-                        })}
+                      {state.assignedAgent ? (
+                        <option value={state.assignedAgent}>{state.assignedAgent}</option>
+                      ) : (
+                        <option value="">— Chargement de la session… —</option>
+                      )}
                     </select>
                   </Field>
                 </div>
