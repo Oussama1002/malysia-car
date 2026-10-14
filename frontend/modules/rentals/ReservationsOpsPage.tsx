@@ -457,12 +457,45 @@ export const ReservationsOpsPage: React.FC = () => {
 
   const vehicleOptions = useMemo(
     () =>
-      (vehiclesQ.data ?? []).map((v) => ({
-        id: String(v.id),
-        label: `${v.brand} ${v.model} · ${v.registration}`,
-        status: String((v as any).status ?? ''),
-        isSubRented: (v.ownershipStatus ?? '').toLowerCase() === 'sub_rented',
-      })),
+      (vehiclesQ.data ?? []).map((v) => {
+        // Prefer the derived flags the list endpoint computes (same source
+        // the swap wizard uses) because current_* columns on the vehicles
+        // table drift in production. Fall back to availability_status, then
+        // raw fleet status.
+        const raw = v as any;
+        const hasReservation = !!(raw.hasActiveReservation
+          ?? raw.has_active_reservation
+          ?? raw.current_reservation_id);
+        const hasContract = !!(raw.hasActiveContract
+          ?? raw.has_active_contract
+          ?? raw.current_contract_id);
+        const availability = String(
+          raw.availabilityStatus ?? raw.availability_status ?? ''
+        ).toLowerCase();
+        const fleetStatus = String(raw.status ?? '').toLowerCase();
+        const effective = hasContract
+          ? 'rented'
+          : hasReservation
+            ? 'reserved'
+            : (availability || fleetStatus);
+        const isAvailable = effective === 'available' || effective === '';
+        const statusFr =
+            effective === 'available'   ? 'Disponible'
+          : effective === 'rented'      ? 'Loué'
+          : effective === 'reserved'    ? 'Réservé'
+          : effective === 'maintenance' ? 'Maintenance'
+          : effective === 'in_repair'   ? 'Réparation'
+          : effective === 'blocked' || effective === 'unavailable' ? 'Indisponible'
+          : (effective || 'Inconnu').replace(/_/g, ' ');
+        return {
+          id: String(v.id),
+          label: `${v.brand} ${v.model} · ${v.registration}`,
+          status: fleetStatus,
+          statusLabel: statusFr,
+          isAvailable,
+          isSubRented: (v.ownershipStatus ?? '').toLowerCase() === 'sub_rented',
+        };
+      }),
     [vehiclesQ.data]
   );
 
@@ -948,11 +981,24 @@ export const ReservationsOpsPage: React.FC = () => {
                     .filter((v) => !vehicleSearch || v.label.toLowerCase().includes(vehicleSearch.toLowerCase()))
                     .map((v) => {
                       const selected = form.is_draft ? form.vehicle_ids.includes(v.id) : form.vehicle_id === v.id;
+                      // Unavailable vehicles stay listed so the agent can
+                      // SEE why they can't pick a specific car, but the
+                      // button is disabled and dimmed and shows the real
+                      // reason (Loué / Réservé / Maintenance / …).
+                      const chipTone = v.isAvailable
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-100 text-rose-700 border-rose-200';
                       return (
                         <button
                           key={v.id}
                           type="button"
-                          className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-slate-50 ${selected ? 'bg-indigo-50 font-bold' : ''}`}
+                          disabled={!v.isAvailable}
+                          title={!v.isAvailable ? `Véhicule indisponible : ${v.statusLabel}` : undefined}
+                          className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm ${
+                            !v.isAvailable
+                              ? 'cursor-not-allowed opacity-55'
+                              : selected ? 'bg-indigo-50 font-bold hover:bg-indigo-50' : 'hover:bg-slate-50'
+                          }`}
                           onClick={() => {
                             // Picking a vehicle must NOT pull a tarif off its
                             // fleet record — the price is landing-page only
@@ -972,8 +1018,11 @@ export const ReservationsOpsPage: React.FC = () => {
                           }}
                         >
                           {form.is_draft && <span className={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selected ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300'}`}>{selected ? '✓' : ''}</span>}
-                          <span className="flex-1">{v.label}</span>
+                          <span className="flex-1 truncate">{v.label}</span>
                           {v.isSubRented && <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-black text-amber-700">SL</span>}
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${chipTone}`}>
+                            {v.statusLabel}
+                          </span>
                         </button>
                       );
                     })}

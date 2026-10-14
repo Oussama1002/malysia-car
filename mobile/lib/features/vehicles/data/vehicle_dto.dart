@@ -18,6 +18,9 @@ class VehicleDto {
     this.techControlExpiry,
     this.vignetteExpiry,
     this.registrationCardNumber,
+    this.availabilityStatus,
+    this.hasActiveReservation = false,
+    this.hasActiveContract = false,
   });
 
   final String id;
@@ -36,6 +39,53 @@ class VehicleDto {
   final DateTime? techControlExpiry;
   final DateTime? vignetteExpiry;
   final String? registrationCardNumber;
+  /// 'available' | 'rented' | 'reserved' | 'maintenance' | 'blocked' | …
+  /// Dérivé par le backend : il tient compte des réservations/contrats actifs
+  /// en plus du statut flotte brut, donc à préférer à `status`.
+  final String? availabilityStatus;
+  /// Flags recalculés par la liste pour éviter la dérive des colonnes
+  /// current_* sur la table vehicles.
+  final bool hasActiveReservation;
+  final bool hasActiveContract;
+
+  /// Statut consolidé prêt à afficher dans un picker de réservation.
+  /// Priorise contrat actif → réservation active → availability_status → status.
+  String get effectiveStatus {
+    if (hasActiveContract) return 'rented';
+    if (hasActiveReservation) return 'reserved';
+    final av = (availabilityStatus ?? '').toLowerCase();
+    if (av.isNotEmpty) return av;
+    return status.toLowerCase();
+  }
+
+  bool get isAvailable {
+    final e = effectiveStatus;
+    return e == 'available' || e.isEmpty;
+  }
+
+  String get statusLabel {
+    switch (effectiveStatus) {
+      case 'available':
+        return 'Disponible';
+      case 'rented':
+        return 'Loué';
+      case 'reserved':
+        return 'Réservé';
+      case 'maintenance':
+        return 'Maintenance';
+      case 'in_repair':
+        return 'Réparation';
+      case 'blocked':
+      case 'unavailable':
+        return 'Indisponible';
+      case 'sold':
+        return 'Vendu';
+      case 'scrapped':
+        return 'Rebut';
+      default:
+        return effectiveStatus.replaceAll('_', ' ');
+    }
+  }
 
   String get label {
     final parts = [brand, model].where((e) => e != null && (e as String).isNotEmpty).toList();
@@ -71,6 +121,15 @@ class VehicleDto {
               json['registrationCardNumber'] ??
               json['registrationCard'])
           ?.toString(),
+      availabilityStatus: (json['availabilityStatus'] ??
+              json['availability_status'])
+          ?.toString(),
+      hasActiveReservation: json['hasActiveReservation'] == true ||
+          json['has_active_reservation'] == true ||
+          json['current_reservation_id'] != null,
+      hasActiveContract: json['hasActiveContract'] == true ||
+          json['has_active_contract'] == true ||
+          json['current_contract_id'] != null,
     );
   }
 }

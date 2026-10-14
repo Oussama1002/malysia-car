@@ -1108,47 +1108,86 @@ class _VehiclePickerSheetState extends ConsumerState<_VehiclePickerSheet> {
                     itemBuilder: (_, i) {
                       final v = list[i];
                       final isPicked = _picked.contains(v.id);
-                      return ListTile(
-                        leading: Icon(widget.isDraft
-                            ? (isPicked
-                                ? Icons.check_box
-                                : Icons.check_box_outline_blank)
-                            : Icons.directions_car),
-                        title: Text(v.label,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700)),
-                        subtitle: Text(v.registration),
-                        trailing: v.isSubRented
-                            ? Container(
+                      // Unavailable vehicles stay listed so the agent can
+                      // SEE why they can't pick a specific car (Loué /
+                      // Réservé / Maintenance / …), but the row is dimmed,
+                      // the status chip explains the state, and tap is
+                      // blocked with a short snack message.
+                      final isAvailable = v.isAvailable;
+                      final chipBg = isAvailable
+                          ? Colors.green.shade100
+                          : Colors.red.shade100;
+                      final chipFg = isAvailable
+                          ? Colors.green.shade700
+                          : Colors.red.shade700;
+                      return Opacity(
+                        opacity: isAvailable ? 1.0 : 0.55,
+                        child: ListTile(
+                          leading: Icon(widget.isDraft
+                              ? (isPicked
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank)
+                              : Icons.directions_car),
+                          title: Text(v.label,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700)),
+                          subtitle: Text(v.registration),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (v.isSubRented)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade100,
+                                    borderRadius:
+                                        BorderRadius.circular(999),
+                                  ),
+                                  child: const Text('SL',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.orange)),
+                                ),
+                              Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.amber.shade100,
-                                  borderRadius: BorderRadius.circular(999),
+                                  color: chipBg,
+                                  borderRadius:
+                                      BorderRadius.circular(999),
                                 ),
-                                child: const Text('SL',
+                                child: Text(v.statusLabel,
                                     style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w800,
-                                        color: Colors.orange)),
-                              )
-                            : null,
-                        selected: isPicked,
-                        selectedTileColor: const Color(0xFFEEF0FB),
-                        onTap: () {
-                          if (widget.isDraft) {
-                            setState(() {
-                              if (isPicked) {
-                                _picked.remove(v.id);
-                              } else {
-                                _picked.add(v.id);
-                              }
-                            });
-                          } else {
-                            Navigator.of(context).pop(_VehiclePickResult(
-                                ids: [v.id], single: v));
-                          }
-                        },
+                                        color: chipFg)),
+                              ),
+                            ],
+                          ),
+                          selected: isPicked,
+                          selectedTileColor: const Color(0xFFEEF0FB),
+                          enabled: isAvailable,
+                          onTap: isAvailable
+                              ? () {
+                                  if (widget.isDraft) {
+                                    setState(() {
+                                      if (isPicked) {
+                                        _picked.remove(v.id);
+                                      } else {
+                                        _picked.add(v.id);
+                                      }
+                                    });
+                                  } else {
+                                    Navigator.of(context).pop(
+                                        _VehiclePickResult(
+                                            ids: [v.id], single: v));
+                                  }
+                                }
+                              : null,
+                        ),
                       );
                     },
                   );
