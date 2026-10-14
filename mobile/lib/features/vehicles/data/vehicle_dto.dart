@@ -68,22 +68,34 @@ class VehicleDto {
       case 'available':
         return 'Disponible';
       case 'rented':
+      case 'in_use':
         return 'Loué';
       case 'reserved':
         return 'Réservé';
       case 'maintenance':
         return 'Maintenance';
       case 'in_repair':
+      case 'repair':
         return 'Réparation';
       case 'blocked':
       case 'unavailable':
+      case 'immobilized':
+      case 'immobilised':
+      case 'accident':
         return 'Indisponible';
       case 'sold':
         return 'Vendu';
       case 'scrapped':
         return 'Rebut';
+      case 'pending':
+        return 'En attente';
       default:
-        return effectiveStatus.replaceAll('_', ' ');
+        // Fallback: title-case the raw enum (replace _ with spaces) rather
+        // than letting an untranslated 'in_use' or 'in_repair' slip into
+        // the UI chip.
+        final cleaned = effectiveStatus.replaceAll('_', ' ');
+        if (cleaned.isEmpty) return 'Inconnu';
+        return '${cleaned[0].toUpperCase()}${cleaned.substring(1)}';
     }
   }
 

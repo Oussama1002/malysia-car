@@ -479,14 +479,24 @@ export const ReservationsOpsPage: React.FC = () => {
             ? 'reserved'
             : (availability || fleetStatus);
         const isAvailable = effective === 'available' || effective === '';
+        // Backend occasionally returns 'in_use', 'repair', 'immobilized',
+        // 'accident' etc. as the availability_status — map every known one
+        // to French so no raw enum leaks into the chip.
         const statusFr =
-            effective === 'available'   ? 'Disponible'
-          : effective === 'rented'      ? 'Loué'
-          : effective === 'reserved'    ? 'Réservé'
-          : effective === 'maintenance' ? 'Maintenance'
-          : effective === 'in_repair'   ? 'Réparation'
-          : effective === 'blocked' || effective === 'unavailable' ? 'Indisponible'
-          : (effective || 'Inconnu').replace(/_/g, ' ');
+            effective === 'available'                                   ? 'Disponible'
+          : effective === 'rented' || effective === 'in_use'            ? 'Loué'
+          : effective === 'reserved'                                    ? 'Réservé'
+          : effective === 'maintenance'                                 ? 'Maintenance'
+          : effective === 'in_repair' || effective === 'repair'         ? 'Réparation'
+          : effective === 'blocked' || effective === 'unavailable'
+            || effective === 'immobilized' || effective === 'immobilised'
+            || effective === 'accident'                                 ? 'Indisponible'
+          : effective === 'sold'                                        ? 'Vendu'
+          : effective === 'scrapped'                                    ? 'Rebut'
+          : effective === 'pending'                                     ? 'En attente'
+          : (effective
+              ? effective.charAt(0).toUpperCase() + effective.slice(1).replace(/_/g, ' ')
+              : 'Inconnu');
         return {
           id: String(v.id),
           label: `${v.brand} ${v.model} · ${v.registration}`,
