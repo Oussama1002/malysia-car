@@ -78,14 +78,8 @@ export const ContractPaperPreview: React.FC<{
 
   return (
     <div className="rounded-2xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-5">
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <div className="df-card__hint">
-          Aperçu du contrat — le formulaire de l'agence, rempli comme à l'impression
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-blue-700">
-          <span className="h-2 w-2 rounded-full bg-blue-500" />
-          Valeurs saisies
-        </span>
+      <div className="df-card__hint mb-3">
+        Aperçu du contrat — exactement comme le PDF à télécharger
       </div>
 
       <div
@@ -96,28 +90,28 @@ export const ContractPaperPreview: React.FC<{
         <img src="/contract-form.jpg" alt="Contrat de location" className="absolute inset-0 h-full w-full object-fill" />
 
         {marks.map(([key, spot, text]) => {
-          // Checklist Oui/Non marks are single-glyph 'X' marks on the paper
-          // form — rendering them with a background chip would overflow the
-          // tick box. Keep those as a bold inked glyph; everything else is
-          // the real customer/vehicle data that benefits from standing out.
-          const isCheckMark = key.startsWith('papers_');
+          // Mirror the PDF Blade exactly: font-size × 1.15 and y − 2 mm so
+          // the preview overlay sits where the PDF prints. The previous
+          // preview used the raw config coordinates + a colored chip
+          // background, which drifted from the downloaded PDF — the
+          // décalage the agent kept seeing between step 6 and the file.
+          const size = (spot.size ?? 8.5) * 1.15;
+          const topMm = spot.y - 2;
           return (
             <span
               key={key}
-              className={
-                isCheckMark
-                  ? 'absolute whitespace-nowrap text-blue-700'
-                  : 'absolute whitespace-nowrap rounded-sm bg-blue-50/80 px-[2px] text-blue-700 ring-1 ring-blue-200/70'
-              }
+              className="absolute whitespace-nowrap text-black"
               style={{
                 left: `${(spot.x / A4_WIDTH_MM) * 100}%`,
-                top: `${(spot.y / A4_HEIGHT_MM) * 100}%`,
-                fontSize: mmToPx > 0 ? `${(spot.size ?? 8.5) * 0.3528 * mmToPx}px` : undefined,
-                fontWeight: spot.bold || !isCheckMark ? 800 : 700,
-                // Font-fallback stack with a monospace hint — handwritten
-                // ERP values read more "filled-in" than Blade default.
-                fontFamily: '"Courier New", "SFMono-Regular", ui-monospace, monospace',
-                letterSpacing: '0.01em',
+                top: `${(topMm / A4_HEIGHT_MM) * 100}%`,
+                fontSize: mmToPx > 0 ? `${size * 0.3528 * mmToPx}px` : undefined,
+                // Same weight scheme as the PDF: default bold (700), extra
+                // black (900) only on fields config flagged bold.
+                fontWeight: spot.bold ? 900 : 700,
+                // Match the DomPDF default font so widths and glyph shapes
+                // line up with what prints.
+                fontFamily: '"DejaVu Sans", sans-serif',
+                letterSpacing: '0.02em',
               }}
             >
               {text}
