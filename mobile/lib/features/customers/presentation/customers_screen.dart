@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
+import '../../../core/router/back_nav.dart';
 import '../data/customer_dto.dart';
 import '../data/customers_repo.dart';
 import 'customer_detail_screen.dart';
@@ -78,7 +79,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                       title: 'Clients',
                       subtitle:
                           'Particuliers et entreprises — KYC, risque, blacklist.',
-                      onBack: () => Navigator.of(context).maybePop(),
+                      onBack: () => goBackOrHome(context),
                     ),
                     if (missing.isNotEmpty) ...[
                       const SizedBox(height: 12),

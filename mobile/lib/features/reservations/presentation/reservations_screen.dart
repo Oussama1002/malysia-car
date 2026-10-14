@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/router/back_nav.dart';
 import '../../placeholders/placeholder_screen.dart';
 import 'archive_reservations_screen.dart';
 import 'availability_check_screen.dart';
@@ -115,7 +116,7 @@ class _ReservationsScreenState extends ConsumerState<ReservationsScreen> {
                 return ListView(
                   padding: const EdgeInsets.only(bottom: 24),
                   children: [
-                    _TopBar(onBack: () => Navigator.of(context).maybePop()),
+                    _TopBar(onBack: () => goBackOrHome(context)),
                     if (urgent.isNotEmpty)
                       _UrgentBanner(
                         urgent: urgent,

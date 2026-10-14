@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
+import '../../../core/router/back_nav.dart';
 import '../data/document_reader_dto.dart';
 import '../data/document_reader_repo.dart';
 import 'document_reader_detail_screen.dart';
@@ -89,7 +90,7 @@ class _DocumentReaderScreenState extends ConsumerState<DocumentReaderScreen> {
                   title: 'Softnovation Document Reader',
                   subtitle:
                       'Numérisation, OCR (Tesseract) et extraction automatique des champs. L\'admin valide avant enregistrement.',
-                  onBack: () => Navigator.of(context).maybePop(),
+                  onBack: () => goBackOrHome(context),
                 ),
                 const SizedBox(height: 12),
                 _UploadCard(

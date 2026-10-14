@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/router/back_nav.dart';
 import '../../../core/widgets/module_scaffold.dart';
 import '../data/chat_dto.dart';
 import '../data/chat_repo.dart';
@@ -51,7 +52,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   title: 'Discussion interne',
                   subtitle:
                       'Messagerie 1-à-1 avec vos collègues de l\'entreprise.',
-                  onBack: () => Navigator.of(context).maybePop(),
+                  onBack: () => goBackOrHome(context),
                 ),
                 const SizedBox(height: 10),
                 Padding(

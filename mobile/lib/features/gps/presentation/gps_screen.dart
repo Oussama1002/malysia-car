@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
+import '../../../core/router/back_nav.dart';
 import '../data/gps_dto.dart';
 import '../data/gps_repo.dart';
 
@@ -81,7 +82,7 @@ class _GpsScreenState extends ConsumerState<GpsScreen> {
               padding: const EdgeInsets.only(bottom: 24),
               children: [
                 _Header(dateLabel: dateFmt.format(DateTime.now()),
-                    onBack: () => Navigator.of(context).maybePop()),
+                    onBack: () => goBackOrHome(context)),
                 const SizedBox(height: 10),
                 _KpiRow(
                   vehicles: vehiclesAsync,

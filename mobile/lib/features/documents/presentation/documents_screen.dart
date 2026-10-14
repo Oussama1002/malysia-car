@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
+import '../../../core/router/back_nav.dart';
 import '../data/document_dto.dart';
 import '../data/documents_repo.dart';
 
@@ -40,7 +41,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                   title: 'Centre documentaire',
                   subtitle:
                       'Référentiel unique des pièces KYC, flotte, sinistres, missions et PDFs générés.',
-                  onBack: () => Navigator.of(context).maybePop(),
+                  onBack: () => goBackOrHome(context),
                 ),
                 const SizedBox(height: 14),
                 // La liste d'abord : c'est ce que l'utilisateur attend en

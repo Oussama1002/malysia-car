@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
+import '../../../core/router/back_nav.dart';
 import '../../placeholders/placeholder_screen.dart';
 import '../data/contract_dto.dart';
 import '../data/contracts_repo.dart';
@@ -84,7 +85,7 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
                       title: 'Contrats',
                       subtitle:
                           'LLD, LOA, crédit auto, vente VO — liste.',
-                      onBack: () => Navigator.of(context).maybePop(),
+                      onBack: () => goBackOrHome(context),
                     ),
                     const SizedBox(height: 18),
                     Padding(

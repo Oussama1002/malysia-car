@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/router/back_nav.dart';
 import '../data/reservation_dto.dart';
 import '../data/reservations_repo.dart';
 import 'reservation_detail_screen.dart';
@@ -66,7 +67,7 @@ class _ArchiveReservationsScreenState
               return ListView(
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  _TopBar(onBack: () => Navigator.of(context).maybePop()),
+                  _TopBar(onBack: () => goBackOrHome(context)),
                   const _Title(),
                   const SizedBox(height: 14),
                   Padding(

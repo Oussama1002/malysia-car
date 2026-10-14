@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/router/back_nav.dart';
 import '../data/notification_dto.dart';
 import '../data/notifications_repo.dart';
 import 'notification_navigation.dart';
@@ -19,7 +20,7 @@ class NotificationsScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            _Header(onBack: () => Navigator.of(context).maybePop(), onMarkAll: () async {
+            _Header(onBack: () => goBackOrHome(context), onMarkAll: () async {
               try {
                 await ref.read(notificationsRepoProvider).markAllRead();
                 ref.invalidate(notificationsListProvider);

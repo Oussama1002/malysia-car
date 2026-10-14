@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
+import '../../../core/router/back_nav.dart';
 import '../data/payment_dto.dart';
 import '../data/payments_repo.dart';
 import 'payment_detail_screen.dart';
@@ -47,7 +48,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                 ModuleHeader(
                   title: 'Paiements',
                   subtitle: 'Encaissements clients et allocations.',
-                  onBack: () => Navigator.of(context).maybePop(),
+                  onBack: () => goBackOrHome(context),
                 ),
                 const SizedBox(height: 10),
                 _FilterCard(
