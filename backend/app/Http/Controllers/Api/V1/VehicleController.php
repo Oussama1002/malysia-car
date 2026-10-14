@@ -65,8 +65,37 @@ class VehicleController extends Controller
         $per = min(500, max(1, (int) $request->query('per_page', 200)));
         $page = $q->orderByDesc('updated_at')->paginate($per);
 
+        // Disponibilité temps réel : on calcule une seule fois par page
+        // quels véhicules ont un contrat actif ou une réservation bloquante,
+        // puis on écrase la colonne stockée `availability_status` (parfois
+        // à la traîne) comme le fait déjà `show()`. Même règle de priorité :
+        // contrat actif → rented, réservation bloquante → reserved, sinon
+        // on garde la colonne (maintenance/repair/unavailable/…) ou on
+        // retombe à `available`.
+        $ids = collect($page->items())->pluck('id')->all();
+        $activeContractIds = [];
+        $blockingReservationIds = [];
+        if (! empty($ids)) {
+            $activeContractIds = \App\Models\Contract::query()
+                ->whereIn('vehicle_id', $ids)
+                ->whereIn('status', ['active', 'pending_approval'])
+                ->pluck('vehicle_id')
+                ->unique()
+                ->flip()
+                ->all();
+            $blockingStatuses =
+                \App\Services\RentalAvailabilityService::blockingReservationStatuses();
+            $blockingReservationIds = \App\Models\Reservation::query()
+                ->whereIn('vehicle_id', $ids)
+                ->whereIn('status', $blockingStatuses)
+                ->pluck('vehicle_id')
+                ->unique()
+                ->flip()
+                ->all();
+        }
+
         $rows = collect(VehicleResource::collection($page->items())->resolve($request))
-            ->map(function (array $item): array {
+            ->map(function (array $item) use ($activeContractIds, $blockingReservationIds): array {
                 $openAlerts = ComplianceAlert::query()
                     ->where('vehicle_id', $item['id'])
                     ->where('status', 'open')
@@ -77,6 +106,22 @@ class VehicleController extends Controller
                     ? 'ok'
                     : (collect($openAlerts)->contains(fn ($type) => str_contains((string) $type, 'expired') || str_contains((string) $type, 'missing')) ? 'critical' : 'warning');
                 $item['complianceAlerts'] = array_values($openAlerts);
+
+                $hasContract = isset($activeContractIds[$item['id']]);
+                $hasReservation = isset($blockingReservationIds[$item['id']]);
+                $item['hasActiveContract'] = $hasContract;
+                $item['hasActiveReservation'] = $hasReservation;
+
+                $av = strtolower((string) ($item['availabilityStatus'] ?? ''));
+                if ($hasContract) {
+                    $item['availabilityStatus'] = 'rented';
+                } elseif ($hasReservation) {
+                    $item['availabilityStatus'] = 'reserved';
+                } elseif ($av === '' || in_array($av, ['available', 'rented', 'reserved'], true)) {
+                    // La colonne stockée dit rented/reserved alors qu'aucun
+                    // document actif ne le justifie ⇒ on la ramène à available.
+                    $item['availabilityStatus'] = 'available';
+                }
 
                 return $item;
             })

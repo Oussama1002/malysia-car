@@ -371,8 +371,8 @@ class _VehicleCard extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     ModuleStatusChip(
-                      label: vehicleStatusFr(v.status),
-                      tone: _statusTone(v.status),
+                      label: v.statusLabel,
+                      tone: _statusTone(v.effectiveStatus),
                     ),
                     if (v.isSubRented)
                       const ModuleStatusChip(
@@ -418,10 +418,16 @@ class _VehicleCard extends StatelessWidget {
   }
 
   ModuleStatusTone _statusTone(String s) {
-    return switch (s.toUpperCase()) {
-      'AVAILABLE' => ModuleStatusTone.ok,
-      'RENTED' || 'RESERVED' => ModuleStatusTone.warning,
-      'MAINTENANCE' || 'IN_REPAIR' => ModuleStatusTone.danger,
+    return switch (s.toLowerCase()) {
+      'available' => ModuleStatusTone.ok,
+      'rented' || 'in_use' || 'reserved' => ModuleStatusTone.warning,
+      'maintenance' ||
+      'in_repair' ||
+      'repair' ||
+      'accident' ||
+      'immobilized' ||
+      'immobilised' =>
+        ModuleStatusTone.danger,
       _ => ModuleStatusTone.neutral,
     };
   }
