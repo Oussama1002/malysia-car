@@ -189,7 +189,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   final Map<_VehDoc, String?> _scanPath = {};
   final Map<_VehDoc, String?> _scanDocId = {};
   _VehDoc? _scanning;
-  String? _scanNotice;
+  // Notice shown next to each scanner card. Keyed per document so the
+  // "Champs détectés" / "Scan impossible" message of one card never bleeds
+  // into another — the previous shared `String? _scanNotice` made it look
+  // like every card had succeeded.
+  final Map<_VehDoc, String?> _scanNotice = {};
 
   bool _submitting = false;
   String? _error;
@@ -220,12 +224,18 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   // OCR
   // ------------------------------------------------------------------
 
-  // Types canoniques du backend (ReaderDocument::TYPE_*), identiques au web.
+  // Types canoniques du backend (ReaderDocument::TYPE_*). Pour la visite
+  // technique et la vignette, le document physique au Maroc est l'attestation
+  // de paiement de la Taxe Spéciale Annuelle sur les Véhicules : on envoie
+  // donc `payment_attestation` pour que le parser serveur
+  // (DocumentParser::parsePaymentAttestation) tourne et ramène immat.,
+  // carburant, mise en circulation et puissance fiscale. Sans ça le hint
+  // `other` renvoyait un tableau de champs vide et rien ne pré-remplissait.
   String _ocrType(_VehDoc d) => switch (d) {
         _VehDoc.assurance => 'insurance',
         _VehDoc.autorisation => 'autorisation_circulation',
-        _VehDoc.techControl => 'other',
-        _VehDoc.vignette => 'other',
+        _VehDoc.techControl => 'payment_attestation',
+        _VehDoc.vignette => 'payment_attestation',
         _VehDoc.carteGriseRecto => 'vehicle_registration',
         _VehDoc.carteGriseVerso => 'vehicle_registration',
       };
@@ -265,7 +275,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
       setState(() {
         _scanPath[doc] = f.path;
         _scanning = doc;
-        _scanNotice = 'OCR ${_ocrLabel(doc)} en cours…';
+        _scanNotice[doc] = 'OCR ${_ocrLabel(doc)} en cours…';
       });
       final result = await ref.read(vehiclesRepoProvider).scanDocument(
             filePath: kIsWeb ? null : f.path,
@@ -276,7 +286,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
       _applyScanFields(result, doc: doc);
     } catch (e) {
       setState(() {
-        _scanNotice =
+        _scanNotice[doc] =
             'Scan impossible : ${_short(e)}. Saisissez les champs manuellement.';
       });
     } finally {
@@ -288,8 +298,23 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   /// les mappings du web (frontend/modules/fleet/VehicleDocumentScanner.tsx :
   /// mapAssurance / mapAutorisation / mapVisiteTech / mapVignette / mapCarteGrise).
   void _applyScanFields(Map<String, dynamic> result, {required _VehDoc doc}) {
-    final fields = (result['fields'] as Map<String, dynamic>? ?? const {});
+    final rawFields = result['fields'];
+    final fields = <String, dynamic>{};
+    if (rawFields is Map) {
+      rawFields.forEach((k, v) => fields[k.toString()] = v);
+    }
     _scanDocId[doc] = result['document_id']?.toString();
+
+    // Backend may answer with { _type_mismatch: "ce n'est pas une assurance" }
+    // when the server-side classifier disagrees with the slot the agent used.
+    // In that case there's nothing to apply — just surface the message.
+    final mismatch = _s(fields['_type_mismatch']);
+    if (mismatch != null) {
+      setState(() {
+        _scanNotice[doc] = mismatch;
+      });
+      return;
+    }
 
     String? pick(List<String> keys) {
       for (final k in keys) {
@@ -297,6 +322,14 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         if (v != null) return v;
       }
       return null;
+    }
+
+    // Track which human-readable fields got filled, so the per-card notice can
+    // tell the agent exactly what was recognised ("Marque, Modèle, VIN")
+    // instead of a bare "Champs détectés" that hides a silent 0-match.
+    final applied = <String>[];
+    void note(bool wasApplied, String label) {
+      if (wasApplied) applied.add(label);
     }
 
     setState(() {
@@ -321,14 +354,26 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           ]));
           if (police != null && _numeroPolice.text.isEmpty) {
             _numeroPolice.text = police;
+            note(true, 'N° police');
           }
           if (start != null && _insuranceStart == null) {
-            _insuranceStart = DateTime.tryParse(start);
+            final parsed = DateTime.tryParse(start);
+            if (parsed != null) {
+              _insuranceStart = parsed;
+              note(true, 'Garantie du');
+            }
           }
           if (end != null && _insuranceExpiry == null) {
-            _insuranceExpiry = DateTime.tryParse(end);
+            final parsed = DateTime.tryParse(end);
+            if (parsed != null) {
+              _insuranceExpiry = parsed;
+              note(true, 'Garantie au');
+            }
           }
-          if (ww != null && _immatOnline.text.isEmpty) _immatOnline.text = ww;
+          if (ww != null && _immatOnline.text.isEmpty) {
+            _immatOnline.text = ww;
+            note(true, 'N° provisoire / WW');
+          }
           break;
         case _VehDoc.autorisation:
           final reg =
@@ -346,13 +391,26 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'mise_en_circulation',
             'date_circulation'
           ]);
-          _applyPlate(reg);
-          if (ww != null && _immatOnline.text.isEmpty) _immatOnline.text = ww;
-          if (fuel != null) _fuelType = _matchFuel(fuel);
-          if (mec != null && _miseEnCirculation == null) {
-            _miseEnCirculation = DateTime.tryParse(mec);
+          note(_applyPlate(reg), 'Immatriculation');
+          if (ww != null && _immatOnline.text.isEmpty) {
+            _immatOnline.text = ww;
+            note(true, 'N° provisoire / WW');
           }
-          _matchBrandModel(brand, null);
+          if (fuel != null) {
+            final matched = _matchFuel(fuel);
+            if (matched != _fuelType) {
+              _fuelType = matched;
+              note(true, 'Carburant');
+            }
+          }
+          if (mec != null && _miseEnCirculation == null) {
+            final parsed = DateTime.tryParse(mec);
+            if (parsed != null) {
+              _miseEnCirculation = parsed;
+              note(true, 'Mise en circulation');
+            }
+          }
+          note(_matchBrandModel(brand, null), 'Marque');
           break;
         case _VehDoc.techControl:
           final exp = pick([
@@ -376,15 +434,35 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           final cv =
               pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
           if (exp != null && _techExpiry == null) {
-            _techExpiry = DateTime.tryParse(exp);
+            final parsed = DateTime.tryParse(exp);
+            if (parsed != null) {
+              _techExpiry = parsed;
+              note(true, 'Exp. visite technique');
+            }
           }
-          _applyPlate(reg);
-          if (ww != null && _immatOnline.text.isEmpty) _immatOnline.text = ww;
-          if (fuel != null) _fuelType = _matchFuel(fuel);
+          note(_applyPlate(reg), 'Immatriculation');
+          if (ww != null && _immatOnline.text.isEmpty) {
+            _immatOnline.text = ww;
+            note(true, 'N° provisoire / WW');
+          }
+          if (fuel != null) {
+            final matched = _matchFuel(fuel);
+            if (matched != _fuelType) {
+              _fuelType = matched;
+              note(true, 'Carburant');
+            }
+          }
           if (mec != null && _miseEnCirculation == null) {
-            _miseEnCirculation = DateTime.tryParse(mec);
+            final parsed = DateTime.tryParse(mec);
+            if (parsed != null) {
+              _miseEnCirculation = parsed;
+              note(true, 'Mise en circulation');
+            }
           }
-          if (cv != null && _fiscalPower.text.isEmpty) _fiscalPower.text = cv;
+          if (cv != null && _fiscalPower.text.isEmpty) {
+            _fiscalPower.text = cv;
+            note(true, 'Puissance fiscale');
+          }
           break;
         case _VehDoc.vignette:
           final exp = pick([
@@ -397,7 +475,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'valid_until'
           ]);
           if (exp != null && _vignetteExpiry == null) {
-            _vignetteExpiry = DateTime.tryParse(exp);
+            final parsed = DateTime.tryParse(exp);
+            if (parsed != null) {
+              _vignetteExpiry = parsed;
+              note(true, 'Exp. vignette');
+            }
           }
           break;
         case _VehDoc.carteGriseRecto:
@@ -417,20 +499,42 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'mise_en_circulation',
             'date_circulation'
           ]);
-          _matchBrandModel(brand, model);
-          if (vin != null && _vin.text.isEmpty) _vin.text = vin;
-          if (fuel != null) _fuelType = _matchFuel(fuel);
-          if (cv != null && _fiscalPower.text.isEmpty) _fiscalPower.text = cv;
-          _applyPlate(reg);
+          note(_matchBrandModel(brand, model), 'Marque / Modèle');
+          if (vin != null && _vin.text.isEmpty) {
+            _vin.text = vin;
+            note(true, 'VIN / Châssis');
+          }
+          if (fuel != null) {
+            final matched = _matchFuel(fuel);
+            if (matched != _fuelType) {
+              _fuelType = matched;
+              note(true, 'Carburant');
+            }
+          }
+          if (cv != null && _fiscalPower.text.isEmpty) {
+            _fiscalPower.text = cv;
+            note(true, 'Puissance fiscale');
+          }
+          note(_applyPlate(reg), 'Immatriculation');
           if (mec != null && _miseEnCirculation == null) {
-            _miseEnCirculation = DateTime.tryParse(mec);
+            final parsed = DateTime.tryParse(mec);
+            if (parsed != null) {
+              _miseEnCirculation = parsed;
+              note(true, 'Mise en circulation');
+            }
           }
           // La carte grise a été uploadée → statut « Reçue » automatiquement.
           _carteGriseStatus = _CarteGriseStatus.recue;
           break;
       }
-      _scanNotice =
-          'Champs détectés (${_ocrLabel(doc)}) — vérifiez avant d\'enregistrer.';
+      if (applied.isEmpty) {
+        _scanNotice[doc] = fields.isEmpty
+            ? 'Aucun champ exploitable détecté. Vérifiez la netteté du document ou saisissez les informations manuellement.'
+            : "Document reconnu mais aucun champ n'a pu être rapproché (${fields.length} brute(s)). Saisissez les informations manuellement.";
+      } else {
+        _scanNotice[doc] =
+            'Champs détectés (${_ocrLabel(doc)}) : ${applied.join(' · ')}. Vérifiez avant d\'enregistrer.';
+      }
     });
   }
 
@@ -444,21 +548,37 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   }
 
   /// Décompose une plaque "12345-A-1" dans num / lettre / région.
-  void _applyPlate(String? reg) {
-    if (reg == null) return;
+  /// Retourne true si au moins un segment a été rempli — pour que la
+  /// notice de scan puisse dire "Immatriculation" seulement quand c'est vrai.
+  bool _applyPlate(String? reg) {
+    if (reg == null) return false;
     final cleaned = reg.replaceAll(RegExp(r'\s+'), '').toUpperCase();
     final m =
         RegExp(r'(\d{1,5})\D+([A-Z])\D+(\d{1,2})').firstMatch(cleaned);
+    var changed = false;
     if (m != null) {
-      if (_platNum.text.isEmpty) _platNum.text = m.group(1)!;
+      if (_platNum.text.isEmpty) {
+        _platNum.text = m.group(1)!;
+        changed = true;
+      }
       final letter = m.group(2)!;
-      if (_plateLetters.contains(letter)) _platLetter = letter;
+      if (_plateLetters.contains(letter) && _platLetter != letter) {
+        _platLetter = letter;
+        changed = true;
+      }
       final region = int.tryParse(m.group(3)!);
-      if (region != null && region >= 1 && region <= 99) _platRegion = region;
+      if (region != null && region >= 1 && region <= 99 && _platRegion != region) {
+        _platRegion = region;
+        changed = true;
+      }
     } else if (_platNum.text.isEmpty) {
       final digits = RegExp(r'\d{1,5}').firstMatch(cleaned);
-      if (digits != null) _platNum.text = digits.group(0)!;
+      if (digits != null) {
+        _platNum.text = digits.group(0)!;
+        changed = true;
+      }
     }
+    return changed;
   }
 
   String _matchFuel(String raw) {
@@ -480,7 +600,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
 
   /// Rapproche le texte OCR marque/modèle des options du catalogue (exact →
   /// sous-chaîne), comme `closestOption` côté web, pour pré-remplir les listes.
-  void _matchBrandModel(String? brandText, String? modelText) {
+  bool _matchBrandModel(String? brandText, String? modelText) {
+    var changed = false;
     final brands = ref.read(vehicleBrandsProvider).valueOrNull ??
         const <VehicleBrandDto>[];
     if (brandText != null && _brandId == null && brands.isNotEmpty) {
@@ -500,6 +621,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
       if (match != null) {
         _brandId = match.id;
         _modelId = null;
+        changed = true;
       }
     }
     if (modelText != null && _brandId != null) {
@@ -519,8 +641,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               m.name.toLowerCase().contains(mt) ||
               mt.contains(m.name.toLowerCase()))
           .firstOrNull;
-      if (mm != null) _modelId = mm.id;
+      if (mm != null) {
+        _modelId = mm.id;
+        changed = true;
+      }
     }
+    return changed;
   }
 
   // ------------------------------------------------------------------
@@ -740,12 +866,13 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               subtitle: _ocrHint(d),
               photoPath: _scanPath[d],
               scanning: _scanning == d,
-              notice: _scanning == null && _scanNotice != null ? _scanNotice : null,
+              notice: _scanning == d ? null : _scanNotice[d],
               onCamera: () => _scan(source: ImageSource.camera, doc: d),
               onGallery: () => _scan(source: ImageSource.gallery, doc: d),
               onClear: () => setState(() {
                 _scanPath[d] = null;
                 _scanDocId[d] = null;
+                _scanNotice[d] = null;
               }),
             ),
             if (d != _VehDoc.values.last) const SizedBox(height: 8),
@@ -1092,7 +1219,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _newBrandName.clear();
       });
     } catch (e) {
-      setState(() => _scanNotice = 'Ajout marque impossible : ${_short(e)}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ajout marque impossible : ${_short(e)}')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _creatingBrand = false);
     }
@@ -1114,7 +1245,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _newModelName.clear();
       });
     } catch (e) {
-      setState(() => _scanNotice = 'Ajout modèle impossible : ${_short(e)}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ajout modèle impossible : ${_short(e)}')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _creatingModel = false);
     }
