@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/user_repo.dart';
 import '../../contracts/data/contracts_repo.dart';
+import '../../contracts/presentation/contract_paper_preview.dart';
 import '../../contracts/presentation/contract_pdf_preview_screen.dart';
 import '../../customers/data/customer_dto.dart';
 import '../../customers/data/customers_repo.dart';
@@ -1350,9 +1351,60 @@ class _NewContractFromReservationScreenState
       if (_annexFiles.isNotEmpty)
         ('Annexes', '${_annexFiles.length} document(s)'),
     ];
+    // Durée en jours pour le prix unitaire (mêmes règles que le web).
+    final totalDays = _isShort
+        ? (int.tryParse(_duration.text) ?? 0)
+        : ((int.tryParse(_duration.text) ?? 0) * 30);
+    final monthly = double.tryParse(_monthly.text) ?? 0;
+    final totalTtc = _isShort
+        ? monthly * (totalDays > 0 ? totalDays : 1)
+        : monthly * (int.tryParse(_duration.text) ?? 0);
+    final deposit = double.tryParse(_deposit.text) ?? 0;
+    final paperValues = <String, String?>{
+      'contract_number': 'attribué à l\'enregistrement',
+      'customer_last_name': client?.displayName ?? client?.code,
+      'customer_cin': client?.nationalId ?? client?.passportNumber,
+      'customer_license': client?.drivingLicenseNumber,
+      'customer_phone': client?.phone,
+      'driver_last_name': _secondaryDriver.isEmpty ? null : _secondaryDriver,
+      'vehicle_brand': vehicle == null
+          ? null
+          : [vehicle.brand, vehicle.model]
+              .where((s) => (s ?? '').isNotEmpty)
+              .join(' ')
+              .trim(),
+      'vehicle_plate': vehicle?.registration,
+      'start_date': _startDate != null ? dateFmt.format(_startDate!) : null,
+      'end_date': _endDate != null ? dateFmt.format(_endDate!) : null,
+      'fuel': vehicle?.fuel,
+      'days': totalDays > 0 ? totalDays.toString() : null,
+      'unit_price': totalDays > 0
+          ? '${money.format(totalTtc / totalDays)} MAD'
+          : null,
+      // La ligne « Assurance » du formulaire papier porte la Franchise
+      // d'assurance convenue, pas l'expiration flotte.
+      'insurance': deposit > 0 ? '${money.format(deposit)} MAD' : null,
+      'total_ttc': '${money.format(totalTtc)} MAD',
+      'payment_method': _paymentMethodLabels[_depositMethod] ??
+          (_paymentTerms.text.isEmpty ? null : _paymentTerms.text),
+    };
+    final now = DateTime.now();
+    final paperFlags = <String, bool>{
+      'insurance': vehicle?.insuranceExpiry != null &&
+          vehicle!.insuranceExpiry!.isAfter(now),
+      'registration': (vehicle?.registration ?? '').isNotEmpty,
+      'circulation': (vehicle?.registration ?? '').isNotEmpty,
+      'vignette': vehicle?.vignetteExpiry != null &&
+          vehicle!.vignetteExpiry!.isAfter(now),
+      'inspection': vehicle?.techControlExpiry != null &&
+          vehicle!.techControlExpiry!.isAfter(now),
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const _Section('Aperçu du contrat'),
+        ContractPaperPreview(values: paperValues, papers: paperFlags),
+        const SizedBox(height: 14),
         const _Section('Résumé du contrat avant signature'),
         Container(
           padding: const EdgeInsets.all(12),
