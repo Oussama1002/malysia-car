@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' show DioException;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -761,8 +762,25 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   }
 
   String _short(Object e) {
-    final msg = e.toString().replaceAll('Exception: ', '');
-    return msg.length > 80 ? '${msg.substring(0, 80)}…' : msg;
+    // Extraire le message serveur quand c'est une DioException : le message
+    // brut est "DioException [bad response]: …" ce qui ne dit rien à l'agent.
+    // L'API renvoie {"message": "…"} ou {"data": {"message": "…"}} en 422/503.
+    String msg = e.toString();
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map) {
+        final serverMsg = data['message'] ??
+            (data['data'] is Map ? (data['data'] as Map)['message'] : null) ??
+            data['error'];
+        if (serverMsg != null) msg = serverMsg.toString();
+      } else if (data is String && data.isNotEmpty) {
+        msg = data;
+      } else {
+        msg = e.message ?? e.toString();
+      }
+    }
+    msg = msg.replaceAll('Exception: ', '').trim();
+    return msg.length > 180 ? '${msg.substring(0, 180)}…' : msg;
   }
 
   String? _s(dynamic v) {

@@ -104,8 +104,12 @@ class VehiclesRepo {
     );
   }
 
-  /// OCR : upload d'un document vehicule + extraction (poll). Renvoie les
-  /// champs extraits + l'id du document pour l'attacher au vehicule.
+  /// OCR : upload d'un document vehicule + extraction. Mode `sync=true`
+  /// pour contourner la file d'attente (le worker n'est pas toujours à
+  /// jour en prod) : le backend exécute Tesseract + parser dans la requête
+  /// et nous renvoie l'extraction directement — plus de polling fragile.
+  /// Renvoie les champs extraits + l'id du document pour l'attacher au
+  /// véhicule.
   Future<Map<String, dynamic>> scanDocument({
     String? filePath,
     List<int>? fileBytes,
@@ -114,8 +118,8 @@ class VehiclesRepo {
   }) async {
     final MultipartFile multipart;
     if (fileBytes != null) {
-      multipart =
-          MultipartFile.fromBytes(fileBytes, filename: fileName ?? 'upload.jpg');
+      multipart = MultipartFile.fromBytes(fileBytes,
+          filename: fileName ?? 'upload.jpg');
     } else if (filePath != null) {
       multipart = await MultipartFile.fromFile(filePath);
     } else {
@@ -128,32 +132,62 @@ class VehiclesRepo {
     final uploadData = upload.data['data'] ?? upload.data;
     final docId = (uploadData is Map ? uploadData['id'] : null)?.toString();
     if (docId == null) throw Exception('Réponse upload sans identifiant.');
-    await _api.raw.post('/document-reader/documents/$docId/extract',
-        data: {'document_type': type});
-    for (var i = 0; i < 60; i++) {
-      await Future<void>.delayed(Duration(seconds: i < 10 ? 1 : 3));
-      final poll = await _api.getData('/document-reader/documents/$docId');
-      if (poll is Map) {
-        final p = poll is Map<String, dynamic>
-            ? poll
-            : poll.map((k, v) => MapEntry(k.toString(), v));
-        final status = p['status']?.toString();
-        if (status == 'extracted' || status == 'validated') {
-          final extraction = p['extraction'];
-          final data = extraction is Map ? extraction['extracted_data'] : null;
-          return {
-            'document_id': docId,
-            'fields': data is Map
-                ? data.map((k, v) => MapEntry(k.toString(), v))
-                : <String, dynamic>{},
-          };
-        }
-        if (status == 'failed') {
-          throw Exception(p['error_message']?.toString() ?? 'Échec OCR.');
+
+    // Appel synchrone : Tesseract tourne pendant la requête HTTP (jusqu'à
+    // ~2 min). On s'offre un receiveTimeout long juste pour cet appel au
+    // lieu des 20 s par défaut, sinon Dio tue la connexion avant la fin.
+    final resp = await _api.raw.post(
+      '/document-reader/documents/$docId/extract',
+      data: {'document_type': type, 'sync': true},
+      options: Options(
+        receiveTimeout: const Duration(seconds: 180),
+        sendTimeout: const Duration(seconds: 60),
+      ),
+    );
+    final body = resp.data;
+    final doc = body is Map ? (body['data'] ?? body) : body;
+    if (doc is! Map) {
+      throw Exception('Réponse extract inattendue.');
+    }
+    final docMap = doc.map((k, v) => MapEntry(k.toString(), v));
+    final status = docMap['status']?.toString();
+    if (status == 'failed') {
+      throw Exception(
+          docMap['error_message']?.toString() ?? 'Échec OCR.');
+    }
+    if (status != 'extracted' && status != 'validated') {
+      // Le mode sync devrait toujours renvoyer un état terminal ; si ce
+      // n'est pas le cas, repli vers un court polling pour couvrir le cas
+      // où `sync=true` est ignoré par un ancien backend.
+      for (var i = 0; i < 20; i++) {
+        await Future<void>.delayed(Duration(seconds: i < 5 ? 1 : 3));
+        final poll = await _api.getData('/document-reader/documents/$docId');
+        if (poll is Map) {
+          final p = poll.map((k, v) => MapEntry(k.toString(), v));
+          final s = p['status']?.toString();
+          if (s == 'extracted' || s == 'validated') {
+            return _unpackExtraction(docId, p);
+          }
+          if (s == 'failed') {
+            throw Exception(
+                p['error_message']?.toString() ?? 'Échec OCR.');
+          }
         }
       }
+      throw Exception('OCR trop long — réessayez.');
     }
-    throw Exception('OCR trop long — réessayez.');
+    return _unpackExtraction(docId, docMap);
+  }
+
+  Map<String, dynamic> _unpackExtraction(
+      String docId, Map<String, dynamic> docMap) {
+    final extraction = docMap['extraction'];
+    final data = extraction is Map ? extraction['extracted_data'] : null;
+    final fields = <String, dynamic>{};
+    if (data is Map) {
+      data.forEach((k, v) => fields[k.toString()] = v);
+    }
+    return {'document_id': docId, 'fields': fields};
   }
 
   Future<VehicleDetailDto> fetchDetail(String id) async {
