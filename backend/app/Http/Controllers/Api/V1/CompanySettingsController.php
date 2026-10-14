@@ -187,6 +187,12 @@ class CompanySettingsController extends Controller
                 'default_penalty_per_km',
                 'default_daily_rate_mad',
                 'default_monthly_rate_mad',
+                // Comma-separated whitelist of contract types the wizard
+                // offers (LLD, LOCATION_COURTE, LOA, CREDIT_AUTO, VENTE_VO).
+                // Empty / unset = default (LLD + LOCATION_COURTE only), so a
+                // migrated DB without this key keeps the business rule the
+                // user asked for.
+                'enabled_contract_types',
             ],
             'reservations' => [
                 'default_reservation_type',

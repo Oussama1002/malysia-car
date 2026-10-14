@@ -132,6 +132,41 @@ class _NewContractFromReservationScreenState
 
   bool get _isShort => _type == 'LOCATION_COURTE';
 
+  /// Whitelist of contract types from settings.contracts.enabled_contract_types
+  /// (CSV). Loaded on first build from /v1/settings/contracts. Falls back to
+  /// LLD + LOCATION_COURTE if the admin never set the value, matching the
+  /// business default on the web app.
+  Set<String> _enabledTypes = const {'LLD', 'LOCATION_COURTE'};
+  bool _enabledTypesLoaded = false;
+  Future<void> _loadEnabledContractTypes() async {
+    if (_enabledTypesLoaded) return;
+    _enabledTypesLoaded = true;
+    try {
+      final res = await ref.read(apiClientProvider).getData('/settings/contracts');
+      final map = res is Map ? res : const <String, dynamic>{};
+      final data = map['data'] is Map ? map['data'] as Map : map;
+      final settings = data['settings'] is Map ? data['settings'] as Map : const <String, dynamic>{};
+      final csv = (settings['enabled_contract_types'] ?? '').toString();
+      final parts = csv
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      if (parts.isNotEmpty && mounted) {
+        setState(() {
+          _enabledTypes = parts;
+          // Si le type pré-rempli n'est plus autorisé, retomber sur le
+          // premier type disponible pour que la page ne reste pas vide.
+          if (!_enabledTypes.contains(_type)) {
+            _type = _enabledTypes.first;
+          }
+        });
+      }
+    } catch (_) {
+      // Non-blocking — on garde le défaut LLD + LCD.
+    }
+  }
+
   void _prefillFromReservation(ReservationDetailDto d) {
     if (_prefilled) return;
     _prefilled = true;
@@ -837,11 +872,13 @@ class _NewContractFromReservationScreenState
   }
 
   Widget _typeStep() {
+    _loadEnabledContractTypes();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Section('Type de contrat'),
-        for (final e in _contractTypes.entries) _typeCard(e.key, e.value),
+        for (final e in _contractTypes.entries)
+          if (_enabledTypes.contains(e.key)) _typeCard(e.key, e.value),
       ],
     );
   }

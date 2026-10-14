@@ -37,6 +37,21 @@ const FIELDS: FieldDef[] = [
 
 const RESERVATION_FIELDS: FieldDef[] = [];
 
+/**
+ * Catalog of contract types available in the wizard. The admin picks which
+ * ones agents can create; LLD + LCD are on by default per the business rule
+ * (short / long rental only). The CSV in enabled_contract_types feeds
+ * ContractWizardPage (web) and new_contract_from_reservation_screen (mobile).
+ */
+const CONTRACT_TYPE_CATALOG: { value: string; label: string; sub: string }[] = [
+  { value: 'LLD', label: 'Location Longue Durée (LLD)', sub: 'Sans option d’achat' },
+  { value: 'LOCATION_COURTE', label: 'Location Courte Durée (LCD)', sub: 'Journalière / hebdomadaire' },
+  { value: 'LOA', label: 'Location avec Option d’Achat (LOA)', sub: 'Valeur résiduelle fixée au contrat' },
+  { value: 'CREDIT_AUTO', label: 'Crédit Automobile', sub: 'Financement bancaire interne' },
+  { value: 'VENTE_VO', label: 'Vente Véhicule d’Occasion', sub: 'Transfert de propriété immédiat' },
+];
+const DEFAULT_ENABLED_TYPES = ['LLD', 'LOCATION_COURTE'];
+
 function groupBySection(fields: FieldDef[]): [string, FieldDef[]][] {
   const map = new Map<string, FieldDef[]>();
   for (const f of fields) {
@@ -45,6 +60,70 @@ function groupBySection(fields: FieldDef[]): [string, FieldDef[]][] {
     map.set(f.section, arr);
   }
   return Array.from(map.entries());
+}
+
+/** Parse the stored CSV; fall back to the LLD + LCD default when empty. */
+function parseEnabledTypes(csv: string): Set<string> {
+  const trimmed = (csv ?? '').trim();
+  if (!trimmed) return new Set(DEFAULT_ENABLED_TYPES);
+  const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  return parts.length ? new Set(parts) : new Set(DEFAULT_ENABLED_TYPES);
+}
+
+/** Toggle grid for the five known contract types. */
+function ContractTypesCard({ csv, onChange }: { csv: string; onChange: (csv: string) => void }) {
+  const enabled = parseEnabledTypes(csv);
+  const toggle = (value: string) => {
+    const next = new Set(enabled);
+    if (next.has(value)) {
+      if (next.size === 1) return; // keep at least one type available
+      next.delete(value);
+    } else {
+      next.add(value);
+    }
+    // Serialize in catalog order so the stored string stays canonical.
+    const serialized = CONTRACT_TYPE_CATALOG
+      .filter((t) => next.has(t.value))
+      .map((t) => t.value)
+      .join(',');
+    onChange(serialized);
+  };
+  return (
+    <div className="df-card">
+      <div className="df-card__header">
+        <h2 className="df-card__title">Types de contrats disponibles</h2>
+      </div>
+      <div className="df-card__body">
+        <p className="mb-4 text-xs text-[color:var(--df-text-muted)]">
+          Choisissez les types proposés aux agents dans le wizard de création. Les types décochés n'apparaîtront ni sur le web ni sur le mobile. Au moins un type doit rester actif.
+        </p>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {CONTRACT_TYPE_CATALOG.map((t) => {
+            const on = enabled.has(t.value);
+            return (
+              <label
+                key={t.value}
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${
+                  on ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 accent-indigo-600"
+                  checked={on}
+                  onChange={() => toggle(t.value)}
+                />
+                <div>
+                  <div className="text-sm font-black text-slate-900">{t.label}</div>
+                  <div className="text-[11px] text-slate-500">{t.sub}</div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SectionCard({ title, fields, values, onChange }: {
@@ -134,6 +213,13 @@ export const ContractSettingsPage: React.FC = () => {
       </header>
 
       <div className="space-y-5">
+        <ContractTypesCard
+          csv={contractValues['enabled_contract_types'] ?? ''}
+          onChange={(csv) =>
+            setContractValues((prev) => ({ ...prev, enabled_contract_types: csv }))
+          }
+        />
+
         {contractSections.map(([section, fields]) => (
           <SectionCard
             key={section}
