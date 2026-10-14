@@ -11,6 +11,7 @@ import '../data/vehicle_dto.dart';
 import '../data/vehicles_repo.dart';
 import 'new_maintenance_screen.dart';
 import 'new_movement_screen.dart';
+import 'vehicle_extra_tabs.dart';
 
 /// Fiche véhicule — même structure que la page web (`FleetVehicleDetailPage`) :
 /// 12 onglets dans l'ordre Vue générale, Identité, Mouvements, Entretien,
@@ -115,24 +116,28 @@ class _VehicleDetailScreenState extends ConsumerState<VehicleDetailScreen>
                           }
                         }),
                       ),
-                      const _StubTab(
-                          icon: Icons.handyman_outlined,
-                          text:
-                              'Historique des réparations — bientôt disponible.'),
-                      const _StubTab(
-                          icon: Icons.car_crash_outlined,
-                          text: 'Accidents déclarés — bientôt disponible.'),
-                      _InsuranceTab(v: detail.vehicle),
-                      _TechControlTab(v: detail.vehicle),
-                      const _StubTab(
-                          icon: Icons.history,
-                          text: 'Historique complet — bientôt disponible.'),
-                      _CostsTab(v: detail.vehicle),
+                      RepairsTab(vehicleId: widget.id),
+                      AccidentsTab(vehicleId: widget.id),
+                      Column(
+                        children: [
+                          _InsuranceTab(v: detail.vehicle),
+                          Expanded(
+                              child:
+                                  InsurancePoliciesTab(vehicleId: widget.id)),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          _TechControlTab(v: detail.vehicle),
+                          Expanded(
+                              child: TechnicalInspectionsTab(
+                                  vehicleId: widget.id)),
+                        ],
+                      ),
+                      HistoryTab(vehicleId: widget.id),
+                      CostsTab(vehicleId: widget.id),
                       _VehicleDocumentsTab(vehicleId: widget.id),
-                      const _StubTab(
-                          icon: Icons.policy_outlined,
-                          text:
-                              'Journal d\'audit — bientôt disponible depuis l\'onglet Audit.'),
+                      AuditTab(vehicleId: widget.id),
                     ],
                   ),
                 ),
@@ -637,45 +642,42 @@ class _InsuranceTab extends StatelessWidget {
         !expired &&
         expiry.difference(now).inDays >= 0 &&
         expiry.difference(now).inDays <= 30;
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        ModuleCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Assurance',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              ModuleKV(
-                label: 'Date d\'expiration',
-                value: expiry != null ? dateFmt.format(expiry) : '—',
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: ModuleCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Assurance (synthèse)',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            ModuleKV(
+              label: 'Prochaine expiration',
+              value: expiry != null ? dateFmt.format(expiry) : '—',
+            ),
+            const SizedBox(height: 10),
+            if (expired)
+              _StatusLine(
+                color: Colors.red,
+                icon: Icons.error,
+                text: 'Assurance expirée.',
+              )
+            else if (soon)
+              _StatusLine(
+                color: Colors.amber,
+                icon: Icons.warning_amber,
+                text:
+                    'Assurance à renouveler sous ${expiry!.difference(now).inDays} jour${expiry.difference(now).inDays > 1 ? 's' : ''}.',
+              )
+            else if (expiry != null)
+              _StatusLine(
+                color: Colors.green,
+                icon: Icons.check_circle,
+                text: 'Assurance en règle.',
               ),
-              const SizedBox(height: 10),
-              if (expired)
-                _StatusLine(
-                  color: Colors.red,
-                  icon: Icons.error,
-                  text: 'Assurance expirée.',
-                )
-              else if (soon)
-                _StatusLine(
-                  color: Colors.amber,
-                  icon: Icons.warning_amber,
-                  text:
-                      'Assurance à renouveler sous ${expiry!.difference(now).inDays} jour${expiry.difference(now).inDays > 1 ? 's' : ''}.',
-                )
-              else if (expiry != null)
-                _StatusLine(
-                  color: Colors.green,
-                  icon: Icons.check_circle,
-                  text: 'Assurance en règle.',
-                ),
-            ],
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -694,78 +696,46 @@ class _TechControlTab extends StatelessWidget {
         !expired &&
         expiry.difference(now).inDays >= 0 &&
         expiry.difference(now).inDays <= 30;
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        ModuleCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Visite technique',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              ModuleKV(
-                label: 'Date d\'expiration',
-                value: expiry != null ? dateFmt.format(expiry) : '—',
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: ModuleCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Visite technique (synthèse)',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            ModuleKV(
+              label: 'Prochaine expiration',
+              value: expiry != null ? dateFmt.format(expiry) : '—',
+            ),
+            const SizedBox(height: 10),
+            if (expired)
+              _StatusLine(
+                color: Colors.red,
+                icon: Icons.error,
+                text: 'Visite technique expirée.',
+              )
+            else if (soon)
+              _StatusLine(
+                color: Colors.amber,
+                icon: Icons.warning_amber,
+                text:
+                    'À repasser sous ${expiry!.difference(now).inDays} jour${expiry.difference(now).inDays > 1 ? 's' : ''}.',
+              )
+            else if (expiry != null)
+              _StatusLine(
+                color: Colors.green,
+                icon: Icons.check_circle,
+                text: 'Visite technique à jour.',
               ),
-              const SizedBox(height: 10),
-              if (expired)
-                _StatusLine(
-                  color: Colors.red,
-                  icon: Icons.error,
-                  text: 'Visite technique expirée.',
-                )
-              else if (soon)
-                _StatusLine(
-                  color: Colors.amber,
-                  icon: Icons.warning_amber,
-                  text:
-                      'À repasser sous ${expiry!.difference(now).inDays} jour${expiry.difference(now).inDays > 1 ? 's' : ''}.',
-                )
-              else if (expiry != null)
-                _StatusLine(
-                  color: Colors.green,
-                  icon: Icons.check_circle,
-                  text: 'Visite technique à jour.',
-                ),
-            ],
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
-class _CostsTab extends StatelessWidget {
-  const _CostsTab({required this.v});
-  final VehicleDto v;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: const [
-        _StubTab(
-          icon: Icons.analytics_outlined,
-          text:
-              'Analyse coûts & rentabilité (dépenses, CA, marge) — bientôt disponible.',
-        ),
-      ],
-    );
-  }
-}
-
-class _StubTab extends StatelessWidget {
-  const _StubTab({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return ModuleEmptyView(icon: icon, message: text);
-  }
-}
 
 class _StatusLine extends StatelessWidget {
   const _StatusLine({
