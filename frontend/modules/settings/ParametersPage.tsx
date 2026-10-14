@@ -13,11 +13,13 @@ const SECTION_META: Record<Section, { title: string; icon: string; hint: string 
   notifications: { title: 'Notifications', icon: '🔔', hint: 'Fenêtres d\'alerte pour assurance, visite technique, vignette, maintenance et fin de contrat.' },
   branding:      { title: 'Entreprise',    icon: '🏢', hint: 'Identité légale, ICE, RC, IF, CNSS, langue, fuseau horaire.' },
   gps:           { title: 'GPS',            icon: '📡', hint: 'Fournisseur GPS, endpoint API, clés, intervalle de rafraîchissement, alertes.' },
+  clients:       { title: 'Clients',        icon: '👥', hint: 'Documents requis au dossier, âge minimum, conformité KYC, numérotation client.' },
 };
 
 const isSection = (v: string | null): v is Section =>
   v === 'reservations' || v === 'contracts' || v === 'invoicing'
-  || v === 'payments' || v === 'notifications' || v === 'branding' || v === 'gps';
+  || v === 'payments' || v === 'notifications' || v === 'branding' || v === 'gps'
+  || v === 'clients';
 
 export const ParametersPage: React.FC = () => {
   const q = useQuery({
@@ -269,6 +271,160 @@ export const ParametersPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {tab === 'clients' && (
+          <div className="space-y-6">
+            {/* Documents requis — Particuliers */}
+            <RequiredDocumentsSection
+              title="Documents requis — Particuliers"
+              hint="Documents à collecter obligatoirement sur la fiche client avant de générer un contrat. Les codes correspondent aux catégories utilisées dans l'onglet Annexes du wizard (web + mobile)."
+              catalog={CUSTOMER_DOC_CATALOG_INDIVIDUAL}
+              csv={draft.clients.required_documents_individual ?? ''}
+              onChange={(csv) => setField('clients', 'required_documents_individual', csv)}
+            />
+
+            {/* Documents requis — Entreprises */}
+            <RequiredDocumentsSection
+              title="Documents requis — Entreprises"
+              hint="Documents complémentaires pour les clients personnes morales."
+              catalog={CUSTOMER_DOC_CATALOG_ENTERPRISE}
+              csv={draft.clients.required_documents_entreprise ?? ''}
+              onChange={(csv) => setField('clients', 'required_documents_entreprise', csv)}
+            />
+
+            {/* Validité & conformité */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-1 text-sm font-black uppercase tracking-widest text-slate-700">
+                Validité & conformité
+              </div>
+              <p className="mb-4 text-xs text-slate-500">
+                Règles d'éligibilité d'un client avant signature du contrat.
+              </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <NumberField
+                  label="Âge minimum conducteur (années)"
+                  value={draft.clients.min_client_age}
+                  min={16}
+                  max={99}
+                  onChange={(v) => setField('clients', 'min_client_age', v)}
+                />
+                <NumberField
+                  label="Ancienneté minimum du permis (mois)"
+                  value={draft.clients.min_driving_license_months}
+                  min={0}
+                  max={240}
+                  onChange={(v) => setField('clients', 'min_driving_license_months', v)}
+                  hint="Nombre de mois minimum entre la date de délivrance du permis et la date de contrat."
+                />
+                <NumberField
+                  label="Alerte expiration document (jours avant)"
+                  value={draft.clients.document_expiry_warning_days}
+                  min={0}
+                  max={365}
+                  onChange={(v) => setField('clients', 'document_expiry_warning_days', v)}
+                  hint="Un badge d'alerte apparaît sur la fiche client dès que l'expiration tombe dans cette fenêtre."
+                />
+                <NumberField
+                  label="Contrats actifs max. par client (0 = illimité)"
+                  value={draft.clients.max_active_contracts_per_client}
+                  min={0}
+                  max={50}
+                  onChange={(v) => setField('clients', 'max_active_contracts_per_client', v)}
+                />
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <BoolField
+                  label="Bloquer la génération du contrat si des documents requis manquent"
+                  value={draft.clients.block_contract_if_documents_missing}
+                  onChange={(v) => setField('clients', 'block_contract_if_documents_missing', v)}
+                />
+                <BoolField
+                  label="Exiger la vérification conformité avant contrat"
+                  value={draft.clients.require_compliance_before_contract}
+                  onChange={(v) => setField('clients', 'require_compliance_before_contract', v)}
+                  hint="Impose un statut KYC validé pour signer."
+                />
+                <BoolField
+                  label="Exiger le permis du conducteur secondaire"
+                  value={draft.clients.require_second_driver_license}
+                  onChange={(v) => setField('clients', 'require_second_driver_license', v)}
+                />
+                <BoolField
+                  label="Un client blacklisté bloque toute nouvelle réservation"
+                  value={draft.clients.blacklist_blocks_new_reservations}
+                  onChange={(v) => setField('clients', 'blacklist_blocks_new_reservations', v)}
+                />
+                <BoolField
+                  label="Validation KYC manuelle obligatoire"
+                  value={draft.clients.kyc_manual_approval_required}
+                  onChange={(v) => setField('clients', 'kyc_manual_approval_required', v)}
+                  hint="Un responsable doit approuver manuellement chaque nouveau client."
+                />
+              </div>
+            </div>
+
+            {/* Numérotation client */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-1 text-sm font-black uppercase tracking-widest text-slate-700">
+                Numérotation client
+              </div>
+              <p className="mb-4 text-xs text-slate-500">
+                Format du code client (ex. CL0001). Désactivez l'auto-génération si vous préférez saisir le code manuellement.
+              </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <TextField
+                  label="Préfixe du code client"
+                  value={draft.clients.customer_code_prefix}
+                  onChange={(v) => setField('clients', 'customer_code_prefix', v)}
+                  hint="Ex. CL, CUST, C-"
+                />
+                <NumberField
+                  label="Padding numérotation"
+                  value={draft.clients.customer_code_padding}
+                  min={2}
+                  max={8}
+                  onChange={(v) => setField('clients', 'customer_code_padding', v)}
+                />
+                <BoolField
+                  label="Générer le code client automatiquement"
+                  value={draft.clients.customer_code_auto_generate}
+                  onChange={(v) => setField('clients', 'customer_code_auto_generate', v)}
+                />
+              </div>
+            </div>
+
+            {/* Valeurs par défaut */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-1 text-sm font-black uppercase tracking-widest text-slate-700">
+                Valeurs par défaut
+              </div>
+              <p className="mb-4 text-xs text-slate-500">
+                Pré-sélections appliquées à l'ouverture du formulaire « Nouveau client ».
+              </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <SelectField
+                  label="Type de client par défaut"
+                  value={draft.clients.default_customer_type}
+                  onChange={(v) => setField('clients', 'default_customer_type', v as any)}
+                  options={[
+                    { value: 'individual', label: 'Particulier' },
+                    { value: 'entreprise', label: 'Entreprise' },
+                  ]}
+                />
+                <SelectField
+                  label="Langue de correspondance par défaut"
+                  value={draft.clients.default_customer_language}
+                  onChange={(v) => setField('clients', 'default_customer_language', v as any)}
+                  options={[
+                    { value: 'fr', label: 'Français' },
+                    { value: 'ar', label: 'Arabe' },
+                    { value: 'en', label: 'Anglais' },
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -393,6 +549,87 @@ const ContractTypesSection: React.FC<{ csv: string; onChange: (csv: string) => v
               <div>
                 <div className="text-sm font-black text-slate-900">{t.label}</div>
                 <div className="text-[11px] text-slate-500">{t.sub}</div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── Documents requis — Clients ───────────────────────────────────────────
+type CustomerDoc = { code: string; label: string; sub: string };
+
+const CUSTOMER_DOC_CATALOG_INDIVIDUAL: CustomerDoc[] = [
+  { code: 'cin',             label: "Pièce d'identité (CIN)",      sub: 'Recto / verso de la carte nationale' },
+  { code: 'passport',        label: 'Passeport',                    sub: 'Pour les clients étrangers' },
+  { code: 'driving_license', label: 'Permis de conduire',           sub: 'Recto obligatoire — verso recommandé' },
+  { code: 'address_proof',   label: 'Justificatif de domicile',     sub: 'Facture < 3 mois, attestation, contrat de bail' },
+  { code: 'income_proof',    label: 'Justificatif de revenus / CNSS', sub: 'Bulletin de paie, attestation employeur, CNSS' },
+  { code: 'rib',             label: 'RIB',                          sub: 'Pour prélèvements et remboursement de caution' },
+  { code: 'cnss_cert',       label: 'Attestation CNSS',             sub: 'Si demandée par le dossier LLD' },
+];
+
+const CUSTOMER_DOC_CATALOG_ENTERPRISE: CustomerDoc[] = [
+  { code: 'rc_cert',             label: 'Registre de commerce (RC)',          sub: "Modèle J ou extrait récent" },
+  { code: 'ice_cert',             label: 'Attestation ICE',                    sub: "Identifiant commun de l'entreprise" },
+  { code: 'if_cert',               label: 'Attestation IF',                     sub: 'Identifiant fiscal' },
+  { code: 'cnss_cert',             label: 'Attestation CNSS',                   sub: 'Déclaration à jour' },
+  { code: 'statuts',               label: 'Statuts de la société',              sub: 'Mise à jour la plus récente' },
+  { code: 'rib',                   label: 'RIB entreprise',                     sub: 'Compte bancaire de la société' },
+  { code: 'power_of_attorney',     label: 'Pouvoir du signataire',              sub: "Mandat autorisant la signature du contrat" },
+  { code: 'financial_statements',  label: 'Bilans financiers (3 exercices)',    sub: 'Requis pour dossiers CREDIT_AUTO / LLD longue durée' },
+];
+
+function parseDocsCsv(csv: string): Set<string> {
+  const trimmed = (csv ?? '').trim();
+  if (!trimmed) return new Set();
+  return new Set(trimmed.split(',').map((s) => s.trim()).filter(Boolean));
+}
+
+const RequiredDocumentsSection: React.FC<{
+  title: string;
+  hint: string;
+  catalog: CustomerDoc[];
+  csv: string;
+  onChange: (csv: string) => void;
+}> = ({ title, hint, catalog, csv, onChange }) => {
+  const required = parseDocsCsv(csv);
+  const toggle = (code: string) => {
+    const next = new Set(required);
+    if (next.has(code)) next.delete(code); else next.add(code);
+    // Serialize in catalog order so the stored string stays canonical.
+    const serialized = catalog
+      .filter((d) => next.has(d.code))
+      .map((d) => d.code)
+      .join(',');
+    onChange(serialized);
+  };
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-1 text-sm font-black uppercase tracking-widest text-slate-700">{title}</div>
+      <p className="mb-4 text-xs text-slate-500">{hint}</p>
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {catalog.map((d) => {
+          const on = required.has(d.code);
+          return (
+            <label
+              key={d.code}
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${
+                on ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 accent-indigo-600"
+                checked={on}
+                onChange={() => toggle(d.code)}
+              />
+              <div>
+                <div className="text-sm font-black text-slate-900">{d.label}</div>
+                <div className="text-[11px] text-slate-500">{d.sub}</div>
+                <div className="mt-0.5 text-[10px] font-mono text-slate-400">code: {d.code}</div>
               </div>
             </label>
           );

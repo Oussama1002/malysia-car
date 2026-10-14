@@ -23,7 +23,7 @@ class CompanySettingsController extends Controller
     {
         $user = $request->user();
         $companyId = optional($user)->company_id;
-        $groups = ['reservations', 'contracts', 'invoicing', 'payments', 'notifications', 'branding', 'gps'];
+        $groups = ['reservations', 'contracts', 'invoicing', 'payments', 'notifications', 'branding', 'gps', 'clients'];
         $codes = $user?->roleCodes() ?? [];
         $canReadIntegrations = (bool) array_intersect(['ADMIN', 'DIRECTEUR'], $codes);
         if ($canReadIntegrations) {
@@ -199,6 +199,34 @@ class CompanySettingsController extends Controller
                 'auto_confirm',
                 'max_reservation_days',
                 'min_reservation_hours',
+            ],
+            'clients' => [
+                // Required documents — CSV of document codes that MUST be on
+                // file before a contract can be generated. Codes are the same
+                // keys the mobile Annexes step and the web EntityDocuments
+                // picker already use (cin, driving_license, income_proof,
+                // address_proof, rib, passport, financial_statements,
+                // rc_cert, ice_cert, cnss_cert).
+                'required_documents_individual',
+                'required_documents_entreprise',
+                // Validity / compliance policy
+                'min_client_age',                   // years, individual
+                'min_driving_license_months',       // months since issue
+                'document_expiry_warning_days',     // alert N days before expiry
+                'require_compliance_before_contract', // bool-ish '1'/'0'
+                'block_contract_if_documents_missing', // bool-ish
+                'require_second_driver_license',    // bool-ish
+                // KYC / dossier
+                'kyc_manual_approval_required',     // bool-ish
+                'max_active_contracts_per_client',  // 0 = illimité
+                'blacklist_blocks_new_reservations', // bool-ish
+                // Numérotation client
+                'customer_code_prefix',
+                'customer_code_padding',
+                'customer_code_auto_generate',      // bool-ish
+                // Defaults
+                'default_customer_type',            // 'individual' | 'entreprise'
+                'default_customer_language',        // 'fr' | 'ar' | 'en'
             ],
             'integrations' => [
                 'smtp_host',

@@ -74,6 +74,11 @@ export const SettingsPage: React.FC = () => (
       <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500">Configuration métier</h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <AdminCard
+          title="Clients"
+          subtitle="Documents requis, âge minimum, conformité KYC, numérotation"
+          href="/settings/parameters?tab=clients"
+        />
+        <AdminCard
           title="Réservations"
           subtitle="Auto-annulation, rappels, type par défaut, caution"
           href="/settings/parameters?tab=reservations"

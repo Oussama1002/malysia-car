@@ -71,6 +71,30 @@ export interface CompanySettingsPayload {
     speed_alert_kmh: number;
     position_retention_days: number;
   };
+  clients: {
+    /** CSV of document codes required BEFORE a contract can be generated,
+     *  for individual customers. Document codes match the EntityDocuments
+     *  / mobile Annexes keys: cin, passport, driving_license,
+     *  address_proof, income_proof, rib, cnss_cert. */
+    required_documents_individual: string;
+    /** Same for enterprise customers: rc_cert, ice_cert, cnss_cert,
+     *  financial_statements, rib, etc. */
+    required_documents_entreprise: string;
+    min_client_age: number;
+    min_driving_license_months: number;
+    document_expiry_warning_days: number;
+    require_compliance_before_contract: boolean;
+    block_contract_if_documents_missing: boolean;
+    require_second_driver_license: boolean;
+    kyc_manual_approval_required: boolean;
+    max_active_contracts_per_client: number;
+    blacklist_blocks_new_reservations: boolean;
+    customer_code_prefix: string;
+    customer_code_padding: number;
+    customer_code_auto_generate: boolean;
+    default_customer_type: 'individual' | 'entreprise';
+    default_customer_language: 'fr' | 'ar' | 'en';
+  };
 }
 
 export const companySettingsApi = {
