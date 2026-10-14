@@ -261,69 +261,64 @@ class _OverviewTab extends StatelessWidget {
                       TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
               ModuleKV(label: 'Immatriculation', value: v.registration),
-              if ((v.registrationCardNumber ?? '').isNotEmpty)
-                ModuleKV(
-                    label: 'N° Carte Grise',
-                    value: v.registrationCardNumber!),
-              if ((v.vin ?? '').isNotEmpty)
-                ModuleKV(label: 'VIN', value: v.vin!),
-              if (v.fuel != null)
-                ModuleKV(
-                  label: 'Carburant',
-                  value: kFuelFr[v.fuel!.toLowerCase()] ?? v.fuel!,
-                ),
-              if (v.fiscalPower != null)
-                ModuleKV(
-                    label: 'Puissance fiscale', value: '${v.fiscalPower} CV'),
-              if (v.mileageKm != null)
-                ModuleKV(
-                    label: 'Kilométrage',
-                    value: '${money.format(v.mileageKm)} km'),
-              if (v.year != null) ModuleKV(label: 'Année', value: '${v.year}'),
+              ModuleKV(
+                  label: 'N° Carte Grise',
+                  value: (v.registrationCardNumber ?? '').isEmpty
+                      ? '—'
+                      : v.registrationCardNumber!),
+              ModuleKV(
+                  label: 'VIN',
+                  value: (v.vin ?? '').isEmpty ? '—' : v.vin!),
+              ModuleKV(
+                label: 'Carburant',
+                value: v.fuel == null
+                    ? '—'
+                    : (kFuelFr[v.fuel!.toLowerCase()] ?? v.fuel!),
+              ),
+              ModuleKV(
+                  label: 'Puissance fiscale',
+                  value: v.fiscalPower == null ? '—' : '${v.fiscalPower} CV'),
+              ModuleKV(
+                  label: 'Kilométrage',
+                  value: v.mileageKm == null
+                      ? '—'
+                      : '${money.format(v.mileageKm)} km'),
             ],
           ),
         ),
 
-        // ─── Documents réglementaires ────────────────────────────────
-        if (v.insuranceExpiry != null ||
-            v.techControlExpiry != null ||
-            v.vignetteExpiry != null) ...[
-          const SizedBox(height: 12),
-          ModuleCard(child: _ComplianceSummary(v: v)),
-        ],
+        // ─── Documents réglementaires — toujours affichés (web parity)
+        const SizedBox(height: 12),
+        ModuleCard(child: _ComplianceSummary(v: v)),
 
-        // ─── Acquisition ─────────────────────────────────────────────
-        if (v.acquisitionType != null ||
-            v.purchaseCostMad != null ||
-            v.currentValueMad != null) ...[
-          const SizedBox(height: 12),
-          ModuleCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Acquisition',
-                    style:
-                        TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                if (v.acquisitionType != null)
-                  ModuleKV(label: 'Type', value: v.acquisitionType!),
-                if (v.purchaseCostMad != null)
-                  ModuleKV(
-                      label: "Prix d'achat",
-                      value: '${money.format(v.purchaseCostMad)} MAD'),
-                if (v.currentValueMad != null)
-                  ModuleKV(
-                      label: 'Valeur livre',
-                      value: '${money.format(v.currentValueMad)} MAD'),
-                if (v.acquisitionDate != null)
-                  ModuleKV(
-                      label: "Date d'achat",
-                      value: DateFormat('dd/MM/yyyy', 'fr')
-                          .format(v.acquisitionDate!)),
-              ],
-            ),
+        // ─── Acquisition — toujours affichée (web parity)
+        const SizedBox(height: 12),
+        ModuleCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Acquisition',
+                  style:
+                      TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              ModuleKV(
+                  label: 'Type',
+                  value: (v.acquisitionType ?? '').isEmpty
+                      ? '—'
+                      : v.acquisitionType!),
+              ModuleKV(
+                  label: "Prix d'achat",
+                  value: v.purchaseCostMad == null
+                      ? '—'
+                      : '${money.format(v.purchaseCostMad)} MAD'),
+              ModuleKV(
+                  label: 'Valeur livre',
+                  value: v.currentValueMad == null
+                      ? '—'
+                      : '${money.format(v.currentValueMad)} MAD'),
+            ],
           ),
-        ],
+        ),
       ],
     );
   }
@@ -411,16 +406,27 @@ class _IdentityTab extends StatelessWidget {
   const _IdentityTab({required this.detail});
   final VehicleDetailDto detail;
 
+  // Same row contract as the web: always render the field, show "—" when
+  // the value is empty so the two surfaces have identical layouts.
+  String _or(String? v) => (v == null || v.trim().isEmpty) ? '—' : v;
+
   @override
   Widget build(BuildContext context) {
     final v = detail.vehicle;
-    final hasContext = detail.currentCustomerName != null ||
-        detail.currentContractNumber != null ||
-        detail.currentReservationNumber != null;
+    final clientLine = detail.currentCustomerName == null
+        ? '—'
+        : (detail.currentCustomerCode == null
+            ? detail.currentCustomerName!
+            : '${detail.currentCustomerName!} · ${detail.currentCustomerCode}');
+    final reservationLine = detail.currentReservationNumber == null
+        ? '—'
+        : (detail.currentReservationStatus == null
+            ? detail.currentReservationNumber!
+            : '${detail.currentReservationNumber!} · ${kReservationStatusFr[detail.currentReservationStatus!.toLowerCase()] ?? detail.currentReservationStatus}');
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ─── Identité véhicule ──────────────────────────────────────
+        // ─── Identité véhicule — same 9 rows as the web ─────────────
         ModuleCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,71 +436,59 @@ class _IdentityTab extends StatelessWidget {
                       TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
               ModuleKV(label: 'Immatriculation', value: v.registration),
-              if ((v.vin ?? '').isNotEmpty)
-                ModuleKV(label: 'VIN', value: v.vin!),
-              if ((v.chassisNumber ?? '').isNotEmpty)
-                ModuleKV(label: 'Châssis', value: v.chassisNumber!),
-              if (v.transmission != null)
-                ModuleKV(
-                    label: 'Transmission',
-                    value: kTransmissionFr[v.transmission!.toLowerCase()] ??
-                        v.transmission!),
-              if ((v.physicalStatus ?? '').isNotEmpty)
-                ModuleKV(
-                    label: 'Statut physique',
-                    value: kPhysicalStatusFr[v.physicalStatus!.toLowerCase()] ??
-                        v.physicalStatus!),
-              if ((v.availabilityStatus ?? '').isNotEmpty)
-                ModuleKV(
-                    label: 'Disponibilité',
-                    value: kAvailabilityFr[v.availabilityStatus!.toLowerCase()] ??
-                        v.availabilityStatus!),
-              if ((v.ownership ?? '').isNotEmpty)
-                ModuleKV(
-                    label: 'Propriété',
-                    value: kOwnershipFr[v.ownership!.toLowerCase()] ??
-                        v.ownership!),
-              if ((v.currentLocation ?? '').isNotEmpty)
-                ModuleKV(label: 'Emplacement', value: v.currentLocation!),
-              if ((v.unavailabilityReason ?? '').isNotEmpty)
-                ModuleKV(
-                    label: 'Motif indispo.',
-                    value: v.unavailabilityReason!),
+              ModuleKV(label: 'VIN', value: _or(v.vin)),
+              ModuleKV(label: 'Châssis', value: _or(v.chassisNumber)),
+              ModuleKV(
+                  label: 'Transmission',
+                  value: v.transmission == null
+                      ? '—'
+                      : (kTransmissionFr[v.transmission!.toLowerCase()] ??
+                          v.transmission!)),
+              ModuleKV(
+                  label: 'Statut physique',
+                  value: v.physicalStatus == null
+                      ? '—'
+                      : (kPhysicalStatusFr[v.physicalStatus!.toLowerCase()] ??
+                          v.physicalStatus!)),
+              ModuleKV(
+                  label: 'Disponibilité',
+                  value: v.availabilityStatus == null
+                      ? '—'
+                      : (kAvailabilityFr[v.availabilityStatus!.toLowerCase()] ??
+                          v.availabilityStatus!)),
+              ModuleKV(
+                  label: 'Propriété',
+                  value: v.ownership == null
+                      ? '—'
+                      : (kOwnershipFr[v.ownership!.toLowerCase()] ??
+                          v.ownership!)),
+              ModuleKV(label: 'Emplacement', value: _or(v.currentLocation)),
+              ModuleKV(
+                  label: 'Motif indispo.',
+                  value: _or(v.unavailabilityReason)),
             ],
           ),
         ),
 
-        // ─── Contexte location ──────────────────────────────────────
-        if (hasContext) ...[
-          const SizedBox(height: 12),
-          ModuleCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Contexte location',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                if (detail.currentCustomerName != null)
-                  ModuleKV(
-                      label: 'Client',
-                      value: detail.currentCustomerCode == null
-                          ? detail.currentCustomerName!
-                          : '${detail.currentCustomerName!} · ${detail.currentCustomerCode}'),
-                if (detail.currentContractNumber != null)
-                  ModuleKV(
-                      label: 'Contrat courant',
-                      value: detail.currentContractNumber!),
-                if (detail.currentReservationNumber != null)
-                  ModuleKV(
-                      label: 'Réservation courante',
-                      value: detail.currentReservationStatus == null
-                          ? detail.currentReservationNumber!
-                          : '${detail.currentReservationNumber!} · ${kReservationStatusFr[detail.currentReservationStatus!.toLowerCase()] ?? detail.currentReservationStatus}'),
-              ],
-            ),
+        // ─── Contexte location — same 3 rows as the web, toujours visible
+        const SizedBox(height: 12),
+        ModuleCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Contexte location',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              ModuleKV(label: 'Client (lié)', value: clientLine),
+              ModuleKV(
+                  label: 'Contrat courant',
+                  value: _or(detail.currentContractNumber)),
+              ModuleKV(
+                  label: 'Réservation courante', value: reservationLine),
+            ],
           ),
-        ],
+        ),
       ],
     );
   }
