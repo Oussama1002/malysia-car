@@ -572,14 +572,11 @@ export const ContractWizardPage: React.FC = () => {
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   // Filter the contract-type catalog by the admin's whitelist stored in
   // settings.contracts.enabled_contract_types (CSV). Fallback is LLD + LCD
-  // only, which is the business default the user asked for. The 'contracts'
-  // settings block comes through settingsQ.data.contracts.
+  // only — business default per the admin-controllable types section.
   const enabledContractTypes = useMemo(() => {
-    const raw = (settingsQ.data as Record<string, Record<string, string>> | undefined)
-      ?.contracts?.enabled_contract_types ?? '';
+    const raw = settingsQ.data?.contracts?.enabled_contract_types ?? '';
     const parts = String(raw).split(',').map((s) => s.trim()).filter(Boolean);
-    const set = new Set(parts.length ? parts : ['LLD', 'LOCATION_COURTE']);
-    return set;
+    return new Set(parts.length ? parts : ['LLD', 'LOCATION_COURTE']);
   }, [settingsQ.data]);
   const visibleContractTypes = useMemo(
     () => CONTRACT_TYPES.filter((t) => enabledContractTypes.has(t.value)),

@@ -20,6 +20,9 @@ export interface CompanySettingsPayload {
     contract_number_prefix: string;
     contract_number_padding: number;
     auto_generate_pdf: boolean;
+    /** CSV of allowed contract types ('LLD,LOCATION_COURTE,LOA,…').
+     *  Empty / unset means the business default (LLD + LCD only). */
+    enabled_contract_types: string;
   };
   invoicing: {
     invoice_number_prefix: string;

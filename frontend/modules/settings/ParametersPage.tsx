@@ -137,17 +137,26 @@ export const ParametersPage: React.FC = () => {
         )}
 
         {tab === 'contracts' && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <NumberField label="Km inclus par mois (défaut)" value={draft.contracts.default_km_per_month} onChange={(v) => setField('contracts', 'default_km_per_month', v)} />
-            <NumberField label="Caution par défaut (MAD)" value={draft.contracts.default_deposit_mad} onChange={(v) => setField('contracts', 'default_deposit_mad', v)} hint="Utilisé si Caution % = 0." />
-            <NumberField label="Caution par défaut (%)" value={draft.contracts.default_deposit_pct} onChange={(v) => setField('contracts', 'default_deposit_pct', v)} hint="Si > 0, remplace la caution fixe." />
-            <NumberField label="Jour de prélèvement attendu" value={draft.contracts.default_expected_day} min={1} max={31} onChange={(v) => setField('contracts', 'default_expected_day', v)} />
-            <TextField label="Conditions de paiement (défaut)" value={draft.contracts.default_payment_terms} onChange={(v) => setField('contracts', 'default_payment_terms', v)} />
-            <NumberField label="Seuil validation directeur (MAD)" value={draft.contracts.approval_threshold_mad} onChange={(v) => setField('contracts', 'approval_threshold_mad', v)} hint="Au-dessus de ce montant, l'approbation du directeur est requise." />
-            <NumberField label="Pénalité par jour de retard (MAD)" value={draft.contracts.default_penalty_per_day} onChange={(v) => setField('contracts', 'default_penalty_per_day', v)} />
-            <TextField label="Préfixe numérotation contrat" value={draft.contracts.contract_number_prefix} onChange={(v) => setField('contracts', 'contract_number_prefix', v)} />
-            <NumberField label="Padding numérotation" value={draft.contracts.contract_number_padding} min={2} max={8} onChange={(v) => setField('contracts', 'contract_number_padding', v)} />
-            <BoolField label="Générer le PDF automatiquement à l'enregistrement" value={draft.contracts.auto_generate_pdf} onChange={(v) => setField('contracts', 'auto_generate_pdf', v)} />
+          <div className="space-y-6">
+            {/* Types de contrats — admin whitelist that drives the wizard
+                (web + mobile). Business default: LLD + LCD only. */}
+            <ContractTypesSection
+              csv={draft.contracts.enabled_contract_types ?? ''}
+              onChange={(csv) => setField('contracts', 'enabled_contract_types', csv)}
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <NumberField label="Km inclus par mois (défaut)" value={draft.contracts.default_km_per_month} onChange={(v) => setField('contracts', 'default_km_per_month', v)} />
+              <NumberField label="Franchise d'assurance par défaut (MAD)" value={draft.contracts.default_deposit_mad} onChange={(v) => setField('contracts', 'default_deposit_mad', v)} hint="Utilisé si Franchise % = 0." />
+              <NumberField label="Franchise d'assurance par défaut (%)" value={draft.contracts.default_deposit_pct} onChange={(v) => setField('contracts', 'default_deposit_pct', v)} hint="Si > 0, remplace la franchise fixe." />
+              <NumberField label="Jour de prélèvement attendu" value={draft.contracts.default_expected_day} min={1} max={31} onChange={(v) => setField('contracts', 'default_expected_day', v)} />
+              <TextField label="Conditions de paiement (défaut)" value={draft.contracts.default_payment_terms} onChange={(v) => setField('contracts', 'default_payment_terms', v)} />
+              <NumberField label="Seuil validation directeur (MAD)" value={draft.contracts.approval_threshold_mad} onChange={(v) => setField('contracts', 'approval_threshold_mad', v)} hint="Au-dessus de ce montant, l'approbation du directeur est requise." />
+              <NumberField label="Pénalité par jour de retard (MAD)" value={draft.contracts.default_penalty_per_day} onChange={(v) => setField('contracts', 'default_penalty_per_day', v)} />
+              <TextField label="Préfixe numérotation contrat" value={draft.contracts.contract_number_prefix} onChange={(v) => setField('contracts', 'contract_number_prefix', v)} />
+              <NumberField label="Padding numérotation" value={draft.contracts.contract_number_padding} min={2} max={8} onChange={(v) => setField('contracts', 'contract_number_padding', v)} />
+              <BoolField label="Générer le PDF automatiquement à l'enregistrement" value={draft.contracts.auto_generate_pdf} onChange={(v) => setField('contracts', 'auto_generate_pdf', v)} />
+            </div>
           </div>
         )}
 
@@ -318,5 +327,79 @@ const BoolField: React.FC<{ label: string; value: boolean; onChange: (v: boolean
     </div>
   </label>
 );
+
+// ─── Types de contrats whitelist ──────────────────────────────────────────
+const CONTRACT_TYPE_CATALOG: { value: string; label: string; sub: string }[] = [
+  { value: 'LLD', label: 'Location Longue Durée (LLD)', sub: 'Sans option d’achat' },
+  { value: 'LOCATION_COURTE', label: 'Location Courte Durée (LCD)', sub: 'Journalière / hebdomadaire' },
+  { value: 'LOA', label: 'Location avec Option d’Achat (LOA)', sub: 'Valeur résiduelle fixée au contrat' },
+  { value: 'CREDIT_AUTO', label: 'Crédit Automobile', sub: 'Financement bancaire interne' },
+  { value: 'VENTE_VO', label: 'Vente Véhicule d’Occasion', sub: 'Transfert de propriété immédiat' },
+];
+const DEFAULT_ENABLED_TYPES = ['LLD', 'LOCATION_COURTE'];
+
+/** Decoder for the CSV stored in enabled_contract_types. Empty value =
+ *  LLD + LCD only (business default). */
+function parseEnabledTypes(csv: string): Set<string> {
+  const trimmed = (csv ?? '').trim();
+  if (!trimmed) return new Set(DEFAULT_ENABLED_TYPES);
+  const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  return parts.length ? new Set(parts) : new Set(DEFAULT_ENABLED_TYPES);
+}
+
+/** Admin section on /settings/parameters?tab=contracts. Toggles which
+ *  contract types the wizard offers (web + mobile both read this). */
+const ContractTypesSection: React.FC<{ csv: string; onChange: (csv: string) => void }> = ({ csv, onChange }) => {
+  const enabled = parseEnabledTypes(csv);
+  const toggle = (value: string) => {
+    const next = new Set(enabled);
+    if (next.has(value)) {
+      if (next.size === 1) return; // keep at least one type available
+      next.delete(value);
+    } else {
+      next.add(value);
+    }
+    // Serialize in catalog order so the stored string stays canonical.
+    const serialized = CONTRACT_TYPE_CATALOG
+      .filter((t) => next.has(t.value))
+      .map((t) => t.value)
+      .join(',');
+    onChange(serialized);
+  };
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-1 text-sm font-black uppercase tracking-widest text-slate-700">
+        Types de contrats disponibles
+      </div>
+      <p className="mb-4 text-xs text-slate-500">
+        Choisissez les types proposés aux agents dans le wizard de création (web et mobile). Les types décochés disparaissent du choix. Au moins un type doit rester actif.
+      </p>
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {CONTRACT_TYPE_CATALOG.map((t) => {
+          const on = enabled.has(t.value);
+          return (
+            <label
+              key={t.value}
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${
+                on ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 accent-indigo-600"
+                checked={on}
+                onChange={() => toggle(t.value)}
+              />
+              <div>
+                <div className="text-sm font-black text-slate-900">{t.label}</div>
+                <div className="text-[11px] text-slate-500">{t.sub}</div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 export default ParametersPage;

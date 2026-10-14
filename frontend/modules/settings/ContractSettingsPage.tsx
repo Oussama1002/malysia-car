@@ -213,12 +213,10 @@ export const ContractSettingsPage: React.FC = () => {
       </header>
 
       <div className="space-y-5">
-        <ContractTypesCard
-          csv={contractValues['enabled_contract_types'] ?? ''}
-          onChange={(csv) =>
-            setContractValues((prev) => ({ ...prev, enabled_contract_types: csv }))
-          }
-        />
+        {/* 'Types de contrats disponibles' lives on ParametersPage
+            (the page actually mounted at /settings/parameters?tab=contracts).
+            This ContractSettingsPage is a legacy/standalone view; keep it
+            focused on durations + payment defaults. */}
 
         {contractSections.map(([section, fields]) => (
           <SectionCard
