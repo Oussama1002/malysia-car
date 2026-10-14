@@ -15,12 +15,38 @@ class VehicleDto {
     this.photoUrl,
     this.mileageKm,
     this.insuranceExpiry,
+    this.insuranceStart,
     this.techControlExpiry,
     this.vignetteExpiry,
     this.registrationCardNumber,
     this.availabilityStatus,
     this.hasActiveReservation = false,
     this.hasActiveContract = false,
+    this.vin,
+    this.chassisNumber,
+    this.physicalStatus,
+    this.fiscalPower,
+    this.color,
+    this.purchaseCostMad,
+    this.currentValueMad,
+    this.acquisitionType,
+    this.acquisitionDate,
+    this.currentLocation,
+    this.unavailabilityReason,
+    this.numeroPolice,
+    this.nombreCylindres,
+    this.nombrePlaces,
+    this.nombrePortes,
+    this.miseEnCirculation,
+    this.dateImmatriculation,
+    this.immatOnline,
+    this.carteGriseStatus,
+    this.immatProvisoireExpiry,
+    this.insuranceDeductible,
+    this.vehicleType,
+    this.gamme,
+    this.categorie,
+    this.equipments = const [],
   });
 
   final String id;
@@ -47,6 +73,36 @@ class VehicleDto {
   /// current_* sur la table vehicles.
   final bool hasActiveReservation;
   final bool hasActiveContract;
+
+  // ── Fiche détaillée (expose les mêmes champs que le web
+  // `FleetVehicleDetailPage`, onglets Vue générale & Identité). Tous
+  // facultatifs : la liste parc n'en a pas besoin.
+  final DateTime? insuranceStart;
+  final String? vin;
+  final String? chassisNumber;
+  final String? physicalStatus;
+  final int? fiscalPower;
+  final String? color;
+  final double? purchaseCostMad;
+  final double? currentValueMad;
+  final String? acquisitionType;
+  final DateTime? acquisitionDate;
+  final String? currentLocation;
+  final String? unavailabilityReason;
+  final String? numeroPolice;
+  final int? nombreCylindres;
+  final int? nombrePlaces;
+  final int? nombrePortes;
+  final DateTime? miseEnCirculation;
+  final DateTime? dateImmatriculation;
+  final String? immatOnline;
+  final String? carteGriseStatus;
+  final DateTime? immatProvisoireExpiry;
+  final double? insuranceDeductible;
+  final String? vehicleType;
+  final String? gamme;
+  final String? categorie;
+  final List<String> equipments;
 
   /// Statut consolidé prêt à afficher dans un picker de réservation.
   /// Priorise contrat actif → réservation active → availability_status → status.
@@ -142,6 +198,49 @@ class VehicleDto {
       hasActiveContract: json['hasActiveContract'] == true ||
           json['has_active_contract'] == true ||
           json['current_contract_id'] != null,
+      insuranceStart: _date(json['insuranceStart'] ?? json['insurance_start']),
+      vin: json['vin']?.toString(),
+      chassisNumber:
+          (json['chassisNumber'] ?? json['chassis_number'])?.toString(),
+      physicalStatus:
+          (json['physicalStatus'] ?? json['physical_status'])?.toString(),
+      fiscalPower: _int(json['cv'] ?? json['fiscalPower'] ?? json['fiscal_power']),
+      color: json['color']?.toString(),
+      purchaseCostMad:
+          _d(json['purchaseCostMad'] ?? json['purchase_price']),
+      currentValueMad: _d(json['currentValueMad'] ?? json['book_value']),
+      acquisitionType:
+          (json['acquisitionType'] ?? json['acquisition_type'])?.toString(),
+      acquisitionDate:
+          _date(json['acquisitionDate'] ?? json['acquisition_date']),
+      currentLocation:
+          (json['currentLocation'] ?? json['current_location'])?.toString(),
+      unavailabilityReason:
+          (json['unavailabilityReason'] ?? json['unavailability_reason'])
+              ?.toString(),
+      numeroPolice:
+          (json['numeroPolice'] ?? json['numero_police'])?.toString(),
+      nombreCylindres:
+          _int(json['nombreCylindres'] ?? json['nombre_cylindres']),
+      nombrePlaces: _int(json['nombrePlaces'] ?? json['nombre_places']),
+      nombrePortes: _int(json['nombrePortes'] ?? json['nombre_portes']),
+      miseEnCirculation:
+          _date(json['miseEnCirculation'] ?? json['mise_en_circulation']),
+      dateImmatriculation: _date(
+          json['dateImmatriculation'] ?? json['date_immatriculation']),
+      immatOnline: (json['immatOnline'] ?? json['immat_online'])?.toString(),
+      carteGriseStatus:
+          (json['carteGriseStatus'] ?? json['carte_grise_status'])?.toString(),
+      immatProvisoireExpiry: _date(
+          json['immatProvisoireExpiry'] ?? json['immat_provisoire_expiry']),
+      insuranceDeductible:
+          _d(json['insuranceDeductible'] ?? json['insurance_deductible']),
+      vehicleType: (json['vehicleType'] ?? json['vehicle_type'])?.toString(),
+      gamme: json['gamme']?.toString(),
+      categorie: json['categorie']?.toString(),
+      equipments: json['equipments'] is List
+          ? [for (final e in json['equipments']) e.toString()]
+          : const [],
     );
   }
 }
@@ -195,4 +294,51 @@ const Map<String, String> kTransmissionFr = {
   'automatic': 'Automatique',
   'semi_automatic': 'Semi-automatique',
   'cvt': 'Automatique',
+};
+
+const Map<String, String> kPhysicalStatusFr = {
+  'good': 'Bon état',
+  'needs_maintenance': "Besoin d'entretien",
+  'needs_repair': 'Besoin de réparation',
+  'damaged': 'Endommagé',
+  'immobilized': 'Immobilisé',
+};
+
+const Map<String, String> kAvailabilityFr = {
+  'available': 'Disponible',
+  'reserved': 'Réservé',
+  'rented': 'Loué',
+  'in_use': 'Loué',
+  'maintenance': 'En maintenance',
+  'repair': 'En réparation',
+  'in_repair': 'En réparation',
+  'blocked': 'Bloqué',
+  'unavailable': 'Indisponible',
+  'immobilized': 'Immobilisé',
+  'accident': 'Accidenté',
+  'sold': 'Vendu',
+  'scrapped': 'Rebuté',
+  'pending': 'En attente',
+};
+
+const Map<String, String> kOwnershipFr = {
+  'owned': 'Propriété agence',
+  'leased': 'Loué (crédit-bail)',
+  'sub_rented': 'Sous-location',
+  'sub_rental': 'Sous-location',
+  'consignment': 'Dépôt-vente',
+};
+
+const Map<String, String> kReservationStatusFr = {
+  'draft': 'Brouillon',
+  'reserved': 'Réservée',
+  'confirmed': 'Confirmée',
+  'pickup_scheduled': 'Remise planifiée',
+  'handed_over': 'Remise',
+  'active': 'En cours',
+  'extension_requested': 'Prolongation demandée',
+  'returned': 'Retournée',
+  'cancelled': 'Annulée',
+  'closed': 'Clôturée',
+  'completed': 'Terminée',
 };

@@ -10,7 +10,12 @@ class VehicleDetailDto {
     this.movements = const [],
     this.odometerReadings = const [],
     this.currentCustomerName,
+    this.currentCustomerCode,
     this.currentContractNumber,
+    this.currentContractId,
+    this.currentReservationNumber,
+    this.currentReservationId,
+    this.currentReservationStatus,
   });
 
   final VehicleDto vehicle;
@@ -18,17 +23,29 @@ class VehicleDetailDto {
   final List<VehicleMovementDto> movements;
   final List<OdometerReadingDto> odometerReadings;
   final String? currentCustomerName;
+  final String? currentCustomerCode;
   final String? currentContractNumber;
+  final String? currentContractId;
+  final String? currentReservationNumber;
+  final String? currentReservationId;
+  final String? currentReservationStatus;
 
   factory VehicleDetailDto.fromJson(Map<String, dynamic> json) {
     final vJson = _asMap(json['vehicle']) ?? json;
     final current = _asMap(json['current']);
     String? customerName;
+    String? customerCode;
     String? contractNumber;
+    String? contractId;
+    String? reservationNumber;
+    String? reservationId;
+    String? reservationStatus;
     if (current != null) {
       final cust = _asMap(current['customer']);
       if (cust != null) {
-        customerName = cust['display_name']?.toString();
+        customerName = cust['display_name']?.toString() ??
+            cust['legal_name']?.toString() ??
+            cust['name']?.toString();
         if (customerName == null || customerName.isEmpty) {
           final ind = _asMap(cust['individual_profile']);
           if (ind != null) {
@@ -36,11 +53,25 @@ class VehicleDetailDto {
             final l = ind['last_name']?.toString() ?? '';
             customerName = ('$f $l').trim();
           }
+          final comp = _asMap(cust['company_profile']);
+          if ((customerName == null || customerName.isEmpty) && comp != null) {
+            customerName = (comp['trade_name'] ?? comp['legal_name'])?.toString();
+          }
         }
+        customerCode = cust['customer_code']?.toString();
       }
       final contract = _asMap(current['contract']);
       if (contract != null) {
-        contractNumber = contract['contract_number']?.toString();
+        contractNumber = (contract['contract_number'] ?? contract['reference'])
+            ?.toString();
+        contractId = contract['id']?.toString();
+      }
+      final reservation = _asMap(current['reservation']);
+      if (reservation != null) {
+        reservationNumber =
+            reservation['reservation_number']?.toString();
+        reservationId = reservation['id']?.toString();
+        reservationStatus = reservation['status']?.toString();
       }
     }
     return VehicleDetailDto(
@@ -50,7 +81,12 @@ class VehicleDetailDto {
       odometerReadings:
           _list(json['odometerReadings'], OdometerReadingDto.fromJson),
       currentCustomerName: customerName,
+      currentCustomerCode: customerCode,
       currentContractNumber: contractNumber,
+      currentContractId: contractId,
+      currentReservationNumber: reservationNumber,
+      currentReservationId: reservationId,
+      currentReservationStatus: reservationStatus,
     );
   }
 

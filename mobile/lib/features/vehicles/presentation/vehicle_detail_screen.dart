@@ -86,7 +86,7 @@ class _VehicleDetailScreenState extends ConsumerState<VehicleDetailScreen>
                     controller: _tabs,
                     children: [
                       _OverviewTab(detail: detail),
-                      _IdentityTab(v: detail.vehicle),
+                      _IdentityTab(detail: detail),
                       _MovementsTab(
                         detail: detail,
                         onAdd: () => Navigator.of(context)
@@ -247,28 +247,11 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final v = detail.vehicle;
+    final money = NumberFormat.decimalPattern('fr');
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (detail.currentCustomerName != null ||
-            detail.currentContractNumber != null) ...[
-          ModuleCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Utilisation actuelle',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                if (detail.currentCustomerName != null)
-                  ModuleKV(label: 'Client', value: detail.currentCustomerName!),
-                if (detail.currentContractNumber != null)
-                  ModuleKV(label: 'Contrat', value: detail.currentContractNumber!),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
+        // ─── Identification ──────────────────────────────────────────
         ModuleCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,32 +261,67 @@ class _OverviewTab extends StatelessWidget {
                       TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
               ModuleKV(label: 'Immatriculation', value: v.registration),
-              if (v.year != null) ModuleKV(label: 'Année', value: '${v.year}'),
+              if ((v.registrationCardNumber ?? '').isNotEmpty)
+                ModuleKV(
+                    label: 'N° Carte Grise',
+                    value: v.registrationCardNumber!),
+              if ((v.vin ?? '').isNotEmpty)
+                ModuleKV(label: 'VIN', value: v.vin!),
               if (v.fuel != null)
                 ModuleKV(
                   label: 'Carburant',
                   value: kFuelFr[v.fuel!.toLowerCase()] ?? v.fuel!,
                 ),
-              if (v.transmission != null)
+              if (v.fiscalPower != null)
                 ModuleKV(
-                  label: 'Boîte',
-                  value: kTransmissionFr[v.transmission!.toLowerCase()] ??
-                      v.transmission!,
-                ),
+                    label: 'Puissance fiscale', value: '${v.fiscalPower} CV'),
               if (v.mileageKm != null)
                 ModuleKV(
                     label: 'Kilométrage',
-                    value:
-                        '${NumberFormat.decimalPattern('fr').format(v.mileageKm)} km'),
+                    value: '${money.format(v.mileageKm)} km'),
+              if (v.year != null) ModuleKV(label: 'Année', value: '${v.year}'),
             ],
           ),
         ),
+
+        // ─── Documents réglementaires ────────────────────────────────
         if (v.insuranceExpiry != null ||
             v.techControlExpiry != null ||
             v.vignetteExpiry != null) ...[
           const SizedBox(height: 12),
+          ModuleCard(child: _ComplianceSummary(v: v)),
+        ],
+
+        // ─── Acquisition ─────────────────────────────────────────────
+        if (v.acquisitionType != null ||
+            v.purchaseCostMad != null ||
+            v.currentValueMad != null) ...[
+          const SizedBox(height: 12),
           ModuleCard(
-            child: _ComplianceSummary(v: v),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Acquisition',
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                if (v.acquisitionType != null)
+                  ModuleKV(label: 'Type', value: v.acquisitionType!),
+                if (v.purchaseCostMad != null)
+                  ModuleKV(
+                      label: "Prix d'achat",
+                      value: '${money.format(v.purchaseCostMad)} MAD'),
+                if (v.currentValueMad != null)
+                  ModuleKV(
+                      label: 'Valeur livre',
+                      value: '${money.format(v.currentValueMad)} MAD'),
+                if (v.acquisitionDate != null)
+                  ModuleKV(
+                      label: "Date d'achat",
+                      value: DateFormat('dd/MM/yyyy', 'fr')
+                          .format(v.acquisitionDate!)),
+              ],
+            ),
           ),
         ],
       ],
@@ -390,14 +408,19 @@ class _ComplianceRow extends StatelessWidget {
 }
 
 class _IdentityTab extends StatelessWidget {
-  const _IdentityTab({required this.v});
-  final VehicleDto v;
+  const _IdentityTab({required this.detail});
+  final VehicleDetailDto detail;
 
   @override
   Widget build(BuildContext context) {
+    final v = detail.vehicle;
+    final hasContext = detail.currentCustomerName != null ||
+        detail.currentContractNumber != null ||
+        detail.currentReservationNumber != null;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ─── Identité véhicule ──────────────────────────────────────
         ModuleCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,19 +430,71 @@ class _IdentityTab extends StatelessWidget {
                       TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
               ModuleKV(label: 'Immatriculation', value: v.registration),
-              if (v.year != null) ModuleKV(label: 'Année', value: '${v.year}'),
-              if (v.fuel != null)
-                ModuleKV(
-                    label: 'Carburant',
-                    value: kFuelFr[v.fuel!.toLowerCase()] ?? v.fuel!),
+              if ((v.vin ?? '').isNotEmpty)
+                ModuleKV(label: 'VIN', value: v.vin!),
+              if ((v.chassisNumber ?? '').isNotEmpty)
+                ModuleKV(label: 'Châssis', value: v.chassisNumber!),
               if (v.transmission != null)
                 ModuleKV(
                     label: 'Transmission',
                     value: kTransmissionFr[v.transmission!.toLowerCase()] ??
                         v.transmission!),
+              if ((v.physicalStatus ?? '').isNotEmpty)
+                ModuleKV(
+                    label: 'Statut physique',
+                    value: kPhysicalStatusFr[v.physicalStatus!.toLowerCase()] ??
+                        v.physicalStatus!),
+              if ((v.availabilityStatus ?? '').isNotEmpty)
+                ModuleKV(
+                    label: 'Disponibilité',
+                    value: kAvailabilityFr[v.availabilityStatus!.toLowerCase()] ??
+                        v.availabilityStatus!),
+              if ((v.ownership ?? '').isNotEmpty)
+                ModuleKV(
+                    label: 'Propriété',
+                    value: kOwnershipFr[v.ownership!.toLowerCase()] ??
+                        v.ownership!),
+              if ((v.currentLocation ?? '').isNotEmpty)
+                ModuleKV(label: 'Emplacement', value: v.currentLocation!),
+              if ((v.unavailabilityReason ?? '').isNotEmpty)
+                ModuleKV(
+                    label: 'Motif indispo.',
+                    value: v.unavailabilityReason!),
             ],
           ),
         ),
+
+        // ─── Contexte location ──────────────────────────────────────
+        if (hasContext) ...[
+          const SizedBox(height: 12),
+          ModuleCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Contexte location',
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                if (detail.currentCustomerName != null)
+                  ModuleKV(
+                      label: 'Client',
+                      value: detail.currentCustomerCode == null
+                          ? detail.currentCustomerName!
+                          : '${detail.currentCustomerName!} · ${detail.currentCustomerCode}'),
+                if (detail.currentContractNumber != null)
+                  ModuleKV(
+                      label: 'Contrat courant',
+                      value: detail.currentContractNumber!),
+                if (detail.currentReservationNumber != null)
+                  ModuleKV(
+                      label: 'Réservation courante',
+                      value: detail.currentReservationStatus == null
+                          ? detail.currentReservationNumber!
+                          : '${detail.currentReservationNumber!} · ${kReservationStatusFr[detail.currentReservationStatus!.toLowerCase()] ?? detail.currentReservationStatus}'),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
