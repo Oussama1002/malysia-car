@@ -113,3 +113,56 @@ String docEntityLabel(String? raw) {
   if (raw == null || raw.isEmpty) return '—';
   return kDocumentEntityTypeFr[raw] ?? raw;
 }
+
+/// Catégories posées sur `entity_attachments.category` + les slots du
+/// scanner véhicule et du wizard contrat. Doit couvrir ce que le mobile
+/// envoie (voir `_annexCategoryFor` dans
+/// `new_contract_from_reservation_screen.dart` et `_ocrType` dans
+/// `new_vehicle_screen.dart`) et ce que l'API renvoie dans
+/// `DocumentCenterItem.category`.
+const Map<String, String> kDocumentCategoryFr = {
+  // Clients
+  'cin': "Pièce d'identité (CIN)",
+  'passport': 'Passeport',
+  'driving_license': 'Permis de conduire',
+  'address_proof': 'Justificatif de domicile',
+  'income_proof': 'Justificatif de revenus / CNSS',
+  'cnss_cert': 'Attestation CNSS',
+  'rib': 'RIB',
+  // Entreprises
+  'rc_cert': 'Registre de commerce (RC)',
+  'ice_cert': 'Attestation ICE',
+  'if_cert': 'Attestation IF',
+  'statuts': 'Statuts de la société',
+  'power_of_attorney': 'Pouvoir du signataire',
+  'financial_statements': 'Bilans financiers',
+  // Contrats / paiements
+  'cheque': 'Chèque',
+  'contract_pdf': 'Contrat PDF',
+  'invoice_pdf': 'Facture PDF',
+  // Véhicule / état des lieux
+  'handover_photo': 'Photo véhicule (livraison)',
+  'return_photo': 'Photo véhicule (retour)',
+  'vehicle_registration': 'Carte grise',
+  'insurance': 'Assurance',
+  'autorisation_circulation': 'Autorisation de circulation',
+  'payment_attestation': 'Attestation de paiement / Taxe',
+  'tech_control': 'Visite technique',
+  'vignette': 'Vignette',
+  // Divers
+  'other': 'Autre',
+  'misc': 'Autre',
+};
+
+/// Libellé français d'une catégorie document. Repli : on « humanise »
+/// le slug (`driving_license` → `Driving license`) pour qu'un code
+/// inconnu reste lisible plutôt que brut.
+String docCategoryLabel(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return '—';
+  final key = raw.toLowerCase().trim();
+  final mapped = kDocumentCategoryFr[key];
+  if (mapped != null) return mapped;
+  final words = key.replaceAll('_', ' ').trim();
+  if (words.isEmpty) return '—';
+  return words[0].toUpperCase() + words.substring(1);
+}

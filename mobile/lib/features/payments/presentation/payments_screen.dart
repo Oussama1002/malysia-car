@@ -292,8 +292,8 @@ class _StatusPill extends StatelessWidget {
   final String status;
   @override
   Widget build(BuildContext context) {
-    final (bg, fg) = switch (status) {
-      'allocated' => (
+    final (bg, fg) = switch (status.toLowerCase()) {
+      'allocated' || 'completed' || 'succeeded' || 'cleared' => (
         const Color(0xFFDCFCE7),
         const Color(0xFF166534)
       ),
@@ -301,11 +301,15 @@ class _StatusPill extends StatelessWidget {
         const Color(0xFFDBEAFE),
         const Color(0xFF1E40AF)
       ),
+      'pending' || 'pending_match' || 'draft' => (
+        const Color(0xFFFEF3C7),
+        const Color(0xFF92400E)
+      ),
       'refunded' => (
         const Color(0xFFFEF3C7),
         const Color(0xFF92400E)
       ),
-      'reversed' => (
+      'reversed' || 'cancelled' || 'failed' || 'bounced' || 'returned' => (
         const Color(0xFFFEE2E2),
         const Color(0xFFB91C1C)
       ),

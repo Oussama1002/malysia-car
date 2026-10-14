@@ -243,9 +243,25 @@ class _AvailabilityCheckScreenState
   }
 
   String _formatConflict(Map<String, dynamic> data) {
+    // Le backend `RentalAvailabilityService::evaluate` fournit déjà un
+    // dictionnaire français `messages` keyé par code (chaque code vient
+    // de `reasons`). On s'en sert directement : c'est la même phrase que
+    // le web affiche, et ça couvre les 12 cas (contrat, réservation,
+    // maintenance, accident, sous-location…) sans qu'on duplique les
+    // libellés côté mobile.
     final reasons = data['reasons'];
+    final rawMessages = data['messages'];
+    final messages = rawMessages is Map
+        ? rawMessages.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))
+        : const <String, String>{};
     if (reasons is List && reasons.isNotEmpty) {
-      return reasons.map((r) => _reasonLabel(r.toString())).join(' · ');
+      final parts = <String>[];
+      for (final r in reasons) {
+        final code = r.toString();
+        final msg = messages[code] ?? _reasonLabel(code);
+        if (msg.isNotEmpty) parts.add(msg);
+      }
+      if (parts.isNotEmpty) return parts.join(' · ');
     }
     final conflicts = data['conflicts'];
     if (conflicts is List && conflicts.isNotEmpty) {
@@ -254,14 +270,39 @@ class _AvailabilityCheckScreenState
     return 'Ce véhicule est pris sur cette période.';
   }
 
+  /// Repli français au cas où un code ne porterait pas de message
+  /// (anciens builds backend, cas limites). Codes alignés sur
+  /// `RentalAvailabilityService` + anciens codes du client web.
   String _reasonLabel(String code) {
     const map = {
-      'reservation_overlap': 'Chevauchement avec une réservation',
-      'contract_overlap': 'Chevauchement avec un contrat',
-      'maintenance_overlap': 'Véhicule en maintenance',
-      'vehicle_availability_flag': 'Véhicule marqué indisponible',
+      'vehicle_not_found': 'Véhicule introuvable.',
+      'invalid_range': 'Dates invalides.',
+      'vehicle_status_unavailable':
+          'Véhicule indisponible (statut flotte).',
+      'vehicle_availability_flag':
+          'Véhicule marqué comme indisponible.',
+      'overlapping_reservation':
+          'Une réservation chevauche cette période.',
+      'reservation_overlap': 'Chevauchement avec une réservation.',
+      'active_contract_overlap':
+          'Un contrat actif chevauche cette période.',
+      'contract_overlap': 'Chevauchement avec un contrat.',
+      'overlapping_mission':
+          'Une mission est planifiée sur cette période.',
+      'vehicle_in_maintenance':
+          'Véhicule en réparation.',
+      'vehicle_in_scheduled_maintenance':
+          'Véhicule en maintenance planifiée.',
+      'maintenance_overlap': 'Véhicule en maintenance.',
+      'vehicle_accident_hold':
+          "Dossier accident en cours sur ce véhicule.",
+      'sub_rental_period_exceeded':
+          'Hors période contractuelle du fournisseur (sous-location).',
+      'sub_rental_no_active_contract':
+          'Aucun contrat de sous-location actif pour ce véhicule.',
+      'vehicle_unavailable': 'Véhicule indisponible.',
     };
-    return map[code] ?? code;
+    return map[code] ?? 'Véhicule indisponible.';
   }
 }
 

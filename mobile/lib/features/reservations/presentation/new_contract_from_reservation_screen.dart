@@ -14,6 +14,7 @@ import '../../contracts/presentation/contract_paper_preview.dart';
 import '../../contracts/presentation/contract_pdf_preview_screen.dart';
 import '../../customers/data/customer_dto.dart';
 import '../../customers/data/customers_repo.dart';
+import '../../documents/data/document_dto.dart';
 import '../../documents/data/entity_documents_repo.dart';
 import '../../documents/presentation/document_viewer_screen.dart';
 import '../../vehicles/data/vehicle_dto.dart';
@@ -1619,7 +1620,7 @@ class _ExistingClientDocuments extends ConsumerWidget {
                               const SizedBox(height: 2),
                               Text(
                                 [
-                                  if (d.category != null) d.category!,
+                                  if (d.category != null) docCategoryLabel(d.category),
                                   if (d.createdAt != null)
                                     'Déposé le ${dateFmt.format(d.createdAt!)}',
                                 ].join(' · '),

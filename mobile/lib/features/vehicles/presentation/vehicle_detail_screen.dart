@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/widgets/module_scaffold.dart';
+import '../../documents/data/document_dto.dart';
 import '../../documents/data/entity_documents_repo.dart';
 import '../../documents/presentation/document_viewer_screen.dart';
 import '../../shared/brand_logo.dart';
@@ -923,7 +924,7 @@ class _VehicleDocumentsTab extends ConsumerWidget {
                         const SizedBox(height: 2),
                         Text(
                           [
-                            if (d.category != null) d.category!,
+                            if (d.category != null) docCategoryLabel(d.category),
                             if (d.createdAt != null)
                               'Déposé le ${dateFmt.format(d.createdAt!)}',
                           ].join(' · '),

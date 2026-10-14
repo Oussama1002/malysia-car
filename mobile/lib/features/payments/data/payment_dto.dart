@@ -201,18 +201,44 @@ const Map<String, String> kPaymentMethodLabel = {
 const Map<String, String> kPaymentTypeLabel = {
   'avance': 'Avance',
   'paiement_location': 'Paiement location',
+  'rent': 'Loyer',
+  'rental_payment': 'Paiement location',
   'solde': 'Solde',
   'caution': "Franchise d'assurance",
   'deposit': "Franchise d'assurance",
+  'security_deposit': "Franchise d'assurance",
+  // Le contrôleur contrat (ContractController) crée des paiements avec
+  // `payment_type: 'down_payment'` à l'activation — même sens que
+  // « avance » / acompte dans l'UI française.
+  'down_payment': 'Acompte',
+  'downpayment': 'Acompte',
+  'advance': 'Avance',
   'penalite': 'Pénalité',
+  'penalty': 'Pénalité',
+  'late_fee': 'Pénalité de retard',
   'utilisation_avoir': 'Utilisation avoir',
+  'refund': 'Remboursement',
+  'adjustment': 'Ajustement',
+  'other': 'Autre',
 };
 
 const Map<String, String> kPaymentStatusLabel = {
+  'draft': 'Brouillon',
+  'pending': 'En attente',
+  'pending_match': 'À rapprocher',
   'received': 'Reçu',
   'allocated': 'Alloué',
+  // Le contrôleur contrat écrit `status: 'completed'` à la création
+  // des paiements d'activation. Mobile le montrait brut en anglais.
+  'completed': 'Finalisé',
+  'succeeded': 'Finalisé',
+  'cleared': 'Encaissé',
   'refunded': 'Remboursé',
   'reversed': 'Annulé',
+  'cancelled': 'Annulé',
+  'failed': 'Échoué',
+  'bounced': 'Chèque rejeté',
+  'returned': 'Retourné',
 };
 
 String paymentMethodFr(String raw) =>

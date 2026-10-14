@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
+import '../../documents/data/document_dto.dart';
 import '../../documents/data/entity_documents_repo.dart';
 import '../../documents/presentation/document_viewer_screen.dart';
 import '../data/customer_detail_dto.dart';
@@ -718,7 +719,7 @@ class _DocumentsTab extends ConsumerWidget {
                         const SizedBox(height: 2),
                         Text(
                           [
-                            if (d.category != null) d.category!,
+                            if (d.category != null) docCategoryLabel(d.category),
                             if (d.createdAt != null)
                               'Déposé le ${dateFmt.format(d.createdAt!)}',
                           ].join(' · '),
