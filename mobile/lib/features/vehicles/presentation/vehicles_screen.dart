@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/widgets/module_scaffold.dart';
 import '../../placeholders/placeholder_screen.dart';
+import '../../shared/brand_logo.dart';
 import '../data/vehicle_dto.dart';
 import '../data/vehicles_repo.dart';
 import 'new_vehicle_screen.dart';
@@ -339,9 +340,19 @@ class _VehicleCard extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(v.label,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 15)),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    BrandLogo(brand: v.brand, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(v.label,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800, fontSize: 15)),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 2),
                 Text(
                   [

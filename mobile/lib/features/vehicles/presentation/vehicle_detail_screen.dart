@@ -6,6 +6,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/widgets/module_scaffold.dart';
 import '../../documents/data/entity_documents_repo.dart';
 import '../../documents/presentation/document_viewer_screen.dart';
+import '../../shared/brand_logo.dart';
 import '../data/vehicle_detail_dto.dart';
 import '../data/vehicle_dto.dart';
 import '../data/vehicles_repo.dart';
@@ -208,9 +209,19 @@ class _HeaderCard extends StatelessWidget {
                           color: Colors.black45,
                           fontSize: 12,
                           fontWeight: FontWeight.w800)),
-                  Text(v.label,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      BrandLogo(brand: v.brand, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(v.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w900)),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
