@@ -1314,8 +1314,10 @@ class _NewContractFromReservationScreenState
         _kmIncluded.text
       ),
       ("Franchise d'assurance", '${money.format(double.tryParse(_deposit.text) ?? 0)} MAD'),
+      ("Franchise encaissée par",
+          _paymentMethodLabels[_depositMethod] ?? _depositMethod),
       if (_type == 'LOA') ('Valeur résiduelle', '${_residual.text} %'),
-      ('Modes de paiement',
+      ('Modes de paiement (Loyer)',
           _payments.map((p) => _paymentMethodLabels[p.method] ?? p.method).join(' + ')),
       if (_paymentTerms.text.isNotEmpty)
         ('Conditions', _paymentTerms.text),
