@@ -144,6 +144,12 @@ Route::prefix('v1')->group(function () {
         // l'écriture reste gated plus bas (role:ADMIN,DIRECTEUR).
         Route::get('settings/{group}', [CompanySettingsController::class, 'show']);
 
+        // Aggregate read: /v1/company-settings returns every group in one
+        // payload. Consumed by ParametersPage / ContractSettingsPage so the
+        // UI can mount all tabs with a single request instead of hitting
+        // seven routes. Integrations are only included for ADMIN/DIRECTEUR.
+        Route::get('company-settings', [CompanySettingsController::class, 'index']);
+
         // Branches: read-only catalogue used by every screen filter
         Route::get('branches', [BranchController::class, 'index']);
 
@@ -1159,6 +1165,10 @@ Route::prefix('v1')->group(function () {
 
             Route::post('settings/integrations/test-email', [CompanySettingsController::class, 'testEmail']);
             Route::put('settings/{group}', [CompanySettingsController::class, 'update']);
+            // Aggregate write: PUT /v1/company-settings accepts a partial
+            // { group: { key: value, … }, … } payload and persists each
+            // group through the same per-group audit path as PUT settings/{group}.
+            Route::put('company-settings', [CompanySettingsController::class, 'updateAll']);
         });
     });
 });

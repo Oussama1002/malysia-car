@@ -11,6 +11,96 @@ use Illuminate\Http\Request;
 
 class CompanySettingsController extends Controller
 {
+    /**
+     * Agrégat de tous les groupes de réglages. L'écran /settings/parameters
+     * (ParametersPage, ContractSettingsPage) consomme cette route pour peupler
+     * tous les onglets en une seule requête — plus simple que de requêter
+     * chaque groupe séparément. Les intégrations (SMTP) ne sont incluses que
+     * pour les admins ; sinon le groupe est renvoyé vide pour que l'UI puisse
+     * cacher cette section sans erreur.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $companyId = optional($user)->company_id;
+        $groups = ['reservations', 'contracts', 'invoicing', 'payments', 'notifications', 'branding', 'gps'];
+        $codes = $user?->roleCodes() ?? [];
+        $canReadIntegrations = (bool) array_intersect(['ADMIN', 'DIRECTEUR'], $codes);
+        if ($canReadIntegrations) {
+            $groups[] = 'integrations';
+        }
+        $out = [];
+        foreach ($groups as $group) {
+            $settings = CompanySetting::getAll($group, $companyId);
+            if ($group === 'integrations' && $canReadIntegrations) {
+                $hasPwd = ! empty($settings['smtp_password']);
+                $settings['smtp_password'] = '';
+                $settings['smtp_password_set'] = $hasPwd ? '1' : '0';
+            }
+            $out[$group] = $settings;
+        }
+
+        return ApiResponse::success($out);
+    }
+
+    /**
+     * Met à jour plusieurs groupes de réglages en un seul PUT. Payload
+     * attendu : { contracts: {key:value,…}, reservations: {…}, … }.
+     * Chaque groupe est validé via allowedKeys() comme sur update() et
+     * audité à part pour que l'historique reste granulaire.
+     */
+    public function updateAll(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $companyId = optional($user)->company_id;
+        $codes = $user?->roleCodes() ?? [];
+        $canWriteIntegrations = (bool) array_intersect(['ADMIN', 'DIRECTEUR'], $codes);
+
+        $payload = $request->validate([
+            '*' => ['sometimes', 'array'],
+        ]);
+        // Laravel validation on wildcard preserves top-level structure.
+        $groups = is_array($payload) ? $payload : [];
+
+        $result = [];
+        foreach ($groups as $group => $settings) {
+            if (! is_array($settings)) continue;
+            $allowed = $this->allowedKeys((string) $group);
+            if (empty($allowed)) continue;
+            if ($group === 'integrations' && ! $canWriteIntegrations) continue;
+
+            $input = collect($settings)
+                ->only($allowed)
+                ->map(fn ($v) => $v === null ? null : (string) $v)
+                ->toArray();
+
+            if ($group === 'integrations' &&
+                (! isset($input['smtp_password']) || trim((string) $input['smtp_password']) === '')) {
+                unset($input['smtp_password']);
+            }
+
+            $before = CompanySetting::getAll((string) $group, $companyId);
+            CompanySetting::setAll((string) $group, $companyId, $input);
+            $after = CompanySetting::getAll((string) $group, $companyId);
+
+            AuditLogger::record(
+                action: 'settings_updated',
+                user: $user,
+                entityType: 'company_settings',
+                entityId: (string) $group,
+                before: $before,
+                after: $after,
+                module: 'admin',
+                label: 'Paramètres modifiés : '.$group,
+                request: $request,
+            );
+
+            $result[$group] = $after;
+        }
+
+        return ApiResponse::success($result);
+    }
+
     public function show(Request $request, string $group): JsonResponse
     {
         // Les réglages opérationnels (contracts, reservations…) sont lisibles
