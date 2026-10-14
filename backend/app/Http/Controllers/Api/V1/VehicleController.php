@@ -200,8 +200,39 @@ class VehicleController extends Controller
                     ? \App\Models\Customer::query()->find($currentContract->customer_id)
                     : null));
 
+        // Disponibilité effective : la colonne `vehicles.availability_status`
+        // dérive parfois (contrat terminé en coulisses, worker en retard…).
+        // On la recompute ici à partir des sources de vérité déjà chargées
+        // pour que l'onglet « Identité » du web et le détail mobile montrent
+        // la bonne valeur sans attendre un sync. Priorité :
+        //   contrat actif → `rented`
+        //   réservation bloquante → `reserved`
+        //   colonne stockée (maintenance / unavailable / …) → telle quelle
+        //   sinon → `available`
+        $vehicleResource = (new VehicleResource($vehicle))->resolve($request);
+        $effectiveAvailability = $vehicleResource['availabilityStatus'] ?? null;
+        $contractActive = $currentContract
+            && in_array(strtolower((string) $currentContract->status), ['active', 'pending_approval'], true);
+        $reservationBlocking = $currentReservation
+            && in_array(
+                strtolower((string) $currentReservation->status),
+                \App\Services\RentalAvailabilityService::blockingReservationStatuses(),
+                true,
+            );
+        if ($contractActive) {
+            $effectiveAvailability = 'rented';
+        } elseif ($reservationBlocking) {
+            $effectiveAvailability = 'reserved';
+        } elseif (! $effectiveAvailability
+            || in_array(strtolower((string) $effectiveAvailability), ['', 'available', 'rented', 'reserved'], true)) {
+            // La colonne stocke `rented`/`reserved` même sans doc actif ⇒ on
+            // la ramène à `available` (plus de contrat/réservation en cours).
+            $effectiveAvailability = 'available';
+        }
+        $vehicleResource['availabilityStatus'] = $effectiveAvailability;
+
         return ApiResponse::success([
-            'vehicle' => (new VehicleResource($vehicle))->resolve($request),
+            'vehicle' => $vehicleResource,
             'current' => [
                 'status' => $currentStatus,
                 'mileageKm' => $currentMileage ? (int) $currentMileage : null,
