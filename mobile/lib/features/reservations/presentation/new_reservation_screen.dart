@@ -1011,20 +1011,26 @@ class _ClientPickerSheetState extends ConsumerState<_ClientPickerSheet> {
                       const Divider(height: 1),
                       for (final c in list)
                         () {
-                          // CIN right next to the name (same layout as the
-                          // web and the contract-wizard dropdown): the title
-                          // reads 'Oussama ELHADI · AB123456' when a CIN is
-                          // on file, falls back to the plain name otherwise.
+                          // CIN right next to the name — same layout as the
+                          // web and the contract-wizard dropdown. For a
+                          // Particulier we show '{name} · {CIN}' (or just
+                          // the name when no CIN on file). For an
+                          // Entreprise we fall back to the ICE code the
+                          // same way. The customer code (CL0001…) is not
+                          // shown anymore — it's an internal id, not
+                          // disambiguating information for the agent.
                           final name = c.displayName ?? '—';
-                          final cin = (c.nationalId ?? '').trim();
-                          final title = cin.isNotEmpty ? '$name · $cin' : name;
+                          final idCode = (c.nationalId ?? '').trim().isNotEmpty
+                              ? c.nationalId!.trim()
+                              : (c.ice ?? '').trim();
+                          final title =
+                              idCode.isNotEmpty ? '$name · $idCode' : name;
                           return ListTile(
                             leading: Icon(
                                 c.isCompany ? Icons.business : Icons.person),
                             title: Text(title,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w700)),
-                            subtitle: Text(c.code),
                             onTap: () => Navigator.of(context).pop(c),
                           );
                         }(),
