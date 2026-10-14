@@ -13,6 +13,8 @@ import '../../contracts/data/contracts_repo.dart';
 import '../../contracts/presentation/contract_pdf_preview_screen.dart';
 import '../../customers/data/customer_dto.dart';
 import '../../customers/data/customers_repo.dart';
+import '../../documents/data/entity_documents_repo.dart';
+import '../../documents/presentation/document_viewer_screen.dart';
 import '../../vehicles/data/vehicle_dto.dart';
 import '../../vehicles/data/vehicles_repo.dart';
 import '../data/reservation_detail_dto.dart';
@@ -1143,6 +1145,11 @@ class _NewContractFromReservationScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (_clientId != null && _clientId!.isNotEmpty) ...[
+          const _Section('Documents du client déjà au dossier'),
+          _ExistingClientDocuments(customerId: _clientId!),
+          const SizedBox(height: 8),
+        ],
         const _Section('Documents client'),
         _uploadZone("Pièce d'identité (CIN)"),
         _uploadZone('Permis de conduire'),
@@ -1468,6 +1475,120 @@ class _StepDot extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ExistingClientDocuments extends ConsumerWidget {
+  const _ExistingClientDocuments({required this.customerId});
+  final String customerId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(entityDocumentsProvider(('customer', customerId)));
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Text("Impossible de charger les documents du client : $e",
+            style: const TextStyle(fontSize: 11, color: Colors.redAccent)),
+      ),
+      data: (docs) {
+        if (docs.isEmpty) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'Aucun document déjà au dossier pour ce client.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          );
+        }
+        final dateFmt = DateFormat('dd/MM/yyyy', 'fr');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final d in docs)
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: InkWell(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => DocumentViewerScreen(
+                        id: d.id,
+                        title: d.title,
+                        mimeType: d.mimeType,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        (d.mimeType ?? '').startsWith('image/')
+                            ? Icons.image_outlined
+                            : d.mimeType == 'application/pdf'
+                                ? Icons.picture_as_pdf
+                                : Icons.description_outlined,
+                        color: const Color(0xFFB8933F),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(d.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5)),
+                            if (d.category != null || d.createdAt != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                [
+                                  if (d.category != null) d.category!,
+                                  if (d.createdAt != null)
+                                    'Déposé le ${dateFmt.format(d.createdAt!)}',
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.black54),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.open_in_new,
+                          color: Color(0xFFB8933F), size: 16),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
