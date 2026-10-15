@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * `contracts.delete` était référencé par la route
@@ -27,9 +26,7 @@ return new class extends Migration {
     {
         $permId = DB::table('permissions')->where('code', self::CODE)->value('id');
         if (!$permId) {
-            $permId = (string) Str::uuid();
-            DB::table('permissions')->insert([
-                'id'          => $permId,
+            $permId = DB::table('permissions')->insertGetId([
                 'code'        => self::CODE,
                 'module_name' => 'contracts',
                 'action_name' => 'Contracts delete',
