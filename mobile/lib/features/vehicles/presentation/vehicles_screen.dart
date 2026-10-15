@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/router/back_nav.dart';
 import '../../../core/widgets/module_scaffold.dart';
 import '../../placeholders/placeholder_screen.dart';
 import '../../shared/brand_logo.dart';
@@ -114,7 +115,7 @@ class _VehiclesScreenState extends ConsumerState<VehiclesScreen> {
                       title: 'Flotte',
                       subtitle:
                           'Parc complet — conformité, maintenance, documents et pièces.',
-                      onBack: () => Navigator.of(context).maybePop(),
+                      onBack: () => goBackOrHome(context),
                     ),
                     if (banners.isNotEmpty) ...[
                       const SizedBox(height: 10),
