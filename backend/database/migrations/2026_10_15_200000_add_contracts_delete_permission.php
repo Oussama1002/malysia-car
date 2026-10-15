@@ -34,8 +34,6 @@ return new class extends Migration {
                 'module_name' => 'contracts',
                 'action_name' => 'Contracts delete',
                 'description' => self::DESCRIPTION,
-                'created_at'  => now(),
-                'updated_at'  => now(),
             ]);
         }
 
