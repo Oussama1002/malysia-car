@@ -80,7 +80,11 @@ export const VehicleDocumentScanner: React.FC<{
         mapFields={mapVisiteTech}
         onDocumentUploaded={(id) => onDocumentUploaded?.('technical_inspection', id)}
       />
-      <div ref={carteGriseRef}>
+      {/* La carte grise occupe deux colonnes du grid parent pour laisser à ses
+          sous-slots recto / verso une largeur respirable — sans ça les deux
+          dropzones et la rangée Choisir/Photo se chevauchent (bug UI constaté
+          en prod). */}
+      <div ref={carteGriseRef} className="md:col-span-2">
         <CarteGriseScanSlot
           onPrefill={onPrefill}
           onDocumentUploaded={(id) => onDocumentUploaded?.('registration_card', id)}
