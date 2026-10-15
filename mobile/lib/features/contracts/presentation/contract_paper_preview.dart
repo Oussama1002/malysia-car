@@ -69,7 +69,10 @@ class ContractPaperPreview extends ConsumerWidget {
         marks.add(_Mark(
           text: text,
           xMm: spot.x + dx,
-          yMm: spot.y + dy - 2, // mirror the PDF offset
+          // Léger décalage vers le bas (-2 → -0.5 mm) demandé pour que les
+          // valeurs retombent dans les lignes imprimées des blocs
+          // « LOCATAIRE » et « INFORMATION SUR VEHICULE ».
+          yMm: spot.y + dy - 0.5,
           sizeMm: (spot.size ?? layout.fontSize) * 1.15,
           bold: spot.bold,
         ));
@@ -122,7 +125,10 @@ class ContractPaperPreview extends ConsumerWidget {
                             // cases du formulaire.
                             fontSize: m.sizeMm * 0.3528 * mmToPx,
                             fontWeight: m.bold ? FontWeight.w900 : FontWeight.w700,
-                            color: Colors.black,
+                            // Gris anthracite (comme un stylo gris) plutôt que
+                            // noir pur, pour mieux se détacher du fond pré-
+                            // imprimé du contrat sur mobile.
+                            color: const Color(0xFF4B5563),
                             height: 1.0,
                             letterSpacing: 0.2,
                           ),
