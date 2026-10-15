@@ -572,7 +572,6 @@ const VehiclesList: React.FC = () => {
         vehicle_type: formData.vehicleType || undefined,
         numero_police: formData.numeroPolice || undefined,
         nombre_cylindres: formData.nombreCylindres !== '' ? Number(formData.nombreCylindres) : undefined,
-        nombre_places: formData.nombrePlaces !== '' ? Number(formData.nombrePlaces) : undefined,
         nombre_portes: formData.nombrePortes !== '' ? Number(formData.nombrePortes) : undefined,
         gamme: formData.gamme || undefined,
         acquisition_date: formData.acquisitionDate || undefined,
@@ -1312,10 +1311,10 @@ const VehiclesList: React.FC = () => {
                     ...(data.cgFuelType           ? { fuel: data.cgFuelType }                             : {}),
                     ...(data.cgFiscalPower        ? { cv: data.cgFiscalPower }                            : {}),
                     // Sur la carte grise marocaine la valeur libellée "Nombre
-                    // de places" correspond en pratique au nombre de portes
-                    // (et vice-versa). On croise les deux champs à l'affectation.
+                    // de places" sur le papier correspond en pratique au
+                    // nombre de portes du véhicule — on la route vers
+                    // nombrePortes. Le champ Places a été retiré du formulaire.
                     ...(data.nombrePlaces         ? { nombrePortes: data.nombrePlaces }                   : {}),
-                    ...(data.nombrePortes         ? { nombrePlaces: data.nombrePortes }                   : {}),
                     ...(data.nombreCylindres      ? { nombreCylindres: data.nombreCylindres }             : {}),
                   };
                 })}
@@ -1502,14 +1501,6 @@ const VehiclesList: React.FC = () => {
                     <input type="number" min="1" max="16" className={inputCls} placeholder="ex: 4"
                       value={formData.nombreCylindres}
                       onChange={e => setFormData(fd => ({ ...fd, nombreCylindres: e.target.value }))} />
-                  </div>
-
-                  {/* Nombre de places */}
-                  <div className="space-y-2">
-                    <label className={labelCls}>Places</label>
-                    <input type="number" min="1" max="60" className={inputCls} placeholder="ex: 5"
-                      value={formData.nombrePlaces}
-                      onChange={e => setFormData(fd => ({ ...fd, nombrePlaces: e.target.value }))} />
                   </div>
 
                   {/* Nombre de portes */}
