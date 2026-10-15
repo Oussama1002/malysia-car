@@ -601,15 +601,39 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     return m != null ? 'WW${m.group(1)}' : null;
   }
 
-  /// Décompose une plaque "12345-A-1" dans num / lettre / région.
-  /// Retourne true si au moins un segment a été rempli — pour que la
-  /// notice de scan puisse dire "Immatriculation" seulement quand c'est vrai.
+  /// Correspondance Arabe → Latin pour les lettres de la plaque marocaine.
+  /// La carte grise imprime la lettre en arabe (ب, ج, د, …) alors que la
+  /// liste `_plateLetters` ne stocke que du Latin. Sans cette table l'OCR
+  /// renvoyait une plaque du type "27314-ب-72" qui ne matchait pas la regex
+  /// `[A-Z]` et retombait sur le fallback "premier bloc de chiffres", d'où
+  /// le "9-.-22" vu à l'écran.
+  static const Map<String, String> _arabicToLatinLetter = {
+    'أ': 'A', 'ا': 'A',
+    'ب': 'B',
+    'ج': 'J',
+    'د': 'D',
+    'ه': 'H',
+    'و': 'W',
+    'ط': 'T',
+  };
+
+  /// Décompose une plaque "12345-A-1" (ou "12345-ب-1") dans num / lettre /
+  /// région. Retourne true si au moins un segment a été rempli — pour que
+  /// la notice de scan puisse dire "Immatriculation" seulement quand c'est
+  /// vrai.
   bool _applyPlate(String? reg) {
     if (reg == null) return false;
-    final cleaned = reg.replaceAll(RegExp(r'\s+'), '').toUpperCase();
-    final m =
-        RegExp(r'(\d{1,5})\D+([A-Z])\D+(\d{1,2})').firstMatch(cleaned);
+    // On remplace les lettres arabes par leur équivalent latin AVANT la
+    // regex pour que la plaque "27314-ب-72" se décompose comme "27314-B-72".
+    var normalized = reg;
+    _arabicToLatinLetter.forEach((ar, la) {
+      normalized = normalized.replaceAll(ar, la);
+    });
+    final cleaned = normalized.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+
     var changed = false;
+    // 1) Plaque complète avec lettre reconnue (après mapping arabe→latin).
+    final m = RegExp(r'(\d{1,5})\D+([A-Z])\D+(\d{1,2})').firstMatch(cleaned);
     if (m != null) {
       if (_platNum.text.isEmpty) {
         _platNum.text = m.group(1)!;
@@ -625,8 +649,27 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _platRegion = region;
         changed = true;
       }
-    } else if (_platNum.text.isEmpty) {
-      final digits = RegExp(r'\d{1,5}').firstMatch(cleaned);
+      return changed;
+    }
+    // 2) Plaque "chiffres - inconnu - chiffres" (lettre arabe non mappée ou
+    //    bruit OCR). On remplit quand même le numéro et la région pour éviter
+    //    le "9-.-22" ; l'agent corrige la lettre dans le dropdown.
+    final partial = RegExp(r'(\d{3,5})\D{1,3}(\d{1,2})\b').firstMatch(cleaned);
+    if (partial != null) {
+      if (_platNum.text.isEmpty) {
+        _platNum.text = partial.group(1)!;
+        changed = true;
+      }
+      final region = int.tryParse(partial.group(2)!);
+      if (region != null && region >= 1 && region <= 99 && _platRegion != region) {
+        _platRegion = region;
+        changed = true;
+      }
+      return changed;
+    }
+    // 3) Dernier recours : on prend le plus long bloc de chiffres comme num.
+    if (_platNum.text.isEmpty) {
+      final digits = RegExp(r'\d{3,5}').firstMatch(cleaned);
       if (digits != null) {
         _platNum.text = digits.group(0)!;
         changed = true;
