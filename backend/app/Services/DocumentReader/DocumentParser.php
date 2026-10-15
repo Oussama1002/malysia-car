@@ -1326,15 +1326,29 @@ class DocumentParser
         $guaranteeEnd = null;
 
         $datePattern = '(\d{1,2}\s*[\/\-.]\s*\d{1,2}\s*[\/\-.]\s*\d{2,4})';
+        // Entre "du" / "au" et la date il peut y avoir des deux-points,
+        // tirets, parenthèses, retours à la ligne, etc. : on tolère n'importe
+        // quel bruit non-chiffré sur 0 à 10 caractères.
+        $gap = '[^\d\n]{0,10}';
         // "du DD/MM/YYYY au DD/MM/YYYY" or "du DD/MM/YYYY à DD/MM/YYYY"
-        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture|valable|valide|assurance|assur[ée])[^\n]*?du\s*'.$datePattern.'\s*(?:au|[àa]|jusqu\'?au?)\s*'.$datePattern.'/iu', $text, $m)) {
+        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture|valable|valide|assurance|assur[ée])[^\n]*?\bdu\b'.$gap.$datePattern.$gap.'(?:au|[àa]|jusqu\'?au?)\b'.$gap.$datePattern.'/iu', $text, $m)) {
             $guaranteeStart = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[1]));
             $guaranteeEnd = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[2]));
         }
         // Fallback: "du DD/MM/YYYY au DD/MM/YYYY" anywhere
-        if (! $guaranteeStart && preg_match('/du\s*'.$datePattern.'\s*(?:au|[àa]|jusqu\'?au?)\s*'.$datePattern.'/iu', $text, $m)) {
+        if (! $guaranteeStart && preg_match('/\bdu\b'.$gap.$datePattern.$gap.'(?:au|[àa]|jusqu\'?au?)\b'.$gap.$datePattern.'/iu', $text, $m)) {
             $guaranteeStart = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[1]));
             $guaranteeEnd = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[2]));
+        }
+        // Fallback: two dates separated by any token on the same line ("15/10/2026 - 15/10/2027",
+        // "15/10/2026 au 15/10/2027", table row). Only when NOTHING else matched.
+        if (! $guaranteeStart && preg_match('/'.$datePattern.'[^\d\n]{1,20}'.$datePattern.'/u', $text, $m)) {
+            $a = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[1]));
+            $b = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[2]));
+            if ($a && $b && $a <= $b) {
+                $guaranteeStart = $a;
+                $guaranteeEnd = $b;
+            }
         }
         // Fallback: labeled start/end dates
         if (! $guaranteeStart) {
@@ -1403,6 +1417,11 @@ class DocumentParser
             'registration_number' => $registration ? trim($registration) : null,
         ];
         Log::info('DocumentParser.parseInsurance', $result);
+        // Trace diagnostique du texte brut quand au moins un champ clé reste
+        // null : indispensable pour comprendre pourquoi la regex n'a rien pris.
+        if (! $policyNumber || ! $guaranteeStart || ! $guaranteeEnd || ! $company) {
+            Log::info('DocumentParser.parseInsurance.rawText', ['text' => mb_substr($text, 0, 2000)]);
+        }
         return $result;
     }
 
