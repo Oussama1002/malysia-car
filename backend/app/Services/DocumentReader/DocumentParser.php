@@ -1323,40 +1323,49 @@ class DocumentParser
 
         // Date d'expiration : le mobile ET le web réutilisent ce parser pour
         // la Visite technique (le procès-verbal CVT porte « NATURE ET DATE
-        // DE LA PROCHAINE VISITE : Le JJ/MM/AAAA »). On fait l'extraction
-        // inline parce que `extractDate` filtre les dates futures dans son
-        // fallback 200-char (hérité du cas CIN né-le), ce qui jetterait
-        // l'expiration 2027 alors qu'on est en 2026.
+        // DE LA PROCHAINE VISITE » puis une ligne « Visite technique Le:
+        // JJ/MM/AAAA » un peu plus bas). On fait l'extraction inline parce
+        // que `extractDate` filtre les dates futures dans son fallback
+        // 200-char (hérité du cas CIN né-le), ce qui jetterait l'expiration
+        // 2027 alors qu'on est en 2026.
         $expiryDate = null;
         $expiryLabels = [
-            'Date\s+de\s+la\s+prochaine\s+visite',
-            'Prochaine\s+visite',
+            // OCR-tolerant « PROCHAINE » (PROCHANE, PRCHAINE, PROCHA1NE…)
+            'Date\s+de\s+la\s+pr?o?c?h?a?i?n?e\s+visite',
+            'PROCHA[A-Z1]{0,3}E\s+VISITE',
             'Next\s+inspection',
-            'Valable\s+jusqu[\'’]?au',
-            'Valable\s+jusqu',
+            // « Visite technique Le : JJ/MM/AAAA » juste sous le libellé
+            'Visite\s+techn[iq]{0,2}u?e[\s\S]{0,80}?Le',
+            'Valable\s+jusqu[\'’]?a?u?',
             'Date\s+d\'?[ée]ch[ée]ance',
             'Date\s+d\'?expiration',
         ];
-        $dateRe = '(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})';
+        $dateRe = '(\d{1,2}[\/\-.\s]\d{1,2}[\/\-.\s]\d{2,4})';
         foreach ($expiryLabels as $label) {
-            if (preg_match('#'.$label.'[\s\S]{0,220}?'.$dateRe.'#iu', $text, $m)) {
-                $expiryDate = $this->canonicalizeDate($m[1]);
-                if ($expiryDate !== null) {
+            if (preg_match('#'.$label.'[\s\S]{0,250}?'.$dateRe.'#iu', $text, $m)) {
+                $canon = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[1]));
+                if ($canon !== null) {
+                    $expiryDate = $canon;
                     break;
                 }
             }
         }
-        // Dernier recours sur un PV de visite technique : la seule date
-        // future portée par le procès-verbal est la prochaine visite, donc
-        // si rien n'a été ancré sur un libellé on prend la date la plus
-        // tardive supérieure à aujourd'hui.
-        if (! $expiryDate && preg_match('/VISITE\s+TECHNIQUE|CONTR[ÔO]LE\s+TECHNIQUE/iu', $text)) {
-            preg_match_all('/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/u', $text, $allDates);
-            $todayIso = date('Y-m-d');
-            foreach ($allDates[1] ?? [] as $raw) {
-                $iso = $this->canonicalizeDate($raw);
-                if ($iso !== null && $iso > $todayIso && ($expiryDate === null || $iso > $expiryDate)) {
-                    $expiryDate = $iso;
+        // Dernier recours : la plupart des PV de visite technique n'ont
+        // qu'une seule date dans le futur (la prochaine visite). On tolère
+        // beaucoup d'OCR-garbling sur le titre : il suffit que le document
+        // contienne un signal « contrôle / visite technique » ou qu'il soit
+        // passé en hint comme payment_attestation ET qu'il porte au moins
+        // une date future — on prend la plus tardive.
+        if (! $expiryDate) {
+            $looksLikeCvt = (bool) preg_match('/V[I1]SITE\s+TECHN|CONTR[ÔO0]LE\s+TECHN|\bCVT\b|CENTRE\s+DE\s+V[I1]SITE|PROC[ÈE]S[\-\s]*VERBAL/iu', $text);
+            if ($looksLikeCvt) {
+                preg_match_all('/\b(\d{1,2})[\/\-.\s](\d{1,2})[\/\-.\s]((?:19|20|21)\d{2})\b/u', $text, $allDates, PREG_SET_ORDER);
+                $todayIso = date('Y-m-d');
+                foreach ($allDates as $d) {
+                    $iso = $this->canonicalizeDate("{$d[1]}/{$d[2]}/{$d[3]}");
+                    if ($iso !== null && $iso > $todayIso && ($expiryDate === null || $iso > $expiryDate)) {
+                        $expiryDate = $iso;
+                    }
                 }
             }
         }
