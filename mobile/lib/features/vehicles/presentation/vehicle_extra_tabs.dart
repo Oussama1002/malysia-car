@@ -720,6 +720,208 @@ class CostsTab extends ConsumerWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Audit — parité avec `EntityAuditTimeline.tsx` du web ERP
+// ---------------------------------------------------------------------------
+
+const _auditHiddenFields = {
+  'id',
+  'company_id',
+  'branch_id',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'sha256',
+  'storage_path',
+  'disk',
+  'password',
+  'remember_token',
+  'two_factor_secret',
+};
+
+const _auditFieldLabels = {
+  'status': 'Statut',
+  'customer_id': 'Client',
+  'vehicle_id': 'Véhicule',
+  'contract_id': 'Contrat',
+  'reservation_id': 'Réservation',
+  'document_id': 'Document',
+  'invoice_id': 'Facture',
+  'user_id': 'Utilisateur',
+  'assigned_user_id': 'Assigné à',
+  'start_date': 'Date de début',
+  'end_date': 'Date de fin',
+  'desired_start_at': 'Début souhaité',
+  'desired_end_at': 'Fin souhaitée',
+  'activation_date': "Date d'activation",
+  'closure_date': 'Date de clôture',
+  'signed_at': 'Signé le',
+  'terminated_reason': 'Motif résiliation',
+  'monthly_payment': 'Mensualité',
+  'base_amount': 'Montant de base',
+  'down_payment_amount': 'Apport',
+  'deposit_amount': 'Caution',
+  'duration_months': 'Durée (mois)',
+  'allowed_km': 'Km autorisés',
+  'excess_km_rate': 'Tarif km excédent',
+  'payment_method': 'Mode de paiement',
+  'payment_terms': 'Conditions paiement',
+  'bank_reference': 'Réf. virement',
+  'cheque_number': 'N° chèque',
+  'notes': 'Notes',
+  'legal_status': 'Statut légal',
+  'signature_status': 'Statut signature',
+  'estimated_price': 'Prix estimé',
+  'reservation_type': 'Type réservation',
+  'handover_type': 'Type remise',
+  'fuel_level': 'Niveau carburant',
+  'odometer': 'Kilométrage',
+  'condition_notes': 'État / observations',
+  'daily_rental_price': 'Prix location / jour',
+  'brand': 'Marque',
+  'model': 'Modèle',
+  'plate_number': 'Immatriculation',
+  'year': 'Année',
+  'color': 'Couleur',
+  'fuel_type': 'Carburant',
+  'transmission': 'Transmission',
+  'mileage': 'Kilométrage',
+  'seats': 'Nombre de places',
+  'category': 'Catégorie',
+  'availability_status': 'Disponibilité',
+  'ownership': 'Propriété',
+  'first_registration_date': "Date de 1re mise en circulation",
+};
+
+const _auditValueTranslations = {
+  'draft': 'Brouillon',
+  'pending': 'En attente',
+  'approved': 'Approuvé',
+  'active': 'Actif',
+  'inactive': 'Inactif',
+  'completed': 'Terminé',
+  'cancelled': 'Annulé',
+  'rejected': 'Rejeté',
+  'expired': 'Expiré',
+  'terminated': 'Résilié',
+  'closed': 'Clôturé',
+  'suspended': 'Suspendu',
+  'blocked': 'Bloqué',
+  'reserved': 'Réservé',
+  'confirmed': 'Confirmé',
+  'available': 'Disponible',
+  'in_use': 'Loué',
+  'rented': 'Loué',
+  'maintenance': 'Maintenance',
+  'repair': 'Réparation',
+  'immobilized': 'Immobilisé',
+  'sold': 'Vendu',
+  'scrapped': 'Rebut',
+  'true': 'Oui',
+  'false': 'Non',
+  '1': 'Oui',
+  '0': 'Non',
+  'owned': 'Propriété',
+  'leased': 'Loué',
+  'sub_rented': 'Sous-location',
+  'virement': 'Virement',
+  'cheque': 'Chèque',
+  'espece': 'Espèce',
+  'cash': 'Espèce',
+  'carte': 'Carte bancaire',
+  'bank_transfer': 'Virement bancaire',
+};
+
+final _auditUuidRe = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false);
+final _auditIsoDateRe = RegExp(r'^\d{4}-\d{2}-\d{2}(T[\d:.Z+\-]+)?$');
+final _auditHexRe = RegExp(r'^[0-9a-f]{32,}$', caseSensitive: false);
+
+String _auditFieldLabel(String key) {
+  return _auditFieldLabels[key] ??
+      key
+          .replaceAll('_', ' ')
+          .split(' ')
+          .where((s) => s.isNotEmpty)
+          .map((s) => s[0].toUpperCase() + s.substring(1))
+          .join(' ');
+}
+
+String _auditUuidPrefix(String key) {
+  final k = key.toLowerCase();
+  if (k.contains('customer')) return 'CLT';
+  if (k.contains('vehicle')) return 'VHL';
+  if (k.contains('contract')) return 'CTR';
+  if (k.contains('reservation')) return 'RSV';
+  if (k.contains('invoice')) return 'INV';
+  if (k.contains('document')) return 'DOC';
+  if (k.contains('user')) return 'USR';
+  if (k.contains('company')) return 'CMP';
+  if (k.contains('branch')) return 'BRN';
+  return key.replaceAll(RegExp(r'_id$'), '').toUpperCase().substring(
+      0, key.replaceAll(RegExp(r'_id$'), '').length.clamp(0, 3));
+}
+
+String _auditFormatValue(String key, dynamic raw) {
+  if (raw == null || raw == '') return '—';
+  final s = raw is Map || raw is List ? raw.toString() : raw.toString();
+  final trimmed = s.trim();
+  if (_auditUuidRe.hasMatch(trimmed)) {
+    return '${_auditUuidPrefix(key)}-${trimmed.replaceAll('-', '').substring(0, 8).toUpperCase()}';
+  }
+  if (_auditIsoDateRe.hasMatch(trimmed)) {
+    final d = DateTime.tryParse(trimmed);
+    if (d != null) {
+      return trimmed.contains('T') &&
+              !trimmed.endsWith('T00:00:00.000000Z') &&
+              !trimmed.endsWith('T00:00:00Z')
+          ? _dateTimeFmt.format(d)
+          : _dateFmt.format(d);
+    }
+  }
+  if (_auditHexRe.hasMatch(trimmed) && trimmed.length > 20) {
+    return '${trimmed.substring(0, 12)}…';
+  }
+  final lower = trimmed.toLowerCase();
+  return _auditValueTranslations[trimmed] ??
+      _auditValueTranslations[lower] ??
+      trimmed;
+}
+
+String _auditComparable(dynamic v) {
+  if (v == null) return '';
+  if (v is Map || v is List) return v.toString();
+  return v.toString();
+}
+
+class _AuditDiff {
+  _AuditDiff(this.label, this.before, this.after);
+  final String label;
+  final String before;
+  final String after;
+}
+
+List<_AuditDiff> _auditSummarize(dynamic before, dynamic after) {
+  final b = before is Map ? before.cast<String, dynamic>() : <String, dynamic>{};
+  final a = after is Map ? after.cast<String, dynamic>() : <String, dynamic>{};
+  final keys = <String>{...b.keys, ...a.keys};
+  final out = <_AuditDiff>[];
+  for (final k in keys) {
+    if (_auditHiddenFields.contains(k)) continue;
+    final rb = _auditComparable(b[k]);
+    final ra = _auditComparable(a[k]);
+    if (rb == ra) continue;
+    out.add(_AuditDiff(
+      _auditFieldLabel(k),
+      _auditFormatValue(k, b[k]),
+      _auditFormatValue(k, a[k]),
+    ));
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 class AuditTab extends ConsumerWidget {
   const AuditTab({super.key, required this.vehicleId});
   final String vehicleId;
@@ -739,53 +941,184 @@ class AuditTab extends ConsumerWidget {
         return ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: logs.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (_, i) {
-            final l = logs[i];
-            final actor = l['actor'];
-            final actorEmail = actor is Map ? actor['email']?.toString() : null;
-            final actorRole = actor is Map ? actor['role']?.toString() : null;
-            return ModuleCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          (l['action_label'] ?? l['action'] ?? '—').toString(),
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      _StatusChip(
-                        label: (l['module'] ?? '').toString(),
-                        tone: ModuleStatusTone.neutral,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _fmtDateTime(l['created_at']),
-                    style:
-                        const TextStyle(fontSize: 11, color: Colors.black45),
-                  ),
-                  if (actorEmail != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      actorRole != null && actorRole.isNotEmpty
-                          ? '$actorEmail · $actorRole'
-                          : actorEmail,
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.black54),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (_, i) => _AuditCard(log: logs[i]),
         );
       },
+    );
+  }
+}
+
+class _AuditCard extends StatelessWidget {
+  const _AuditCard({required this.log});
+  final Map<String, dynamic> log;
+
+  @override
+  Widget build(BuildContext context) {
+    final actionLabel =
+        (log['action_label'] ?? log['action'] ?? '—').toString();
+    final actorName =
+        (log['actor_name'] ?? log['actor_email'] ?? 'Système').toString();
+    final ip = log['ip_address']?.toString();
+    final legal = log['legal_significance'] == true;
+    final occurredAt = log['occurred_at'] ?? log['created_at'];
+    final diffs = _auditSummarize(log['before_data'], log['after_data']);
+
+    return ModuleCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  actionLabel,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                _fmtDateTime(occurredAt),
+                style: const TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 0.4,
+                    color: Colors.black45,
+                    fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            children: [
+              Text(
+                ip != null && ip.isNotEmpty ? '$actorName · $ip' : actorName,
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+              if (legal)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'LÉGAL',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.4,
+                        color: Color(0xFF92400E)),
+                  ),
+                ),
+            ],
+          ),
+          if (diffs.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Theme(
+              data: Theme.of(context)
+                  .copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                title: Text(
+                  'Voir les changements (${diffs.length})',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF4F46E5)),
+                ),
+                children: [_AuditDiffTable(diffs: diffs)],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditDiffTable extends StatelessWidget {
+  const _AuditDiffTable({required this.diffs});
+  final List<_AuditDiff> diffs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          decoration: const BoxDecoration(
+            border: Border(
+                bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+          ),
+          child: Row(
+            children: const [
+              Expanded(
+                child: Text('Champ',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black38)),
+              ),
+              Expanded(
+                child: Text('Avant',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black38)),
+              ),
+              Expanded(
+                child: Text('Après',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black38)),
+              ),
+            ],
+          ),
+        ),
+        for (final d in diffs)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: const BoxDecoration(
+              border: Border(
+                  bottom: BorderSide(color: Color(0xFFF8FAFC), width: 1)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(d.label,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF475569))),
+                ),
+                Expanded(
+                  child: Text(d.before,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          color: Color(0xFF94A3B8))),
+                ),
+                Expanded(
+                  child: Text(d.after,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E293B))),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
