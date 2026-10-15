@@ -152,7 +152,8 @@ const ScanSlot: React.FC<{
     setDocPreview({ url: localUrl, isImage: file.type.startsWith('image/') });
     try {
       const docType = mapFields === mapAssurance ? 'insurance'
-        : mapFields === mapCarteGrise ? 'vehicle_registration'
+        : (mapFields === mapCarteGrise || mapFields === mapCarteGriseRecto || mapFields === mapCarteGriseVerso)
+            ? 'vehicle_registration'
         : mapFields === mapAutorisation ? 'autorisation_circulation'
         : 'other';
       const uploaded = await documentReaderApi.upload(file, docType);
@@ -319,17 +320,17 @@ const CarteGriseScanSlot: React.FC<{
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <ScanSlot
           title="Recto"
-          description="Immatriculation, 1ère mise en circulation, fin de validité"
+          description="Immatriculation, WW antérieur, 1ère mise en circulation, fin de validité"
           onPrefill={(d) => { onPrefill(d); handleRectoDone(); }}
-          mapFields={mapCarteGrise}
+          mapFields={mapCarteGriseRecto}
           onDocumentUploaded={(id) => onDocumentUploaded?.(id)}
           onSourceChosen={setRectoSource}
         />
         <ScanSlot
           title="Verso"
-          description="Marque, modèle, châssis, carburant, puissance"
+          description="Marque, modèle, châssis (VIN), carburant, puissance fiscale"
           onPrefill={(d) => { onPrefill(d); setVersoDone(true); }}
-          mapFields={mapCarteGrise}
+          mapFields={mapCarteGriseVerso}
           onDocumentUploaded={(id) => onDocumentUploaded?.(id)}
           cameraInputRef={versoCameraRef}
           fileInputRef={versoFileRef}
@@ -403,22 +404,35 @@ function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
-// La carte grise est désormais un unique slot (recto + verso scannés dans la
-// même carte) : on en tire TOUT ce que le parser renvoie — verso (marque,
-// modèle, châssis, carburant, puissance, fin validité) ET recto
-// (immatriculation, WW antérieur, 1ère mise en circulation).
-function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
+// Recto de la carte grise : plaque définitive, WW antérieur, 1ère mise en
+// circulation, fin de validité. On NE touche PAS aux champs verso (marque,
+// modèle, châssis, carburant, puissance) pour que la liste "Non détectés"
+// ne mentionne pas des champs qui ne sont physiquement pas sur cette face.
+function mapCarteGriseRecto(d: Record<string, unknown>): ScannedVehicleData {
   return {
-    cgMarque:            str(d.brand ?? d.marque ?? d.make),
-    cgModele:            str(d.model ?? d.modele),
-    cgChassis:           str(d.vin_number ?? d.vin ?? d.chassis ?? d.chassis_number),
-    cgFuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
-    cgFiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale),
-    cgExpiry:            str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
-    registration:        str(d.registration_number ?? d.immatriculation ?? d.plate_number),
-    immatProvisoire:     wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire ?? d.immatriculation_anterieure),
-    miseEnCirculation:   str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation ?? d.premiere_mise_en_circulation),
+    registration:      str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    immatProvisoire:   wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire ?? d.immatriculation_anterieure),
+    miseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation ?? d.premiere_mise_en_circulation),
+    cgExpiry:          str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
   };
+}
+
+// Verso de la carte grise : marque, modèle, châssis (VIN), carburant,
+// puissance fiscale. Pareil, on ne regarde PAS les champs recto.
+function mapCarteGriseVerso(d: Record<string, unknown>): ScannedVehicleData {
+  return {
+    cgMarque:      str(d.brand ?? d.marque ?? d.make),
+    cgModele:      str(d.model ?? d.modele),
+    cgChassis:     str(d.vin_number ?? d.vin ?? d.chassis ?? d.chassis_number),
+    cgFuelType:    str(d.fuel_type ?? d.carburant ?? d.energie),
+    cgFiscalPower: str(d.fiscal_power ?? d.puissance_fiscale),
+  };
+}
+
+// Gardé pour les anciens points d'entrée (sub-rental, etc.) qui n'ont qu'un
+// seul uploader « carte grise » tout-en-un.
+function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
+  return { ...mapCarteGriseRecto(d), ...mapCarteGriseVerso(d) };
 }
 
 const FIELD_LABELS: Record<string, string> = {
