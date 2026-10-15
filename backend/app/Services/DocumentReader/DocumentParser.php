@@ -747,16 +747,33 @@ class DocumentParser
         }
 
         // --- Plaque d'immatriculation définitive (recto) ---
-        // Format marocain : "XXXXX-A-YY" après remappage arabe→latin plus haut.
-        // On exige maintenant une vraie lettre centrale (A-Z) ; sinon on
-        // laisse `registration` à null plutôt que de renvoyer "27314---72".
+        // Format marocain : "XXXXX-A-YY". Si Tesseract a lu la lettre
+        // centrale (après remappage arabe→latin plus haut), on la renvoie
+        // telle quelle. Si la lettre reste illisible, on garde quand même
+        // les deux blocs de chiffres sous la forme "XXXXX-?-YY" : le mobile
+        // et le web peuvent déjà remplir le numéro et la région, et l'agent
+        // n'a plus qu'à choisir la lettre dans le dropdown — c'est bien
+        // mieux que « non détecté » quand la carte grise est l'unique source
+        // de la plaque.
         $registration = null;
-        if (preg_match('/\b(\d{1,5})\s*[-ـ\s]{1,3}\s*([A-Z])\s*[-ـ\s]{1,3}\s*(\d{1,2})\b/u', $flatUpper, $rm)) {
+        if (preg_match('/\b(\d{3,5})\s*[-ـ\s]{1,3}\s*([A-Z])\s*[-ـ\s]{1,3}\s*(\d{1,2})\b/u', $flatUpper, $rm)) {
             $registration = $rm[1].'-'.$rm[2].'-'.$rm[3];
         }
+        if (! $registration && preg_match('/\b(\d{3,5})\s*[-ـ\s—–]{1,4}\s*(\d{1,2})\b/u', $flatUpper, $rm2)) {
+            // Blocs chiffres - blocs chiffres sans lettre lisible. On s'assure
+            // d'abord que ce bloc apparaît dans le voisinage du libellé
+            // "immatriculation" (ou directement en haut de la carte) pour ne
+            // pas confondre avec une date ou le numéro de téléphone du PV.
+            $windowOk = (bool) preg_match(
+                '/IMMATRICULATION[\s\S]{0,120}'.preg_quote($rm2[0], '/').'/u',
+                $flatUpper,
+            ) || mb_strpos($flatUpper, $rm2[0]) < 400;
+            if ($windowOk) {
+                $registration = $rm2[1].'-?-'.$rm2[2];
+            }
+        }
         if (! $registration) {
-            // Après le label "Numéro d'immatriculation" / "N° d'immatriculation",
-            // en exigeant toujours une lettre latine centrale.
+            // Après le label "Numéro d'immatriculation" / "N° d'immatriculation".
             $registration = $this->labelValue(
                 $flatUpper,
                 [
@@ -764,15 +781,8 @@ class DocumentParser
                     'N[°O]?\s*D[\'\']?IMMATRICULATION',
                     'IMMATRICULATION',
                 ],
-                '\d{1,5}\s*[-ـ\s]{1,3}\s*[A-Z]\s*[-ـ\s]{1,3}\s*\d{1,2}',
+                '\d{1,5}\s*[-ـ\s]{1,3}\s*[A-Z\?]\s*[-ـ\s]{1,3}\s*\d{1,2}',
             );
-        }
-        // Garde-fou : si pour une raison ou une autre une valeur du type
-        // « 27314---72 » (sans lettre centrale lisible) atterrit ici, on la
-        // jette plutôt que de la propager à l'UI. Il vaut mieux ne rien poser
-        // et laisser l'autorisation/vignette ou l'agent remplir la plaque.
-        if ($registration !== null && ! preg_match('/\d+[-ـ\s][A-Z][-ـ\s]\d+/u', mb_strtoupper($registration))) {
-            $registration = null;
         }
 
         // --- Immatriculation antérieure / WW (recto) ---

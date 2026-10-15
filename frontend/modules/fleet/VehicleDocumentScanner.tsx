@@ -404,12 +404,14 @@ function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
-/** Rejet défensif des plaques du type "27314---72" (sans lettre centrale) :
- *  si le parser côté serveur en laisse passer une, on la convertit en
- *  undefined ici pour que l'UI ne la propage pas comme Immatriculation. */
+/** Rejet défensif des plaques du type "27314---72" (sans aucun marqueur
+ *  central) : si le parser côté serveur en laisse passer une, on la convertit
+ *  en undefined. On tolère par contre "27314-?-72" (lettre arabe illisible)
+ *  parce que l'UI remplit le numéro + la région et laisse l'agent choisir
+ *  la lettre dans le dropdown. */
 function cleanPlate(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
-  return /\d+[-\s][A-Z][-\s]\d+/i.test(raw.toUpperCase()) ? raw : undefined;
+  return /\d+[-\s][A-Z?][-\s]\d+/i.test(raw.toUpperCase()) ? raw : undefined;
 }
 
 // Recto de la carte grise : plaque définitive, WW antérieur, 1ère mise en
