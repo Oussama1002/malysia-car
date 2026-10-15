@@ -22,13 +22,13 @@ class NewVehicleScreen extends ConsumerStatefulWidget {
 }
 
 // Mêmes documents OCR que le web (frontend/modules/fleet/VehicleDocumentScanner
-// .tsx) : Assurance, Autorisation de circulation, Visite technique, Vignette,
-// Carte Grise — avec les mêmes types canoniques (ReaderDocument::TYPE_*).
+// .tsx) : Assurance, Autorisation de circulation (= Attestation de paiement /
+// Vignette : un seul document physique au Maroc), Visite technique, Carte
+// Grise — avec les mêmes types canoniques (ReaderDocument::TYPE_*).
 enum _VehDoc {
   assurance,
   autorisation,
   techControl,
-  vignette,
   carteGriseRecto,
   carteGriseVerso
 }
@@ -240,16 +240,14 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.assurance => 'insurance',
         _VehDoc.autorisation => 'autorisation_circulation',
         _VehDoc.techControl => 'payment_attestation',
-        _VehDoc.vignette => 'payment_attestation',
         _VehDoc.carteGriseRecto => 'vehicle_registration',
         _VehDoc.carteGriseVerso => 'vehicle_registration',
       };
 
   String _ocrLabel(_VehDoc d) => switch (d) {
         _VehDoc.assurance => 'Assurance',
-        _VehDoc.autorisation => 'Autorisation de circulation',
+        _VehDoc.autorisation => 'Autorisation de circulation / Vignette',
         _VehDoc.techControl => 'Visite technique',
-        _VehDoc.vignette => 'Vignette',
         _VehDoc.carteGriseRecto => 'Carte Grise — Recto',
         _VehDoc.carteGriseVerso => 'Carte Grise — Verso',
       };
@@ -257,10 +255,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   String _ocrHint(_VehDoc d) => switch (d) {
         _VehDoc.assurance => 'N° police, période de garantie, immatriculation',
         _VehDoc.autorisation =>
-          'Immat., N° WW, marque, carburant, mise en circulation, validité',
-        _VehDoc.techControl =>
-          'Immat., WW, carburant, mise en circulation, puissance (CV), validité',
-        _VehDoc.vignette => 'Année / date expiration',
+          'Attestation de paiement TSAV — immat., WW, marque, carburant, mise en circulation, validité vignette',
+        _VehDoc.techControl => 'Date d\'expiration de la visite technique',
         _VehDoc.carteGriseRecto =>
           'Marque, modèle, immatriculation, 1ère mise en circulation',
         _VehDoc.carteGriseVerso =>
@@ -429,12 +425,31 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             }
           }
           note(_matchBrandModel(brand, null), 'Marque');
+          // L'attestation de paiement TSAV ET l'autorisation de circulation
+          // sont le même papier au Maroc, donc on en tire aussi la date de
+          // validité de la vignette.
+          final vignetteExp = pick([
+            'expiry_date',
+            'date_expiration',
+            'validity_date',
+            'date_validite',
+            'valid_until',
+            'year',
+            'annee',
+          ]);
+          if (vignetteExp != null && _vignetteExpiry == null) {
+            final parsed = DateTime.tryParse(vignetteExp);
+            if (parsed != null) {
+              _vignetteExpiry = parsed;
+              note(true, 'Exp. vignette');
+            }
+          }
           outcome('Immatriculation', reg);
           outcome('N° provisoire / WW', ww);
           outcome('Marque', brand);
           outcome('Carburant', fuel);
           outcome('Mise en circulation', mec);
-          outcome("Autorisation valable jusqu'au", pick(['expiry_date', 'validity_date', 'date_expiration', 'date_validite']));
+          outcome('Exp. vignette', vignetteExp);
           break;
         case _VehDoc.techControl:
           // Parité avec `mapVisiteTech` du web : la visite technique ne sert
@@ -457,25 +472,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             }
           }
           outcome('Exp. visite tech.', exp);
-          break;
-        case _VehDoc.vignette:
-          final exp = pick([
-            'expiry_date',
-            'date_expiration',
-            'validity_date',
-            'date_validite',
-            'year',
-            'annee',
-            'valid_until'
-          ]);
-          if (exp != null && _vignetteExpiry == null) {
-            final parsed = DateTime.tryParse(exp);
-            if (parsed != null) {
-              _vignetteExpiry = parsed;
-              note(true, 'Exp. vignette');
-            }
-          }
-          outcome('Exp. vignette', exp);
           break;
         case _VehDoc.carteGriseRecto:
           // Recto : plaque définitive, immatriculation antérieure (WW),

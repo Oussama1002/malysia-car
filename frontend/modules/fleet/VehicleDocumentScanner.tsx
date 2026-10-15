@@ -41,7 +41,6 @@ export type VehicleDocSlotKey =
   | 'circulation_authorization'
   | 'payment_attestation'
   | 'technical_inspection'
-  | 'vignette'
   | 'registration_card';
 
 export const VehicleDocumentScanner: React.FC<{
@@ -68,25 +67,18 @@ export const VehicleDocumentScanner: React.FC<{
         onDocumentUploaded={(id) => onDocumentUploaded?.('insurance', id)}
       />
       <ScanSlot
-        title="Autorisation de circulation"
-        description="Immat., N° WW, marque, carburant, mise en circulation, validité"
+        title="Autorisation de circulation / Vignette"
+        description="Attestation de paiement TSAV — immat., WW, marque, carburant, mise en circulation, validité vignette"
         onPrefill={onPrefill}
         mapFields={mapAutorisation}
         onDocumentUploaded={(id) => onDocumentUploaded?.('circulation_authorization', id)}
       />
       <ScanSlot
         title="Visite technique"
-        description="Immat., WW, carburant, mise en circulation, puissance (CV), validité"
+        description="Date d'expiration de la visite technique"
         onPrefill={onPrefill}
         mapFields={mapVisiteTech}
         onDocumentUploaded={(id) => onDocumentUploaded?.('technical_inspection', id)}
-      />
-      <ScanSlot
-        title="Vignette"
-        description="Année / date expiration"
-        onPrefill={onPrefill}
-        mapFields={mapVignette}
-        onDocumentUploaded={(id) => onDocumentUploaded?.('vignette', id)}
       />
       <div ref={carteGriseRef}>
         <ScanSlot
@@ -303,6 +295,8 @@ function mapAssurance(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
+// L'autorisation de circulation est le MÊME papier que l'attestation de
+// paiement TSAV (« la vignette »), donc on en tire aussi vignetteExpiry.
 function mapAutorisation(d: Record<string, unknown>): ScannedVehicleData {
   return {
     registration:       str(d.registration_number ?? d.immatriculation ?? d.plate_number),
@@ -311,6 +305,7 @@ function mapAutorisation(d: Record<string, unknown>): ScannedVehicleData {
     fuelType:           str(d.fuel_type ?? d.carburant ?? d.energie),
     miseEnCirculation:  str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation),
     autorisationExpiry: str(d.authorization_expiry ?? d.valid_until ?? d.expiry_date ?? d.date_validite),
+    vignetteExpiry:     str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_validite ?? d.year ?? d.annee ?? d.valid_until),
   };
 }
 
@@ -338,12 +333,6 @@ function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
     cgFuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
     cgFiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale),
     cgExpiry:            str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
-  };
-}
-
-function mapVignette(d: Record<string, unknown>): ScannedVehicleData {
-  return {
-    vignetteExpiry: str(d.expiry_date ?? d.date_expiration ?? d.validity_date ?? d.date_validite ?? d.year ?? d.annee ?? d.valid_until),
   };
 }
 
