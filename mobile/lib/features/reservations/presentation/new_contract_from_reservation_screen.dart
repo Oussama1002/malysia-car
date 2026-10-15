@@ -260,6 +260,28 @@ class _NewContractFromReservationScreenState
       _lastError = null;
     });
     try {
+      // Les sélecteurs mobiles stockent des libellés FR internes
+      // (virement, cheque, especes, carte). `deposit_method` sur
+      // StoreContractRequest n'accepte que `cash,cheque,bank_transfer,card,other`
+      // — sans cette conversion le POST /contracts tombait en 422.
+      String depositMethodToApi(String m) {
+        switch (m) {
+          case 'cheque':
+          case 'check':
+            return 'cheque';
+          case 'virement':
+          case 'bank_transfer':
+            return 'bank_transfer';
+          case 'carte':
+          case 'card':
+            return 'card';
+          case 'especes':
+          case 'cash':
+            return 'cash';
+          default:
+            return 'other';
+        }
+      }
       final payload = <String, dynamic>{
         'contract_type': _type,
         if (_clientId != null) 'customer_id': _clientId,
@@ -276,7 +298,7 @@ class _NewContractFromReservationScreenState
           'deposit_amount': double.parse(_deposit.text),
         // Carried onto the contract row so the detail page and the
         // generated PDF show how the franchise was collected.
-        'deposit_method': _depositMethod,
+        'deposit_method': depositMethodToApi(_depositMethod),
         if (int.tryParse(_kmIncluded.text) != null)
           'allowed_km': int.parse(_kmIncluded.text),
         if (_type == 'LOA' && double.tryParse(_residual.text) != null)
