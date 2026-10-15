@@ -1004,22 +1004,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     );
   }
 
-  /// Scanne le recto et, dès que l'OCR a répondu, enchaîne automatiquement
-  /// sur le verso avec le même mode de capture (caméra ou galerie). Ça évite
-  /// à l'agent de ré-ouvrir la liste de photos entre les deux faces.
-  Future<void> _scanRectoThenVerso(ImageSource source) async {
-    await _scan(source: source, doc: _VehDoc.carteGriseRecto);
-    if (!mounted) return;
-    // On n'auto-chaîne pas si l'agent a annulé le recto (aucun fichier posé)
-    // ou si le verso a déjà été rempli précédemment.
-    if (_scanPath[_VehDoc.carteGriseRecto] == null) return;
-    if (_scanPath[_VehDoc.carteGriseVerso] != null) return;
-    await _scan(source: source, doc: _VehDoc.carteGriseVerso);
-  }
-
   /// Carte grise = une seule carte avec deux emplacements photo (recto +
-  /// verso) côte à côte. Après le recto on enchaîne tout de suite sur le
-  /// verso, dans le même mode (appareil photo ou galerie).
+  /// verso) côte à côte. Chaque face a ses propres boutons Caméra/Fichier
+  /// parce que l'ouverture automatique du 2e picker est bloquée par Safari
+  /// iOS après la 1re prise (règle « input.click() hors gesture utilisateur
+  /// bloqué »), ce qui faisait croire que la carte grise ne prenait qu'une
+  /// seule photo.
   Widget _carteGriseGroupedSlot() {
     return Container(
       padding: const EdgeInsets.all(10),
@@ -1045,7 +1035,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Scannez le recto puis le verso — l\'appareil photo s\'ouvre automatiquement pour le verso après la première prise.',
+            'Prenez le recto, puis le verso. Chaque face a ses propres boutons (iOS/Safari oblige : l\'ouverture automatique du 2e appareil-photo est bloquée après la 1re prise).',
             style: TextStyle(fontSize: 10.5, color: Colors.black45),
           ),
           const SizedBox(height: 10),
@@ -1057,6 +1047,14 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                   label: 'Recto',
                   photoPath: _scanPath[_VehDoc.carteGriseRecto],
                   scanning: _scanning == _VehDoc.carteGriseRecto,
+                  disabled: _scanning != null &&
+                      _scanning != _VehDoc.carteGriseRecto,
+                  onCamera: () => _scan(
+                      source: ImageSource.camera,
+                      doc: _VehDoc.carteGriseRecto),
+                  onGallery: () => _scan(
+                      source: ImageSource.gallery,
+                      doc: _VehDoc.carteGriseRecto),
                   onClear: () => setState(() {
                     _scanPath[_VehDoc.carteGriseRecto] = null;
                     _scanDocId[_VehDoc.carteGriseRecto] = null;
@@ -1071,42 +1069,20 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
                   label: 'Verso',
                   photoPath: _scanPath[_VehDoc.carteGriseVerso],
                   scanning: _scanning == _VehDoc.carteGriseVerso,
+                  disabled: _scanning != null &&
+                      _scanning != _VehDoc.carteGriseVerso,
+                  onCamera: () => _scan(
+                      source: ImageSource.camera,
+                      doc: _VehDoc.carteGriseVerso),
+                  onGallery: () => _scan(
+                      source: ImageSource.gallery,
+                      doc: _VehDoc.carteGriseVerso),
                   onClear: () => setState(() {
                     _scanPath[_VehDoc.carteGriseVerso] = null;
                     _scanDocId[_VehDoc.carteGriseVerso] = null;
                     _scanNotice[_VehDoc.carteGriseVerso] = null;
                     _scanPreview[_VehDoc.carteGriseVerso] = null;
                   }),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _scanning != null
-                      ? null
-                      : () => _scanRectoThenVerso(ImageSource.camera),
-                  icon: const Icon(Icons.photo_camera_outlined, size: 16),
-                  label: const Text('Prendre les deux photos'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFB8933F),
-                    minimumSize: const Size.fromHeight(40),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _scanning != null
-                      ? null
-                      : () => _scanRectoThenVerso(ImageSource.gallery),
-                  icon: const Icon(Icons.folder_open_outlined, size: 16),
-                  label: const Text('Fichier'),
-                  style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(40)),
                 ),
               ),
             ],
@@ -2158,15 +2134,22 @@ class _CarteGriseSide extends StatelessWidget {
     required this.label,
     required this.photoPath,
     required this.scanning,
+    required this.disabled,
+    required this.onCamera,
+    required this.onGallery,
     required this.onClear,
   });
   final String label;
   final String? photoPath;
   final bool scanning;
+  final bool disabled;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
   final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
+    final buttonsEnabled = !scanning && !disabled;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2225,6 +2208,35 @@ class _CarteGriseSide extends StatelessWidget {
                         size: 28, color: Colors.black26),
                   ),
           ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: buttonsEnabled ? onCamera : null,
+                icon: const Icon(Icons.photo_camera_outlined, size: 14),
+                label: const Text('Photo', style: TextStyle(fontSize: 11)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB8933F),
+                  minimumSize: const Size.fromHeight(34),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: buttonsEnabled ? onGallery : null,
+                icon: const Icon(Icons.folder_open_outlined, size: 14),
+                label: const Text('Fichier', style: TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(34),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
