@@ -133,15 +133,20 @@ class DocumentParser
         if (preg_match('/PASSPORT|PASSEPORT|REPUBLIQUE.*MAROC.*PASS/u', $upper)) {
             return ReaderDocument::TYPE_PASSPORT;
         }
-        // Payment attestation (vignette / taxe spéciale annuelle). Checked before
-        // the generic CIN "ROYAUME DU MAROC" rule below, which every Moroccan
-        // government document shares.
-        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|QUITTANCE|VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|TAXE\s+ANNUELLE|DIRECTION\s+G[ÉE]N[ÉE]RALE\s+DES\s+IMP[ÔO]TS|TR[ÉE]SORERIE\s+G[ÉE]N[ÉE]RALE|\bTSAV\b|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE/u', $upper)) {
-            return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
-        }
-        // Insurance / assurance
-        if (preg_match('/ASSURANCE|INSURANCE|POLICE\s+D\'?ASSURANCE|N°?\s*POLICE|ATTESTATION\s+D\'?ASSURANCE|COMPAGNIE\s+D\'?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE/u', $upper)) {
+        // Insurance / assurance — checked BEFORE payment-attestation because
+        // the Wafa / Sanad / AXA attestations include a "QUITTANCE DE PRIME"
+        // panel at the bottom, and the generic `QUITTANCE` match used to steal
+        // them for the vignette type. Any attestation d'assurance obligatoire
+        // / police d'assurance / période de garantie wins first.
+        if (preg_match('/ATTESTATION\s+D\'?ASSURANCE|POLICE\s+D\'?ASSURANCE|COMPAGNIE\s+D\'?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE|N[°º]?\s*(?:DE\s+LA\s+)?POLICE|QUITTANCE\s+DE\s+PRIME|ASSURANCE|INSURANCE/u', $upper)) {
             return ReaderDocument::TYPE_INSURANCE;
+        }
+        // Payment attestation (vignette / taxe spéciale annuelle). Checked
+        // AFTER the insurance block above — we no longer match a bare
+        // `QUITTANCE` (that steals every insurance attestation that carries
+        // a quittance de prime); only quittance de vignette / taxe / TSAV.
+        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|TAXE\s+ANNUELLE|DIRECTION\s+G[ÉE]N[ÉE]RALE\s+DES\s+IMP[ÔO]TS|TR[ÉE]SORERIE\s+G[ÉE]N[ÉE]RALE|\bTSAV\b|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE/u', $upper)) {
+            return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
         }
         // Cheque / bank check
         if (preg_match('/CH[ÈE]QUE|CHEQUE|PAYEZ\s+CONTRE|ORDER\s+OF|PAY\s+TO\s+THE|BANQUE|BANK.*CHECK/u', $upper)) {
