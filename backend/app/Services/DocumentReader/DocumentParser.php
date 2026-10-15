@@ -862,23 +862,35 @@ class DocumentParser
             'First\s+registration',
         ]);
 
-        // --- Nombre de portes (verso, rare sur la carte grise marocaine
-        // mais Tesseract peut le remonter via "Nombre de portes : 5"). ---
+        // --- Nombre de portes (verso) ---
+        // Variantes OCR observées : "Nombre de portes : 5", "Nb portes 5",
+        // "N. de portes 5", "Portes 5", "Nbre portes : 5". On tolère un
+        // "Noinbre" / "Nornbre" (confusions m/rn), des points et des espaces
+        // à la place des séparateurs.
         $nbPortes = null;
-        if (preg_match('/[Nn]ombre\s+de\s+portes[^\d]{0,15}(\d{1,2})/u', $flat, $npm)) {
-            $nbPortes = (int) $npm[1];
+        if (preg_match('/(?:[Nn](?:ombre|bre?|b|\.)[^A-Za-z]{0,6}(?:de\s*)?)?\b[Pp]ortes?\b[^\d]{0,10}(\d{1,2})/u', $flat, $npm)) {
+            $v = (int) $npm[1];
+            if ($v >= 1 && $v <= 10) {
+                $nbPortes = $v;
+            }
         }
 
         // --- Nombre de places (verso, utilisé par la fiche véhicule). ---
         $nbPlaces = null;
-        if (preg_match('/[Nn]ombre\s+de\s+places[^\d]{0,15}(\d{1,2})/u', $flat, $nsm)) {
-            $nbPlaces = (int) $nsm[1];
+        if (preg_match('/(?:[Nn](?:ombre|bre?|b|\.)[^A-Za-z]{0,6}(?:de\s*)?)?\b[Pp]laces?\b(?:\s*assises?)?[^\d]{0,10}(\d{1,2})/u', $flat, $nsm)) {
+            $v = (int) $nsm[1];
+            if ($v >= 1 && $v <= 60) {
+                $nbPlaces = $v;
+            }
         }
 
         // --- Nombre de cylindres (verso). ---
         $nbCylindres = null;
-        if (preg_match('/[Nn]ombre\s+de\s+cylindres[^\d]{0,15}(\d{1,2})/u', $flat, $ncm)) {
-            $nbCylindres = (int) $ncm[1];
+        if (preg_match('/(?:[Nn](?:ombre|bre?|b|\.)[^A-Za-z]{0,6}(?:de\s*)?)?\b[Cc]ylindres?\b[^\d]{0,10}(\d{1,2})/u', $flat, $ncm)) {
+            $v = (int) $ncm[1];
+            if ($v >= 1 && $v <= 16) {
+                $nbCylindres = $v;
+            }
         }
 
         $result = [

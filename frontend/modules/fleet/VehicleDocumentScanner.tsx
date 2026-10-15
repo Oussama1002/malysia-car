@@ -34,6 +34,9 @@ export interface ScannedVehicleData {
   cgFuelType?: string;
   cgFiscalPower?: string;
   cgExpiry?: string;
+  nombrePortes?: string;
+  nombrePlaces?: string;
+  nombreCylindres?: string;
 }
 
 export type VehicleDocSlotKey =
@@ -438,6 +441,9 @@ function mapCarteGriseVerso(d: Record<string, unknown>): ScannedVehicleData {
     cgChassis:     str(d.vin_number ?? d.vin ?? d.chassis ?? d.chassis_number),
     cgFuelType:    str(d.fuel_type ?? d.carburant ?? d.energie),
     cgFiscalPower: str(d.fiscal_power ?? d.puissance_fiscale),
+    nombrePortes:  str(d.nombre_portes ?? d.number_of_doors ?? d.doors),
+    nombrePlaces:  str(d.nombre_places ?? d.number_of_seats ?? d.seats),
+    nombreCylindres: str(d.nombre_cylindres ?? d.number_of_cylinders ?? d.cylinders),
     registration:  cleanPlate(str(d.registration_number ?? d.immatriculation ?? d.plate_number)),
   };
 }
@@ -474,4 +480,7 @@ const FIELD_LABELS: Record<string, string> = {
   cgFuelType:            'Carburant',
   cgFiscalPower:         'Puissance fiscale',
   cgExpiry:              'Fin de validité',
+  nombrePortes:          'Nombre de portes',
+  nombrePlaces:          'Nombre de places',
+  nombreCylindres:       'Nombre de cylindres',
 };

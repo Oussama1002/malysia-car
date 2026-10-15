@@ -1311,6 +1311,9 @@ const VehiclesList: React.FC = () => {
                     ...(data.cgChassis            ? { chassis: data.cgChassis }                           : {}),
                     ...(data.cgFuelType           ? { fuel: data.cgFuelType }                             : {}),
                     ...(data.cgFiscalPower        ? { cv: data.cgFiscalPower }                            : {}),
+                    ...(data.nombrePortes         ? { nombrePortes: data.nombrePortes }                   : {}),
+                    ...(data.nombrePlaces         ? { nombrePlaces: data.nombrePlaces }                   : {}),
+                    ...(data.nombreCylindres      ? { nombreCylindres: data.nombreCylindres }             : {}),
                   };
                 })}
               />
