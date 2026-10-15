@@ -51,6 +51,7 @@ import { ApiError } from '@/services/apiError';
 import { documentReaderApi } from '@/services/documentReaderApi';
 import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
 import { DateField } from '@/modules/shared/components/DateField';
+import { requiredDocsFor } from '@/modules/shared/customerDocCatalog';
 
 type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
 
@@ -1748,20 +1749,38 @@ export const ContractWizardPage: React.FC = () => {
               </>
             )}
 
-            {step.key === 'annex' && (
+            {step.key === 'annex' && (() => {
+              // Les Annexes se calquent sur l'onglet Clients de /settings/parameters :
+              // seuls les documents cochés par l'admin sont affichés, selon le type
+              // de client sélectionné. Les documents déjà rattachés au client
+              // apparaissent en lecture seule (ExistingDocRow) à la place du dropzone.
+              const clientKind = selectedClient?.kind ?? 'PARTICULIER';
+              const settingsCsv = clientKind === 'ENTREPRISE'
+                ? settingsQ.data?.clients?.required_documents_entreprise
+                : settingsQ.data?.clients?.required_documents_individual;
+              const requiredDocs = requiredDocsFor(clientKind, settingsCsv);
+              const existingByCode: Record<string, DocumentCenterItem | undefined> = {
+                cin: cinDoc,
+                passport: passportDoc,
+                driving_license: permisDoc,
+              };
+              return (
               <>
                 <div className="space-y-3">
                   <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Documents client</div>
-                  {cinDoc
-                    ? <ExistingDocRow doc={cinDoc} label="Pièce d'identité (CIN)" />
-                    : <UploadZone label="Pièce d'identité (CIN recto/verso)" />
-                  }
-                  {permisDoc
-                    ? <ExistingDocRow doc={permisDoc} label="Permis de conduire" />
-                    : <UploadZone label="Permis de conduire valide" />
-                  }
-                  <UploadZone label="Justificatif de revenus / attestation CNSS" />
-                  {state.type === 'CREDIT_AUTO' && <UploadZone label="Bilans financiers (3 derniers exercices)" />}
+                  {requiredDocs.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-[color:var(--df-border)] px-4 py-6 text-center text-xs text-[color:var(--df-text-faint)]">
+                      Aucun document requis configuré pour ce type de client.
+                      <Link to="/settings/parameters?tab=clients" className="ml-1 font-semibold text-[color:var(--df-brand-600)] underline">
+                        Configurer dans Paramètres
+                      </Link>
+                    </div>
+                  ) : requiredDocs.map((d) => {
+                    const existing = existingByCode[d.code];
+                    return existing
+                      ? <ExistingDocRow key={d.code} doc={existing} label={d.label} />
+                      : <UploadZone key={d.code} label={d.label} hint={d.sub} />;
+                  })}
                 </div>
                 <div className="mt-5 space-y-3">
                   <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Photos véhicule avant livraison</div>
@@ -1775,7 +1794,8 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
                 <AIHint tone="info" text="Tous les documents sont chiffrés et conformes Loi 09-08 sur la protection des données." />
               </>
-            )}
+              );
+            })()}
 
             {step.key === 'review' && (
               <ContractPaperPreview

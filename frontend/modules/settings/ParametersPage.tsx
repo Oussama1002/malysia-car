@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { companySettingsApi, type CompanySettingsPayload } from '@/services/companySettingsApi';
+import {
+  CUSTOMER_DOC_CATALOG_INDIVIDUAL,
+  CUSTOMER_DOC_CATALOG_ENTERPRISE,
+  parseRequiredDocsCsv,
+  type CustomerDoc,
+} from '@/modules/shared/customerDocCatalog';
 
 type Section = keyof CompanySettingsPayload;
 
@@ -559,34 +565,8 @@ const ContractTypesSection: React.FC<{ csv: string; onChange: (csv: string) => v
 };
 
 // ─── Documents requis — Clients ───────────────────────────────────────────
-type CustomerDoc = { code: string; label: string; sub: string };
-
-const CUSTOMER_DOC_CATALOG_INDIVIDUAL: CustomerDoc[] = [
-  { code: 'cin',             label: "Pièce d'identité (CIN)",      sub: 'Recto / verso de la carte nationale' },
-  { code: 'passport',        label: 'Passeport',                    sub: 'Pour les clients étrangers' },
-  { code: 'driving_license', label: 'Permis de conduire',           sub: 'Recto obligatoire — verso recommandé' },
-  { code: 'address_proof',   label: 'Justificatif de domicile',     sub: 'Facture < 3 mois, attestation, contrat de bail' },
-  { code: 'income_proof',    label: 'Justificatif de revenus / CNSS', sub: 'Bulletin de paie, attestation employeur, CNSS' },
-  { code: 'rib',             label: 'RIB',                          sub: 'Pour prélèvements et remboursement de caution' },
-  { code: 'cnss_cert',       label: 'Attestation CNSS',             sub: 'Si demandée par le dossier LLD' },
-];
-
-const CUSTOMER_DOC_CATALOG_ENTERPRISE: CustomerDoc[] = [
-  { code: 'rc_cert',             label: 'Registre de commerce (RC)',          sub: "Modèle J ou extrait récent" },
-  { code: 'ice_cert',             label: 'Attestation ICE',                    sub: "Identifiant commun de l'entreprise" },
-  { code: 'if_cert',               label: 'Attestation IF',                     sub: 'Identifiant fiscal' },
-  { code: 'cnss_cert',             label: 'Attestation CNSS',                   sub: 'Déclaration à jour' },
-  { code: 'statuts',               label: 'Statuts de la société',              sub: 'Mise à jour la plus récente' },
-  { code: 'rib',                   label: 'RIB entreprise',                     sub: 'Compte bancaire de la société' },
-  { code: 'power_of_attorney',     label: 'Pouvoir du signataire',              sub: "Mandat autorisant la signature du contrat" },
-  { code: 'financial_statements',  label: 'Bilans financiers (3 exercices)',    sub: 'Requis pour dossiers CREDIT_AUTO / LLD longue durée' },
-];
-
-function parseDocsCsv(csv: string): Set<string> {
-  const trimmed = (csv ?? '').trim();
-  if (!trimmed) return new Set();
-  return new Set(trimmed.split(',').map((s) => s.trim()).filter(Boolean));
-}
+// Catalog + parser live in `@/modules/shared/customerDocCatalog` so the
+// contract wizard's Annexes step and the client form read the same codes.
 
 const RequiredDocumentsSection: React.FC<{
   title: string;
@@ -595,7 +575,7 @@ const RequiredDocumentsSection: React.FC<{
   csv: string;
   onChange: (csv: string) => void;
 }> = ({ title, hint, catalog, csv, onChange }) => {
-  const required = parseDocsCsv(csv);
+  const required = parseRequiredDocsCsv(csv);
   const toggle = (code: string) => {
     const next = new Set(required);
     if (next.has(code)) next.delete(code); else next.add(code);

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type {
   Customer,
   CustomerCreatePayload,
@@ -14,6 +15,8 @@ import {
 } from '@/modules/customers/CustomerIdentityScanner';
 import { COUNTRIES_FR } from '@/modules/customers/countries';
 import { DateField } from '@/modules/shared/components/DateField';
+import { companySettingsApi } from '@/services/companySettingsApi';
+import { requiredDocsFor, parseRequiredDocsCsv } from '@/modules/shared/customerDocCatalog';
 
 export const CustomerForm: React.FC<{
   mode: 'create' | 'edit';
@@ -53,6 +56,20 @@ export const CustomerForm: React.FC<{
     },
   );
   const [company, setCompany] = useState<Partial<CompanyProfile>>(initial?.company_profile ?? { legal_name: '' });
+
+  // Catalogue de documents requis : copié de /settings/parameters → Clients.
+  // Le scanner OCR masque les slots non requis, et un petit panneau rappelle
+  // à l'agent la liste à collecter sur la fiche.
+  const settingsQ = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => (await companySettingsApi.get()).data,
+    staleTime: 5 * 60 * 1000,
+  });
+  const requiredCsv = type === 'ENTREPRISE'
+    ? settingsQ.data?.clients?.required_documents_entreprise
+    : settingsQ.data?.clients?.required_documents_individual;
+  const requiredCodes = parseRequiredDocsCsv(requiredCsv);
+  const requiredDocs = requiredDocsFor(type === 'ENTREPRISE' ? 'ENTREPRISE' : 'PARTICULIER', requiredCsv);
 
   // Optional primary contact + address created with the customer
   const [phone, setPhone] = useState(mode === 'create' ? (seed?.phone ?? '') : '');
@@ -142,6 +159,7 @@ export const CustomerForm: React.FC<{
           <SectionTitle>Identité particulier</SectionTitle>
           {mode === 'create' ? (
             <CustomerIdentityScanner
+              requiredCodes={requiredCodes}
               onPrefill={({ address, ...scanned }: ScannedIdentity) => {
                 setIndividual((prev) => ({ ...prev, ...scanned }));
                 // L'adresse n'appartient pas à l'identité : elle alimente le
@@ -155,6 +173,7 @@ export const CustomerForm: React.FC<{
               }
             />
           ) : null}
+          <RequiredDocumentsChecklist docs={requiredDocs} />
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Prénom">
               <input
@@ -236,6 +255,7 @@ export const CustomerForm: React.FC<{
       ) : (
         <section className="space-y-3">
           <SectionTitle>Identité entreprise</SectionTitle>
+          <RequiredDocumentsChecklist docs={requiredDocs} />
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Raison sociale">
               <input
@@ -370,3 +390,30 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
 const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">{children}</h3>
 );
+
+/** Liste à cocher mentale pour l'agent : les documents configurés dans
+ *  Paramètres → Clients. Ne stocke rien — c'est un rappel de dossier.
+ *  La liste disparaît quand aucun document n'est requis pour éviter un bloc vide. */
+const RequiredDocumentsChecklist: React.FC<{
+  docs: ReadonlyArray<{ code: string; label: string; sub: string }>;
+}> = ({ docs }) => {
+  if (!docs.length) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+        Documents à collecter sur la fiche
+      </div>
+      <ul className="grid gap-1 md:grid-cols-2">
+        {docs.map((d) => (
+          <li key={d.code} className="flex items-start gap-2 text-xs text-slate-700">
+            <span aria-hidden className="mt-[2px] text-slate-400">•</span>
+            <span>
+              <span className="font-semibold">{d.label}</span>
+              <span className="text-slate-500"> — {d.sub}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};

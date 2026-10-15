@@ -39,7 +39,16 @@ export interface ScannedDocument {
 export const CustomerIdentityScanner: React.FC<{
   onPrefill: (data: ScannedIdentity) => void;
   onScanComplete?: (scan: ScannedDocument) => void;
-}> = ({ onPrefill, onScanComplete }) => {
+  /**
+   * Codes des documents cochés dans Paramètres → Clients. Si fourni, on
+   * n'affiche que les slots dont au moins un `ReaderDocumentType` est requis.
+   * Non fourni → tous les slots sont visibles (compat descendante).
+   */
+  requiredCodes?: Set<string>;
+}> = ({ onPrefill, onScanComplete, requiredCodes }) => {
+  const showId = !requiredCodes || requiredCodes.has('cin') || requiredCodes.has('passport');
+  const showLicense = !requiredCodes || requiredCodes.has('driving_license');
+  if (!showId && !showLicense) return null;
   return (
     <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
       <div className="mb-1 text-xs font-black uppercase tracking-wider text-indigo-700">
@@ -51,22 +60,37 @@ export const CustomerIdentityScanner: React.FC<{
         avant d'enregistrer.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <ScanSlot
-          title="CIN / Passeport"
-          allowedTypes={['cin', 'passport']}
-          defaultType="cin"
-          onPrefill={onPrefill}
-          onScanComplete={onScanComplete}
-          mapFields={mapIdCardFields}
-        />
-        <ScanSlot
-          title="Permis de conduire"
-          allowedTypes={['driving_license']}
-          defaultType="driving_license"
-          onPrefill={onPrefill}
-          onScanComplete={onScanComplete}
-          mapFields={mapLicenseFields}
-        />
+        {showId && (
+          <ScanSlot
+            title={requiredCodes && !requiredCodes.has('passport')
+              ? 'CIN'
+              : requiredCodes && !requiredCodes.has('cin')
+                ? 'Passeport'
+                : 'CIN / Passeport'}
+            allowedTypes={
+              requiredCodes
+                ? ([
+                    requiredCodes.has('cin') ? 'cin' : null,
+                    requiredCodes.has('passport') ? 'passport' : null,
+                  ].filter(Boolean) as ReaderDocumentType[])
+                : (['cin', 'passport'] as ReaderDocumentType[])
+            }
+            defaultType={requiredCodes && !requiredCodes.has('cin') ? 'passport' : 'cin'}
+            onPrefill={onPrefill}
+            onScanComplete={onScanComplete}
+            mapFields={mapIdCardFields}
+          />
+        )}
+        {showLicense && (
+          <ScanSlot
+            title="Permis de conduire"
+            allowedTypes={['driving_license']}
+            defaultType="driving_license"
+            onPrefill={onPrefill}
+            onScanComplete={onScanComplete}
+            mapFields={mapLicenseFields}
+          />
+        )}
       </div>
     </div>
   );
