@@ -1325,37 +1325,44 @@ class DocumentParser
         $guaranteeStart = null;
         $guaranteeEnd = null;
 
-        $datePattern = '(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})';
+        $datePattern = '(\d{1,2}\s*[\/\-.]\s*\d{1,2}\s*[\/\-.]\s*\d{2,4})';
         // "du DD/MM/YYYY au DD/MM/YYYY" or "du DD/MM/YYYY à DD/MM/YYYY"
-        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture)[^\n]*?du\s*'.$datePattern.'\s*(?:au|[àa])\s*'.$datePattern.'/iu', $text, $m)) {
-            $guaranteeStart = $this->canonicalizeDate($m[1]);
-            $guaranteeEnd = $this->canonicalizeDate($m[2]);
+        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture|valable|valide|assurance|assur[ée])[^\n]*?du\s*'.$datePattern.'\s*(?:au|[àa]|jusqu\'?au?)\s*'.$datePattern.'/iu', $text, $m)) {
+            $guaranteeStart = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[1]));
+            $guaranteeEnd = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[2]));
         }
         // Fallback: "du DD/MM/YYYY au DD/MM/YYYY" anywhere
-        if (! $guaranteeStart && preg_match('/du\s*'.$datePattern.'\s*(?:au|[àa])\s*'.$datePattern.'/iu', $text, $m)) {
-            $guaranteeStart = $this->canonicalizeDate($m[1]);
-            $guaranteeEnd = $this->canonicalizeDate($m[2]);
+        if (! $guaranteeStart && preg_match('/du\s*'.$datePattern.'\s*(?:au|[àa]|jusqu\'?au?)\s*'.$datePattern.'/iu', $text, $m)) {
+            $guaranteeStart = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[1]));
+            $guaranteeEnd = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[2]));
         }
         // Fallback: labeled start/end dates
         if (! $guaranteeStart) {
             $guaranteeStart = $this->extractDate($text, [
                 'Date\s+d\'?effet',
-                'Date\s+de\s+d[ée]but',
+                'Date\s+de\s+d[ée]but(?:\s+de\s+validit[ée])?',
+                'D[ée]but\s+de\s+validit[ée]',
                 'Effet\s+du',
+                'Souscrit(?:e)?\s+le',
+                'A\s+compter\s+du',
                 'Start\s+date',
                 'D[ée]but',
+                'Assurance\s+du',
             ]);
         }
         if (! $guaranteeEnd) {
             $guaranteeEnd = $this->extractDate($text, [
                 'Date\s+d\'?[ée]ch[ée]ance',
                 'Date\s+d\'?expiration',
-                'Date\s+de\s+fin',
+                'Date\s+de\s+fin(?:\s+de\s+validit[ée])?',
+                'Fin\s+de\s+validit[ée]',
                 'Expir',
                 'Fin\s+de\s+garantie',
                 'Ech[ée]ance',
                 'End\s+date',
                 'Valable\s+jusqu',
+                'Jusqu\'?au',
+                'Assurance\s+au',
             ]);
         }
         // Fallback: parse the PERIODE DE GARANTIE table with French month
