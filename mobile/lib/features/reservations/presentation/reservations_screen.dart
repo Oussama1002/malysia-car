@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/router/back_nav.dart';
-import '../../placeholders/placeholder_screen.dart';
 import 'archive_reservations_screen.dart';
 import 'availability_check_screen.dart';
 import 'new_contract_from_reservation_screen.dart';
+import 'new_mission_screen.dart';
 import 'new_reservation_screen.dart';
 import '../data/reservation_dto.dart';
 import '../data/reservations_repo.dart';
@@ -667,8 +667,15 @@ class _ReservationCard extends StatelessWidget {
       out.add(_ActionBtn.dark(
         label: '+ Mission',
         onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => const PlaceholderScreen(
-              title: 'Nouvelle mission', icon: Icons.assignment_outlined),
+          builder: (_) => NewMissionScreen(
+            reservationId: r.id,
+            reservationNumber: r.number,
+            customerName: r.customerName,
+            vehicleLabel: r.vehicleLabel,
+            pickupAddress: r.pickupAddress,
+            deliveryAddress: r.deliveryAddress,
+            customerId: r.customerId,
+          ),
         )),
       ));
     }
