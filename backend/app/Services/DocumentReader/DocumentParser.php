@@ -751,69 +751,79 @@ class DocumentParser
         }
 
         // --- Plaque d'immatriculation définitive (recto) ---
-        // Format marocain : "XXXXX-A-YY". Si Tesseract a lu la lettre
-        // centrale (après remappage arabe→latin plus haut), on la renvoie
-        // telle quelle. Si la lettre reste illisible, on garde quand même
-        // les deux blocs de chiffres sous la forme "XXXXX-?-YY" : le mobile
-        // et le web peuvent déjà remplir le numéro et la région, et l'agent
-        // n'a plus qu'à choisir la lettre dans le dropdown — c'est bien
-        // mieux que « non détecté » quand la carte grise est l'unique source
-        // de la plaque.
+        //
+        // Stratégie défensive (après remappage arabe→latin plus haut) :
+        // on ne cherche PAS une plaque "parfaite" avec deux dashes et une
+        // lettre au centre — Tesseract rend très souvent ce bloc n'importe
+        // comment ("27314-ب-72" devient "27314 - 72", "27314 . - . 72",
+        // "27314 — 72", voire "27314 72" sans séparateur du tout). On
+        // regarde plutôt le voisinage du libellé IMMATRICULATION, on y liste
+        // tous les groupes de chiffres, et on construit la plaque à partir
+        // du PREMIER bloc 3-5 chiffres suivi d'un bloc 1-2 chiffres (01..99).
+        // La lettre centrale est posée à '?' si aucune lettre latine ne se
+        // trouve entre les deux ; l'agent la corrige dans le dropdown.
         $registration = null;
-        // Région marocaine = 2 chiffres (01..99), on refuse les régions à 1
-        // chiffre qui captent le "5" de "Nombre de places 5" en région.
-        if (preg_match('/\b(\d{3,5})\s*[-ـ\s]{1,3}\s*([A-Z])\s*[-ـ\s]{1,3}\s*(\d{2})\b/u', $flatUpper, $rm)) {
-            $registration = $rm[1].'-'.$rm[2].'-'.$rm[3];
+        $labelPos = null;
+        if (preg_match('/NUM[EÉ]RO\s+D[\'\']?IMMATRICULATION|N[°O]?\s*D[\'\']?IMMATRICULATION|IMMATRICULATION/u', $flatUpper, $lm, PREG_OFFSET_CAPTURE)) {
+            $labelPos = $lm[0][1];
         }
-        if (! $registration) {
-            // Blocs chiffres - (lettre ou vide) - blocs chiffres sans lettre
-            // Latin lisible. On exige :
-            //  * au moins DEUX séparateurs (-, —, ـ, espace) entre les blocs,
-            //    pour ne pas confondre "27314 72" avec "Nombre de places 5"
-            //  * le bloc final à 2 chiffres pile (une région Marocaine est
-            //    toujours sur 2 chiffres : 01..99)
-            //  * le bloc trouvé reste à moins de 60 caractères du libellé
-            //    "IMMATRICULATION" sur le flat text. Sans ça, un bloc comme
-            //    "D1VMA27314B72<221119E" dans la MRZ était cueilli et la
-            //    plaque sortait avec une région aléatoire (5, 7, 1…).
-            if (preg_match_all('/\b(\d{4,5})\s*(?:[-ـ—–]\s*){2,3}([A-Z\?]?)\s*(?:[-ـ—–]\s*){0,2}(\d{2})\b/u', $flatUpper, $all, PREG_OFFSET_CAPTURE)) {
-                $labelPos = null;
-                if (preg_match('/IMMATRICULATION/u', $flatUpper, $lm, PREG_OFFSET_CAPTURE)) {
-                    $labelPos = $lm[0][1];
-                }
-                foreach ($all[0] as $idx => $hit) {
-                    [$whole, $wholePos] = $hit;
-                    $num = $all[1][$idx][0];
-                    $letter = $all[2][$idx][0] ?: '?';
-                    $region = (int) $all[3][$idx][0];
-                    if ($region < 1 || $region > 99) continue;
-                    // Si on a trouvé le libellé "IMMATRICULATION", le bloc
-                    // doit être à moins de 200 chars de celui-ci (plus loin,
-                    // c'est très probablement une autre valeur de la carte).
-                    // Sinon on tolère les 400 premiers chars du texte brut
-                    // (en-tête de la carte grise).
-                    $distance = $labelPos !== null
-                        ? abs($wholePos - $labelPos)
-                        : $wholePos;
-                    $maxDistance = $labelPos !== null ? 200 : 400;
-                    if ($distance > $maxDistance) continue;
-                    $registration = $num.'-'.$letter.'-'.$all[3][$idx][0];
-                    break;
+        $windowStart = $labelPos ?? 0;
+        $windowLen = $labelPos !== null ? 180 : 400;
+        $window = mb_substr($flatUpper, $windowStart, $windowLen);
+
+        // Récupère toutes les séquences de chiffres de la fenêtre avec leur
+        // position relative au début de la fenêtre.
+        preg_match_all('/(\d+)/u', $window, $digitHits, PREG_OFFSET_CAPTURE);
+        $groups = $digitHits[1] ?? [];
+        $foundNumIdx = null;
+        $foundRegionIdx = null;
+        foreach ($groups as $i => $g) {
+            [$digits, $offset] = $g;
+            if ($foundNumIdx === null && mb_strlen($digits) >= 3 && mb_strlen($digits) <= 5) {
+                $foundNumIdx = $i;
+                continue;
+            }
+            if ($foundNumIdx !== null && $foundRegionIdx === null) {
+                $len = mb_strlen($digits);
+                if ($len >= 1 && $len <= 2) {
+                    $r = (int) $digits;
+                    if ($r >= 1 && $r <= 99) {
+                        $foundRegionIdx = $i;
+                        break;
+                    }
                 }
             }
         }
-        if (! $registration) {
-            // Après le label "Numéro d'immatriculation" / "N° d'immatriculation".
-            $registration = $this->labelValue(
-                $flatUpper,
-                [
-                    'NUM[EÉ]RO\s+D[\'\']?IMMATRICULATION',
-                    'N[°O]?\s*D[\'\']?IMMATRICULATION',
-                    'IMMATRICULATION',
-                ],
-                '\d{1,5}\s*[-ـ\s]{1,3}\s*[A-Z\?]\s*[-ـ\s]{1,3}\s*\d{1,2}',
-            );
+        if ($foundNumIdx !== null && $foundRegionIdx !== null) {
+            $num = $groups[$foundNumIdx][0];
+            $regionDigits = $groups[$foundRegionIdx][0];
+            // On refuse une « région » collée directement au numéro
+            // (ex. "271472" où 72 serait pris comme région) en exigeant
+            // au moins un caractère non-digit entre les deux.
+            $afterNum = $groups[$foundNumIdx][1] + mb_strlen($num);
+            $beforeRegion = $groups[$foundRegionIdx][1];
+            $between = mb_substr($window, $afterNum, $beforeRegion - $afterNum);
+            if (mb_strlen(trim($between)) > 0 || preg_match('/\D/u', $between)) {
+                // Lettre centrale si une seule lettre latine apparaît entre
+                // les deux blocs chiffres ; sinon '?'.
+                $letter = '?';
+                if (preg_match('/([A-Z])/u', $between, $letterMatch)) {
+                    $letter = $letterMatch[1];
+                }
+                $regionPadded = (int) $regionDigits;
+                $registration = $num.'-'.$letter.'-'.$regionPadded;
+            }
         }
+        // Log diagnostique pour que, si la plaque reste null, on puisse
+        // voir dans storage/logs/laravel.log exactement ce que l'OCR a
+        // envoyé — sans ça on tourne en rond entre « non détecté » et
+        // des guesses.
+        Log::info('DocumentParser.carteGrise.plate', [
+            'label_pos' => $labelPos,
+            'window' => $window,
+            'digit_groups' => array_map(fn ($g) => $g[0], $groups),
+            'registration' => $registration,
+        ]);
 
         // --- Immatriculation antérieure / WW (recto) ---
         // "WW539032", "WW 539032", "WM539032" (OCR noise), etc.
