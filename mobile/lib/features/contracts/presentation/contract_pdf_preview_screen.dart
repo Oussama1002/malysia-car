@@ -108,17 +108,13 @@ class _ContractPdfPreviewScreenState
   void _downloadLocal() {
     final bytes = _bytes;
     if (bytes == null) return;
-    // Le téléchargement natif (vers Downloads sur Android / Documents sur iOS)
-    // demande path_provider + share_plus — à ajouter au pub quand on construira
-    // l'APK/IPA. Sur Flutter Web (la cible de /mobile-web/) le stub
-    // dart:html marche directement.
     try {
       saveBytesAsFile(bytes, _fileName);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
-                'Téléchargement natif indisponible pour l\'instant — ouvert dans l\'app.')),
+                'Téléchargement impossible pour l\'instant : $e. Essayez à nouveau.')),
       );
     }
   }
