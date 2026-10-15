@@ -404,13 +404,21 @@ function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
+/** Rejet défensif des plaques du type "27314---72" (sans lettre centrale) :
+ *  si le parser côté serveur en laisse passer une, on la convertit en
+ *  undefined ici pour que l'UI ne la propage pas comme Immatriculation. */
+function cleanPlate(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  return /\d+[-\s][A-Z][-\s]\d+/i.test(raw.toUpperCase()) ? raw : undefined;
+}
+
 // Recto de la carte grise : plaque définitive, WW antérieur, 1ère mise en
 // circulation, fin de validité. On NE touche PAS aux champs verso (marque,
 // modèle, châssis, carburant, puissance) pour que la liste "Non détectés"
 // ne mentionne pas des champs qui ne sont physiquement pas sur cette face.
 function mapCarteGriseRecto(d: Record<string, unknown>): ScannedVehicleData {
   return {
-    registration:      str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    registration:      cleanPlate(str(d.registration_number ?? d.immatriculation ?? d.plate_number)),
     immatProvisoire:   wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire ?? d.immatriculation_anterieure),
     miseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation ?? d.premiere_mise_en_circulation),
     cgExpiry:          str(d.expiry_date ?? d.fin_validite ?? d.validity_date),

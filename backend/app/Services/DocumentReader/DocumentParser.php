@@ -738,6 +738,13 @@ class DocumentParser
                 '\d{1,5}\s*[-ـ\s]{1,3}\s*[A-Z]\s*[-ـ\s]{1,3}\s*\d{1,2}',
             );
         }
+        // Garde-fou : si pour une raison ou une autre une valeur du type
+        // « 27314---72 » (sans lettre centrale lisible) atterrit ici, on la
+        // jette plutôt que de la propager à l'UI. Il vaut mieux ne rien poser
+        // et laisser l'autorisation/vignette ou l'agent remplir la plaque.
+        if ($registration !== null && ! preg_match('/\d+[-ـ\s][A-Z][-ـ\s]\d+/u', mb_strtoupper($registration))) {
+            $registration = null;
+        }
 
         // --- Immatriculation antérieure / WW (recto) ---
         // "WW539032", "WW 539032", "WM539032" (OCR noise), etc.
