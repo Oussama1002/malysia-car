@@ -1388,10 +1388,52 @@ class DocumentParser
             $guaranteeStart = $guaranteeStart ?? $periode['start'];
             $guaranteeEnd = $guaranteeEnd ?? $periode['end'];
         }
+        // Heuristique "deux dates à ~1 an d'écart" : les attestations auto
+        // marocaines portent presque toujours [début, fin] séparés d'un an
+        // exactement. Si l'un des deux manque encore, on balaie TOUTES les
+        // dates du document et on prend la première paire (a, b) telle que
+        // a <= b et (b.year - a.year) in {1}, avec a cohérent (année ≥ 2000).
+        if (! $guaranteeStart || ! $guaranteeEnd) {
+            if (preg_match_all('/(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/u', $text, $all)) {
+                $dates = [];
+                foreach ($all[1] as $raw) {
+                    $iso = $this->canonicalizeDate($raw);
+                    if ($iso && (int) substr($iso, 0, 4) >= 2000) {
+                        $dates[] = $iso;
+                    }
+                }
+                $picked = false;
+                foreach ($dates as $i => $a) {
+                    foreach (array_slice($dates, $i + 1) as $b) {
+                        if ($a <= $b) {
+                            $ya = (int) substr($a, 0, 4);
+                            $yb = (int) substr($b, 0, 4);
+                            if ($yb - $ya === 1) {
+                                $guaranteeStart = $guaranteeStart ?? $a;
+                                $guaranteeEnd = $guaranteeEnd ?? $b;
+                                $picked = true;
+                                break;
+                            }
+                        }
+                    }
+                    if ($picked) {
+                        break;
+                    }
+                }
+            }
+        }
         // Last resort: only use classified future dates as guarantee end.
         if (! $guaranteeEnd) {
             $classified = $this->classifyDatesByYear($text);
             $guaranteeEnd = $classified['expiry'];
+        }
+        // Garde-fou : si on n'a QUE guaranteeEnd et que cette date est
+        // antérieure à aujourd'hui, c'est probablement en réalité la date
+        // de début — on la bascule pour que l'UI n'affiche pas "Assurance
+        // au" avec une date passée.
+        if ($guaranteeEnd && ! $guaranteeStart && $guaranteeEnd < date('Y-m-d')) {
+            $guaranteeStart = $guaranteeEnd;
+            $guaranteeEnd = null;
         }
 
         // Registration / Immatriculation. On insurance attestations the vehicle
