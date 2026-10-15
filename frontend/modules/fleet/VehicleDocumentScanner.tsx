@@ -82,8 +82,8 @@ export const VehicleDocumentScanner: React.FC<{
       />
       <div ref={carteGriseRef}>
         <ScanSlot
-          title="Carte Grise"
-          description="Marque, modèle, châssis, carburant, puissance, fin validité"
+          title="Carte Grise (recto + verso)"
+          description="Scannez le recto puis le verso : immatriculation, WW, 1ère mise en circulation, fin de validité, marque, modèle, châssis, carburant, puissance"
           onPrefill={onPrefill}
           mapFields={mapCarteGrise}
           onDocumentUploaded={(id) => onDocumentUploaded?.('registration_card', id)}
@@ -325,6 +325,10 @@ function mapVisiteTech(d: Record<string, unknown>): ScannedVehicleData {
   };
 }
 
+// La carte grise est désormais un unique slot (recto + verso scannés dans la
+// même carte) : on en tire TOUT ce que le parser renvoie — verso (marque,
+// modèle, châssis, carburant, puissance, fin validité) ET recto
+// (immatriculation, WW antérieur, 1ère mise en circulation).
 function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
   return {
     cgMarque:            str(d.brand ?? d.marque ?? d.make),
@@ -333,6 +337,9 @@ function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
     cgFuelType:          str(d.fuel_type ?? d.carburant ?? d.energie),
     cgFiscalPower:       str(d.fiscal_power ?? d.puissance_fiscale),
     cgExpiry:            str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
+    registration:        str(d.registration_number ?? d.immatriculation ?? d.plate_number),
+    immatProvisoire:     wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire ?? d.immatriculation_anterieure),
+    miseEnCirculation:   str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation ?? d.premiere_mise_en_circulation),
   };
 }
 

@@ -29,8 +29,7 @@ enum _VehDoc {
   assurance,
   autorisation,
   techControl,
-  carteGriseRecto,
-  carteGriseVerso
+  carteGrise,
 }
 
 enum _CarteGriseStatus { enAttente, recue }
@@ -240,16 +239,14 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.assurance => 'insurance',
         _VehDoc.autorisation => 'autorisation_circulation',
         _VehDoc.techControl => 'payment_attestation',
-        _VehDoc.carteGriseRecto => 'vehicle_registration',
-        _VehDoc.carteGriseVerso => 'vehicle_registration',
+        _VehDoc.carteGrise => 'vehicle_registration',
       };
 
   String _ocrLabel(_VehDoc d) => switch (d) {
         _VehDoc.assurance => 'Assurance',
         _VehDoc.autorisation => 'Autorisation de circulation / Vignette',
         _VehDoc.techControl => 'Visite technique',
-        _VehDoc.carteGriseRecto => 'Carte Grise — Recto',
-        _VehDoc.carteGriseVerso => 'Carte Grise — Verso',
+        _VehDoc.carteGrise => 'Carte Grise (recto + verso)',
       };
 
   String _ocrHint(_VehDoc d) => switch (d) {
@@ -257,10 +254,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.autorisation =>
           'Attestation de paiement TSAV — immat., WW, marque, carburant, mise en circulation, validité vignette',
         _VehDoc.techControl => 'Date d\'expiration de la visite technique',
-        _VehDoc.carteGriseRecto =>
-          'Marque, modèle, immatriculation, 1ère mise en circulation',
-        _VehDoc.carteGriseVerso =>
-          'Châssis (VIN), carburant, puissance fiscale, fin de validité',
+        _VehDoc.carteGrise =>
+          'Scannez le recto puis le verso : marque, modèle, VIN, carburant, puissance, immatriculation, 1ère mise en circulation, fin de validité.',
       };
 
   Future<void> _scan({
@@ -477,9 +472,14 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           }
           outcome('Exp. visite tech.', exp);
           break;
-        case _VehDoc.carteGriseRecto:
-          // Recto : plaque définitive, immatriculation antérieure (WW),
-          // 1ère mise en circulation, fin de validité.
+        case _VehDoc.carteGrise:
+          // Un seul slot pour la carte grise (recto + verso) : l'agent scanne
+          // l'un, puis l'autre, chaque passe remplit les champs encore vides
+          // ou pose la plaque si elle est manquante. Les deux parsers côté
+          // backend partagent `vehicle_registration` donc une seule passe
+          // suffit souvent (le DomPDF carte grise porte les deux faces côte
+          // à côte).
+          // Recto : plaque, WW antérieur, mise en circulation, fin validité.
           final reg =
               pick(['registration_number', 'immatriculation', 'plate_number']);
           final ww = _ww(pick([
@@ -501,6 +501,19 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'date_validite',
             'date_expiration',
           ]);
+          // Verso : marque, modèle, carburant, VIN, puissance, nombre de
+          // places / portes / cylindres.
+          final brand = pick(['brand', 'marque', 'make']);
+          final model = pick(['model', 'modele']);
+          final vin =
+              pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
+          final fuel = pick(['fuel_type', 'carburant', 'energie']);
+          final cv = pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
+          final nbPortes = pick(['nombre_portes', 'number_of_doors', 'doors']);
+          final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
+          final nbCylindres = pick(
+              ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
+
           note(_applyPlate(reg), 'Immatriculation');
           if (ww != null && _immatOnline.text.isEmpty) {
             _immatOnline.text = ww;
@@ -525,26 +538,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               note(true, 'Fin de validité');
             }
           }
-          // La carte grise a été uploadée → statut « Reçue » automatiquement.
-          _carteGriseStatus = _CarteGriseStatus.recue;
-          outcome('Immatriculation', reg);
-          outcome('Immat. antérieure / WW', ww);
-          outcome('Mise en circulation', mec);
-          outcome('Fin de validité', exp);
-          break;
-        case _VehDoc.carteGriseVerso:
-          // Verso : marque, modèle, carburant, VIN/châssis, puissance
-          // fiscale, nombre de portes / places / cylindres.
-          final brand = pick(['brand', 'marque', 'make']);
-          final model = pick(['model', 'modele']);
-          final vin =
-              pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
-          final fuel = pick(['fuel_type', 'carburant', 'energie']);
-          final cv = pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
-          final nbPortes = pick(['nombre_portes', 'number_of_doors', 'doors']);
-          final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
-          final nbCylindres = pick(
-              ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
           note(_matchBrandModel(brand, model), 'Marque / Modèle');
           if (fuel != null) {
             final matched = _matchFuel(fuel);
@@ -573,7 +566,13 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             _cylinders.text = nbCylindres;
             note(true, 'Nombre de cylindres');
           }
+          // La carte grise a été uploadée → statut « Reçue » automatiquement.
           _carteGriseStatus = _CarteGriseStatus.recue;
+
+          outcome('Immatriculation', reg);
+          outcome('Immat. antérieure / WW', ww);
+          outcome('Mise en circulation', mec);
+          outcome('Fin de validité', exp);
           outcome('Marque', brand);
           outcome('Modèle', model);
           outcome('VIN / Châssis', vin);
