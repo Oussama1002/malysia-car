@@ -609,7 +609,6 @@ const RequiredDocumentsSection: React.FC<{
               <div>
                 <div className="text-sm font-black text-slate-900">{d.label}</div>
                 <div className="text-[11px] text-slate-500">{d.sub}</div>
-                <div className="mt-0.5 text-[10px] font-mono text-slate-400">code: {d.code}</div>
               </div>
             </label>
           );
