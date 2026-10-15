@@ -115,12 +115,12 @@ class ContractPaperPreview extends ConsumerWidget {
                           m.text,
                           softWrap: false,
                           style: TextStyle(
-                            // Convert mm → pt (1 mm = 2.8346 pt) then let
-                            // Flutter render at device pixel ratio. The web
-                            // uses `size * 0.3528 * mmToPx`; the equivalent
-                            // in logical pixels here is just `size * mmToPx`
-                            // because our box is already in logical pixels.
-                            fontSize: m.sizeMm * mmToPx,
+                            // Même formule que la version web
+                            // (`ContractPaperPreview.tsx` : size * 0.3528 * mmToPx).
+                            // Sans le facteur 0.3528 (mm → pt), le texte sortait
+                            // ~2,83× trop grand sur mobile et dépassait les
+                            // cases du formulaire.
+                            fontSize: m.sizeMm * 0.3528 * mmToPx,
                             fontWeight: m.bold ? FontWeight.w900 : FontWeight.w700,
                             color: Colors.black,
                             height: 1.0,
