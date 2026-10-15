@@ -355,12 +355,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'validity_date',
             'date_fin'
           ]);
-          final ww = _ww(pick([
-            'registration_number',
-            'immatriculation',
-            'plate_number',
-            'ww_number'
-          ]));
           if (police != null && _numeroPolice.text.isEmpty) {
             _numeroPolice.text = police;
             note(true, 'N° police');
@@ -369,25 +363,26 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             final parsed = DateTime.tryParse(start);
             if (parsed != null) {
               _insuranceStart = parsed;
-              note(true, 'Garantie du');
+              note(true, 'Assurance du');
             }
           }
           if (end != null && _insuranceExpiry == null) {
             final parsed = DateTime.tryParse(end);
             if (parsed != null) {
               _insuranceExpiry = parsed;
-              note(true, 'Garantie au');
+              note(true, 'Assurance au');
             }
           }
-          if (ww != null && _immatOnline.text.isEmpty) {
-            _immatOnline.text = ww;
-            note(true, 'N° provisoire / WW');
-          }
+          // Le N° provisoire / WW n'est PLUS lu depuis l'attestation
+          // d'assurance : la plaque posée sur ce papier est souvent la plaque
+          // définitive (immatriculation anterieure WW manquante), et le slot
+          // Autorisation de circulation / Vignette en donne une version
+          // fiable. Évite d'écraser le WW avec une plaque définitive mal
+          // interprétée.
           outcome('Compagnie', pick(['insurance_company', 'company_name', 'compagnie', 'insurer']));
           outcome('N° police', police);
-          outcome('Garantie du', start);
-          outcome('Garantie au', end);
-          outcome('N° provisoire / WW', ww);
+          outcome('Assurance du', start);
+          outcome('Assurance au', end);
           break;
         case _VehDoc.autorisation:
           final reg =
