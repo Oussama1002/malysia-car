@@ -44,6 +44,17 @@ class TesseractOcrProvider implements OcrProviderInterface
         $docType = (string) ($options['doc_type'] ?? '');
         $ext = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
 
+        // Les cartes grises marocaines portent la lettre centrale de la plaque
+        // en arabe (ب, ج, د, …). Sans le pack `ara` Tesseract la rend par un
+        // tiret ou rien, et la plaque sort en "27314---72". On ajoute `ara`
+        // au mix uniquement pour ce type de document, de façon idempotente
+        // (silencieusement ignoré si le pack n'est pas installé — le fallback
+        // `_detectArabicPlateLetterByShape` tente une seconde passe caractère
+        // en overlay côté parser).
+        if ($docType === 'vehicle_registration' && ! str_contains($lang, 'ara')) {
+            $lang .= '+ara';
+        }
+
         // The pink-watermark red-channel preprocessing is tuned for the Moroccan
         // permis / CIN. On a plain grayscale carte grise it destroys thin digit
         // strokes (turns "6"→"@", garbles VIN digits), so apply only to the
@@ -452,8 +463,19 @@ class TesseractOcrProvider implements OcrProviderInterface
         try {
             $process->mustRun();
         } catch (ProcessFailedException $e) {
+            $err = $e->getProcess()->getErrorOutput();
+            // Pack `ara` manquant : on recommence sans en invoquer un vrai
+            // problème. Message typique Tesseract : "Error opening data file
+            // /usr/share/tesseract-ocr/*/tessdata/ara.traineddata".
+            if (str_contains($lang, 'ara') &&
+                (str_contains($err, 'ara.traineddata') || str_contains($err, "'ara'"))) {
+                $fallback = trim(preg_replace('/\+?ara\+?/', '+', $lang) ?? $lang, '+');
+                if ($fallback !== '' && $fallback !== $lang) {
+                    return $this->runTesseract($image, $fallback);
+                }
+            }
             throw new RuntimeException(
-                'Tesseract OCR failed: '.$e->getProcess()->getErrorOutput(),
+                'Tesseract OCR failed: '.$err,
                 previous: $e,
             );
         }
