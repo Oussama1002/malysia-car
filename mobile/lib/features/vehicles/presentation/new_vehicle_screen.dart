@@ -421,6 +421,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             if (parsed != null) {
               _miseEnCirculation = parsed;
               note(true, 'Mise en circulation');
+              if (_year.text.trim().isEmpty) {
+                _year.text = parsed.year.toString();
+                note(true, 'Année');
+              }
             }
           }
           note(_matchBrandModel(brand, null), 'Marque');
@@ -506,6 +510,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             if (parsed != null) {
               _miseEnCirculation = parsed;
               note(true, 'Mise en circulation');
+              if (_year.text.trim().isEmpty) {
+                _year.text = parsed.year.toString();
+                note(true, 'Année');
+              }
             }
           }
           if (exp != null && _dateImmatriculation == null) {
