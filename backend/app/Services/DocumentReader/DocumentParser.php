@@ -436,17 +436,21 @@ class DocumentParser
         $flatUpper = mb_strtoupper($flat);
 
         // Les cartes grises marocaines impriment la lettre centrale de la
-        // plaque en arabe (ب, ج, د, …). Si Tesseract la rend telle quelle,
-        // on la remappe en Latin AVANT l'extraction pour que la plaque se
-        // décompose en "XXXXX-B-YY" plutôt qu'en "XXXXX---YY".
+        // plaque en arabe. Correspondance officielle Arabe → Latin
+        // utilisée sur les plaques marocaines :
+        //   أ → A    ب → B    د → D    ه (هـ) → H
+        //   و → E    ط → T    ي → Y
+        // On remappe AVANT l'extraction pour que la plaque se décompose en
+        // "XXXXX-B-YY" plutôt qu'en "XXXXX---YY". `ا` (alif sans hamza) est
+        // mappé à A par tolérance OCR.
         $arabicToLatin = [
             'أ' => 'A', 'ا' => 'A',
             'ب' => 'B',
-            'ج' => 'J',
             'د' => 'D',
-            'ه' => 'H',
-            'و' => 'W',
+            'ه' => 'H', 'هـ' => 'H',
+            'و' => 'E',
             'ط' => 'T',
+            'ي' => 'Y',
         ];
         $flat = strtr($flat, $arabicToLatin);
         $flatUpper = mb_strtoupper($flat);

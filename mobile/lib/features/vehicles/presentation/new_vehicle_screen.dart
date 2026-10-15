@@ -592,20 +592,23 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
     return m != null ? 'WW${m.group(1)}' : null;
   }
 
-  /// Correspondance Arabe → Latin pour les lettres de la plaque marocaine.
-  /// La carte grise imprime la lettre en arabe (ب, ج, د, …) alors que la
-  /// liste `_plateLetters` ne stocke que du Latin. Sans cette table l'OCR
+  /// Correspondance officielle Arabe → Latin utilisée sur les plaques
+  /// marocaines :
+  ///   أ → A    ب → B    د → D    ه (هـ) → H
+  ///   و → E    ط → T    ي → Y
+  /// La carte grise imprime la lettre en arabe alors que la liste
+  /// `_plateLetters` ne stocke que du Latin. Sans cette table l'OCR
   /// renvoyait une plaque du type "27314-ب-72" qui ne matchait pas la regex
-  /// `[A-Z]` et retombait sur le fallback "premier bloc de chiffres", d'où
-  /// le "9-.-22" vu à l'écran.
+  /// `[A-Z]` et retombait sur le fallback. `ا` (alif sans hamza) est mappé
+  /// à A par tolérance OCR.
   static const Map<String, String> _arabicToLatinLetter = {
     'أ': 'A', 'ا': 'A',
     'ب': 'B',
-    'ج': 'J',
     'د': 'D',
-    'ه': 'H',
-    'و': 'W',
+    'ه': 'H', 'هـ': 'H',
+    'و': 'E',
     'ط': 'T',
+    'ي': 'Y',
   };
 
   /// Décompose une plaque "12345-A-1" (ou "12345-ب-1") dans num / lettre /
