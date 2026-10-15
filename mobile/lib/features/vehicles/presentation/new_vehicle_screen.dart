@@ -258,7 +258,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           'Attestation de paiement TSAV — immat., WW, marque, carburant, mise en circulation, validité vignette',
         _VehDoc.techControl => 'Date d\'expiration de la visite technique',
         _VehDoc.carteGriseRecto =>
-          'Face avant : plaque, 1ère mise en circulation, fin de validité',
+          'Face avant : WW antérieur, 1ère mise en circulation, fin de validité',
         _VehDoc.carteGriseVerso =>
           'Face arrière : marque, modèle, châssis (VIN), carburant, puissance',
       };
@@ -473,10 +473,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           outcome('Exp. visite tech.', exp);
           break;
         case _VehDoc.carteGriseRecto:
-          // Recto : plaque définitive, immatriculation antérieure (WW),
-          // 1ère mise en circulation, fin de validité.
-          final reg =
-              pick(['registration_number', 'immatriculation', 'plate_number']);
+          // Recto : immatriculation antérieure (WW), 1ère mise en circulation,
+          // fin de validité. La plaque définitive est volontairement ignorée
+          // ici — la lettre centrale est en arabe et l'OCR se trompe souvent
+          // de caractère. On laisse le verso (MRZ ICAO) poser la plaque sans
+          // ambiguïté.
           final ww = _ww(pick([
             'ww_number',
             'provisional_number',
@@ -496,7 +497,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'date_validite',
             'date_expiration',
           ]);
-          note(_applyPlate(reg), 'Immatriculation');
           if (ww != null && _immatOnline.text.isEmpty) {
             _immatOnline.text = ww;
             note(true, 'Immat. provisoire / WW');
@@ -516,7 +516,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             }
           }
           _carteGriseStatus = _CarteGriseStatus.recue;
-          outcome('Immatriculation', reg);
           outcome('Immat. antérieure / WW', ww);
           outcome('Mise en circulation', mec);
           outcome('Fin de validité', exp);

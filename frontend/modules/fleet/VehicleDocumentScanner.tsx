@@ -323,7 +323,7 @@ const CarteGriseScanSlot: React.FC<{
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <ScanSlot
           title="Recto"
-          description="Immatriculation, WW antérieur, 1ère mise en circulation, fin de validité"
+          description="WW antérieur, 1ère mise en circulation, fin de validité"
           onPrefill={(d) => { onPrefill(d); handleRectoDone(); }}
           mapFields={mapCarteGriseRecto}
           onDocumentUploaded={(id) => onDocumentUploaded?.(id)}
@@ -422,8 +422,10 @@ function cleanPlate(raw: string | undefined): string | undefined {
 // modèle, châssis, carburant, puissance) pour que la liste "Non détectés"
 // ne mentionne pas des champs qui ne sont physiquement pas sur cette face.
 function mapCarteGriseRecto(d: Record<string, unknown>): ScannedVehicleData {
+  // L'immatriculation est volontairement ignorée côté recto : la lettre
+  // centrale y est en arabe et l'OCR se trompe souvent de caractère. On
+  // laisse le verso (MRZ ICAO) poser la plaque sans ambiguïté.
   return {
-    registration:      cleanPlate(str(d.registration_number ?? d.immatriculation ?? d.plate_number)),
     immatProvisoire:   wwStr(d.ww_number ?? d.provisional_number ?? d.numero_provisoire ?? d.immatriculation_anterieure),
     miseEnCirculation: str(d.first_registration_date ?? d.mise_en_circulation ?? d.date_circulation ?? d.premiere_mise_en_circulation),
     cgExpiry:          str(d.expiry_date ?? d.fin_validite ?? d.validity_date),
