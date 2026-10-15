@@ -105,6 +105,16 @@ class DocumentParser
     {
         $upper = mb_strtoupper($text);
 
+        // Visite technique (procès-verbal CVT) — gagne AVANT le fallback carte
+        // grise, parce que le PV imprime IMMATRICULATION, PUISSANCE, ENERGIE,
+        // MARQUE, KILOMETRAGE : sans ce check prioritaire les 2+ vehicle
+        // signals font tomber le PV dans la branche carte grise et le
+        // parsePaymentAttestation (qui porte l'extraction d'expiration) ne
+        // tourne jamais. Partagé avec le parser payment_attestation puisque
+        // c'est le même slot côté UI.
+        if (preg_match('/PROC[ÈE]S[\-\s]*VERBAL\s+DE\s+CONTR[ÔO]LE\s+TECHNIQUE|CONTR[ÔO]LE\s+TECHNIQUE|VISITE\s+TECHNIQUE|DATE\s+DE\s+LA\s+PROCHAINE\s+VISITE/u', $upper)) {
+            return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
+        }
         // Autorisation de circulation — distinctive title (allow OCR noise in
         // the middle word: "circulation"/"drcutation"). Checked before the carte
         // grise heuristic since it shares vehicle vocabulary.
@@ -1313,16 +1323,43 @@ class DocumentParser
 
         // Date d'expiration : le mobile ET le web réutilisent ce parser pour
         // la Visite technique (le procès-verbal CVT porte « NATURE ET DATE
-        // DE LA PROCHAINE VISITE : Le JJ/MM/AAAA »). Si on trouve une telle
-        // date, elle sort comme `expiry_date` pour que le slot Visite tech.
-        // la retrouve.
-        $expiryDate = $this->extractDate($text, [
+        // DE LA PROCHAINE VISITE : Le JJ/MM/AAAA »). On fait l'extraction
+        // inline parce que `extractDate` filtre les dates futures dans son
+        // fallback 200-char (hérité du cas CIN né-le), ce qui jetterait
+        // l'expiration 2027 alors qu'on est en 2026.
+        $expiryDate = null;
+        $expiryLabels = [
             'Date\s+de\s+la\s+prochaine\s+visite',
             'Prochaine\s+visite',
             'Next\s+inspection',
+            'Valable\s+jusqu[\'’]?au',
             'Valable\s+jusqu',
             'Date\s+d\'?[ée]ch[ée]ance',
-        ]);
+            'Date\s+d\'?expiration',
+        ];
+        $dateRe = '(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})';
+        foreach ($expiryLabels as $label) {
+            if (preg_match('#'.$label.'[\s\S]{0,220}?'.$dateRe.'#iu', $text, $m)) {
+                $expiryDate = $this->canonicalizeDate($m[1]);
+                if ($expiryDate !== null) {
+                    break;
+                }
+            }
+        }
+        // Dernier recours sur un PV de visite technique : la seule date
+        // future portée par le procès-verbal est la prochaine visite, donc
+        // si rien n'a été ancré sur un libellé on prend la date la plus
+        // tardive supérieure à aujourd'hui.
+        if (! $expiryDate && preg_match('/VISITE\s+TECHNIQUE|CONTR[ÔO]LE\s+TECHNIQUE/iu', $text)) {
+            preg_match_all('/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/u', $text, $allDates);
+            $todayIso = date('Y-m-d');
+            foreach ($allDates[1] ?? [] as $raw) {
+                $iso = $this->canonicalizeDate($raw);
+                if ($iso !== null && $iso > $todayIso && ($expiryDate === null || $iso > $expiryDate)) {
+                    $expiryDate = $iso;
+                }
+            }
+        }
 
         $result = [
             'registration_number'    => $registration ? trim($registration) : null,
