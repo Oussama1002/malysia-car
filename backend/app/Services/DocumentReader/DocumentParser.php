@@ -435,6 +435,24 @@ class DocumentParser
         $flat = preg_replace('/[\r\n]+/', ' ', $text);
         $flatUpper = mb_strtoupper($flat);
 
+        // Les cartes grises marocaines impriment la lettre centrale de la
+        // plaque en arabe (ب, ج, د, …). Si Tesseract la rend telle quelle,
+        // on la remappe en Latin AVANT l'extraction pour que la plaque se
+        // décompose en "XXXXX-B-YY" plutôt qu'en "XXXXX---YY".
+        $arabicToLatin = [
+            'أ' => 'A', 'ا' => 'A',
+            'ب' => 'B',
+            'ج' => 'J',
+            'د' => 'D',
+            'ه' => 'H',
+            'و' => 'W',
+            'ط' => 'T',
+        ];
+        $flat = strtr($flat, $arabicToLatin);
+        $flatUpper = mb_strtoupper($flat);
+        $text = strtr($text, $arabicToLatin);
+        $upper = mb_strtoupper($text);
+
         // --- Brand: known brands list, both word-boundary and substring ---
         $brand = null;
         $knownBrands = [
@@ -700,27 +718,24 @@ class DocumentParser
         }
 
         // --- Plaque d'immatriculation définitive (recto) ---
-        // Format marocain : "XXXXX-ب-YY" ou "XXXXX-A-YY". Dans la carte grise
-        // la lettre arabe peut être lue par Tesseract comme un caractère non
-        // latin ou disparaître. On capture donc "XXXXX" + un ou deux
-        // caractères non chiffres + "YY" pour couvrir les deux cas.
+        // Format marocain : "XXXXX-A-YY" après remappage arabe→latin plus haut.
+        // On exige maintenant une vraie lettre centrale (A-Z) ; sinon on
+        // laisse `registration` à null plutôt que de renvoyer "27314---72".
         $registration = null;
-        if (preg_match('/\b(\d{1,5})\s*[-ـ\s]\s*([^\d\s]{1,3})\s*[-ـ\s]\s*(\d{1,2})\b/u', $flat, $rm)) {
-            // Normalise en "XXXXX-A-YY" quand la lettre centrale est latine,
-            // sinon on la laisse telle quelle (le mobile tolère).
-            $center = trim($rm[2]);
-            $registration = $rm[1].'-'.$center.'-'.$rm[3];
+        if (preg_match('/\b(\d{1,5})\s*[-ـ\s]{1,3}\s*([A-Z])\s*[-ـ\s]{1,3}\s*(\d{1,2})\b/u', $flatUpper, $rm)) {
+            $registration = $rm[1].'-'.$rm[2].'-'.$rm[3];
         }
         if (! $registration) {
-            // Après le label "Numéro d'immatriculation" / "N° d'immatriculation"
+            // Après le label "Numéro d'immatriculation" / "N° d'immatriculation",
+            // en exigeant toujours une lettre latine centrale.
             $registration = $this->labelValue(
-                $flat,
+                $flatUpper,
                 [
-                    'Num[eé]ro\s+d[\'\']?immatriculation',
-                    'N[°o]?\s*d[\'\']?immatriculation',
-                    'Immatriculation',
+                    'NUM[EÉ]RO\s+D[\'\']?IMMATRICULATION',
+                    'N[°O]?\s*D[\'\']?IMMATRICULATION',
+                    'IMMATRICULATION',
                 ],
-                '\d{1,5}\s*[-ـ\s]\s*[^\d\s]{1,3}\s*[-ـ\s]\s*\d{1,2}',
+                '\d{1,5}\s*[-ـ\s]{1,3}\s*[A-Z]\s*[-ـ\s]{1,3}\s*\d{1,2}',
             );
         }
 
@@ -811,6 +826,21 @@ class DocumentParser
         $foundBrand = null;
         $foundBrandId = null;
 
+        // On exige une occurrence « au bord d'un mot » plutôt qu'un simple
+        // substring : avant, un modèle "RIO" du catalogue agence tombait sur
+        // les 3 lettres "RIO" prises au vol dans "INTERIEURE" ou dans un VIN,
+        // d'où "Kia Rio" renvoyé sur une Audi A4. Les noms longs (5 chars et
+        // plus) gardent la tolérance substring puisqu'ils sont assez
+        // discriminants.
+        $matchesInText = function (string $flatUp, string $needle): bool {
+            $up = mb_strtoupper($needle);
+            if (mb_strlen($up) >= 5) {
+                return str_contains($flatUp, $up);
+            }
+            // Mot borné : [^A-Z0-9] de chaque côté (ou début/fin de chaîne).
+            return (bool) preg_match('/(?:^|[^A-Z0-9])' . preg_quote($up, '/') . '(?:[^A-Z0-9]|$)/u', $flatUp);
+        };
+
         // Modèle d'abord (plus discriminant). On privilégie le libellé le plus
         // long qui apparaît dans le texte pour éviter les faux positifs courts.
         $bestLen = 0;
@@ -819,7 +849,7 @@ class DocumentParser
             if (mb_strlen($name) < 3) {
                 continue;
             }
-            if (str_contains($flatUpper, mb_strtoupper($name)) && mb_strlen($name) > $bestLen) {
+            if ($matchesInText($flatUpper, $name) && mb_strlen($name) > $bestLen) {
                 $foundModel = $name;
                 $foundBrandId = $m->brand_id;
                 $bestLen = mb_strlen($name);
@@ -835,7 +865,7 @@ class DocumentParser
                 if (mb_strlen($bn) < 3) {
                     continue;
                 }
-                if (str_contains($flatUpper, mb_strtoupper($bn)) && mb_strlen($bn) > $bestLen) {
+                if ($matchesInText($flatUpper, $bn) && mb_strlen($bn) > $bestLen) {
                     $foundBrand = $bn;
                     $bestLen = mb_strlen($bn);
                 }
