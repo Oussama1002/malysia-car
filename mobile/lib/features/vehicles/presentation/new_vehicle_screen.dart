@@ -195,6 +195,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   // into another — the previous shared `String? _scanNotice` made it look
   // like every card had succeeded.
   final Map<_VehDoc, String?> _scanNotice = {};
+  // Parité avec `VehicleDocumentScanner.tsx` : chaque champ attendu pour le
+  // document est listé après OCR, détecté (valeur) ou non détecté (null), pour
+  // que l'agent voie exactement ce que le serveur a trouvé.
+  final Map<_VehDoc, List<_FieldOutcome>?> _scanPreview = {};
 
   bool _submitting = false;
   String? _error;
@@ -277,6 +281,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _scanPath[doc] = f.path;
         _scanning = doc;
         _scanNotice[doc] = 'OCR ${_ocrLabel(doc)} en cours…';
+        _scanPreview[doc] = null;
       });
       final result = await ref.read(vehiclesRepoProvider).scanDocument(
             filePath: kIsWeb ? null : f.path,
@@ -333,6 +338,13 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
       if (wasApplied) applied.add(label);
     }
 
+    // Résultat détaillé par champ attendu — alimente le panneau
+    // « Champs détectés » / « Non détectés » (parité web).
+    final outcomes = <_FieldOutcome>[];
+    void outcome(String label, String? value) {
+      outcomes.add(_FieldOutcome(label, (value?.trim().isEmpty ?? true) ? null : value));
+    }
+
     setState(() {
       switch (doc) {
         case _VehDoc.assurance:
@@ -375,6 +387,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             _immatOnline.text = ww;
             note(true, 'N° provisoire / WW');
           }
+          outcome('Compagnie', pick(['insurance_company', 'company_name', 'compagnie', 'insurer']));
+          outcome('N° police', police);
+          outcome('Garantie du', start);
+          outcome('Garantie au', end);
+          outcome('N° provisoire / WW', ww);
           break;
         case _VehDoc.autorisation:
           final reg =
@@ -412,6 +429,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             }
           }
           note(_matchBrandModel(brand, null), 'Marque');
+          outcome('Immatriculation', reg);
+          outcome('N° provisoire / WW', ww);
+          outcome('Marque', brand);
+          outcome('Carburant', fuel);
+          outcome('Mise en circulation', mec);
+          outcome("Autorisation valable jusqu'au", pick(['expiry_date', 'validity_date', 'date_expiration', 'date_validite']));
           break;
         case _VehDoc.techControl:
           final exp = pick([
@@ -464,6 +487,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             _fiscalPower.text = cv;
             note(true, 'Puissance fiscale');
           }
+          outcome('Immatriculation', reg);
+          outcome('N° provisoire / WW', ww);
+          outcome('Exp. visite tech.', exp);
+          outcome('Mise en circulation', mec);
+          outcome('Carburant', fuel);
+          outcome('Puissance fiscale', cv);
           break;
         case _VehDoc.vignette:
           final exp = pick([
@@ -482,6 +511,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               note(true, 'Exp. vignette');
             }
           }
+          outcome('Exp. vignette', exp);
           break;
         case _VehDoc.carteGriseRecto:
           // Recto : plaque définitive, immatriculation antérieure (WW),
@@ -533,6 +563,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           }
           // La carte grise a été uploadée → statut « Reçue » automatiquement.
           _carteGriseStatus = _CarteGriseStatus.recue;
+          outcome('Immatriculation', reg);
+          outcome('Immat. antérieure / WW', ww);
+          outcome('Mise en circulation', mec);
+          outcome('Fin de validité', exp);
           break;
         case _VehDoc.carteGriseVerso:
           // Verso : marque, modèle, carburant, VIN/châssis, puissance
@@ -576,8 +610,17 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             note(true, 'Nombre de cylindres');
           }
           _carteGriseStatus = _CarteGriseStatus.recue;
+          outcome('Marque', brand);
+          outcome('Modèle', model);
+          outcome('VIN / Châssis', vin);
+          outcome('Carburant', fuel);
+          outcome('Puissance fiscale', cv);
+          outcome('Nombre de portes', nbPortes);
+          outcome('Nombre de places', nbPlaces);
+          outcome('Nombre de cylindres', nbCylindres);
           break;
       }
+      _scanPreview[doc] = outcomes;
       if (applied.isEmpty) {
         _scanNotice[doc] = fields.isEmpty
             ? 'Aucun champ exploitable détecté. Vérifiez la netteté du document ou saisissez les informations manuellement.'
@@ -935,12 +978,14 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               photoPath: _scanPath[d],
               scanning: _scanning == d,
               notice: _scanning == d ? null : _scanNotice[d],
+              preview: _scanning == d ? null : _scanPreview[d],
               onCamera: () => _scan(source: ImageSource.camera, doc: d),
               onGallery: () => _scan(source: ImageSource.gallery, doc: d),
               onClear: () => setState(() {
                 _scanPath[d] = null;
                 _scanDocId[d] = null;
                 _scanNotice[d] = null;
+                _scanPreview[d] = null;
               }),
             ),
             if (d != _VehDoc.values.last) const SizedBox(height: 8),
@@ -1787,6 +1832,12 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
   }
 }
 
+class _FieldOutcome {
+  _FieldOutcome(this.label, this.value);
+  final String label;
+  final String? value;
+}
+
 class _ScanSlot extends StatelessWidget {
   const _ScanSlot({
     required this.title,
@@ -1794,6 +1845,7 @@ class _ScanSlot extends StatelessWidget {
     required this.photoPath,
     required this.scanning,
     required this.notice,
+    required this.preview,
     required this.onCamera,
     required this.onGallery,
     required this.onClear,
@@ -1804,6 +1856,7 @@ class _ScanSlot extends StatelessWidget {
   final String? photoPath;
   final bool scanning;
   final String? notice;
+  final List<_FieldOutcome>? preview;
   final VoidCallback onCamera;
   final VoidCallback onGallery;
   final VoidCallback onClear;
@@ -1922,6 +1975,136 @@ class _ScanSlot extends StatelessWidget {
                       fontWeight: FontWeight.w700)),
             ),
           ],
+          if (preview != null && preview!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _OcrPreviewPanel(outcomes: preview!),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Deux encarts côte-à-côte — « Champs détectés » (vert) et « Non détectés »
+/// (ambre), mêmes couleurs et même typographie que le web ERP.
+class _OcrPreviewPanel extends StatelessWidget {
+  const _OcrPreviewPanel({required this.outcomes});
+  final List<_FieldOutcome> outcomes;
+
+  @override
+  Widget build(BuildContext context) {
+    final detected = outcomes.where((o) => o.value != null && o.value!.isNotEmpty).toList();
+    final missing = outcomes.where((o) => o.value == null || o.value!.isEmpty).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (detected.isNotEmpty)
+          _PreviewGroup(
+            title: 'Champs détectés',
+            titleColor: const Color(0xFF047857),
+            background: const Color(0xFFECFDF5),
+            borderColor: const Color(0xFFA7F3D0),
+            rows: [
+              for (final o in detected)
+                _PreviewRow(label: o.label, value: o.value!, detected: true),
+            ],
+          ),
+        if (detected.isNotEmpty && missing.isNotEmpty) const SizedBox(height: 6),
+        if (missing.isNotEmpty)
+          _PreviewGroup(
+            title: 'Non détectés',
+            titleColor: const Color(0xFFB45309),
+            background: const Color(0xFFFFFBEB),
+            borderColor: const Color(0xFFFDE68A),
+            rows: [
+              for (final o in missing)
+                _PreviewRow(label: o.label, value: 'non détecté', detected: false),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _PreviewGroup extends StatelessWidget {
+  const _PreviewGroup({
+    required this.title,
+    required this.titleColor,
+    required this.background,
+    required this.borderColor,
+    required this.rows,
+  });
+  final String title;
+  final Color titleColor;
+  final Color background;
+  final Color borderColor;
+  final List<_PreviewRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title.toUpperCase(),
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                  color: titleColor)),
+          const SizedBox(height: 4),
+          ...rows,
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewRow extends StatelessWidget {
+  const _PreviewRow({
+    required this.label,
+    required this.value,
+    required this.detected,
+  });
+  final String label;
+  final String value;
+  final bool detected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 5,
+            child: Text(label,
+                style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+          ),
+          Expanded(
+            flex: 6,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: detected ? FontWeight.w800 : FontWeight.w600,
+                fontStyle: detected ? FontStyle.normal : FontStyle.italic,
+                color: detected
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFD97706),
+              ),
+            ),
+          ),
         ],
       ),
     );
