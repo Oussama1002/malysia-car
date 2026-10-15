@@ -760,20 +760,46 @@ class DocumentParser
         // mieux que « non détecté » quand la carte grise est l'unique source
         // de la plaque.
         $registration = null;
-        if (preg_match('/\b(\d{3,5})\s*[-ـ\s]{1,3}\s*([A-Z])\s*[-ـ\s]{1,3}\s*(\d{1,2})\b/u', $flatUpper, $rm)) {
+        // Région marocaine = 2 chiffres (01..99), on refuse les régions à 1
+        // chiffre qui captent le "5" de "Nombre de places 5" en région.
+        if (preg_match('/\b(\d{3,5})\s*[-ـ\s]{1,3}\s*([A-Z])\s*[-ـ\s]{1,3}\s*(\d{2})\b/u', $flatUpper, $rm)) {
             $registration = $rm[1].'-'.$rm[2].'-'.$rm[3];
         }
-        if (! $registration && preg_match('/\b(\d{3,5})\s*[-ـ\s—–]{1,4}\s*(\d{1,2})\b/u', $flatUpper, $rm2)) {
-            // Blocs chiffres - blocs chiffres sans lettre lisible. On s'assure
-            // d'abord que ce bloc apparaît dans le voisinage du libellé
-            // "immatriculation" (ou directement en haut de la carte) pour ne
-            // pas confondre avec une date ou le numéro de téléphone du PV.
-            $windowOk = (bool) preg_match(
-                '/IMMATRICULATION[\s\S]{0,120}'.preg_quote($rm2[0], '/').'/u',
-                $flatUpper,
-            ) || mb_strpos($flatUpper, $rm2[0]) < 400;
-            if ($windowOk) {
-                $registration = $rm2[1].'-?-'.$rm2[2];
+        if (! $registration) {
+            // Blocs chiffres - (lettre ou vide) - blocs chiffres sans lettre
+            // Latin lisible. On exige :
+            //  * au moins DEUX séparateurs (-, —, ـ, espace) entre les blocs,
+            //    pour ne pas confondre "27314 72" avec "Nombre de places 5"
+            //  * le bloc final à 2 chiffres pile (une région Marocaine est
+            //    toujours sur 2 chiffres : 01..99)
+            //  * le bloc trouvé reste à moins de 60 caractères du libellé
+            //    "IMMATRICULATION" sur le flat text. Sans ça, un bloc comme
+            //    "D1VMA27314B72<221119E" dans la MRZ était cueilli et la
+            //    plaque sortait avec une région aléatoire (5, 7, 1…).
+            if (preg_match_all('/\b(\d{4,5})\s*(?:[-ـ—–]\s*){2,3}([A-Z\?]?)\s*(?:[-ـ—–]\s*){0,2}(\d{2})\b/u', $flatUpper, $all, PREG_OFFSET_CAPTURE)) {
+                $labelPos = null;
+                if (preg_match('/IMMATRICULATION/u', $flatUpper, $lm, PREG_OFFSET_CAPTURE)) {
+                    $labelPos = $lm[0][1];
+                }
+                foreach ($all[0] as $idx => $hit) {
+                    [$whole, $wholePos] = $hit;
+                    $num = $all[1][$idx][0];
+                    $letter = $all[2][$idx][0] ?: '?';
+                    $region = (int) $all[3][$idx][0];
+                    if ($region < 1 || $region > 99) continue;
+                    // Si on a trouvé le libellé "IMMATRICULATION", le bloc
+                    // doit être à moins de 200 chars de celui-ci (plus loin,
+                    // c'est très probablement une autre valeur de la carte).
+                    // Sinon on tolère les 400 premiers chars du texte brut
+                    // (en-tête de la carte grise).
+                    $distance = $labelPos !== null
+                        ? abs($wholePos - $labelPos)
+                        : $wholePos;
+                    $maxDistance = $labelPos !== null ? 200 : 400;
+                    if ($distance > $maxDistance) continue;
+                    $registration = $num.'-'.$letter.'-'.$all[3][$idx][0];
+                    break;
+                }
             }
         }
         if (! $registration) {
