@@ -1311,8 +1311,11 @@ const VehiclesList: React.FC = () => {
                     ...(data.cgChassis            ? { chassis: data.cgChassis }                           : {}),
                     ...(data.cgFuelType           ? { fuel: data.cgFuelType }                             : {}),
                     ...(data.cgFiscalPower        ? { cv: data.cgFiscalPower }                            : {}),
-                    ...(data.nombrePortes         ? { nombrePortes: data.nombrePortes }                   : {}),
-                    ...(data.nombrePlaces         ? { nombrePlaces: data.nombrePlaces }                   : {}),
+                    // Sur la carte grise marocaine la valeur libellée "Nombre
+                    // de places" correspond en pratique au nombre de portes
+                    // (et vice-versa). On croise les deux champs à l'affectation.
+                    ...(data.nombrePlaces         ? { nombrePortes: data.nombrePlaces }                   : {}),
+                    ...(data.nombrePortes         ? { nombrePlaces: data.nombrePortes }                   : {}),
                     ...(data.nombreCylindres      ? { nombreCylindres: data.nombreCylindres }             : {}),
                   };
                 })}

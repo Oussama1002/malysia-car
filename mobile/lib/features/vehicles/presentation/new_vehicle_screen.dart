@@ -527,9 +527,11 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
           final fuel = pick(['fuel_type', 'carburant', 'energie']);
           final cv = pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
-          // Nombre de portes volontairement ignoré : l'OCR confond souvent
-          // avec d'autres chiffres de la carte grise. L'agent le saisit.
-          final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
+          // Sur la carte grise marocaine la valeur libellée "Nombre de
+          // places" correspond en pratique au nombre de portes — on la
+          // route donc vers _nbPortes. Le nombre de places reste à la main.
+          final nbPortesFromPlaces =
+              pick(['nombre_places', 'number_of_seats', 'seats']);
           final nbCylindres = pick(
               ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
           // La MRZ ICAO en bas du verso donne la plaque sans ambiguïté
@@ -556,9 +558,9 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             _fiscalPower.text = cv;
             note(true, 'Puissance fiscale');
           }
-          if (nbPlaces != null && _nbPlaces.text.isEmpty) {
-            _nbPlaces.text = nbPlaces;
-            note(true, 'Nombre de places');
+          if (nbPortesFromPlaces != null && _nbPortes.text.isEmpty) {
+            _nbPortes.text = nbPortesFromPlaces;
+            note(true, 'Nombre de portes');
           }
           if (nbCylindres != null && _cylinders.text.isEmpty) {
             _cylinders.text = nbCylindres;
@@ -571,7 +573,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           outcome('VIN / Châssis', vin);
           outcome('Carburant', fuel);
           outcome('Puissance fiscale', cv);
-          outcome('Nombre de places', nbPlaces);
+          outcome('Nombre de portes', nbPortesFromPlaces);
           outcome('Nombre de cylindres', nbCylindres);
           break;
       }
