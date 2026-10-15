@@ -459,8 +459,8 @@ function mapCarteGrise(d: Record<string, unknown>): ScannedVehicleData {
 const FIELD_LABELS: Record<string, string> = {
   insuranceCompany:      'Compagnie',
   numeroPolice:          'N° police',
-  insuranceStart:        'Garantie du',
-  insuranceExpiry:       'Garantie au',
+  insuranceStart:        'Assurance du',
+  insuranceExpiry:       'Assurance au',
   marque:                'Marque',
   modele:                'Modèle',
   chassis:               'VIN / Châssis',
