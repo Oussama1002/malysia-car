@@ -11,6 +11,8 @@ class ContractDto {
     this.startDate,
     this.endDate,
     this.baseAmount,
+    this.monthlyPayment,
+    this.durationMonths,
   });
 
   final String id;
@@ -23,7 +25,36 @@ class ContractDto {
   final String? vehicleLabel;
   final DateTime? startDate;
   final DateTime? endDate;
+  /// Montant total agréé (= backend `base_amount`). Null si le backend ne
+  /// l'a pas rempli ; dans ce cas on tombe sur `totalAmount` qui recalcule.
   final double? baseAmount;
+  /// `monthly_payment` : loyer mensuel (LLD/LOA/Crédit) ou tarif journalier
+  /// (LCD, puisqu'un contrat court n'a pas de mois). Afficher ça comme montant
+  /// « contrat » induit en erreur — l'agent voyait le tarif/jour au lieu du
+  /// total.
+  final double? monthlyPayment;
+  final int? durationMonths;
+
+  /// Montant total à afficher sur la liste / la fiche.
+  /// Préfère `base_amount` quand il est présent (c'est le montant signé) ;
+  /// sinon le calcule à partir du loyer × durée :
+  ///   - LCD : loyer journalier × nombre de jours entre start et end
+  ///   - LLD / LOA / Crédit : mensualité × duration_months
+  double? get totalAmount {
+    if (baseAmount != null && baseAmount! > 0) return baseAmount;
+    if (monthlyPayment == null || monthlyPayment! <= 0) return null;
+    final isShortTerm = type.toUpperCase() == 'LOCATION_COURTE' ||
+        type.toUpperCase() == 'LCD';
+    if (isShortTerm) {
+      if (startDate != null && endDate != null) {
+        final days = endDate!.difference(startDate!).inDays;
+        if (days > 0) return monthlyPayment! * days;
+      }
+      return monthlyPayment;
+    }
+    final months = (durationMonths ?? 0) > 0 ? durationMonths! : 1;
+    return monthlyPayment! * months;
+  }
 
   /// Copie en enrichissant le nom client / le libellé véhicule — utilisé
   /// par le provider enrichi quand l'API ne renvoie pas `clientName`.
@@ -40,6 +71,8 @@ class ContractDto {
       startDate: startDate,
       endDate: endDate,
       baseAmount: baseAmount,
+      monthlyPayment: monthlyPayment,
+      durationMonths: durationMonths,
     );
   }
 
@@ -102,10 +135,18 @@ class ContractDto {
       vehicleLabel: vehicle,
       startDate: _date(json['startDate'] ?? json['start_date']),
       endDate: _date(json['endDate'] ?? json['end_date']),
-      baseAmount: _d(json['baseAmount'] ?? json['base_amount']) ??
-          _d(json['monthlyPayment'] ?? json['monthly_payment']),
+      baseAmount: _d(json['baseAmount'] ?? json['base_amount']),
+      monthlyPayment: _d(json['monthlyPayment'] ?? json['monthly_payment']),
+      durationMonths: _i(json['durationMonths'] ?? json['duration_months']),
     );
   }
+}
+
+int? _i(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse(v.toString());
 }
 
 double? _d(dynamic v) {

@@ -415,8 +415,8 @@ class _ContractCard extends StatelessWidget {
                 tone: _tone(c.status),
               ),
               const Spacer(),
-              if (c.baseAmount != null && c.baseAmount! > 0)
-                Text(money.format(c.baseAmount),
+              if ((c.totalAmount ?? 0) > 0)
+                Text(money.format(c.totalAmount),
                     style: const TextStyle(
                         fontWeight: FontWeight.w800, fontSize: 14)),
             ],

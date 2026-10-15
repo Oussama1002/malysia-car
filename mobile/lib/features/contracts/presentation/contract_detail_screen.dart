@@ -179,8 +179,8 @@ class _HeaderCard extends StatelessWidget {
                     label: contractStatusFr(c.status),
                     tone: _tone(c.status)),
                 const Spacer(),
-                if (c.baseAmount != null && c.baseAmount! > 0)
-                  Text(money.format(c.baseAmount),
+                if ((c.totalAmount ?? 0) > 0)
+                  Text(money.format(c.totalAmount),
                       style: const TextStyle(
                           color: Color(0xFFB8933F),
                           fontWeight: FontWeight.w900,
