@@ -814,6 +814,27 @@ class DocumentParser
                 $registration = $num.'-'.$letter.'-'.$regionPadded;
             }
         }
+        // Secours MRZ : le verso de la carte grise porte en bas une ligne
+        // ICAO du type "D1VMA27314B72<221119ELHADI<<<3". Elle inclut
+        // IMMATRICULATION compressée (NUM + LETTRE + RÉGION) et c'est le
+        // seul endroit où la lettre centrale est TOUJOURS Latine, même
+        // quand Tesseract rate ب côté recto. On s'en sert si rien n'a été
+        // trouvé via le libellé IMMATRICULATION.
+        if (! $registration && preg_match('/D[\dI1][A-Z]{3}(\d{3,5})([A-Z])(\d{1,2})</u', $flatUpper, $mrz)) {
+            $r = (int) $mrz[3];
+            if ($r >= 1 && $r <= 99) {
+                $registration = $mrz[1].'-'.$mrz[2].'-'.$mrz[3];
+            }
+        }
+        // Fallback générique : partout dans le document, un bloc du type
+        // "27314B72" (5+1+2 collés, typique quand Tesseract retire les
+        // tirets) donne directement la plaque sans ambiguïté.
+        if (! $registration && preg_match('/\b(\d{4,5})([A-Z])(\d{1,2})\b/u', $flatUpper, $cm)) {
+            $r = (int) $cm[3];
+            if ($r >= 1 && $r <= 99) {
+                $registration = $cm[1].'-'.$cm[2].'-'.$cm[3];
+            }
+        }
         // Log diagnostique pour que, si la plaque reste null, on puisse
         // voir dans storage/logs/laravel.log exactement ce que l'OCR a
         // envoyé — sans ça on tourne en rond entre « non détecté » et

@@ -428,7 +428,9 @@ function mapCarteGriseRecto(d: Record<string, unknown>): ScannedVehicleData {
 }
 
 // Verso de la carte grise : marque, modèle, châssis (VIN), carburant,
-// puissance fiscale. Pareil, on ne regarde PAS les champs recto.
+// puissance fiscale. On remonte AUSSI l'immatriculation si le parser l'a
+// trouvée dans la MRZ ICAO en bas de la face arrière (c'est la source la
+// plus fiable de la plaque — la lettre centrale y est forcément Latine).
 function mapCarteGriseVerso(d: Record<string, unknown>): ScannedVehicleData {
   return {
     cgMarque:      str(d.brand ?? d.marque ?? d.make),
@@ -436,6 +438,7 @@ function mapCarteGriseVerso(d: Record<string, unknown>): ScannedVehicleData {
     cgChassis:     str(d.vin_number ?? d.vin ?? d.chassis ?? d.chassis_number),
     cgFuelType:    str(d.fuel_type ?? d.carburant ?? d.energie),
     cgFiscalPower: str(d.fiscal_power ?? d.puissance_fiscale),
+    registration:  cleanPlate(str(d.registration_number ?? d.immatriculation ?? d.plate_number)),
   };
 }
 

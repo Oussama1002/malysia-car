@@ -532,6 +532,14 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
           final nbCylindres = pick(
               ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
+          // La MRZ ICAO en bas du verso donne la plaque sans ambiguïté
+          // ("D1VMA27314B72<…" → 27314-B-72), même quand le recto échoue
+          // sur la lettre arabe. On la pose en force dès qu'elle arrive.
+          final regFromVerso =
+              pick(['registration_number', 'immatriculation', 'plate_number']);
+          if (regFromVerso != null) {
+            note(_applyPlate(regFromVerso, force: true), 'Immatriculation');
+          }
           note(_matchBrandModel(brand, model), 'Marque / Modèle');
           if (fuel != null) {
             final matched = _matchFuel(fuel);
@@ -561,6 +569,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             note(true, 'Nombre de cylindres');
           }
           _carteGriseStatus = _CarteGriseStatus.recue;
+          outcome('Immatriculation (MRZ)', regFromVerso);
           outcome('Marque', brand);
           outcome('Modèle', model);
           outcome('VIN / Châssis', vin);
