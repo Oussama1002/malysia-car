@@ -437,6 +437,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           outcome("Autorisation valable jusqu'au", pick(['expiry_date', 'validity_date', 'date_expiration', 'date_validite']));
           break;
         case _VehDoc.techControl:
+          // Parité avec `mapVisiteTech` du web : la visite technique ne sert
+          // qu'à poser la date d'expiration — immatriculation, carburant,
+          // puissance fiscale et mise en circulation viennent de la carte
+          // grise, pas de ce procès-verbal.
           final exp = pick([
             'expiry_date',
             'date_expiration',
@@ -445,18 +449,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'valid_until',
             'next_inspection'
           ]);
-          final reg =
-              pick(['registration_number', 'immatriculation', 'plate_number']);
-          final ww = _ww(
-              pick(['ww_number', 'provisional_number', 'numero_provisoire']));
-          final fuel = pick(['fuel_type', 'carburant', 'energie']);
-          final mec = pick([
-            'first_registration_date',
-            'mise_en_circulation',
-            'date_circulation'
-          ]);
-          final cv =
-              pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
           if (exp != null && _techExpiry == null) {
             final parsed = DateTime.tryParse(exp);
             if (parsed != null) {
@@ -464,35 +456,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               note(true, 'Exp. visite technique');
             }
           }
-          note(_applyPlate(reg), 'Immatriculation');
-          if (ww != null && _immatOnline.text.isEmpty) {
-            _immatOnline.text = ww;
-            note(true, 'N° provisoire / WW');
-          }
-          if (fuel != null) {
-            final matched = _matchFuel(fuel);
-            if (matched != _fuelType) {
-              _fuelType = matched;
-              note(true, 'Carburant');
-            }
-          }
-          if (mec != null && _miseEnCirculation == null) {
-            final parsed = DateTime.tryParse(mec);
-            if (parsed != null) {
-              _miseEnCirculation = parsed;
-              note(true, 'Mise en circulation');
-            }
-          }
-          if (cv != null && _fiscalPower.text.isEmpty) {
-            _fiscalPower.text = cv;
-            note(true, 'Puissance fiscale');
-          }
-          outcome('Immatriculation', reg);
-          outcome('N° provisoire / WW', ww);
           outcome('Exp. visite tech.', exp);
-          outcome('Mise en circulation', mec);
-          outcome('Carburant', fuel);
-          outcome('Puissance fiscale', cv);
           break;
         case _VehDoc.vignette:
           final exp = pick([
