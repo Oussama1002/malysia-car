@@ -85,17 +85,42 @@ class ContractsRepo {
     }
   }
 
-  /// Les transitions se font via trois endpoints dédiés :
-  /// `approve` (draft → signed), `activate` (signed → active),
-  /// `terminate` (active → terminated).
+  /// `approve` (draft/pending → signed), `activate` (signed → active).
+  /// Pour les autres transitions on retombe sur `PATCH /contracts/{id}` avec
+  /// `status` dans le corps (suspendre, clôturer, ré-ouvrir brouillon, …).
   Future<void> changeStatus(String id, String status) async {
-    final action = switch (status) {
-      'signed' || 'approved' => 'approve',
-      'active' || 'activate' => 'activate',
-      'terminated' || 'closed' => 'terminate',
-      _ => throw ArgumentError('Transition non supportée: $status'),
-    };
-    await _api.raw.post('/contracts/$id/$action');
+    switch (status) {
+      case 'signed':
+      case 'approved':
+        await _api.raw.post('/contracts/$id/approve');
+        return;
+      case 'active':
+      case 'activate':
+        await _api.raw.post('/contracts/$id/activate');
+        return;
+      default:
+        // Suspendre / Clôturer / Draft : passer par le PATCH générique.
+        await _api.raw.patch('/contracts/$id', data: {'status': status});
+        return;
+    }
+  }
+
+  /// Résiliation : POST /contracts/{id}/terminate avec un motif requis par
+  /// le backend (StoreContractRequest-like validation). Sans motif le
+  /// serveur renvoie 422 et le bouton "Résilier" paraît cassé.
+  Future<void> terminate(String id,
+      {required String reason, bool earlyReturn = false, String? note}) async {
+    await _api.raw.post('/contracts/$id/terminate', data: {
+      'reason': reason,
+      if (note != null && note.isNotEmpty) 'note': note,
+      if (earlyReturn) 'early_return': true,
+    });
+  }
+
+  /// Suppression définitive. Le serveur refuse (422) si le contrat est
+  /// actif ou signé — il faut le résilier d'abord.
+  Future<void> delete(String id) async {
+    await _api.raw.delete('/contracts/$id');
   }
 }
 

@@ -1521,6 +1521,12 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
   }
 
   Future<void> _apply(String status, String label) async {
+    // Résiliation : le backend exige un motif ; sans ça il renvoie 422
+    // et le bouton paraît cassé. On ouvre un petit prompt avant l'appel.
+    if (status == 'terminated') {
+      await _applyTerminate();
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -1556,13 +1562,139 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
     }
   }
 
+  Future<void> _applyTerminate() async {
+    final reasonCtl = TextEditingController();
+    var earlyReturn = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Résilier le contrat'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Indiquez le motif de résiliation (obligatoire).',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: reasonCtl,
+                maxLength: 255,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Motif',
+                  hintText: 'Retour anticipé, dommages, non-paiement…',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 6),
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: earlyReturn,
+                onChanged: (v) => setLocal(() => earlyReturn = v ?? false),
+                title: const Text('Retour anticipé — créditer le portefeuille',
+                    style: TextStyle(fontSize: 12.5)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Annuler')),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Résilier')),
+          ],
+        ),
+      ),
+    );
+    final reason = reasonCtl.text.trim();
+    reasonCtl.dispose();
+    if (confirmed != true) return;
+    if (reason.isEmpty) {
+      setState(() => _msg = 'Le motif de résiliation est obligatoire.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _msg = null;
+    });
+    try {
+      await ref.read(contractsRepoProvider).terminate(
+            widget.contractId,
+            reason: reason,
+            earlyReturn: earlyReturn,
+          );
+      ref.invalidate(contractDetailProvider(widget.contractId));
+      ref.invalidate(contractsListProvider);
+      setState(() => _msg = 'Contrat résilié.');
+    } catch (e) {
+      setState(() => _msg = 'Résiliation impossible : ${_friendly(e)}');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _applyDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer le contrat'),
+        content: const Text(
+          'Cette action est définitive. Le contrat et son historique seront effacés. Continuer ?',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Annuler')),
+          FilledButton.tonal(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red.shade100),
+              child: Text('Supprimer',
+                  style: TextStyle(color: Colors.red.shade900))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() {
+      _busy = true;
+      _msg = null;
+    });
+    try {
+      await ref.read(contractsRepoProvider).delete(widget.contractId);
+      ref.invalidate(contractsListProvider);
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+    } catch (e) {
+      setState(() => _msg = 'Suppression impossible : ${_friendly(e)}');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   String _friendly(Object e) {
-    final match = RegExp(r'status code of (\d+)').firstMatch(e.toString());
+    final s = e.toString();
+    final match = RegExp(r'status code of (\d+)').firstMatch(s);
+    // Essaie de récupérer un vrai message du corps de la réponse Dio ("message"
+    // ou "errors") : « Impossible de supprimer un contrat actif ou signé… »
+    // en dit nettement plus que « code HTTP 422 ».
+    final msgMatch = RegExp(r'"message"\s*:\s*"([^"]+)"').firstMatch(s);
+    if (msgMatch != null) return msgMatch[1]!;
     if (match == null) return 'erreur réseau.';
     final code = int.parse(match[1]!);
     if (code == 403) return "pas la permission.";
     if (code == 422) return 'transition non autorisée pour ce statut.';
     return 'code HTTP $code.';
+  }
+
+  bool _canDelete() {
+    final s = widget.contract.status.toLowerCase();
+    // Le backend refuse (422) la suppression d'un contrat `active` ou `signed`.
+    return s != 'active' && s != 'signed';
   }
 
   @override
@@ -1612,13 +1744,48 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
                 const SizedBox(height: 8),
                 Text(_msg!,
                     style: TextStyle(
-                      color: _msg!.startsWith('Statut')
+                      color: _msg!.startsWith('Statut') ||
+                              _msg!.startsWith('Contrat résilié')
                           ? Colors.green.shade700
                           : Colors.red.shade700,
                       fontWeight: FontWeight.w700,
                       fontSize: 12.5,
                     )),
               ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        ModuleCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Zone dangereuse',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(
+                _canDelete()
+                    ? 'La suppression est définitive : brouillons, annulations et contrats résiliés peuvent être effacés.'
+                    : 'Un contrat actif ou signé ne peut pas être supprimé. Résiliez-le d\'abord si nécessaire.',
+                style: const TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _busy || !_canDelete() ? null : _applyDelete,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Supprimer le contrat'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade300),
+                    minimumSize: const Size.fromHeight(46),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
