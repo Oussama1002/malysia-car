@@ -527,7 +527,8 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
           final fuel = pick(['fuel_type', 'carburant', 'energie']);
           final cv = pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
-          final nbPortes = pick(['nombre_portes', 'number_of_doors', 'doors']);
+          // Nombre de portes volontairement ignoré : l'OCR confond souvent
+          // avec d'autres chiffres de la carte grise. L'agent le saisit.
           final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
           final nbCylindres = pick(
               ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
@@ -555,10 +556,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             _fiscalPower.text = cv;
             note(true, 'Puissance fiscale');
           }
-          if (nbPortes != null && _nbPortes.text.isEmpty) {
-            _nbPortes.text = nbPortes;
-            note(true, 'Nombre de portes');
-          }
           if (nbPlaces != null && _nbPlaces.text.isEmpty) {
             _nbPlaces.text = nbPlaces;
             note(true, 'Nombre de places');
@@ -574,7 +571,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           outcome('VIN / Châssis', vin);
           outcome('Carburant', fuel);
           outcome('Puissance fiscale', cv);
-          outcome('Nombre de portes', nbPortes);
           outcome('Nombre de places', nbPlaces);
           outcome('Nombre de cylindres', nbCylindres);
           break;
