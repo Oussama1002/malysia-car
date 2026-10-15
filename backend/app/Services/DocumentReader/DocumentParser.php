@@ -453,8 +453,16 @@ class DocumentParser
         $text = strtr($text, $arabicToLatin);
         $upper = mb_strtoupper($text);
 
-        // --- Brand: known brands list, both word-boundary and substring ---
+        // --- Brand: label-anchored first ("Marque: AUDI" wins over any
+        //     3-char brand/model happening to appear elsewhere in the OCR
+        //     noise, e.g. the agency catalog model "Rio" matching a sliver
+        //     of INTERIEURE / VIN / MRZ bits). ---
         $brand = null;
+        $labelBrand = null;
+        if (preg_match('/Marque[^A-Za-z]{0,10}([A-Z][A-Za-z\-]{1,20})/u', $flat, $mb)) {
+            $labelBrand = mb_strtoupper(trim($mb[1]));
+        }
+        // --- Brand: known brands list, both word-boundary and substring ---
         $knownBrands = [
             'RENAULT', 'DACIA', 'PEUGEOT', 'CITROEN', 'CITROËN', 'FIAT',
             'VOLKSWAGEN', 'HYUNDAI', 'KIA', 'TOYOTA', 'NISSAN', 'FORD',
@@ -465,17 +473,30 @@ class DocumentParser
             'SSANGYONG', 'CHERY', 'GEELY', 'HAVAL', 'GREAT WALL',
             'DFSK', 'CHANGAN', 'JAC', 'FOTON', 'IVECO', 'MAN',
         ];
-        // Try word boundary first (strict)
-        foreach ($knownBrands as $b) {
-            if (preg_match('/\b' . preg_quote($b, '/') . '\b/u', $flatUpper)) {
-                $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
-                break;
+        // 1. Si le libellé « Marque » a renvoyé un nom reconnu, il gagne.
+        if ($labelBrand !== null) {
+            foreach ($knownBrands as $b) {
+                if ($labelBrand === $b) {
+                    $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
+                    break;
+                }
             }
         }
-        // Fallback: substring (for noisy OCR where word boundaries break)
+        // 2. Sinon, essai par limite de mot stricte sur toute la carte.
         if (! $brand) {
             foreach ($knownBrands as $b) {
-                if (mb_strlen($b) >= 4 && str_contains($flatUpper, $b)) {
+                if (preg_match('/\b' . preg_quote($b, '/') . '\b/u', $flatUpper)) {
+                    $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
+                    break;
+                }
+            }
+        }
+        // 3. Fallback substring (noisy OCR) — on exige maintenant >= 5 chars
+        //    pour que "KIA" / "BMW" / "MG" / "JAC" ne gagnent pas sur une
+        //    sous-chaîne du VIN ou de la MRZ.
+        if (! $brand) {
+            foreach ($knownBrands as $b) {
+                if (mb_strlen($b) >= 5 && str_contains($flatUpper, $b)) {
                     $brand = mb_convert_case(mb_strtolower($b), MB_CASE_TITLE, 'UTF-8');
                     break;
                 }
@@ -493,11 +514,19 @@ class DocumentParser
         }
 
         // --- Model: match the user's real catalogue first (so any brand /
-        // model they created is detected — ex. Cupra Formentor — not only the
-        // built-in list below), then fall back to the hard-coded strategies. ---
+        // model they created est détecté — ex. Cupra Formentor — not only the
+        // built-in list below), then fall back to the hard-coded strategies.
+        // Si la marque est déjà posée (via le libellé « Marque »), on exige
+        // que le modèle du catalogue appartienne à CETTE marque. Sans ça la
+        // carte grise d'une Audi A4 ressortait avec le modèle "Rio" du
+        // catalogue agence (parce que Rio existait pour Kia). ---
         $model = null;
         [$catBrand, $catModel] = $this->matchVehicleCatalog($flatUpper);
-        if ($catModel) {
+        $catBrandKey = $catBrand ? mb_strtoupper($catBrand) : null;
+        $brandKeyEarly = $brand ? mb_strtoupper($brand) : null;
+        $catalogConsistent =
+            $brandKeyEarly === null || $catBrandKey === null || $catBrandKey === $brandKeyEarly;
+        if ($catModel && $catalogConsistent) {
             $model = $catModel;
         }
         if ($catBrand && ! $brand) {
