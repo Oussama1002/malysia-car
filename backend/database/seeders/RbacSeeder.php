@@ -124,6 +124,7 @@ class RbacSeeder extends Seeder
             ['contracts.view', 'contracts', 'Voir les contrats'],
             ['contracts.create', 'contracts', 'Créer un contrat'],
             ['contracts.update', 'contracts', 'Modifier un contrat'],
+            ['contracts.delete', 'contracts', 'Supprimer un contrat'],
             ['contracts.approve', 'contracts', 'Approuver un contrat'],
             ['contracts.activate', 'contracts', 'Activer un contrat'],
             ['contracts.terminate', 'contracts', 'Résilier un contrat'],
@@ -317,7 +318,7 @@ class RbacSeeder extends Seeder
                 $customers_read, $customers_write,
                 ['kyc.verify_document', 'kyc.approve', 'kyc.reject', 'customers.blacklist'],
                 $contracts_read, $contracts_write,
-                ['contracts.approve', 'contracts.activate', 'contracts.terminate', 'signatures.void'],
+                ['contracts.approve', 'contracts.activate', 'contracts.terminate', 'contracts.delete', 'signatures.void'],
                 ['credit.view', 'credit.create', 'credit.update', 'credit.score', 'credit.decide'],
                 $usedcars_read, $usedcars_write, ['usedcars.sell', 'usedcars.transfer'],
                 $finance_read, $finance_write,
@@ -358,6 +359,10 @@ class RbacSeeder extends Seeder
                 // reçus panel stays empty on both contract and reservation
                 // details. Allocation is kept for the same signing flow.
                 ['invoices.view', 'invoices.generate_from_contract', 'customer_balance.view', 'payments.view', 'payments.create', 'payments.allocate'],
+                // Un agent peut aussi résilier et supprimer un contrat (le
+                // backend n'autorise la suppression que sur draft / cancelled
+                // / terminated — guard dans ContractController::destroy).
+                ['contracts.terminate', 'contracts.delete'],
                 ['dashboard.fleet']
             )],
 
