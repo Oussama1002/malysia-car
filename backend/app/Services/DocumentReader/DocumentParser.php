@@ -28,9 +28,23 @@ class DocumentParser
 
         Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'detected' => $detectedType, 'text_length' => mb_strlen($normalized)]);
 
+        // Au Maroc, l'« attestation de paiement » (TSAV / vignette) et
+        // l'« autorisation de circulation » sont le même papier physique :
+        // le slot web + mobile a été fusionné, donc on considère ces deux
+        // types comme équivalents pour la vérification de cohérence —
+        // sinon l'agent voit « Ce document semble être une attestation de
+        // paiement, pas une autorisation de circulation » et le scan est
+        // perdu.
+        $mergedPair = [
+            ReaderDocument::TYPE_AUTORISATION_CIRCULATION,
+            ReaderDocument::TYPE_PAYMENT_ATTESTATION,
+        ];
+        $isMergedPair = in_array($hintedType, $mergedPair, true)
+            && in_array($detectedType, $mergedPair, true);
+
         // If a specific type was expected but the document looks like something else, flag it
         $typeMismatch = null;
-        if ($hintedType && $detectedType !== ReaderDocument::TYPE_OTHER && $detectedType !== $hintedType) {
+        if ($hintedType && $detectedType !== ReaderDocument::TYPE_OTHER && $detectedType !== $hintedType && ! $isMergedPair) {
             $typeLabels = [
                 ReaderDocument::TYPE_INSURANCE => 'une assurance',
                 ReaderDocument::TYPE_PAYMENT_ATTESTATION => 'une attestation de paiement',
@@ -58,6 +72,23 @@ class DocumentParser
             ReaderDocument::TYPE_AUTORISATION_CIRCULATION => $this->parseAutorisationCirculation($normalized),
             default => [],
         };
+
+        // Slot « Autorisation de circulation / Vignette » fusionné : si le
+        // document a été envoyé sur l'un des deux types et que le classifier
+        // a détecté l'autre, on complète les champs avec le parseur attendu
+        // pour que l'écran voie à la fois (immatriculation, marque, carburant,
+        // mise en circulation) du parseur « autorisation » ET la date
+        // d'expiration du parseur « payment_attestation ».
+        if ($isMergedPair && $detectedType !== $type) {
+            $extraFields = $detectedType === ReaderDocument::TYPE_AUTORISATION_CIRCULATION
+                ? $this->parseAutorisationCirculation($normalized)
+                : $this->parsePaymentAttestation($normalized);
+            foreach ($extraFields as $k => $v) {
+                if (! array_key_exists($k, $fields) || $fields[$k] === null || $fields[$k] === '') {
+                    $fields[$k] = $v;
+                }
+            }
+        }
 
         return [
             'type' => $type,
@@ -141,11 +172,12 @@ class DocumentParser
         if (preg_match('/ATTESTATION\s+D\'?ASSURANCE|POLICE\s+D\'?ASSURANCE|COMPAGNIE\s+D\'?ASSURANCE|P[ÉE]RIODE\s+DE\s+GARANTIE|N[°º]?\s*(?:DE\s+LA\s+)?POLICE|QUITTANCE\s+DE\s+PRIME|ASSURANCE|INSURANCE/u', $upper)) {
             return ReaderDocument::TYPE_INSURANCE;
         }
-        // Payment attestation (vignette / taxe spéciale annuelle). Checked
-        // AFTER the insurance block above — we no longer match a bare
-        // `QUITTANCE` (that steals every insurance attestation that carries
-        // a quittance de prime); only quittance de vignette / taxe / TSAV.
-        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|TAXE\s+ANNUELLE|DIRECTION\s+G[ÉE]N[ÉE]RALE\s+DES\s+IMP[ÔO]TS|TR[ÉE]SORERIE\s+G[ÉE]N[ÉE]RALE|\bTSAV\b|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE/u', $upper)) {
+        // Payment attestation (vignette / taxe spéciale annuelle) + visite
+        // technique CVT (procès-verbal de contrôle technique). Les deux
+        // partagent le même parser côté backend (parsePaymentAttestation),
+        // le mobile et le web ERP envoient d'ailleurs tous les deux l'un
+        // des deux types pour chacun des slots fusionnés.
+        if (preg_match('/ATTESTATION\s+DE\s+PAI[EÉ]MENT|TAXE\s+SP[ÉE]CIALE\s+ANNUELLE|QUITTANCE\s+DE\s+VIGNETTE|VIGNETTE|TAXE\s+SUR\s+LES\s+V[ÉE]HICULES|TAXE\s+ANNUELLE|DIRECTION\s+G[ÉE]N[ÉE]RALE\s+DES\s+IMP[ÔO]TS|TR[ÉE]SORERIE\s+G[ÉE]N[ÉE]RALE|\bTSAV\b|PUISSANCE\s+FISCALE.*CARBURANT|CARBURANT.*PUISSANCE\s+FISCALE|PROC[ÈE]S[\-\s]*VERBAL\s+DE\s+CONTR[ÔO]LE\s+TECHNIQUE|CONTROLE\s+TECHNIQUE|VISITE\s+TECHNIQUE|DATE\s+DE\s+LA\s+PROCHAINE\s+VISITE/u', $upper)) {
             return ReaderDocument::TYPE_PAYMENT_ATTESTATION;
         }
         // Cheque / bank check
@@ -1075,14 +1107,23 @@ class DocumentParser
         // label). This is the reliable anchor and, crucially, it distinguishes
         // the real policy number from the "NUMÉRO D'ORDRE" (which starts with
         // digits, e.g. "05 D 186203815", and must NOT be used).
+        //
+        // On accepte deux formes derrière le label :
+        //   - Format AO1120240260041 / FL112023C-153426 (2-3 lettres + chiffres)
+        //   - Format Wafa "8/0195092445" (chiffre + / + chiffres)
         $policyNumber = null;
-        if (preg_match('/Num[ée]?ro?\s*(?:de\s+)?police[^A-Za-z0-9]{0,18}([A-Z]{2,3}\d[A-Z0-9\-.]{5,28})/iu', $text, $pm)) {
+        if (preg_match('/Num[ée]?ro?\s*(?:de\s+la?\s+)?police[^A-Za-z0-9\/]{0,18}([A-Z]{2,3}\d[A-Z0-9\-.]{5,28}|\d{1,3}\/[\d\-]{6,20})/iu', $text, $pm)) {
             $policyNumber = rtrim($pm[1], '.-');
         }
         // Priority 2: the Moroccan policy format anywhere (2 letters + digit + …).
         // The numéro d'ordre starts with digits so this won't grab it.
         if (! $policyNumber) {
             $policyNumber = $this->firstMatch('/\b([A-Z]{2}\d[A-Z0-9\-]{9,28})\b/u', $text);
+        }
+        // Priority 2b: Wafa-style "N/NNNNNNNNNN" anywhere (short prefix + slash
+        // + 7-14 digits). Specific enough to avoid grabbing dates / amounts.
+        if (! $policyNumber) {
+            $policyNumber = $this->firstMatch('/\b(\d{1,3}\/\d{7,14})\b/u', $text);
         }
         // Priority 3: other policy-number labels.
         if (! $policyNumber) {
@@ -1270,11 +1311,25 @@ class DocumentParser
             }
         }
 
+        // Date d'expiration : le mobile ET le web réutilisent ce parser pour
+        // la Visite technique (le procès-verbal CVT porte « NATURE ET DATE
+        // DE LA PROCHAINE VISITE : Le JJ/MM/AAAA »). Si on trouve une telle
+        // date, elle sort comme `expiry_date` pour que le slot Visite tech.
+        // la retrouve.
+        $expiryDate = $this->extractDate($text, [
+            'Date\s+de\s+la\s+prochaine\s+visite',
+            'Prochaine\s+visite',
+            'Next\s+inspection',
+            'Valable\s+jusqu',
+            'Date\s+d\'?[ée]ch[ée]ance',
+        ]);
+
         $result = [
             'registration_number'    => $registration ? trim($registration) : null,
             'fuel_type'              => $fuelType ? trim($fuelType) : null,
             'first_registration_date' => $miseEnCirculation,
             'fiscal_power'           => $fiscalPower ? (int) $fiscalPower : null,
+            'expiry_date'            => $expiryDate,
         ];
         Log::info('DocumentParser.parsePaymentAttestation', $result);
         return $result;
