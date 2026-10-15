@@ -81,11 +81,8 @@ export const VehicleDocumentScanner: React.FC<{
         onDocumentUploaded={(id) => onDocumentUploaded?.('technical_inspection', id)}
       />
       <div ref={carteGriseRef}>
-        <ScanSlot
-          title="Carte Grise (recto + verso)"
-          description="Scannez le recto puis le verso : immatriculation, WW, 1ère mise en circulation, fin de validité, marque, modèle, châssis, carburant, puissance"
+        <CarteGriseScanSlot
           onPrefill={onPrefill}
-          mapFields={mapCarteGrise}
           onDocumentUploaded={(id) => onDocumentUploaded?.('registration_card', id)}
         />
       </div>
@@ -123,9 +120,20 @@ const ScanSlot: React.FC<{
   onPrefill: (data: ScannedVehicleData) => void;
   mapFields: Mapper;
   onDocumentUploaded?: (readerDocumentId: string) => void;
-}> = ({ title, description, onPrefill, mapFields, onDocumentUploaded }) => {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const cameraRef = useRef<HTMLInputElement | null>(null);
+  /** Externally-provided refs let a parent click the input (used to auto-chain
+   *  the Carte Grise verso after the recto). */
+  cameraInputRef?: React.MutableRefObject<HTMLInputElement | null>;
+  fileInputRef?: React.MutableRefObject<HTMLInputElement | null>;
+  /** Grey out and ignore clicks — used while the previous side is still OCRing. */
+  disabled?: boolean;
+  /** Called with 'camera' or 'file' the moment the user opens one of the pickers,
+   *  so the carte-grise wrapper can replay the same choice on the second side. */
+  onSourceChosen?: (source: 'camera' | 'file') => void;
+}> = ({ title, description, onPrefill, mapFields, onDocumentUploaded, cameraInputRef, fileInputRef, disabled, onSourceChosen }) => {
+  const localFileRef = useRef<HTMLInputElement | null>(null);
+  const localCameraRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = fileInputRef ?? localFileRef;
+  const cameraRef = cameraInputRef ?? localCameraRef;
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,15 +198,17 @@ const ScanSlot: React.FC<{
         onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) void handle(f); }}
         className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-4 text-center text-[11px] transition ${
           dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 bg-slate-50'
-        } ${loading ? 'pointer-events-none opacity-70' : ''}`}
+        } ${loading || disabled ? 'pointer-events-none opacity-70' : ''}`}
       >
         <div className="text-slate-700">Glisser-déposer ou</div>
         <div className="flex items-center gap-2">
-          <button type="button" disabled={loading} onClick={() => inputRef.current?.click()}
+          <button type="button" disabled={loading || disabled}
+            onClick={() => { onSourceChosen?.('file'); inputRef.current?.click(); }}
             className="rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
             Choisir
           </button>
-          <button type="button" disabled={loading} onClick={() => cameraRef.current?.click()}
+          <button type="button" disabled={loading || disabled}
+            onClick={() => { onSourceChosen?.('camera'); cameraRef.current?.click(); }}
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50">
             Photo
           </button>
@@ -258,6 +268,70 @@ const ScanSlot: React.FC<{
           </div>
         );
       })()}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Carte Grise = un seul card avec deux emplacements (recto + verso) côte à
+// côte. Dès que la première photo est posée, l'input de la seconde est
+// cliqué automatiquement pour enchaîner la prise sans retourner dans un
+// menu. Les deux faces partent à l'OCR indépendamment et les champs
+// extraits sont fusionnés via `onPrefill`.
+// ---------------------------------------------------------------------------
+const CarteGriseScanSlot: React.FC<{
+  onPrefill: (data: ScannedVehicleData) => void;
+  onDocumentUploaded?: (readerDocumentId: string) => void;
+}> = ({ onPrefill, onDocumentUploaded }) => {
+  const [rectoDone, setRectoDone] = useState(false);
+  const [versoDone, setVersoDone] = useState(false);
+  const versoCameraRef = useRef<HTMLInputElement | null>(null);
+  const versoFileRef = useRef<HTMLInputElement | null>(null);
+  // On garde en mémoire si le recto a été pris via l'appareil photo ou via
+  // le sélecteur de fichier, pour enchaîner le verso dans le même mode.
+  const [rectoSource, setRectoSource] = useState<'camera' | 'file'>('camera');
+
+  const handleRectoDone = useCallback(() => {
+    setRectoDone(true);
+    if (!versoDone) {
+      // Déclencher le second input après un micro-tick pour laisser React
+      // flusher le state ; sinon l'input peut encore être désactivé.
+      setTimeout(() => {
+        const target = rectoSource === 'camera' ? versoCameraRef.current : versoFileRef.current;
+        target?.click();
+      }, 50);
+    }
+  }, [rectoSource, versoDone]);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="text-xs font-black text-slate-800">Carte Grise (recto + verso)</div>
+      </div>
+      <div className="text-[11px] text-slate-500">
+        Scannez le recto puis le verso — l'appareil photo s'ouvre
+        automatiquement pour le verso après la première prise.
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ScanSlot
+          title="Recto"
+          description="Immatriculation, 1ère mise en circulation, fin de validité"
+          onPrefill={(d) => { onPrefill(d); handleRectoDone(); }}
+          mapFields={mapCarteGrise}
+          onDocumentUploaded={(id) => onDocumentUploaded?.(id)}
+          onSourceChosen={setRectoSource}
+        />
+        <ScanSlot
+          title="Verso"
+          description="Marque, modèle, châssis, carburant, puissance"
+          onPrefill={(d) => { onPrefill(d); setVersoDone(true); }}
+          mapFields={mapCarteGrise}
+          onDocumentUploaded={(id) => onDocumentUploaded?.(id)}
+          cameraInputRef={versoCameraRef}
+          fileInputRef={versoFileRef}
+          disabled={!rectoDone}
+        />
+      </div>
     </div>
   );
 };

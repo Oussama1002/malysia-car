@@ -29,7 +29,8 @@ enum _VehDoc {
   assurance,
   autorisation,
   techControl,
-  carteGrise,
+  carteGriseRecto,
+  carteGriseVerso,
 }
 
 enum _CarteGriseStatus { enAttente, recue }
@@ -239,14 +240,16 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.assurance => 'insurance',
         _VehDoc.autorisation => 'autorisation_circulation',
         _VehDoc.techControl => 'payment_attestation',
-        _VehDoc.carteGrise => 'vehicle_registration',
+        _VehDoc.carteGriseRecto => 'vehicle_registration',
+        _VehDoc.carteGriseVerso => 'vehicle_registration',
       };
 
   String _ocrLabel(_VehDoc d) => switch (d) {
         _VehDoc.assurance => 'Assurance',
         _VehDoc.autorisation => 'Autorisation de circulation / Vignette',
         _VehDoc.techControl => 'Visite technique',
-        _VehDoc.carteGrise => 'Carte Grise (recto + verso)',
+        _VehDoc.carteGriseRecto => 'Carte Grise — Recto',
+        _VehDoc.carteGriseVerso => 'Carte Grise — Verso',
       };
 
   String _ocrHint(_VehDoc d) => switch (d) {
@@ -254,8 +257,10 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
         _VehDoc.autorisation =>
           'Attestation de paiement TSAV — immat., WW, marque, carburant, mise en circulation, validité vignette',
         _VehDoc.techControl => 'Date d\'expiration de la visite technique',
-        _VehDoc.carteGrise =>
-          'Scannez le recto puis le verso : marque, modèle, VIN, carburant, puissance, immatriculation, 1ère mise en circulation, fin de validité.',
+        _VehDoc.carteGriseRecto =>
+          'Face avant : plaque, 1ère mise en circulation, fin de validité',
+        _VehDoc.carteGriseVerso =>
+          'Face arrière : marque, modèle, châssis (VIN), carburant, puissance',
       };
 
   Future<void> _scan({
@@ -472,14 +477,9 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           }
           outcome('Exp. visite tech.', exp);
           break;
-        case _VehDoc.carteGrise:
-          // Un seul slot pour la carte grise (recto + verso) : l'agent scanne
-          // l'un, puis l'autre, chaque passe remplit les champs encore vides
-          // ou pose la plaque si elle est manquante. Les deux parsers côté
-          // backend partagent `vehicle_registration` donc une seule passe
-          // suffit souvent (le DomPDF carte grise porte les deux faces côte
-          // à côte).
-          // Recto : plaque, WW antérieur, mise en circulation, fin validité.
+        case _VehDoc.carteGriseRecto:
+          // Recto : plaque définitive, immatriculation antérieure (WW),
+          // 1ère mise en circulation, fin de validité.
           final reg =
               pick(['registration_number', 'immatriculation', 'plate_number']);
           final ww = _ww(pick([
@@ -501,19 +501,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             'date_validite',
             'date_expiration',
           ]);
-          // Verso : marque, modèle, carburant, VIN, puissance, nombre de
-          // places / portes / cylindres.
-          final brand = pick(['brand', 'marque', 'make']);
-          final model = pick(['model', 'modele']);
-          final vin =
-              pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
-          final fuel = pick(['fuel_type', 'carburant', 'energie']);
-          final cv = pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
-          final nbPortes = pick(['nombre_portes', 'number_of_doors', 'doors']);
-          final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
-          final nbCylindres = pick(
-              ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
-
           note(_applyPlate(reg), 'Immatriculation');
           if (ww != null && _immatOnline.text.isEmpty) {
             _immatOnline.text = ww;
@@ -526,11 +513,6 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               note(true, 'Mise en circulation');
             }
           }
-          // La fin de validité détectée sur la carte grise est posée sur
-          // `date_immatriculation` : le formulaire mobile n'a pas de champ
-          // dédié à la fin de validité de la carte grise, et cette date est
-          // le témoin le plus proche sur la fiche véhicule — l'agent corrige
-          // si besoin avant d'enregistrer.
           if (exp != null && _dateImmatriculation == null) {
             final parsed = DateTime.tryParse(exp);
             if (parsed != null) {
@@ -538,6 +520,23 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
               note(true, 'Fin de validité');
             }
           }
+          _carteGriseStatus = _CarteGriseStatus.recue;
+          outcome('Immatriculation', reg);
+          outcome('Immat. antérieure / WW', ww);
+          outcome('Mise en circulation', mec);
+          outcome('Fin de validité', exp);
+          break;
+        case _VehDoc.carteGriseVerso:
+          final brand = pick(['brand', 'marque', 'make']);
+          final model = pick(['model', 'modele']);
+          final vin =
+              pick(['vin_number', 'vin', 'chassis', 'chassis_number']);
+          final fuel = pick(['fuel_type', 'carburant', 'energie']);
+          final cv = pick(['fiscal_power', 'puissance_fiscale', 'cv_fiscaux']);
+          final nbPortes = pick(['nombre_portes', 'number_of_doors', 'doors']);
+          final nbPlaces = pick(['nombre_places', 'number_of_seats', 'seats']);
+          final nbCylindres = pick(
+              ['nombre_cylindres', 'number_of_cylinders', 'cylinders']);
           note(_matchBrandModel(brand, model), 'Marque / Modèle');
           if (fuel != null) {
             final matched = _matchFuel(fuel);
@@ -566,13 +565,7 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
             _cylinders.text = nbCylindres;
             note(true, 'Nombre de cylindres');
           }
-          // La carte grise a été uploadée → statut « Reçue » automatiquement.
           _carteGriseStatus = _CarteGriseStatus.recue;
-
-          outcome('Immatriculation', reg);
-          outcome('Immat. antérieure / WW', ww);
-          outcome('Mise en circulation', mec);
-          outcome('Fin de validité', exp);
           outcome('Marque', brand);
           outcome('Modèle', model);
           outcome('VIN / Châssis', vin);
@@ -986,23 +979,184 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           ),
           const SizedBox(height: 10),
           for (final d in _VehDoc.values) ...[
-            _ScanSlot(
-              title: _ocrLabel(d),
-              subtitle: _ocrHint(d),
-              photoPath: _scanPath[d],
-              scanning: _scanning == d,
-              notice: _scanning == d ? null : _scanNotice[d],
-              preview: _scanning == d ? null : _scanPreview[d],
-              onCamera: () => _scan(source: ImageSource.camera, doc: d),
-              onGallery: () => _scan(source: ImageSource.gallery, doc: d),
-              onClear: () => setState(() {
-                _scanPath[d] = null;
-                _scanDocId[d] = null;
-                _scanNotice[d] = null;
-                _scanPreview[d] = null;
-              }),
-            ),
+            if (d == _VehDoc.carteGriseVerso)
+              // Rendu groupé plus bas avec le recto — on saute la boucle
+              // ici pour que la carte grise n'apparaisse qu'une seule fois.
+              const SizedBox.shrink()
+            else if (d == _VehDoc.carteGriseRecto)
+              _carteGriseGroupedSlot()
+            else
+              _ScanSlot(
+                title: _ocrLabel(d),
+                subtitle: _ocrHint(d),
+                photoPath: _scanPath[d],
+                scanning: _scanning == d,
+                notice: _scanning == d ? null : _scanNotice[d],
+                preview: _scanning == d ? null : _scanPreview[d],
+                onCamera: () => _scan(source: ImageSource.camera, doc: d),
+                onGallery: () => _scan(source: ImageSource.gallery, doc: d),
+                onClear: () => setState(() {
+                  _scanPath[d] = null;
+                  _scanDocId[d] = null;
+                  _scanNotice[d] = null;
+                  _scanPreview[d] = null;
+                }),
+              ),
             if (d != _VehDoc.values.last) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Scanne le recto et, dès que l'OCR a répondu, enchaîne automatiquement
+  /// sur le verso avec le même mode de capture (caméra ou galerie). Ça évite
+  /// à l'agent de ré-ouvrir la liste de photos entre les deux faces.
+  Future<void> _scanRectoThenVerso(ImageSource source) async {
+    await _scan(source: source, doc: _VehDoc.carteGriseRecto);
+    if (!mounted) return;
+    // On n'auto-chaîne pas si l'agent a annulé le recto (aucun fichier posé)
+    // ou si le verso a déjà été rempli précédemment.
+    if (_scanPath[_VehDoc.carteGriseRecto] == null) return;
+    if (_scanPath[_VehDoc.carteGriseVerso] != null) return;
+    await _scan(source: source, doc: _VehDoc.carteGriseVerso);
+  }
+
+  /// Carte grise = une seule carte avec deux emplacements photo (recto +
+  /// verso) côte à côte. Après le recto on enchaîne tout de suite sur le
+  /// verso, dans le même mode (appareil photo ou galerie).
+  Widget _carteGriseGroupedSlot() {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.document_scanner_outlined,
+                  size: 16, color: Colors.black54),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text('Carte Grise (recto + verso)',
+                    style: TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Scannez le recto puis le verso — l\'appareil photo s\'ouvre automatiquement pour le verso après la première prise.',
+            style: TextStyle(fontSize: 10.5, color: Colors.black45),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _CarteGriseSide(
+                  label: 'Recto',
+                  photoPath: _scanPath[_VehDoc.carteGriseRecto],
+                  scanning: _scanning == _VehDoc.carteGriseRecto,
+                  onClear: () => setState(() {
+                    _scanPath[_VehDoc.carteGriseRecto] = null;
+                    _scanDocId[_VehDoc.carteGriseRecto] = null;
+                    _scanNotice[_VehDoc.carteGriseRecto] = null;
+                    _scanPreview[_VehDoc.carteGriseRecto] = null;
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CarteGriseSide(
+                  label: 'Verso',
+                  photoPath: _scanPath[_VehDoc.carteGriseVerso],
+                  scanning: _scanning == _VehDoc.carteGriseVerso,
+                  onClear: () => setState(() {
+                    _scanPath[_VehDoc.carteGriseVerso] = null;
+                    _scanDocId[_VehDoc.carteGriseVerso] = null;
+                    _scanNotice[_VehDoc.carteGriseVerso] = null;
+                    _scanPreview[_VehDoc.carteGriseVerso] = null;
+                  }),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _scanning != null
+                      ? null
+                      : () => _scanRectoThenVerso(ImageSource.camera),
+                  icon: const Icon(Icons.photo_camera_outlined, size: 16),
+                  label: const Text('Prendre les deux photos'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB8933F),
+                    minimumSize: const Size.fromHeight(40),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _scanning != null
+                      ? null
+                      : () => _scanRectoThenVerso(ImageSource.gallery),
+                  icon: const Icon(Icons.folder_open_outlined, size: 16),
+                  label: const Text('Fichier'),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(40)),
+                ),
+              ),
+            ],
+          ),
+          if (_scanNotice[_VehDoc.carteGriseRecto] != null ||
+              _scanNotice[_VehDoc.carteGriseVerso] != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_scanNotice[_VehDoc.carteGriseRecto] != null)
+                    Text('Recto : ${_scanNotice[_VehDoc.carteGriseRecto]!}',
+                        style: const TextStyle(
+                            color: Color(0xFF7A5F22),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700)),
+                  if (_scanNotice[_VehDoc.carteGriseRecto] != null &&
+                      _scanNotice[_VehDoc.carteGriseVerso] != null)
+                    const SizedBox(height: 2),
+                  if (_scanNotice[_VehDoc.carteGriseVerso] != null)
+                    Text('Verso : ${_scanNotice[_VehDoc.carteGriseVerso]!}',
+                        style: const TextStyle(
+                            color: Color(0xFF7A5F22),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ],
+          // Panneau Champs détectés / Non détectés — on fusionne les sorties
+          // du recto et du verso pour que l'agent voie TOUT ce qui a été lu
+          // sur la carte grise entière, dans un seul encart.
+          if (((_scanPreview[_VehDoc.carteGriseRecto]?.isNotEmpty ?? false) ||
+                  (_scanPreview[_VehDoc.carteGriseVerso]?.isNotEmpty ?? false))) ...[
+            const SizedBox(height: 8),
+            _OcrPreviewPanel(outcomes: [
+              ...?_scanPreview[_VehDoc.carteGriseRecto],
+              ...?_scanPreview[_VehDoc.carteGriseVerso],
+            ]),
           ],
         ],
       ),
@@ -2001,6 +2155,87 @@ class _ScanSlot extends StatelessWidget {
 
 /// Deux encarts côte-à-côte — « Champs détectés » (vert) et « Non détectés »
 /// (ambre), mêmes couleurs et même typographie que le web ERP.
+/// Vignette d'une face de carte grise (recto ou verso) à l'intérieur du
+/// card unique. Affiche la photo prise + un petit badge « Prise/Vide » et
+/// un bouton croix rouge pour effacer la face.
+class _CarteGriseSide extends StatelessWidget {
+  const _CarteGriseSide({
+    required this.label,
+    required this.photoPath,
+    required this.scanning,
+    required this.onClear,
+  });
+  final String label;
+  final String? photoPath;
+  final bool scanning;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(),
+            style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+                color: Color(0xFF64748B))),
+        const SizedBox(height: 4),
+        AspectRatio(
+          aspectRatio: 16 / 10,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: photoPath != null
+                ? Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      Positioned.fill(
+                        child: df_img.fileImage(photoPath!, fit: BoxFit.cover),
+                      ),
+                      if (scanning)
+                        Container(
+                          color: Colors.black45,
+                          alignment: Alignment.center,
+                          child: const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5, color: Colors.white),
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Material(
+                            color: Colors.red,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              onTap: onClear,
+                              customBorder: const CircleBorder(),
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.close,
+                                    size: 14, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  )
+                : Container(
+                    color: const Color(0xFFEEF2F7),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.image_outlined,
+                        size: 28, color: Colors.black26),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OcrPreviewPanel extends StatelessWidget {
   const _OcrPreviewPanel({required this.outcomes});
   final List<_FieldOutcome> outcomes;
