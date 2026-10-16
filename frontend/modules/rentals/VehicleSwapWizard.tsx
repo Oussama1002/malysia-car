@@ -27,6 +27,21 @@ const STEPS: { key: StepKey; title: string; hint: string }[] = [
   { key: 'confirmation', title: 'Confirmation',  hint: 'Validation' },
 ];
 
+const AVAILABILITY_REASON_FR: Record<string, string> = {
+  overlapping_reservation: 'Réservation en conflit',
+  active_contract_overlap: 'Contrat actif en conflit',
+  overlapping_mission: 'Mission planifiée en conflit',
+  vehicle_in_maintenance: 'En maintenance',
+  vehicle_in_scheduled_maintenance: 'Maintenance planifiée',
+  vehicle_accident_hold: 'Immobilisé (accident)',
+  vehicle_status_unavailable: 'Statut véhicule indisponible',
+  vehicle_availability_flag: 'Marqué indisponible',
+  vehicle_not_found: 'Véhicule introuvable',
+  invalid_range: 'Période invalide',
+  sub_rental_period_exceeded: 'Hors période sous-location',
+  sub_rental_no_active_contract: 'Pas de contrat sous-location actif',
+};
+
 const VEHICLE_TABS = [
   { key: 'recommended', label: 'Recommandés' },
   { key: 'upgrade',     label: 'Catégorie supérieure' },
@@ -475,7 +490,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
                   {/* Unavailability reasons */}
                   {!isAvail && v.availability_reasons?.length > 0 && (
                     <div className="mt-1.5 text-[9px] text-rose-600 font-semibold truncate">
-                      {v.availability_reasons[0]}
+                      {AVAILABILITY_REASON_FR[v.availability_reasons[0]] ?? v.availability_reasons[0]}
                     </div>
                   )}
                 </button>

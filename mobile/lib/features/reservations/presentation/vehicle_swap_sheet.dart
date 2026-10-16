@@ -54,6 +54,23 @@ const _reasons = <MapEntry<String, String>>[
   MapEntry('other', 'Autre'),
 ];
 
+const _availabilityReasonFr = <String, String>{
+  'overlapping_reservation': 'Réservation en conflit',
+  'active_contract_overlap': 'Contrat actif en conflit',
+  'overlapping_mission': 'Mission planifiée en conflit',
+  'vehicle_in_maintenance': 'En maintenance',
+  'vehicle_in_scheduled_maintenance': 'Maintenance planifiée',
+  'vehicle_accident_hold': 'Immobilisé (accident)',
+  'vehicle_status_unavailable': 'Statut véhicule indisponible',
+  'vehicle_availability_flag': 'Marqué indisponible',
+  'vehicle_not_found': 'Véhicule introuvable',
+  'invalid_range': 'Période invalide',
+  'sub_rental_period_exceeded': 'Hors période sous-location',
+  'sub_rental_no_active_contract': 'Pas de contrat sous-location actif',
+};
+
+String _reasonFr(String code) => _availabilityReasonFr[code] ?? code;
+
 const _financialActions = <MapEntry<String, String>>[
   MapEntry('charge', 'Facturer la différence'),
   MapEntry('free_upgrade', 'Surclassement offert'),
@@ -139,7 +156,6 @@ class _VehicleSwapSheetState extends ConsumerState<VehicleSwapSheet> {
     return all
         .whereType<Map>()
         .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
-        .where((v) => v['available'] == true)
         .toList();
   }
 
@@ -262,16 +278,25 @@ class _VehicleSwapSheetState extends ConsumerState<VehicleSwapSheet> {
 
   Widget _vehicleCard(Map<String, dynamic> v) {
     final selected = _vehicleId == v['id'];
+    final isAvail = v['available'] == true;
     final brand = (v['brand_name'] ?? v['brand']?['name'] ?? '').toString();
     final model =
         (v['model_name'] ?? v['model']?['model_name'] ?? v['model']?['name'] ?? '')
             .toString();
     final plate = (v['registration_number'] ?? '—').toString();
-    return InkWell(
-      onTap: () => setState(() {
-        _vehicleId = v['id']?.toString();
-        _selectedVehicle = v;
-      }),
+    final reasonsRaw = v['availability_reasons'];
+    final reasonFr = (!isAvail && reasonsRaw is List && reasonsRaw.isNotEmpty)
+        ? _reasonFr(reasonsRaw.first.toString())
+        : null;
+    return Opacity(
+      opacity: isAvail ? 1.0 : 0.55,
+      child: InkWell(
+      onTap: !isAvail
+          ? null
+          : () => setState(() {
+                _vehicleId = v['id']?.toString();
+                _selectedVehicle = v;
+              }),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -304,6 +329,15 @@ class _VehicleSwapSheetState extends ConsumerState<VehicleSwapSheet> {
                   Text(plate,
                       style: const TextStyle(
                           color: Colors.black45, fontSize: 11)),
+                  if (reasonFr != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(reasonFr,
+                          style: const TextStyle(
+                              color: Color(0xFFE11D48),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
+                    ),
                   Wrap(
                     spacing: 4,
                     children: [
@@ -331,6 +365,7 @@ class _VehicleSwapSheetState extends ConsumerState<VehicleSwapSheet> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
