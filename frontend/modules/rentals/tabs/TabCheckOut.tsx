@@ -167,7 +167,7 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0
                 key={zone}
                 className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 p-3 text-center hover:border-slate-300 cursor-pointer"
               >
-                <div className="text-lg text-slate-300">📷</div>
+                <div className="h-6" />
                 <div className="mt-1 text-[10px] font-bold text-slate-400">{zone}</div>
               </div>
             ))}
@@ -196,7 +196,7 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0
             disabled={pickupM.isPending || franchiseBlocks}
             className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            {pickupM.isPending ? 'Enregistrement…' : '🚗 Valider le Check-Out'}
+            {pickupM.isPending ? 'Enregistrement…' : 'Valider le Check-Out'}
           </button>
         </div>
       </div>
