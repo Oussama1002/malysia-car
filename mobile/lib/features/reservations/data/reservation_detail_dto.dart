@@ -58,9 +58,20 @@ class ReservationDetailDto {
       vehicleRegistration: json['vehicle_registration']?.toString(),
       hasContract: json['has_contract'] == true,
       candidateVehicles: _list(json['candidate_vehicles'], CandidateVehicleDto.fromJson),
+      // Le backend n'imbrique PAS d'objet `contract` dans la réponse — il
+       // expose has_contract / contract_id / contract_number / contract_status
+       // comme clés top-level (cf. ReservationController@show). On construit
+       // le résumé à partir de ces champs ; sinon le mobile affichait toujours
+       // "Aucun contrat lié" alors que has_contract était true.
       contract: _asMap(json['contract']) != null
           ? ContractSummary.fromJson(_asMap(json['contract'])!)
-          : null,
+          : (json['has_contract'] == true && json['contract_id'] != null
+              ? ContractSummary(
+                  id: json['contract_id'].toString(),
+                  number: json['contract_number']?.toString() ?? '—',
+                  status: json['contract_status']?.toString() ?? '',
+                )
+              : null),
       deposits: _list(json['deposits'], DepositDto.fromJson),
       payments: _list(json['payments'], PaymentDto.fromJson),
       extensions: _list(json['extensions'], ExtensionDto.fromJson),
