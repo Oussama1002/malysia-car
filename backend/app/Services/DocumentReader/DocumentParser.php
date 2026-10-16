@@ -1328,10 +1328,11 @@ class DocumentParser
         $datePattern = '(\d{1,2}\s*[\/\-.]\s*\d{1,2}\s*[\/\-.]\s*\d{2,4})';
         // Entre "du" / "au" et la date il peut y avoir des deux-points,
         // tirets, parenthèses, retours à la ligne, etc. : on tolère n'importe
-        // quel bruit non-chiffré sur 0 à 10 caractères.
-        $gap = '[^\d\n]{0,10}';
+        // quel bruit non-chiffré sur 0 à 30 caractères (newlines inclus pour
+        // les attestations où "Du :" et "Au :" sont sur deux lignes).
+        $gap = '[^\d]{0,30}';
         // "du DD/MM/YYYY au DD/MM/YYYY" or "du DD/MM/YYYY à DD/MM/YYYY"
-        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture|valable|valide|assurance|assur[ée])[^\n]*?\bdu\b'.$gap.$datePattern.$gap.'(?:au|[àa]|jusqu\'?au?)\b'.$gap.$datePattern.'/iu', $text, $m)) {
+        if (preg_match('/(?:p[ée]riode|garantie|validit[ée]|effet|couverture|valable|valide|assurance|assur[ée])[\s\S]{0,80}?\bdu\b'.$gap.$datePattern.$gap.'(?:au|[àa]|jusqu\'?au?)\b'.$gap.$datePattern.'/iu', $text, $m)) {
             $guaranteeStart = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[1]));
             $guaranteeEnd = $this->canonicalizeDate(preg_replace('/\s+/', '', $m[2]));
         }
@@ -1422,10 +1423,13 @@ class DocumentParser
                 }
             }
         }
-        // Last resort: only use classified future dates as guarantee end.
-        if (! $guaranteeEnd) {
+        // Last resort: use classified future dates as guarantee end AND
+        // the classifier's "issue" slot as start (dates antérieures à
+        // aujourd'hui mais pas une date de naissance).
+        if (! $guaranteeEnd || ! $guaranteeStart) {
             $classified = $this->classifyDatesByYear($text);
-            $guaranteeEnd = $classified['expiry'];
+            $guaranteeEnd = $guaranteeEnd ?? $classified['expiry'];
+            $guaranteeStart = $guaranteeStart ?? $classified['issue'];
         }
         // Garde-fou : si on n'a QUE guaranteeEnd et que cette date est
         // antérieure à aujourd'hui, c'est probablement en réalité la date
