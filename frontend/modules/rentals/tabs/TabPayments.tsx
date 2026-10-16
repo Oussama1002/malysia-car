@@ -78,7 +78,11 @@ const frLabel = (map: Record<string, string>, v: unknown, fallback = '—'): str
 const TabPayments: React.FC<Props> = ({ data, onAddPayment }) => {
   const [detail, setDetail] = useState<any | null>(null);
   if (!data) return null;
-  const payments = data.payments ?? [];
+  // Les franchises d'assurance (payment_type = caution) ont leur propre carte
+  // dédiée plus bas et alimentent `totals.deposit_paid`. On les retire de la
+  // liste des paiements pour qu'elles ne soient pas comptées deux fois dans
+  // la perception visuelle de l'agent.
+  const payments = (data.payments ?? []).filter((p: any) => String(p?.payment_type ?? '') !== 'caution');
   const totals = data.totals ?? { estimated_price: 0, extensions_total: 0, damages_total: 0, paid: 0 };
   // deposit_paid is new in the backend totals and may not exist on older
   // builds. Fallback to 0 so the UI reads clean on stale servers.

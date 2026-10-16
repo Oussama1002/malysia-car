@@ -1056,11 +1056,18 @@ class _TabPayments extends StatelessWidget {
   Widget build(BuildContext context) {
     final money = NumberFormat.decimalPattern('fr');
     final dateFmt = DateFormat('dd/MM/yyyy', 'fr');
+    // Les franchises d'assurance arrivent côté backend dans `payments` avec
+    // payment_type = 'caution'. On les isole pour les afficher dans la
+    // section FRANCHISES (plus bas elles sont retirées de la liste
+    // PAIEMENTS).
+    final cautionPayments =
+        d.payments.where((p) => p.type == 'caution').toList();
+    final hasFranchise = d.deposits.isNotEmpty || cautionPayments.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (d.deposits.isNotEmpty) ...[
-          const Text('FRANCHISES',
+        if (hasFranchise) ...[
+          const Text('FRANCHISES D\'ASSURANCE',
               style: TextStyle(
                   color: Colors.black45,
                   fontSize: 10.5,
@@ -1082,6 +1089,20 @@ class _TabPayments extends StatelessWidget {
                 ].join(' · '),
               ),
             ),
+          for (final p in cautionPayments)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _rowLine(
+                context,
+                title: '${money.format(p.amount)} MAD',
+                subtitle: [
+                  kPaymentMethodFr[p.method] ?? p.method,
+                  if (p.paymentDate != null) dateFmt.format(p.paymentDate!),
+                  if (p.isReversed) 'Refusé',
+                ].join(' · '),
+                strikethrough: p.isReversed,
+              ),
+            ),
           const SizedBox(height: 10),
         ],
         const Text('PAIEMENTS',
@@ -1091,11 +1112,15 @@ class _TabPayments extends StatelessWidget {
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1.3)),
         const SizedBox(height: 6),
-        if (d.payments.isEmpty)
+        // Les franchises d'assurance (payment_type = caution) sont déjà
+        // affichées dans la section FRANCHISES et alimentent
+        // totals.deposit_paid — on les retire ici pour éviter le double
+        // comptage visuel.
+        if (d.payments.where((p) => p.type != 'caution').isEmpty)
           const Text('Aucun paiement enregistré.',
               style: TextStyle(color: Colors.black45, fontSize: 12.5))
         else
-          for (final p in d.payments)
+          for (final p in d.payments.where((p) => p.type != 'caution'))
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: _rowLine(
