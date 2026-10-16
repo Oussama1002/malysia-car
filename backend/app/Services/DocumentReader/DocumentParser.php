@@ -1466,7 +1466,7 @@ class DocumentParser
         // Trace diagnostique du texte brut quand au moins un champ clé reste
         // null : indispensable pour comprendre pourquoi la regex n'a rien pris.
         if (! $policyNumber || ! $guaranteeStart || ! $guaranteeEnd || ! $company) {
-            Log::info('DocumentParser.parseInsurance.rawText', ['text' => mb_substr($text, 0, 2000)]);
+            Log::info('DocumentParser.parseInsurance.rawText', ['text' => mb_substr($text, 0, 8000)]);
         }
         return $result;
     }
