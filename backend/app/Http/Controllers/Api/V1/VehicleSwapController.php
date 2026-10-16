@@ -523,6 +523,19 @@ class VehicleSwapController extends Controller
         $elapsedDays = max(0, min($totalDays, $totalDays - $remainingDays));
         $pivot = $today->greaterThan($startDay) ? ($today->lessThan($endDay) ? $today : $endDay) : $startDay;
 
+        // Tarif journalier facturé sur l'ancien véhicule. Source :
+        //   - réservation → reservation.daily_rate (agent-typed).
+        //   - contrat     → contract.base_amount / total_days (le contrat
+        //     ne stocke pas de daily_rate, il stocke le TTC de la période).
+        // On tombe à 0 si rien n'est connu — l'UI affichera 0 au lieu de
+        // laisser `Tarif / jour` ET `Sous-total` à vide.
+        $oldDailyRate = 0.0;
+        if (isset($reservation) && $reservation->daily_rate !== null) {
+            $oldDailyRate = (float) $reservation->daily_rate;
+        } elseif (isset($contract) && $contract->base_amount !== null && $totalDays > 0) {
+            $oldDailyRate = round(((float) $contract->base_amount) / $totalDays, 2);
+        }
+
         return ApiResponse::success([
             'current_vehicle' => $currentVehicle ? $this->formatVehicleForSwap($currentVehicle, ['available' => true, 'reasons' => []]) : null,
             'categories' => [
@@ -538,6 +551,7 @@ class VehicleSwapController extends Controller
                 'total_days' => $totalDays,
                 'elapsed_days' => $elapsedDays,
                 'remaining_days' => $remainingDays,
+                'old_daily_rate' => $oldDailyRate,
             ],
         ]);
     }

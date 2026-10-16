@@ -178,7 +178,16 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
   // the booking was actually priced at (reservation.daily_rate or
   // contract.daily_rate); the new rate is 0 until the agent types one in
   // the popup or the Impact step.
-  const oldDailyRate = Number(reservation?.daily_rate ?? contract?.daily_rate ?? 0);
+  // Priorité au tarif renvoyé par /vehicle-swaps/eligible-vehicles : le
+  // backend le reconstitue depuis reservation.daily_rate OU
+  // contract.base_amount / total_days quand le contrat ne stocke que le
+  // montant TTC. Sans ça, un swap depuis un contrat affichait 0 partout.
+  const oldDailyRate = Number(
+    rentalPeriod?.old_daily_rate
+      ?? reservation?.daily_rate
+      ?? contract?.daily_rate
+      ?? 0,
+  );
   const newDailyRate = form.newDailyRate !== '' ? Number(form.newDailyRate) : 0;
   const finRemainingDays = Number(rentalPeriod?.remaining_days ?? summaryData.remainingDays) || 0;
   // Period split — the old vehicle covers the days already elapsed, the new
