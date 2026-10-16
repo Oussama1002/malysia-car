@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/widgets/module_scaffold.dart';
 import '../../../core/router/back_nav.dart';
-import '../../placeholders/placeholder_screen.dart';
+import '../../reservations/presentation/new_contract_from_reservation_screen.dart';
 import '../data/contract_dto.dart';
 import '../data/contracts_repo.dart';
 import 'contract_detail_screen.dart';
@@ -53,13 +53,13 @@ class _ContractsScreenState extends ConsumerState<ContractsScreen> {
     final filters = ref.watch(contractListFiltersProvider);
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => const PlaceholderScreen(
-              title: 'Nouveau contrat',
-              icon: Icons.description_outlined,
-            ),
+        onPressed: () async {
+          await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => const NewContractFromReservationScreen(),
           ));
+          // Rafraîchir la liste au retour : si l'agent a enregistré un
+          // contrat (brouillon ou approuvé) il doit apparaître directement.
+          ref.invalidate(contractsListProvider);
         },
         icon: const Icon(Icons.add),
         label: const Text('Nouveau contrat'),
