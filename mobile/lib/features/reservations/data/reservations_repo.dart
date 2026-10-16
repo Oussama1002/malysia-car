@@ -100,6 +100,43 @@ class ReservationsRepo {
     final body0 = res.data is Map ? (res.data as Map) : const {};
     return body0.map((k, v) => MapEntry(k.toString(), v));
   }
+
+  // ---------------------------------------------------------------------------
+  // Vehicle swap — même endpoints que le web (/vehicle-swaps/*).
+  // ---------------------------------------------------------------------------
+
+  Future<Map<String, dynamic>> swapEligibleVehicles({
+    String? reservationId,
+    String? contractId,
+  }) async {
+    final data = await _api.getData('/vehicle-swaps/eligible-vehicles', query: {
+      if (reservationId != null) 'reservation_id': reservationId,
+      if (contractId != null) 'contract_id': contractId,
+    });
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return data.map((k, v) => MapEntry(k.toString(), v));
+    return const {};
+  }
+
+  Future<void> instantVehicleSwap({
+    String? reservationId,
+    String? contractId,
+    required String newVehicleId,
+    String? reason,
+    double? newRate,
+    String? financialAction,
+    bool oldVehicleRecovered = false,
+  }) async {
+    await _api.raw.post('/vehicle-swaps/instant', data: {
+      if (reservationId != null) 'reservation_id': reservationId,
+      if (contractId != null) 'contract_id': contractId,
+      'new_vehicle_id': newVehicleId,
+      if (reason != null) 'reason': reason,
+      if (newRate != null) 'new_rate': newRate,
+      if (financialAction != null) 'financial_action': financialAction,
+      'old_vehicle_recovered': oldVehicleRecovered,
+    });
+  }
 }
 
 final reservationsRepoProvider = Provider<ReservationsRepo>((ref) {

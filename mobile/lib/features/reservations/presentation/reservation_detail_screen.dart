@@ -6,6 +6,7 @@ import '../data/reservation_detail_dto.dart';
 import '../data/reservation_dto.dart';
 import '../data/reservations_repo.dart';
 import 'new_contract_from_reservation_screen.dart';
+import 'vehicle_swap_sheet.dart';
 
 /// Fiche réservation — reproduit `ReservationDetailPage.tsx` du web :
 /// gros header (numéro + statut, grille d'infos, bannières draft/no-contract,
@@ -125,6 +126,12 @@ class _ReservationDetailScreenState
                           builder: (_) =>
                               NewContractFromReservationScreen(
                                   reservationId: widget.id))),
+                  onVehicleSwap: () => VehicleSwapSheet.show(
+                        context,
+                        reservationId: widget.id,
+                        onDone: () =>
+                            ref.invalidate(reservationDetailProvider(widget.id)),
+                      ),
                   onCheckout: () =>
                       setState(() => _tab = _Tab.checkout),
                   onCheckin: () => setState(() => _tab = _Tab.checkin),
@@ -512,6 +519,7 @@ class _QuickActions extends StatelessWidget {
     required this.onDeleteCancel,
     required this.onDeleteConfirm,
     required this.onGenerateContract,
+    required this.onVehicleSwap,
     required this.onCheckout,
     required this.onCheckin,
     required this.onAddPayment,
@@ -528,6 +536,7 @@ class _QuickActions extends StatelessWidget {
   final VoidCallback onDeleteCancel;
   final VoidCallback onDeleteConfirm;
   final VoidCallback onGenerateContract;
+  final VoidCallback onVehicleSwap;
   final VoidCallback onCheckout;
   final VoidCallback onCheckin;
   final VoidCallback onAddPayment;
@@ -554,6 +563,7 @@ class _QuickActions extends StatelessWidget {
       actions.add(_mini('Check-Out', const Color(0xFF10B981), onCheckout));
       actions.add(_mini('Check-In', const Color(0xFFB08D57), onCheckin));
       actions.add(_mini('+ Paiement', const Color(0xFF8B5CF6), onAddPayment));
+      actions.add(_mini('Changer véhicule', const Color(0xFF6366F1), onVehicleSwap));
       actions.add(_miniOutline('Générer facture', onInvoice));
       actions.add(_miniOutline('Annuler', onCancel,
           borderColor: const Color(0xFFFECACA),
