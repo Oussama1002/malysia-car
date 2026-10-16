@@ -29,8 +29,8 @@ const STEPS: { key: StepKey; title: string; hint: string }[] = [
 
 const VEHICLE_TABS = [
   { key: 'recommended', label: 'Recommandés' },
-  { key: 'upgrade',     label: 'Upgrade' },
-  { key: 'downgrade',   label: 'Downgrade' },
+  { key: 'upgrade',     label: 'Catégorie supérieure' },
+  { key: 'downgrade',   label: 'Catégorie inférieure' },
   { key: 'all',         label: 'Tous' },
 ] as const;
 
