@@ -6,6 +6,7 @@ import '../data/reservation_detail_dto.dart';
 import '../data/reservation_dto.dart';
 import '../data/reservations_repo.dart';
 import '../../contracts/presentation/contract_detail_screen.dart';
+import 'handover_sheet.dart';
 import 'new_contract_from_reservation_screen.dart';
 import 'vehicle_swap_sheet.dart';
 
@@ -133,9 +134,20 @@ class _ReservationDetailScreenState
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),
-                  onCheckout: () =>
-                      setState(() => _tab = _Tab.checkout),
-                  onCheckin: () => setState(() => _tab = _Tab.checkin),
+                  onCheckout: () => HandoverSheet.show(
+                        context,
+                        reservationId: widget.id,
+                        mode: HandoverMode.checkOut,
+                        onDone: () =>
+                            ref.invalidate(reservationDetailProvider(widget.id)),
+                      ),
+                  onCheckin: () => HandoverSheet.show(
+                        context,
+                        reservationId: widget.id,
+                        mode: HandoverMode.checkIn,
+                        onDone: () =>
+                            ref.invalidate(reservationDetailProvider(widget.id)),
+                      ),
                   onAddPayment: () =>
                       setState(() => _tab = _Tab.payments),
                   onInvoice: () => setState(() => _tab = _Tab.invoices),
