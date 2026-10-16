@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { DateField } from '@/modules/shared/components/DateField';
+import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton';
 
 interface Props {
   reservationId: string;
@@ -82,9 +84,15 @@ const TabInvoices: React.FC<Props> = ({ reservationId, invoices, data, onRefresh
           <div className="space-y-3">
             {invoices.map((inv: any) => {
               const badge = STATUS_BADGE[inv.status] ?? { label: inv.status ?? '—', cls: 'bg-slate-100 text-slate-600' };
+              const sub = Number(inv.subtotal_amount ?? 0);
+              const tax = Number(inv.tax_amount ?? 0);
+              const total = Number(inv.total_amount ?? 0);
+              const due = Number(inv.amount_due ?? 0);
+              const allocations: any[] = inv.allocations ?? [];
               return (
-                <div key={inv.id} className="rounded-xl border border-slate-100 p-4">
-                  <div className="flex items-center justify-between">
+                <div key={inv.id} className="rounded-xl border border-slate-100 p-4 space-y-3">
+                  {/* Header */}
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-black text-slate-800">{inv.invoice_number}</span>
@@ -94,35 +102,83 @@ const TabInvoices: React.FC<Props> = ({ reservationId, invoices, data, onRefresh
                         Emise le {fmtDate(inv.issue_date)} — Echeance {fmtDate(inv.due_date)}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-black text-slate-800">{fmtMad(Number(inv.total_amount ?? 0))}</div>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/finance/invoices/${inv.id}`}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+                      >
+                        Voir la facture complète →
+                      </Link>
+                      <GeneratePdfButton kind="invoice" entityId={String(inv.id)} className="rounded-lg bg-slate-800 px-3 py-1.5 text-[11px] font-black text-white hover:bg-slate-900" />
                     </div>
                   </div>
 
-                  {/* Invoice lines */}
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-lg bg-slate-50 px-3 py-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Sous-total</div>
+                      <div className="mt-0.5 text-sm font-black text-slate-800">{fmtMad(sub)}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 px-3 py-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">TVA</div>
+                      <div className="mt-0.5 text-sm font-black text-slate-800">{fmtMad(tax)}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 px-3 py-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Total</div>
+                      <div className="mt-0.5 text-sm font-black text-slate-800">{fmtMad(total)}</div>
+                    </div>
+                    <div className={`rounded-lg px-3 py-2 ${due > 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+                      <div className={`text-[10px] font-bold uppercase tracking-wide ${due > 0 ? 'text-amber-500' : 'text-emerald-600'}`}>Reste dû</div>
+                      <div className={`mt-0.5 text-sm font-black ${due > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{fmtMad(due)}</div>
+                    </div>
+                  </div>
+
+                  {/* Invoice lines — full detail */}
                   {inv.lines?.length > 0 && (
-                    <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs">
-                      {inv.lines.map((line: any, i: number) => (
-                        <div key={i} className="flex justify-between py-1">
-                          <span className="text-slate-600">{line.description}</span>
-                          <span className="font-bold text-slate-700">{fmtMad(Number(line.line_total ?? 0))}</span>
+                    <div className="overflow-x-auto rounded-lg border border-slate-100">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                          <tr>
+                            <th className="px-2 py-1.5">#</th>
+                            <th className="px-2 py-1.5">Description</th>
+                            <th className="px-2 py-1.5">Qté</th>
+                            <th className="px-2 py-1.5 text-right">PU</th>
+                            <th className="px-2 py-1.5 text-right">Remise</th>
+                            <th className="px-2 py-1.5 text-right">TVA</th>
+                            <th className="px-2 py-1.5 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {inv.lines.map((line: any) => (
+                            <tr key={line.id ?? line.position}>
+                              <td className="px-2 py-1.5">{line.position ?? '—'}</td>
+                              <td className="px-2 py-1.5">{line.description ?? '—'}</td>
+                              <td className="px-2 py-1.5">{Number(line.quantity ?? 1)}</td>
+                              <td className="px-2 py-1.5 text-right">{fmtMad(Number(line.unit_price ?? 0))}</td>
+                              <td className="px-2 py-1.5 text-right">{fmtMad(Number(line.discount_amount ?? 0))}</td>
+                              <td className="px-2 py-1.5 text-right">{fmtMad(Number(line.tax_amount ?? 0))}</td>
+                              <td className="px-2 py-1.5 text-right font-bold">{fmtMad(Number(line.line_total ?? 0))}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Allocations */}
+                  {allocations.length > 0 && (
+                    <div className="rounded-lg bg-slate-50 p-3 text-xs">
+                      <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Paiements alloués</div>
+                      {allocations.map((a: any) => (
+                        <div key={a.id} className="flex items-center justify-between py-1">
+                          <span className="text-slate-600">
+                            {a.payment?.payment_number ?? a.payment_id} · {fmtDate(a.allocated_at)}
+                          </span>
+                          <span className="font-bold text-slate-700">{fmtMad(Number(a.amount_allocated ?? 0))}</span>
                         </div>
                       ))}
                     </div>
                   )}
-
-                  {/* Invoice actions */}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50" disabled>
-                      📥 PDF
-                    </button>
-                    <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50" disabled>
-                      📱 WhatsApp
-                    </button>
-                    <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50" disabled>
-                      📧 Email
-                    </button>
-                  </div>
                 </div>
               );
             })}

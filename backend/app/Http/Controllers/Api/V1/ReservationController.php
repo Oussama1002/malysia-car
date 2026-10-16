@@ -387,7 +387,7 @@ class ReservationController extends Controller
                 ->whereHas('lines', function ($lq) use ($reservation) {
                     $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]);
                 })
-                ->with('lines')
+                ->with(['lines', 'allocations.payment', 'customer'])
                 ->orderByDesc('issue_date')
                 ->get();
         } catch (\Throwable) {

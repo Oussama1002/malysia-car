@@ -6,6 +6,7 @@ import '../data/reservation_detail_dto.dart';
 import '../data/reservation_dto.dart';
 import '../data/reservations_repo.dart';
 import '../../contracts/presentation/contract_detail_screen.dart';
+import '../../documents/presentation/invoice_detail_screen.dart';
 import 'handover_sheet.dart';
 import 'new_contract_from_reservation_screen.dart';
 import 'vehicle_swap_sheet.dart';
@@ -794,15 +795,22 @@ class _TabContent extends StatelessWidget {
   Widget _invoiceTile(BuildContext context, InvoiceDto iv) {
     final money = NumberFormat.decimalPattern('fr');
     final dateFmt = DateFormat('dd/MM/yyyy', 'fr');
-    return _tile(
-      context,
-      title: iv.number,
-      subtitleParts: [
-        kInvoiceStatusFr[iv.status] ?? iv.status,
-        if (iv.amount != null) '${money.format(iv.amount)} MAD',
-        if (iv.issueDate != null) 'Émise ${dateFmt.format(iv.issueDate!)}',
-        if (iv.dueDate != null) 'Échéance ${dateFmt.format(iv.dueDate!)}',
-      ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => InvoiceDetailScreen(id: iv.id),
+      )),
+      child: _tile(
+        context,
+        title: iv.number,
+        subtitleParts: [
+          kInvoiceStatusFr[iv.status] ?? iv.status,
+          if (iv.amount != null) '${money.format(iv.amount)} MAD',
+          if (iv.issueDate != null) 'Émise ${dateFmt.format(iv.issueDate!)}',
+          if (iv.dueDate != null) 'Échéance ${dateFmt.format(iv.dueDate!)}',
+          'Toucher pour voir la facture complète →',
+        ],
+      ),
     );
   }
 
