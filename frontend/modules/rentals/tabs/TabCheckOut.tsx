@@ -21,12 +21,22 @@ interface Props {
   reports: Report[];
   /** Franchise prévue au contrat — la remise est bloquée tant qu'elle n'est pas encaissée. */
   franchiseDue?: number;
+  /** Payments de la réservation (pour détecter une franchise déjà encaissée côté payments.type = 'caution'). */
+  payments?: any[];
   onRefresh: () => void;
 }
 
+const fmtMad = (v: number) => `${v.toLocaleString('fr-MA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} MAD`;
+const METHOD_FR: Record<string, string> = {
+  cash: 'Espèces', cheque: 'Chèque', check: 'Chèque',
+  bank_transfer: 'Virement', card: 'Carte',
+};
+
 const PHOTO_ZONES = ['Avant', 'Arrière', 'Gauche', 'Droite', 'Intérieur', 'Tableau de bord'];
 
-const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0, onRefresh }) => {
+const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0, payments = [], onRefresh }) => {
+  const cautionPayments = payments.filter((p: any) => String(p?.payment_type ?? '') === 'caution');
+  const franchiseAlready = cautionPayments.length > 0;
   const pickups = reports.filter((r) => r.handover_type === 'pickup');
   const [form, setForm] = useState({
     odometer: '',
@@ -36,7 +46,7 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0
   });
 
   const depositsQ = useDeposits(reservationId);
-  const franchiseHeld = (depositsQ.data ?? []).some((d) => d.status === 'held');
+  const franchiseHeld = (depositsQ.data ?? []).some((d) => d.status === 'held') || franchiseAlready;
   const franchiseBlocks = franchiseDue > 0 && !franchiseHeld;
   const [pickupError, setPickupError] = useState<string | null>(null);
 
@@ -60,7 +70,27 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0
 
   return (
     <div className="space-y-6">
-      <FranchisePanel reservationId={reservationId} dueAmount={franchiseDue} mode="collect" />
+      {franchiseAlready ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="mb-2 text-xs font-black uppercase tracking-widest text-emerald-700">Franchise d'assurance encaissée</div>
+          <div className="space-y-1 text-sm">
+            {cautionPayments.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between">
+                <span className="text-emerald-800">
+                  {fmtMad(Number(p.amount ?? 0))} · {METHOD_FR[String(p.payment_method ?? '')] ?? p.payment_method}
+                  {p.payment_date ? ` · ${new Date(p.payment_date).toLocaleDateString('fr-MA')}` : ''}
+                </span>
+                <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-black text-emerald-800">Détenue</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-[11px] text-emerald-700">
+            Le véhicule peut être remis au client — la franchise est déjà au coffre.
+          </div>
+        </div>
+      ) : (
+        <FranchisePanel reservationId={reservationId} dueAmount={franchiseDue} mode="collect" />
+      )}
 
       {/* Existing pickup records */}
       {pickups.length > 0 && (

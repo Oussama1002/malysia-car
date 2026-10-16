@@ -19,12 +19,20 @@ interface Props {
   reports: Report[];
   /** Dommages constatés sur ce retour — la franchise s'y réfère. */
   damagesCount?: number;
+  /** Payments de la réservation (pour détecter une franchise déjà encaissée). */
+  payments?: any[];
   onRefresh: () => void;
 }
 
 const PHOTO_ZONES = ['Avant', 'Arrière', 'Gauche', 'Droite', 'Intérieur', 'Tableau de bord'];
+const fmtMadCI = (v: number) => `${v.toLocaleString('fr-MA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} MAD`;
+const METHOD_FR_CI: Record<string, string> = {
+  cash: 'Espèces', cheque: 'Chèque', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte',
+};
 
-const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0, onRefresh }) => {
+const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0, payments = [], onRefresh }) => {
+  const cautionPayments = payments.filter((p: any) => String(p?.payment_type ?? '') === 'caution');
+  const franchiseAlready = cautionPayments.length > 0;
   const returns = reports.filter((r) => r.handover_type === 'return');
   const lastPickup = reports.filter((r) => r.handover_type === 'pickup').at(-1);
 
@@ -182,7 +190,27 @@ const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0,
       </div>
 
       {/* Once the vehicle is back and the photos checked, release the guarantee. */}
-      <FranchisePanel reservationId={reservationId} mode="settle" damagesCount={damagesCount} />
+      {franchiseAlready ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="mb-2 text-xs font-black uppercase tracking-widest text-emerald-700">Franchise d'assurance encaissée</div>
+          <div className="space-y-1 text-sm">
+            {cautionPayments.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between">
+                <span className="text-emerald-800">
+                  {fmtMadCI(Number(p.amount ?? 0))} · {METHOD_FR_CI[String(p.payment_method ?? '')] ?? p.payment_method}
+                  {p.payment_date ? ` · ${new Date(p.payment_date).toLocaleDateString('fr-MA')}` : ''}
+                </span>
+                <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px] font-black text-emerald-800">Détenue</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-[11px] text-emerald-700">
+            Vérifiez les dommages avant de restituer la franchise au client.
+          </div>
+        </div>
+      ) : (
+        <FranchisePanel reservationId={reservationId} mode="settle" damagesCount={damagesCount} />
+      )}
     </div>
   );
 };

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../data/reservation_detail_dto.dart';
 import '../data/reservations_repo.dart';
 
 /// Check-Out (pickup) / Check-In (return) — bottom sheet compacte qui
@@ -11,17 +13,20 @@ class HandoverSheet extends ConsumerStatefulWidget {
     super.key,
     required this.reservationId,
     required this.mode,
+    this.cautionPayments = const [],
     this.onDone,
   });
 
   final String reservationId;
   final HandoverMode mode;
+  final List<PaymentDto> cautionPayments;
   final VoidCallback? onDone;
 
   static Future<void> show(
     BuildContext context, {
     required String reservationId,
     required HandoverMode mode,
+    List<PaymentDto> cautionPayments = const [],
     VoidCallback? onDone,
   }) {
     return showModalBottomSheet<void>(
@@ -33,6 +38,7 @@ class HandoverSheet extends ConsumerStatefulWidget {
         child: HandoverSheet(
           reservationId: reservationId,
           mode: mode,
+          cautionPayments: cautionPayments,
           onDone: onDone,
         ),
       ),
@@ -150,6 +156,13 @@ class _HandoverSheetState extends ConsumerState<HandoverSheet> {
                   : 'Enregistrer le retour du véhicule et son état.',
               style: const TextStyle(color: Colors.black54, fontSize: 11.5),
             ),
+            if (widget.cautionPayments.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _FranchiseAlreadyBanner(
+                payments: widget.cautionPayments,
+                settleHint: widget.mode == HandoverMode.checkIn,
+              ),
+            ],
             const SizedBox(height: 14),
             TextField(
               controller: _odometer,
@@ -212,6 +225,75 @@ class _HandoverSheetState extends ConsumerState<HandoverSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FranchiseAlreadyBanner extends StatelessWidget {
+  const _FranchiseAlreadyBanner({required this.payments, this.settleHint = false});
+  final List<PaymentDto> payments;
+  final bool settleHint;
+
+  @override
+  Widget build(BuildContext context) {
+    final money = NumberFormat.decimalPattern('fr');
+    final dateFmt = DateFormat('dd/MM/yyyy', 'fr');
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Franchise d'assurance encaissée",
+              style: TextStyle(
+                  color: Color(0xFF047857),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11.5,
+                  letterSpacing: 0.6)),
+          const SizedBox(height: 6),
+          for (final p in payments)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${money.format(p.amount)} MAD · ${kPaymentMethodFr[p.method] ?? p.method}'
+                      '${p.paymentDate != null ? " · ${dateFmt.format(p.paymentDate!)}" : ""}',
+                      style: const TextStyle(
+                          color: Color(0xFF065F46), fontSize: 12),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFA7F3D0),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text('Détenue',
+                        style: TextStyle(
+                            color: Color(0xFF065F46),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900)),
+                  ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              settleHint
+                  ? "Vérifiez les dommages avant de restituer la franchise."
+                  : "Le véhicule peut être remis au client — la franchise est déjà au coffre.",
+              style: const TextStyle(color: Color(0xFF047857), fontSize: 10.5),
+            ),
+          ),
+        ],
       ),
     );
   }

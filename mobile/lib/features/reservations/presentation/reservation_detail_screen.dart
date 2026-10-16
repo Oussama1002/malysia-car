@@ -139,6 +139,9 @@ class _ReservationDetailScreenState
                         context,
                         reservationId: widget.id,
                         mode: HandoverMode.checkOut,
+                        cautionPayments: d.payments
+                            .where((p) => p.type == 'caution')
+                            .toList(),
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),
@@ -146,6 +149,9 @@ class _ReservationDetailScreenState
                         context,
                         reservationId: widget.id,
                         mode: HandoverMode.checkIn,
+                        cautionPayments: d.payments
+                            .where((p) => p.type == 'caution')
+                            .toList(),
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),
