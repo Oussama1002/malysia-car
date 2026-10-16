@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
@@ -31,6 +32,35 @@ class EntityDocumentsRepo {
     parse(attachments);
     parse(generated);
     return out;
+  }
+
+  /// Upload d'un fichier (photo prise par l'agent ou document sélectionné)
+  /// attaché à l'entité. Côté backend : POST multipart sur
+  /// `/entities/{entityType}/{entityId}/documents`.
+  Future<void> upload({
+    required String entityType,
+    required String entityId,
+    required String filePath,
+    required String fileName,
+    String category = 'general',
+    String? documentNumber,
+    String? issueDate,
+    String? expiryDate,
+    String? notes,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      'category': category,
+      if (documentNumber != null && documentNumber.isNotEmpty)
+        'document_number': documentNumber,
+      if (issueDate != null && issueDate.isNotEmpty) 'issue_date': issueDate,
+      if (expiryDate != null && expiryDate.isNotEmpty) 'expiry_date': expiryDate,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    await _api.raw.post(
+      '/entities/$entityType/$entityId/documents',
+      data: form,
+    );
   }
 }
 

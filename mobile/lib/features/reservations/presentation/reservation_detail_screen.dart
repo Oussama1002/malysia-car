@@ -142,6 +142,7 @@ class _ReservationDetailScreenState
                         cautionPayments: d.payments
                             .where((p) => p.type == 'caution')
                             .toList(),
+                        vehicleId: d.reservation.vehicleId,
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),
@@ -152,6 +153,7 @@ class _ReservationDetailScreenState
                         cautionPayments: d.payments
                             .where((p) => p.type == 'caution')
                             .toList(),
+                        vehicleId: d.reservation.vehicleId,
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),

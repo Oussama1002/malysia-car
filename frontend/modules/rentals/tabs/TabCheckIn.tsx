@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { FranchisePanel } from './FranchisePanel';
+import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 
 interface Report {
   id: string;
@@ -21,6 +22,8 @@ interface Props {
   damagesCount?: number;
   /** Payments de la réservation (pour détecter une franchise déjà encaissée). */
   payments?: any[];
+  /** ID du véhicule — nécessaire pour afficher et uploader ses documents. */
+  vehicleId?: string;
   onRefresh: () => void;
 }
 
@@ -30,7 +33,7 @@ const METHOD_FR_CI: Record<string, string> = {
   cash: 'Espèces', cheque: 'Chèque', check: 'Chèque', bank_transfer: 'Virement', card: 'Carte',
 };
 
-const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0, payments = [], onRefresh }) => {
+const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0, payments = [], vehicleId, onRefresh }) => {
   const cautionPayments = payments.filter((p: any) => String(p?.payment_type ?? '') === 'caution');
   const franchiseAlready = cautionPayments.length > 0;
   const returns = reports.filter((r) => r.handover_type === 'return');
@@ -210,6 +213,11 @@ const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0,
         </div>
       ) : (
         <FranchisePanel reservationId={reservationId} mode="settle" damagesCount={damagesCount} />
+      )}
+
+      {/* Documents véhicule — on vérifie les papiers avant/après le retour. */}
+      {vehicleId && (
+        <EntityDocuments entityType="vehicle" entityId={vehicleId} title="Documents véhicule" />
       )}
     </div>
   );

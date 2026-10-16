@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { FranchisePanel, useDeposits } from './FranchisePanel';
+import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
 
 interface Report {
   id: string;
@@ -23,6 +24,8 @@ interface Props {
   franchiseDue?: number;
   /** Payments de la réservation (pour détecter une franchise déjà encaissée côté payments.type = 'caution'). */
   payments?: any[];
+  /** ID du véhicule — nécessaire pour afficher et uploader ses documents. */
+  vehicleId?: string;
   onRefresh: () => void;
 }
 
@@ -34,7 +37,7 @@ const METHOD_FR: Record<string, string> = {
 
 const PHOTO_ZONES = ['Avant', 'Arrière', 'Gauche', 'Droite', 'Intérieur', 'Tableau de bord'];
 
-const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0, payments = [], onRefresh }) => {
+const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0, payments = [], vehicleId, onRefresh }) => {
   const cautionPayments = payments.filter((p: any) => String(p?.payment_type ?? '') === 'caution');
   const franchiseAlready = cautionPayments.length > 0;
   const pickups = reports.filter((r) => r.handover_type === 'pickup');
@@ -90,6 +93,11 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0
         </div>
       ) : (
         <FranchisePanel reservationId={reservationId} dueAmount={franchiseDue} mode="collect" />
+      )}
+
+      {/* Documents véhicule déjà au dossier + ajout rapide (photo possible via le file input). */}
+      {vehicleId && (
+        <EntityDocuments entityType="vehicle" entityId={vehicleId} title="Documents véhicule" />
       )}
 
       {/* Existing pickup records */}
