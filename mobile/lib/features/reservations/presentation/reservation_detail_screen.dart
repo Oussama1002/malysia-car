@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../data/reservation_detail_dto.dart';
 import '../data/reservation_dto.dart';
 import '../data/reservations_repo.dart';
+import '../../contracts/presentation/contract_detail_screen.dart';
 import 'new_contract_from_reservation_screen.dart';
 import 'vehicle_swap_sheet.dart';
 
@@ -1019,27 +1020,215 @@ class _TabContract extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (d.contract == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20),
-        child: Text(
-            'Aucun contrat lié. Utilisez « Générer contrat » pour en créer un.',
-            style: TextStyle(color: Colors.black45, fontSize: 13)),
-      );
+    if (d.contract != null) {
+      return _ContractExistsCard(d: d);
     }
+    return _NoContractCard(reservationId: d.reservation.id);
+  }
+}
+
+class _ContractExistsCard extends StatelessWidget {
+  const _ContractExistsCard({required this.d});
+  final ReservationDetailDto d;
+
+  @override
+  Widget build(BuildContext context) {
     final c = d.contract!;
-    final money = NumberFormat.decimalPattern('fr');
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('✅', style: TextStyle(fontSize: 28)),
+          const SizedBox(height: 6),
+          const Text('Contrat déjà généré',
+              style: TextStyle(
+                  color: Color(0xFF065F46),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14)),
+          const SizedBox(height: 4),
+          const Text(
+            'Un contrat lié à ce client et ce véhicule existe déjà — pas besoin d\'en générer un autre.',
+            style: TextStyle(color: Color(0xFF047857), fontSize: 11.5),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFA7F3D0)),
+                ),
+                child: Text.rich(
+                  TextSpan(
+                    style: const TextStyle(
+                        color: Color(0xFF065F46),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11),
+                    children: [
+                      const TextSpan(text: 'Réf. '),
+                      TextSpan(
+                          text: c.number,
+                          style: const TextStyle(fontWeight: FontWeight.w900)),
+                      const TextSpan(text: ' · '),
+                      TextSpan(
+                          text: c.status.toUpperCase(),
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                ),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ContractDetailScreen(id: c.id),
+                )),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                ),
+                child: const Text('Ouvrir le contrat →',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 11.5)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoContractCard extends StatelessWidget {
+  const _NoContractCard({required this.reservationId});
+  final String reservationId;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _InfoRow(label: 'Numéro', value: c.number),
-        _InfoRow(label: 'Statut', value: c.status),
-        _InfoRow(
-            label: "Franchise d'assurance",
-            value: c.depositAmount != null
-                ? '${money.format(c.depositAmount)} MAD'
-                : '—'),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.black12),
+          ),
+          child: Column(
+            children: [
+              const Text('📄', style: TextStyle(fontSize: 28)),
+              const SizedBox(height: 6),
+              const Text('Contrat de location',
+                  style: TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13)),
+              const SizedBox(height: 6),
+              const Text(
+                'Générez un contrat depuis cette réservation. Les informations du client, véhicule et dates seront pré-remplies automatiquement.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black54, fontSize: 11.5),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => NewContractFromReservationScreen(
+                      reservationId: reservationId),
+                )),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 10),
+                ),
+                child: const Text('Générer contrat',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 12.5)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: Colors.black12, style: BorderStyle.solid),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('ACTIONS CONTRAT',
+                  style: TextStyle(
+                      color: Colors.black45,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.3)),
+              const SizedBox(height: 10),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                childAspectRatio: 1.8,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                children: const [
+                  _ActionCard(icon: '📥', label: 'Télécharger PDF'),
+                  _ActionCard(icon: '📱', label: 'Envoyer WhatsApp'),
+                  _ActionCard(icon: '📧', label: 'Envoyer Email'),
+                  _ActionCard(icon: '🖊️', label: 'Signature'),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Ces actions seront disponibles une fois le contrat généré.',
+                style: TextStyle(color: Colors.black38, fontSize: 10.5),
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({required this.icon, required this.label});
+  final String icon;
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Opacity(opacity: 0.5, child: Text(icon, style: const TextStyle(fontSize: 20))),
+          const SizedBox(height: 4),
+          Opacity(
+            opacity: 0.5,
+            child: Text(label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 10.5, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
     );
   }
 }
