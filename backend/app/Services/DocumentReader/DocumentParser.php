@@ -1712,8 +1712,13 @@ class DocumentParser
             return $result;
         }
 
-        $after = mb_substr($text, $pm[0][1]);
-        $chunk = mb_substr($after, 0, 600);
+        // La table DU / AU est généralement centrée sur le libellé
+        // "PERIODE DE GARANTIE" : la ligne DU est AU-DESSUS, la ligne
+        // AU est EN-DESSOUS. On prend 400 car. avant et 400 après
+        // pour attraper les deux côtés même quand l'OCR est bruitée.
+        $periodePos = (int) $pm[0][1];
+        $start = max(0, $periodePos - 400);
+        $chunk = mb_substr($text, $start, 800);
 
         $frenchMonths = [
             'janvier' => 1, 'janv' => 1,
@@ -1730,17 +1735,27 @@ class DocumentParser
             'd[ée][cv]embre' => 12, 'decembre' => 12, 'd[ée]vembre' => 12,
         ];
 
+        // On garde CHAQUE occurrence des mois, même si le numéro est le
+        // même : une période "octobre 2026 → octobre 2027" contient deux
+        // "octobre" qu'il faut traiter comme start/end distincts.
         $monthPositions = [];
-        $seenNums = [];
         foreach ($frenchMonths as $pattern => $num) {
-            if (in_array($num, $seenNums, true)) {
-                continue;
-            }
-            if (preg_match('/'.$pattern.'/iu', $chunk, $mm, PREG_OFFSET_CAPTURE)) {
-                $monthPositions[] = ['month' => $num, 'pos' => $mm[0][1]];
-                $seenNums[] = $num;
+            if (preg_match_all('/'.$pattern.'/iu', $chunk, $mm, PREG_OFFSET_CAPTURE)) {
+                foreach ($mm[0] as $hit) {
+                    $monthPositions[] = ['month' => $num, 'pos' => (int) $hit[1]];
+                }
             }
         }
+        // Dédupe les positions identiques (variantes `octobre` vs motif
+        // long qui matcheraient le même offset).
+        $seenPos = [];
+        $monthPositions = array_values(array_filter($monthPositions, function ($mp) use (&$seenPos) {
+            if (in_array($mp['pos'], $seenPos, true)) {
+                return false;
+            }
+            $seenPos[] = $mp['pos'];
+            return true;
+        }));
         usort($monthPositions, fn ($a, $b) => $a['pos'] <=> $b['pos']);
 
         if (empty($monthPositions)) {
@@ -1776,33 +1791,56 @@ class DocumentParser
             return $best;
         };
 
-        $year = $contextYear ?? (int) date('Y');
+        // L'année est souvent collée après le mois ("octobre 2027", ou
+        // avec du bruit OCR "octobre 20264 00:00" → "2026"). On la lit
+        // dans un rayon de 20 caractères après chaque mois. Tesseract
+        // peut aussi coller un chiffre parasite ("20264") — on tolère
+        // 4 ou 5 chiffres et on garde les 4 premiers.
+        $findYearNear = function (int $monthPos) use ($chunk): ?int {
+            $after = mb_substr($chunk, $monthPos, 60);
+            if (preg_match('/\b(20[12]\d)\d?\b/u', $after, $ym)) {
+                return (int) $ym[1];
+            }
+            return null;
+        };
+
+        $defaultYear = $contextYear ?? (int) date('Y');
 
         if (count($monthPositions) >= 2) {
             $startMonth = $monthPositions[0]['month'];
             $endMonth = $monthPositions[1]['month'];
+            $startYear = $findYearNear($monthPositions[0]['pos']) ?? $defaultYear;
+            $endYear = $findYearNear($monthPositions[1]['pos']) ?? ($startYear + 1);
             $startDay = $findDayOnSameLine($monthPositions[0]['pos']) ?? 1;
             $endDay = $findDayOnSameLine($monthPositions[1]['pos'])
-                ?? (int) date('t', mktime(0, 0, 0, $endMonth, 1, $year));
-            $result['start'] = sprintf('%04d-%02d-%02d', $year, $startMonth, $startDay);
-            $result['end'] = sprintf('%04d-%02d-%02d', $year, $endMonth, $endDay);
+                ?? (int) date('t', mktime(0, 0, 0, $endMonth, 1, $endYear));
+            $result['start'] = sprintf('%04d-%02d-%02d', $startYear, $startMonth, $startDay);
+            $result['end'] = sprintf('%04d-%02d-%02d', $endYear, $endMonth, $endDay);
         } else {
+            // Un seul mois lisible — c'est quasi toujours la ligne "AU"
+            // (fin). L'OCR aura garbled la ligne "DU" (ex. "cciobr" pour
+            // "octobre"). On balaie les années [20\d\d] dans la fenêtre
+            // pour trouver une paire year, year+1 ; sinon on infère
+            // start = même mois, année-1.
             $foundMonth = $monthPositions[0]['month'];
+            $foundYear = $findYearNear($monthPositions[0]['pos']) ?? $defaultYear;
             $endDay = $findDayOnSameLine($monthPositions[0]['pos'])
-                ?? (int) date('t', mktime(0, 0, 0, $foundMonth, 1, $year));
-            $result['end'] = sprintf('%04d-%02d-%02d', $year, $foundMonth, $endDay);
+                ?? (int) date('t', mktime(0, 0, 0, $foundMonth, 1, $foundYear));
+            $result['end'] = sprintf('%04d-%02d-%02d', $foundYear, $foundMonth, $endDay);
 
-            $monthLineStart = (int) strrpos(mb_substr($chunk, 0, $monthPositions[0]['pos']), "\n");
-            $startDay = null;
-            foreach ($allDays as $dd) {
-                if ($dd['pos'] < $monthLineStart) {
-                    $startDay = $dd['day'];
-                    break;
+            $startYear = null;
+            if (preg_match_all('/\b(20[12]\d)\d?\b/u', $chunk, $ymAll)) {
+                $years = array_values(array_unique(array_map('intval', $ymAll[1])));
+                sort($years);
+                foreach ($years as $yr) {
+                    if ($yr + 1 === $foundYear) {
+                        $startYear = $yr;
+                        break;
+                    }
                 }
             }
-            if ($startDay && $contextMonth) {
-                $result['start'] = sprintf('%04d-%02d-%02d', $year, $contextMonth, $startDay);
-            }
+            $startYear = $startYear ?? ($foundYear - 1);
+            $result['start'] = sprintf('%04d-%02d-%02d', $startYear, $foundMonth, 1);
         }
 
         return $result;
