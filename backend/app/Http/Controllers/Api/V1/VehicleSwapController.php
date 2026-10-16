@@ -523,18 +523,42 @@ class VehicleSwapController extends Controller
         $elapsedDays = max(0, min($totalDays, $totalDays - $remainingDays));
         $pivot = $today->greaterThan($startDay) ? ($today->lessThan($endDay) ? $today : $endDay) : $startDay;
 
-        // Tarif journalier facturé sur l'ancien véhicule. Source :
-        //   - réservation → reservation.daily_rate (agent-typed).
-        //   - contrat     → contract.base_amount / total_days (le contrat
-        //     ne stocke pas de daily_rate, il stocke le TTC de la période).
-        // On tombe à 0 si rien n'est connu — l'UI affichera 0 au lieu de
-        // laisser `Tarif / jour` ET `Sous-total` à vide.
+        // Tarif journalier facturé sur l'ancien véhicule.
+        //   - Priorité 1 : reservation.daily_rate si typée par l'agent.
+        //   - Priorité 2 : contrat lié à la réservation (base_amount / total_days)
+        //                  — case nominale puisque la réservation ne stocke
+        //                  presque jamais le tarif (règle "no vehicle tarif").
+        //   - Priorité 3 : $contract direct quand le swap part d'un contrat.
+        //   - Sinon       : 0 (l'UI affichera 0 au lieu de rester vide).
         $oldDailyRate = 0.0;
         if (isset($reservation) && $reservation->daily_rate !== null) {
             $oldDailyRate = (float) $reservation->daily_rate;
-        } elseif (isset($contract) && $contract->base_amount !== null && $totalDays > 0) {
-            $oldDailyRate = round(((float) $contract->base_amount) / $totalDays, 2);
+        } else {
+            $sourceContract = $contract ?? null;
+            if ($sourceContract === null && isset($reservation)) {
+                $sourceContract = Contract::withoutGlobalScopes()
+                    ->where('customer_id', $reservation->customer_id)
+                    ->where('vehicle_id', $reservation->vehicle_id)
+                    ->whereNotIn('status', ['cancelled', 'terminated'])
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+            if ($sourceContract) {
+                if ($sourceContract->base_amount !== null && $totalDays > 0) {
+                    $oldDailyRate = round(((float) $sourceContract->base_amount) / $totalDays, 2);
+                } elseif ($sourceContract->monthly_payment !== null) {
+                    // LLD : base_amount nulle, le prix mensuel est renseigné.
+                    $oldDailyRate = round(((float) $sourceContract->monthly_payment) / 30, 2);
+                }
+            }
         }
+        \Log::info('VehicleSwap.oldDailyRate', [
+            'source' => $data,
+            'reservation_daily_rate' => isset($reservation) ? $reservation->daily_rate : null,
+            'contract_base_amount' => isset($contract) ? $contract->base_amount : null,
+            'total_days' => $totalDays,
+            'old_daily_rate' => $oldDailyRate,
+        ]);
 
         return ApiResponse::success([
             'current_vehicle' => $currentVehicle ? $this->formatVehicleForSwap($currentVehicle, ['available' => true, 'reasons' => []]) : null,
