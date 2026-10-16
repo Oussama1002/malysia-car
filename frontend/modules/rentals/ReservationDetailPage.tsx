@@ -79,6 +79,8 @@ export const ReservationDetailPage: React.FC = () => {
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [checkOutOpen, setCheckOutOpen] = useState(false);
+  const [checkInOpen, setCheckInOpen] = useState(false);
 
   const detailQ = useQuery({
     queryKey: ['reservation', rid],
@@ -335,13 +337,13 @@ export const ReservationDetailPage: React.FC = () => {
           {!['cancelled', 'closed'].includes(status) && (
             <>
               <button
-                onClick={() => setActiveTab('checkout')}
+                onClick={() => setCheckOutOpen(true)}
                 className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-emerald-700 shrink-0"
               >
                 Check-Out
               </button>
               <button
-                onClick={() => setActiveTab('checkin')}
+                onClick={() => setCheckInOpen(true)}
                 className="rounded-lg bg-cyan-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-cyan-700 shrink-0"
               >
                 Check-In
@@ -543,6 +545,32 @@ export const ReservationDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Check-Out / Check-In drawers (reusing the existing tab components) ── */}
+      <DrawerPanel open={checkOutOpen} title="Check-Out" onClose={() => setCheckOutOpen(false)} widthClass="max-w-3xl">
+        {rid && (
+          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Chargement…</div>}>
+            <TabCheckOut
+              reservationId={rid}
+              reports={d?.handover_reports ?? []}
+              franchiseDue={Number(d?.contract?.deposit_amount ?? 0)}
+              onRefresh={invalidate}
+            />
+          </Suspense>
+        )}
+      </DrawerPanel>
+      <DrawerPanel open={checkInOpen} title="Check-In" onClose={() => setCheckInOpen(false)} widthClass="max-w-3xl">
+        {rid && (
+          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Chargement…</div>}>
+            <TabCheckIn
+              reservationId={rid}
+              reports={d?.handover_reports ?? []}
+              damagesCount={(d?.damage_reports ?? []).length}
+              onRefresh={invalidate}
+            />
+          </Suspense>
+        )}
+      </DrawerPanel>
 
       {/* ── Vehicle swap wizard (6-step flow with period-split financial impact) ── */}
       <VehicleSwapWizard
