@@ -43,10 +43,10 @@ const AVAILABILITY_REASON_FR: Record<string, string> = {
 };
 
 const VEHICLE_TABS = [
+  { key: 'all',         label: 'Tous' },
   { key: 'recommended', label: 'Recommandés' },
   { key: 'upgrade',     label: 'Catégorie supérieure' },
   { key: 'downgrade',   label: 'Catégorie inférieure' },
-  { key: 'all',         label: 'Tous' },
 ] as const;
 
 type FinancialAction = 'charge' | 'free_upgrade' | 'refund' | 'ignore';
@@ -89,7 +89,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
   const qc = useQueryClient();
   const [stepIdx, setStepIdx] = useState(0);
   const [form, setForm] = useState<WizardState>(INITIAL_STATE);
-  const [vehicleTab, setVehicleTab] = useState<string>('recommended');
+  const [vehicleTab, setVehicleTab] = useState<string>('all');
   const [vehicleSearch, setVehicleSearch] = useState('');
   // Opens the price popup after a vehicle card is clicked, keeping the pick
   // and the daily rate decision together instead of making the agent hunt
@@ -105,7 +105,7 @@ export const VehicleSwapWizard: React.FC<VehicleSwapWizardProps> = ({
     if (open) {
       setStepIdx(0);
       setForm(INITIAL_STATE);
-      setVehicleTab('recommended');
+      setVehicleTab('all');
       setVehicleSearch('');
       setPricePopup(null);
       setError(null);
