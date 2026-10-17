@@ -143,6 +143,7 @@ class _ReservationDetailScreenState
                             .where((p) => p.type == 'caution')
                             .toList(),
                         vehicleId: d.reservation.vehicleId,
+                        handoverReports: d.handoverReports,
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),
@@ -154,6 +155,7 @@ class _ReservationDetailScreenState
                             .where((p) => p.type == 'caution')
                             .toList(),
                         vehicleId: d.reservation.vehicleId,
+                        handoverReports: d.handoverReports,
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),
