@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { FranchisePanel } from './FranchisePanel';
 import { VehicleHandoverDocs } from './VehicleHandoverDocs';
+import { HandoverPhotoZones } from './HandoverPhotoZones';
 
 interface Report {
   id: string;
@@ -158,21 +159,8 @@ const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0,
           </div>
         </div>
 
-        {/* Photo zones */}
-        <div className="mt-4">
-          <label className="mb-2 block text-[10px] font-bold text-slate-400">Photos du véhicule</label>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {PHOTO_ZONES.map((zone) => (
-              <div
-                key={zone}
-                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 p-3 text-center hover:border-slate-300 cursor-pointer"
-              >
-                <div className="h-6" />
-                <div className="mt-1 text-[10px] font-bold text-slate-400">{zone}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Photo zones — chaque vignette prend la caméra et upload. */}
+        <HandoverPhotoZones vehicleId={vehicleId} kind="checkin" />
 
         <div className="mt-4">
           <label className="mb-1 block text-[10px] font-bold text-slate-400">Signature client</label>

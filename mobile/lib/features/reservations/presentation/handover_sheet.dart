@@ -348,6 +348,29 @@ class _HandoverSheetState extends ConsumerState<HandoverSheet> {
         );
         if (picked != null) {
           setState(() => _photos[zone] = picked);
+          // Upload immédiat sur le dossier du véhicule — même catégorie
+          // "handover_photo" avec document_number = zone (comme sur le web).
+          final vehicleId = widget.vehicleId;
+          if (vehicleId != null && vehicleId.isNotEmpty) {
+            try {
+              await ref.read(entityDocumentsRepoProvider).upload(
+                    entityType: 'vehicle',
+                    entityId: vehicleId,
+                    filePath: picked.path,
+                    fileName: picked.name,
+                    category: 'handover_photo',
+                    documentNumber: zone,
+                    notes: widget.mode == HandoverMode.checkOut
+                        ? 'Check-Out'
+                        : 'Check-In',
+                  );
+              ref.invalidate(
+                  entityDocumentsProvider(('vehicle', vehicleId)));
+            } catch (_) {
+              // Silencieux : la photo reste visible localement et
+              // l'agent peut retenter via le centre documentaire.
+            }
+          }
         }
       },
       child: Container(
