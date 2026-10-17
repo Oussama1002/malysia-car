@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { FranchisePanel } from './FranchisePanel';
-import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
+import { VehicleHandoverDocs } from './VehicleHandoverDocs';
 
 interface Report {
   id: string;
@@ -215,10 +215,8 @@ const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0,
         <FranchisePanel reservationId={reservationId} mode="settle" damagesCount={damagesCount} />
       )}
 
-      {/* Documents véhicule — on vérifie les papiers avant/après le retour. */}
-      {vehicleId && (
-        <EntityDocuments entityType="vehicle" entityId={vehicleId} title="Documents véhicule" />
-      )}
+      {/* Documents véhicule — on vérifie les papiers ; grille guidée si vide. */}
+      {vehicleId && <VehicleHandoverDocs vehicleId={vehicleId} />}
     </div>
   );
 };

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { FranchisePanel, useDeposits } from './FranchisePanel';
-import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
+import { VehicleHandoverDocs } from './VehicleHandoverDocs';
 
 interface Report {
   id: string;
@@ -95,10 +95,9 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0
         <FranchisePanel reservationId={reservationId} dueAmount={franchiseDue} mode="collect" />
       )}
 
-      {/* Documents véhicule déjà au dossier + ajout rapide (photo possible via le file input). */}
-      {vehicleId && (
-        <EntityDocuments entityType="vehicle" entityId={vehicleId} title="Documents véhicule" />
-      )}
+      {/* Documents véhicule — grille guidée (5 pièces) si aucun au dossier,
+          sinon liste standard du centre documentaire. */}
+      {vehicleId && <VehicleHandoverDocs vehicleId={vehicleId} />}
 
       {/* Existing pickup records */}
       {pickups.length > 0 && (

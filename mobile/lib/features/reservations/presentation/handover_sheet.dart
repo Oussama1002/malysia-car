@@ -689,10 +689,7 @@ class _VehicleDocumentsSectionState
             error: (e, _) => Text('Erreur : $e',
                 style: const TextStyle(fontSize: 11, color: Colors.redAccent)),
             data: (docs) => docs.isEmpty
-                ? const Text(
-                    'Aucun document — prenez une photo pour l\'ajouter au dossier.',
-                    style: TextStyle(fontSize: 11.5, color: Colors.black45),
-                  )
+                ? _emptyStarterGrid()
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -703,6 +700,108 @@ class _VehicleDocumentsSectionState
         ],
       ),
     );
+  }
+
+  Widget _emptyStarterGrid() {
+    const slots = <(String, String, String)>[
+      ('carte_grise_recto', 'Carte grise — Recto', 'Immatriculation, 1ère mise en circulation'),
+      ('carte_grise_verso', 'Carte grise — Verso', 'Marque, modèle, châssis'),
+      ('insurance', 'Assurance', 'Attestation en cours de validité'),
+      ('circulation_authorization', 'Autorisation de circulation', 'Autorisation / vignette TSAV'),
+      ('technical_inspection', 'Visite technique', 'Certificat de visite technique'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 6),
+          child: Text(
+            'Aucun document au dossier. Ajoutez au minimum ces pièces avant de remettre le véhicule.',
+            style: TextStyle(fontSize: 11.5, color: Colors.black54),
+          ),
+        ),
+        for (final s in slots)
+          _starterSlotTile(category: s.$1, label: s.$2, desc: s.$3),
+      ],
+    );
+  }
+
+  Widget _starterSlotTile({
+    required String category,
+    required String label,
+    required String desc,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 12)),
+                Text(desc,
+                    style: const TextStyle(
+                        fontSize: 10.5, color: Colors.black54)),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Prendre une photo',
+            icon: const Icon(Icons.photo_camera_outlined, size: 20),
+            onPressed: _uploading
+                ? null
+                : () => _pickAndUploadCategory(ImageSource.camera, category),
+          ),
+          IconButton(
+            tooltip: 'Choisir dans la galerie',
+            icon: const Icon(Icons.photo_library_outlined, size: 20),
+            onPressed: _uploading
+                ? null
+                : () => _pickAndUploadCategory(ImageSource.gallery, category),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadCategory(ImageSource source, String category) async {
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      final picked =
+          await ImagePicker().pickImage(source: source, imageQuality: 85);
+      if (picked == null) {
+        setState(() => _uploading = false);
+        return;
+      }
+      await ref.read(entityDocumentsRepoProvider).upload(
+            entityType: 'vehicle',
+            entityId: widget.vehicleId,
+            filePath: picked.path,
+            fileName: picked.name,
+            category: category,
+          );
+      ref.invalidate(entityDocumentsProvider(('vehicle', widget.vehicleId)));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document ajouté au véhicule.')),
+      );
+    } catch (e) {
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
   }
 
   Widget _docRow(DocumentDto d, DateFormat dateFmt) {
