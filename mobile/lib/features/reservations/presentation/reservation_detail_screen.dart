@@ -9,6 +9,7 @@ import '../../contracts/presentation/contract_detail_screen.dart';
 import '../../documents/presentation/invoice_detail_screen.dart';
 import 'handover_sheet.dart';
 import 'new_contract_from_reservation_screen.dart';
+import 'payment_sheet.dart';
 import 'vehicle_swap_sheet.dart';
 
 /// Fiche réservation — reproduit `ReservationDetailPage.tsx` du web :
@@ -159,8 +160,25 @@ class _ReservationDetailScreenState
                         onDone: () =>
                             ref.invalidate(reservationDetailProvider(widget.id)),
                       ),
-                  onAddPayment: () =>
-                      setState(() => _tab = _Tab.payments),
+                  onAddPayment: () {
+                    final cid = d.reservation.customerId;
+                    if (cid == null || cid.isEmpty) return;
+                    final balance = d.totals != null
+                        ? (d.totals!.expected - d.totals!.paid)
+                        : null;
+                    PaymentSheet.show(
+                      context,
+                      customerId: cid,
+                      reservationId: widget.id,
+                      vehicleId: d.reservation.vehicleId,
+                      invoiceId:
+                          d.invoices.isNotEmpty ? d.invoices.first.id : null,
+                      reservationBalance:
+                          (balance != null && balance > 0) ? balance : null,
+                      onDone: () =>
+                          ref.invalidate(reservationDetailProvider(widget.id)),
+                    );
+                  },
                   onInvoice: () => setState(() => _tab = _Tab.invoices),
                 ),
                 const SizedBox(height: 10),
