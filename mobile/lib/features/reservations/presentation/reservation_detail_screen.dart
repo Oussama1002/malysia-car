@@ -606,7 +606,7 @@ class _QuickActions extends StatelessWidget {
       actions.add(_mini('Check-In', const Color(0xFFB08D57), onCheckin));
       actions.add(_mini('+ Paiement', const Color(0xFF8B5CF6), onAddPayment));
       actions.add(_mini('Changer véhicule', const Color(0xFF6366F1), onVehicleSwap));
-      actions.add(_miniOutline('Générer facture', onInvoice));
+      actions.add(_miniOutline('Facture', onInvoice));
       actions.add(_miniOutline('Annuler', onCancel,
           borderColor: const Color(0xFFFECACA),
           foregroundColor: const Color(0xFFB91C1C)));
