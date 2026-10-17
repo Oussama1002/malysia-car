@@ -169,13 +169,6 @@ const TabCheckOut: React.FC<Props> = ({ reservationId, reports, franchiseDue = 0
         {/* Photo zones — chaque vignette prend la caméra et upload. */}
         <HandoverPhotoZones vehicleId={vehicleId} kind="checkout" />
 
-        <div className="mt-4">
-          <label className="mb-1 block text-[10px] font-bold text-slate-400">Signature client</label>
-          <div className="h-24 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400">
-            Zone de signature (bientôt disponible)
-          </div>
-        </div>
-
         {pickupError && (
           <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{pickupError}</div>
         )}

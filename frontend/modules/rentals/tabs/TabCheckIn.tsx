@@ -162,13 +162,6 @@ const TabCheckIn: React.FC<Props> = ({ reservationId, reports, damagesCount = 0,
         {/* Photo zones — chaque vignette prend la caméra et upload. */}
         <HandoverPhotoZones vehicleId={vehicleId} kind="checkin" />
 
-        <div className="mt-4">
-          <label className="mb-1 block text-[10px] font-bold text-slate-400">Signature client</label>
-          <div className="h-24 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400">
-            Zone de signature (bientôt disponible)
-          </div>
-        </div>
-
         <div className="mt-4 flex justify-end">
           <button
             onClick={() => returnM.mutate()}

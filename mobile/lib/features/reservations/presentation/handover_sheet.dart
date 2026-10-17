@@ -406,26 +406,6 @@ class _HandoverSheetState extends ConsumerState<HandoverSheet> {
     );
   }
 
-  Widget _signaturePlaceholder() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _formSectionTitle('Signature client'),
-        const SizedBox(height: 6),
-        Container(
-          height: 70,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.black26, width: 1.5),
-          ),
-          alignment: Alignment.center,
-          child: const Text('Zone de signature (bientôt disponible)',
-              style: TextStyle(fontSize: 11, color: Colors.black45)),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // Même structure que TabCheckOut / TabCheckIn côté web :
@@ -559,8 +539,6 @@ class _HandoverSheetState extends ConsumerState<HandoverSheet> {
                     ),
                     const SizedBox(height: 14),
                     _photoZonesGrid(),
-                    const SizedBox(height: 14),
-                    _signaturePlaceholder(),
                     if (widget.vehicleId != null &&
                         widget.vehicleId!.isNotEmpty) ...[
                       const SizedBox(height: 14),
