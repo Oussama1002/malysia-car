@@ -82,6 +82,7 @@ export const ReservationDetailPage: React.FC = () => {
   const [checkOutOpen, setCheckOutOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [invoiceDrawerOpen, setInvoiceDrawerOpen] = useState(false);
+  const [extensionOpen, setExtensionOpen] = useState(false);
 
   const detailQ = useQuery({
     queryKey: ['reservation', rid],
@@ -356,6 +357,12 @@ export const ReservationDetailPage: React.FC = () => {
                 Paiement
               </button>
               <button
+                onClick={() => setExtensionOpen(true)}
+                className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-black text-white hover:bg-amber-700 shrink-0"
+              >
+                Prolongation
+              </button>
+              <button
                 onClick={() => setInvoiceDrawerOpen(true)}
                 className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700 hover:bg-slate-50 shrink-0"
               >
@@ -432,7 +439,7 @@ export const ReservationDetailPage: React.FC = () => {
             {activeTab === 'contract'   && <TabContract reservation={r} />}
             {activeTab === 'checkout'   && <TabCheckOut reservationId={rid!} reports={d?.handover_reports ?? []} franchiseDue={Number(d?.contract?.deposit_amount ?? 0)} payments={d?.payments ?? []} vehicleId={d?.reservation?.vehicle_id ?? d?.vehicle_id ?? ''} onRefresh={invalidate} />}
             {activeTab === 'checkin'    && <TabCheckIn reservationId={rid!} reports={d?.handover_reports ?? []} damagesCount={(d?.damage_reports ?? []).length} payments={d?.payments ?? []} vehicleId={d?.reservation?.vehicle_id ?? d?.vehicle_id ?? ''} onRefresh={invalidate} />}
-            {activeTab === 'extensions' && <TabExtensions reservationId={rid!} extensions={d?.extensions ?? []} onRefresh={invalidate} />}
+            {activeTab === 'extensions' && <TabExtensions reservationId={rid!} extensions={d?.extensions ?? []} reservation={r} currentTotal={Number(d?.totals?.estimated_price ?? 0) + Number(d?.totals?.extensions_total ?? 0) + Number(d?.totals?.damages_total ?? 0)} fallbackDailyRate={Number(d?.totals?.daily_rate ?? 0)} onRefresh={invalidate} />}
             {activeTab === 'damages'    && <TabDamages reservationId={rid!} damages={d?.damage_reports ?? []} onRefresh={invalidate} />}
             {activeTab === 'payments'   && <TabPayments data={d} onAddPayment={openPaymentDrawer} />}
             {activeTab === 'invoices'   && <TabInvoices reservationId={rid!} invoices={d?.invoices ?? []} data={d} onRefresh={invalidate} />}
@@ -546,6 +553,23 @@ export const ReservationDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Prolongation drawer (same shell as Check-Out / Facture) ── */}
+      <DrawerPanel open={extensionOpen} title="Nouvelle prolongation" onClose={() => setExtensionOpen(false)} widthClass="max-w-2xl">
+        {rid && (
+          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Chargement…</div>}>
+            <TabExtensions
+              compact
+              reservationId={rid}
+              extensions={d?.extensions ?? []}
+              reservation={r}
+              currentTotal={Number(d?.totals?.estimated_price ?? 0) + Number(d?.totals?.extensions_total ?? 0) + Number(d?.totals?.damages_total ?? 0)}
+              fallbackDailyRate={Number(d?.totals?.daily_rate ?? 0)}
+              onRefresh={invalidate}
+            />
+          </Suspense>
+        )}
+      </DrawerPanel>
 
       {/* ── Facture drawer (reuses TabInvoices which embeds the full invoice detail) ── */}
       <DrawerPanel open={invoiceDrawerOpen} title="Factures de la réservation" onClose={() => setInvoiceDrawerOpen(false)} widthClass="max-w-4xl">

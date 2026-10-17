@@ -7,6 +7,7 @@ import '../data/reservation_dto.dart';
 import '../data/reservations_repo.dart';
 import '../../contracts/presentation/contract_detail_screen.dart';
 import '../../documents/presentation/invoice_detail_screen.dart';
+import 'extension_sheet.dart';
 import 'handover_sheet.dart';
 import 'new_contract_from_reservation_screen.dart';
 import 'payment_sheet.dart';
@@ -180,6 +181,20 @@ class _ReservationDetailScreenState
                     );
                   },
                   onInvoice: () => setState(() => _tab = _Tab.invoices),
+                  onExtension: () {
+                    final totals = d.totals;
+                    final currentTotal = totals != null ? totals.expected : 0;
+                    ExtensionSheet.show(
+                      context,
+                      reservationId: widget.id,
+                      startAt: d.reservation.startAt,
+                      endAt: d.reservation.endAt,
+                      dailyRate: totals?.dailyRate ?? 0,
+                      currentTotal: currentTotal.toDouble(),
+                      onDone: () =>
+                          ref.invalidate(reservationDetailProvider(widget.id)),
+                    );
+                  },
                 ),
                 const SizedBox(height: 10),
                 _TabsBar(current: _tab, onChanged: (t) => setState(() => _tab = t)),
@@ -566,6 +581,7 @@ class _QuickActions extends StatelessWidget {
     required this.onCheckin,
     required this.onAddPayment,
     required this.onInvoice,
+    required this.onExtension,
   });
 
   final ReservationDetailDto d;
@@ -583,6 +599,7 @@ class _QuickActions extends StatelessWidget {
   final VoidCallback onCheckin;
   final VoidCallback onAddPayment;
   final VoidCallback onInvoice;
+  final VoidCallback onExtension;
 
   @override
   Widget build(BuildContext context) {
@@ -606,6 +623,7 @@ class _QuickActions extends StatelessWidget {
       actions.add(_mini('Check-In', const Color(0xFFB08D57), onCheckin));
       actions.add(_mini('+ Paiement', const Color(0xFF8B5CF6), onAddPayment));
       actions.add(_mini('Changer véhicule', const Color(0xFF6366F1), onVehicleSwap));
+      actions.add(_mini('Prolongation', const Color(0xFFF59E0B), onExtension));
       actions.add(_miniOutline('Facture', onInvoice));
       actions.add(_miniOutline('Annuler', onCancel,
           borderColor: const Color(0xFFFECACA),
