@@ -1,5 +1,6 @@
 import 'dart:io' show File;
 import 'dart:math';
+import 'dart:typed_data' show Uint8List;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../../core/auth/user_repo.dart';
 import '../../contracts/data/contracts_repo.dart';
 import '../../contracts/presentation/contract_paper_preview.dart';
 import '../../contracts/presentation/contract_pdf_preview_screen.dart';
+import '../../contracts/presentation/signature_pad.dart';
 import '../../customers/data/customer_dto.dart';
 import '../../customers/data/customers_repo.dart';
 import '../../documents/data/document_dto.dart';
@@ -85,6 +87,11 @@ class _PaymentEntry {
 class _NewContractFromReservationScreenState
     extends ConsumerState<NewContractFromReservationScreen> {
   _Step _step = _Step.client;
+  // Signature électronique du client sur l'étape Validation. Les bytes
+  // sont capturés depuis le SignaturePad et uploadés comme document
+  // 'signature' sur le contrat créé.
+  final GlobalKey<SignaturePadState> _signatureKey = GlobalKey<SignaturePadState>();
+  bool _signed = false;
   bool _busy = false;
   bool _prefilled = false;
   String? _prefilledNumber;
@@ -432,6 +439,34 @@ class _NewContractFromReservationScreenState
               .postData('/contracts/$contractId/activate', body: const {});
         } catch (_) {
           // Contrat déjà Approuvé via les paiements — pas d'alerte.
+        }
+      }
+
+      // Signature électronique : si l'agent a signé sur l'étape Validation,
+      // on exporte le PNG et on l'upload comme document du contrat avec
+      // category='signature' pour que la fiche contrat et le PDF
+      // regénéré y aient accès. Non bloquant.
+      if (contractId != null && contractId.isNotEmpty && _signed) {
+        try {
+          final bytes = await _signatureKey.currentState?.exportPng();
+          if (bytes != null) {
+            final multi = MultipartFile.fromBytes(
+              bytes,
+              filename: 'signature-contrat.png',
+            );
+            await ref.read(apiClientProvider).raw.post(
+                  '/entities/contract/$contractId/documents',
+                  data: FormData.fromMap({
+                    'file': multi,
+                    'category': 'signature',
+                    'title': 'Signature électronique client',
+                    'notes': 'Capturée depuis le mobile',
+                  }),
+                );
+          }
+        } catch (_) {
+          // Non bloquant — l'agent pourra la ré-attacher depuis la fiche
+          // contrat si l'upload a échoué.
         }
       }
 
@@ -1426,7 +1461,42 @@ class _NewContractFromReservationScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Section('Aperçu du contrat'),
-        ContractPaperPreview(values: paperValues, papers: paperFlags),
+        Stack(
+          children: [
+            ContractPaperPreview(values: paperValues, papers: paperFlags),
+            if (_signed)
+              Positioned(
+                right: 12,
+                bottom: 24,
+                child: FutureBuilder<Uint8List?>(
+                  future: _signatureKey.currentState?.exportPng(),
+                  builder: (_, snap) {
+                    if (snap.data == null) return const SizedBox.shrink();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Image.memory(snap.data!,
+                              width: 110, height: 50, fit: BoxFit.contain),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text('Client — signé',
+                            style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF059669))),
+                      ],
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: 14),
         const _Section('Résumé du contrat avant signature'),
         Container(
@@ -1441,6 +1511,35 @@ class _NewContractFromReservationScreenState
               for (final r in rows) _ReviewRow(label: r.$1, value: r.$2),
             ],
           ),
+        ),
+        const SizedBox(height: 12),
+        const _Section('Signature électronique du client'),
+        SignaturePad(
+          key: _signatureKey,
+          onChanged: (hasStrokes) => setState(() => _signed = hasStrokes),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: () {
+                _signatureKey.currentState?.clear();
+                setState(() => _signed = false);
+              },
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Effacer'),
+            ),
+            const Spacer(),
+            if (_signed)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Text('✓ Signé',
+                    style: TextStyle(
+                        color: Color(0xFF059669),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12)),
+              ),
+          ],
         ),
         const SizedBox(height: 12),
         const _Section('Notes additionnelles'),
