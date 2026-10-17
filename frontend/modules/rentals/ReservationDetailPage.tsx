@@ -81,6 +81,7 @@ export const ReservationDetailPage: React.FC = () => {
   const [swapOpen, setSwapOpen] = useState(false);
   const [checkOutOpen, setCheckOutOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [invoiceDrawerOpen, setInvoiceDrawerOpen] = useState(false);
 
   const detailQ = useQuery({
     queryKey: ['reservation', rid],
@@ -355,7 +356,7 @@ export const ReservationDetailPage: React.FC = () => {
                 Paiement
               </button>
               <button
-                onClick={() => setActiveTab('invoices')}
+                onClick={() => setInvoiceDrawerOpen(true)}
                 className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700 hover:bg-slate-50 shrink-0"
               >
                 Facture
@@ -545,6 +546,15 @@ export const ReservationDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Facture drawer (reuses TabInvoices which embeds the full invoice detail) ── */}
+      <DrawerPanel open={invoiceDrawerOpen} title="Factures de la réservation" onClose={() => setInvoiceDrawerOpen(false)} widthClass="max-w-4xl">
+        {rid && (
+          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Chargement…</div>}>
+            <TabInvoices reservationId={rid} invoices={d?.invoices ?? []} data={d} onRefresh={invalidate} />
+          </Suspense>
+        )}
+      </DrawerPanel>
 
       {/* ── Check-Out / Check-In drawers (reusing the existing tab components) ── */}
       <DrawerPanel open={checkOutOpen} title="Check-Out" onClose={() => setCheckOutOpen(false)} widthClass="max-w-3xl">
