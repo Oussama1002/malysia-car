@@ -1134,29 +1134,37 @@ class _VehiclePickerSheetState extends ConsumerState<_VehiclePickerSheet> {
                                   ? Icons.check_box
                                   : Icons.check_box_outline_blank)
                               : Icons.directions_car),
-                          title: Text(v.label,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700)),
-                          subtitle: Text(v.registration),
-                          trailing: Row(
+                          title: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (v.isSubRented)
+                              Flexible(
+                                child: Text(v.label,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                              if (v.isSubRented) ...[
+                                const SizedBox(width: 6),
                                 Container(
-                                  margin: const EdgeInsets.only(right: 6),
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 2),
+                                      horizontal: 6, vertical: 1),
                                   decoration: BoxDecoration(
                                     color: Colors.amber.shade100,
-                                    borderRadius:
-                                        BorderRadius.circular(999),
+                                    borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: const Text('SL',
                                       style: TextStyle(
                                           fontSize: 10,
-                                          fontWeight: FontWeight.w800,
+                                          fontWeight: FontWeight.w900,
                                           color: Colors.orange)),
                                 ),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(v.registration),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 2),
