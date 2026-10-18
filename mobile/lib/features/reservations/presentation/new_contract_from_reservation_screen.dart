@@ -1461,41 +1461,13 @@ class _NewContractFromReservationScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Section('Aperçu du contrat'),
-        Stack(
-          children: [
-            ContractPaperPreview(values: paperValues, papers: paperFlags),
-            if (_signed)
-              Positioned(
-                right: 12,
-                bottom: 24,
-                child: FutureBuilder<Uint8List?>(
-                  future: _signatureKey.currentState?.exportPng(),
-                  builder: (_, snap) {
-                    if (snap.data == null) return const SizedBox.shrink();
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Image.memory(snap.data!,
-                              width: 110, height: 50, fit: BoxFit.contain),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text('Client — signé',
-                            style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF059669))),
-                      ],
-                    );
-                  },
-                ),
-              ),
-          ],
+        FutureBuilder<Uint8List?>(
+          future: _signed ? _signatureKey.currentState?.exportPng() : null,
+          builder: (_, snap) => ContractPaperPreview(
+            values: paperValues,
+            papers: paperFlags,
+            signaturePng: snap.data,
+          ),
         ),
         const SizedBox(height: 12),
         const _Section('Signature électronique du client'),

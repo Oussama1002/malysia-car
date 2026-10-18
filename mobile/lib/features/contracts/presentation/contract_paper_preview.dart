@@ -1,3 +1,5 @@
+import 'dart:typed_data' show Uint8List;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,13 +17,27 @@ class ContractPaperPreview extends ConsumerWidget {
     super.key,
     required this.values,
     this.papers,
+    this.signaturePng,
   });
 
   final Map<String, String?> values;
   final Map<String, bool>? papers;
 
+  /// PNG bytes de la signature client. Posés à l'emplacement
+  /// "Signature du Locataire" du formulaire (coordonnées en millimètres
+  /// relatives au format A4).
+  final Uint8List? signaturePng;
+
   static const double _a4WidthMm = 210;
   static const double _a4HeightMm = 297;
+
+  // Zone "Signature du Locataire" du modèle papier (approximation
+  // visuelle du tableau du bas). Si le backend finit par exposer ses
+  // propres coordonnées, remplacer ici.
+  static const double _signXmm = 60;
+  static const double _signYmm = 253;
+  static const double _signWmm = 50;
+  static const double _signHmm = 14;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -110,6 +126,17 @@ class ContractPaperPreview extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    if (signaturePng != null)
+                      Positioned(
+                        left: (_signXmm / _a4WidthMm) * pageWidth,
+                        top: (_signYmm / _a4HeightMm) * pageHeight,
+                        width: (_signWmm / _a4WidthMm) * pageWidth,
+                        height: (_signHmm / _a4HeightMm) * pageHeight,
+                        child: Image.memory(
+                          signaturePng!,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     for (final m in marks)
                       Positioned(
                         left: (m.xMm / _a4WidthMm) * pageWidth,
