@@ -82,7 +82,20 @@ class _ExtensionSheetState extends ConsumerState<ExtensionSheet> {
     return d > 0 ? d : 0;
   }
 
-  double get _autoAdditional => _addedDays * widget.dailyRate;
+  /// Tarif/jour fiable. Le backend `totals.daily_rate` renvoie parfois
+  /// le MONTANT TOTAL quand la réservation couvre un seul jour
+  /// (contract_total / 1 = contract_total). On préfère donc dériver le
+  /// tarif journalier localement à partir du total courant et de la
+  /// durée, puis on retombe sur le widget.dailyRate. L'auto-calcul ne
+  /// peut plus multiplier le total par les jours.
+  double get _reliableDailyRate {
+    final derived = (_totalDays > 0 && widget.currentTotal > 0)
+        ? widget.currentTotal / _totalDays
+        : 0.0;
+    return derived > 0 ? derived : widget.dailyRate;
+  }
+
+  double get _autoAdditional => _addedDays * _reliableDailyRate;
 
   double get _effectiveAdditional {
     final typed = double.tryParse(_amount.text.trim().replaceAll(',', '.'));
@@ -202,8 +215,8 @@ class _ExtensionSheetState extends ConsumerState<ExtensionSheet> {
                           _tile('Durée',
                               _totalDays > 0 ? '$_totalDays j' : '—'),
                           _tile('Tarif / jour',
-                              widget.dailyRate > 0
-                                  ? '${money.format(widget.dailyRate)} MAD'
+                              _reliableDailyRate > 0
+                                  ? '${money.format(_reliableDailyRate)} MAD'
                                   : '—'),
                         ],
                       ),
@@ -288,7 +301,7 @@ class _ExtensionSheetState extends ConsumerState<ExtensionSheet> {
                           labelText: 'Montant additionnel (MAD)',
                           helperText: _autoAdditional > 0
                               ? 'Auto : ${money.format(_autoAdditional)} '
-                                  '($_addedDays j × ${money.format(widget.dailyRate)})'
+                                  '($_addedDays j × ${money.format(_reliableDailyRate)})'
                               : null,
                           border: const OutlineInputBorder(),
                           isDense: true,

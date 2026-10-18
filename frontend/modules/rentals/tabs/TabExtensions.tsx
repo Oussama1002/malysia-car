@@ -61,7 +61,20 @@ const TabExtensions: React.FC<Props> = ({
   const totalDays = start && end
     ? Math.max(0, Math.ceil((end.getTime() - start.getTime()) / 86_400_000))
     : 0;
-  const dailyRate = Number(reservation?.daily_rate ?? 0) || Number(fallbackDailyRate) || 0;
+  // Tarif/jour fiable : la valeur backend `totals.daily_rate` sort parfois
+  // égale au MONTANT TOTAL quand la réservation couvre un seul jour
+  // (contract_total / 1 = contract_total). On préfère donc dériver le
+  // tarif journalier localement à partir du total courant et de la durée,
+  // puis on retombe sur le daily_rate explicite de la réservation, puis
+  // sur la valeur fournie en fallback. L'auto-calcul ne peut plus
+  // multiplier le total par les jours.
+  const derivedDaily = (currentTotal > 0 && totalDays > 0)
+    ? currentTotal / totalDays
+    : 0;
+  const dailyRate = derivedDaily
+    || Number(reservation?.daily_rate ?? 0)
+    || Number(fallbackDailyRate)
+    || 0;
 
   // Auto-calc : à chaque changement de new_end_at ou daily_rate on ré-estime
   // le montant additionnel (jours en plus × tarif/jour). L'agent peut
