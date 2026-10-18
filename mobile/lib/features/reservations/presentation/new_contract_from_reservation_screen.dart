@@ -1497,21 +1497,6 @@ class _NewContractFromReservationScreenState
               ),
           ],
         ),
-        const SizedBox(height: 14),
-        const _Section('Résumé du contrat avant signature'),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Theme.of(context).dividerColor),
-          ),
-          child: Column(
-            children: [
-              for (final r in rows) _ReviewRow(label: r.$1, value: r.$2),
-            ],
-          ),
-        ),
         const SizedBox(height: 12),
         const _Section('Signature électronique du client'),
         SignaturePad(
@@ -1540,6 +1525,21 @@ class _NewContractFromReservationScreenState
                         fontSize: 12)),
               ),
           ],
+        ),
+        const SizedBox(height: 14),
+        const _Section('Résumé du contrat avant signature'),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          child: Column(
+            children: [
+              for (final r in rows) _ReviewRow(label: r.$1, value: r.$2),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         const _Section('Notes additionnelles'),
