@@ -61,29 +61,41 @@ class SignaturePadState extends State<SignaturePad> {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: Colors.black26, width: 1.5),
         ),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanStart: (d) {
-            setState(() => _strokes.add(<Offset>[d.localPosition]));
-          },
-          onPanUpdate: (d) {
-            if (_strokes.isEmpty) return;
-            setState(() => _strokes.last.add(d.localPosition));
-          },
-          onPanEnd: (_) => widget.onChanged?.call(hasStrokes),
-          child: CustomPaint(
-            size: Size.infinite,
-            painter: _SignaturePainter(_strokes),
-            child: hasStrokes
-                ? null
-                : const Center(
-                    child: Text(
-                      'Signez ici',
-                      style: TextStyle(color: Colors.black26, fontSize: 12),
+        // Listener (pointer events bruts) plutôt que GestureDetector :
+        // onPanUpdate perd parfois le pointeur sur Flutter Web dans un
+        // SingleChildScrollView, et l'agent voit son trait s'arrêter dès
+        // qu'il bouge. Listener capture tous les PointerMoveEvent sans
+        // passer par l'arène des gestes, et il reste dans sa zone grâce
+        // à Builder + RenderBox.globalToLocal.
+        child: Builder(builder: (ctx) {
+          Offset local(Offset global) {
+            final box = ctx.findRenderObject() as RenderBox?;
+            return box == null ? global : box.globalToLocal(global);
+          }
+          return Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (e) => setState(
+                () => _strokes.add(<Offset>[local(e.position)])),
+            onPointerMove: (e) {
+              if (_strokes.isEmpty) return;
+              setState(() => _strokes.last.add(local(e.position)));
+            },
+            onPointerUp: (_) => widget.onChanged?.call(hasStrokes),
+            onPointerCancel: (_) => widget.onChanged?.call(hasStrokes),
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: _SignaturePainter(_strokes),
+              child: hasStrokes
+                  ? null
+                  : const Center(
+                      child: Text(
+                        'Signez ici',
+                        style: TextStyle(color: Colors.black26, fontSize: 12),
+                      ),
                     ),
-                  ),
-          ),
-        ),
+            ),
+          );
+        }),
       ),
     );
   }
