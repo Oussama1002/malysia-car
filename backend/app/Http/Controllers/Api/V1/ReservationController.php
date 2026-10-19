@@ -1164,11 +1164,19 @@ class ReservationController extends Controller
                 ?? 0
         );
 
-        // Allowed km: contract > reservation > company setting > default 250
+        // Allowed km (par jour) : le contrat stocke un volume TOTAL
+        // (kmInclMonth × durationMonths), donc on divise par les jours. Les
+        // 0 explicites sortent du chaînage ?? ("0 ?? …" aurait figé la
+        // valeur à zéro et le KPI aurait affiché "—").
+        $contractAllowedTotal = $linkedContract?->allowed_km;
+        $contractAllowedPerDay = ($contractAllowedTotal && $days > 0)
+            ? ((float) $contractAllowedTotal / $days)
+            : null;
+        $settingKm = $this->getSetting($companyId, 'contracts', 'default_km_per_day');
         $allowedKm = (float) (
-            ($linkedContract?->allowed_km)
-                ?? $reservation->allowed_km_per_day
-                ?? $this->getSetting($companyId, 'contracts', 'default_km_per_day')
+            ($contractAllowedPerDay ?: null)
+                ?? ($reservation->allowed_km_per_day ?: null)
+                ?? ((float) $settingKm ?: null)
                 ?? 250
         );
 

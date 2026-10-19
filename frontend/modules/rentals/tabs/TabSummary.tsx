@@ -45,7 +45,7 @@ const TabSummary: React.FC<Props> = ({ data }) => {
           { label: 'Payé', value: fmtMad(totals.paid), color: 'bg-emerald-50 text-emerald-700' },
           { label: 'Solde restant', value: fmtMad(balance), color: balance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700' },
           { label: "Franchise d'assurance", value: totals.deposit_amount ? fmtMad(totals.deposit_amount) : '—', color: 'bg-amber-50 text-amber-700' },
-          { label: 'Km inclus', value: totals.allowed_km ? `${totals.allowed_km} km/jour` : '—', color: 'bg-cyan-50 text-cyan-700' },
+          { label: 'Km inclus', value: totals.allowed_km ? `${Math.round(Number(totals.allowed_km)).toLocaleString('fr-MA')} km/jour` : '—', color: 'bg-cyan-50 text-cyan-700' },
           { label: 'Extensions', value: fmtMad(totals.extensions_total), color: 'bg-violet-50 text-violet-700' },
           { label: 'Dommages', value: fmtMad(totals.damages_total), color: 'bg-orange-50 text-orange-700' },
         ].map((c, i) => (
