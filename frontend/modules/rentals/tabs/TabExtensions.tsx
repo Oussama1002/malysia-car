@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { opsApi } from '@/services/opsApi';
 import { DateField } from '@/modules/shared/components/DateField';
@@ -87,6 +87,16 @@ const TabExtensions: React.FC<Props> = ({
     return d > 0 ? d : 0;
   }, [form.new_end_at, end]);
   const autoAdditional = addedDays * dailyRate;
+
+  // Pré-remplit le montant tant que l'agent n'a pas tapé une valeur manuelle.
+  // userEditedRef garde la trace d'une saisie explicite pour ne pas écraser.
+  const userEditedRef = useRef(false);
+  useEffect(() => {
+    if (userEditedRef.current) return;
+    const next = autoAdditional > 0 ? String(autoAdditional) : '';
+    setForm((s) => (s.additional_amount === next ? s : { ...s, additional_amount: next }));
+  }, [autoAdditional]);
+
   const typedAdditional = Number(form.additional_amount);
   const effectiveAdditional = form.additional_amount !== ''
     ? (Number.isFinite(typedAdditional) ? typedAdditional : 0)
@@ -102,6 +112,7 @@ const TabExtensions: React.FC<Props> = ({
       }),
     onSuccess: () => {
       onRefresh();
+      userEditedRef.current = false;
       setForm({ new_end_at: '', additional_amount: '', notes: '' });
       if (!compact) setOpen(false);
     },
@@ -150,7 +161,10 @@ const TabExtensions: React.FC<Props> = ({
           className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
           placeholder={autoAdditional ? String(autoAdditional) : '0'}
           value={form.additional_amount}
-          onChange={(e) => setForm((s) => ({ ...s, additional_amount: e.target.value }))}
+          onChange={(e) => {
+            userEditedRef.current = true;
+            setForm((s) => ({ ...s, additional_amount: e.target.value }));
+          }}
         />
       </div>
 
