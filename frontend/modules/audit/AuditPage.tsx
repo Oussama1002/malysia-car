@@ -115,6 +115,11 @@ function translateActionLabel(label: string | null | undefined, action: string):
     const to = STATUS_FR[m[2]] ?? m[2];
     return `Statut ${from} → ${to}`;
   }
+  // Backend parfois renvoie un libellé humanisé en anglais (ex. "Vehicle Swap
+  // Approved Instant") qui n'est pas une clé d'ACTION_FR. On préfère la
+  // traduction française de l'action brute si on la connaît, sinon on
+  // retombe sur le libellé fourni.
+  if (ACTION_FR[action]) return ACTION_FR[action];
   return ACTION_FR[label] ?? label;
 }
 
@@ -310,12 +315,18 @@ export const AuditPage: React.FC = () => {
           {
             key: 'a',
             header: 'Action',
-            render: (r) => (
-              <div className="flex flex-col">
-                <span className="font-semibold">{translateActionLabel(r.action_label, r.action)}</span>
-                <span className="text-[10px] uppercase text-slate-400">{ACTION_FR[r.action] ?? r.action}</span>
-              </div>
-            ),
+            render: (r) => {
+              const main = translateActionLabel(r.action_label, r.action);
+              const sub = ACTION_FR[r.action] ?? r.action;
+              return (
+                <div className="flex flex-col">
+                  <span className="font-semibold">{main}</span>
+                  {sub && sub !== main && (
+                    <span className="text-[10px] uppercase text-slate-400">{sub}</span>
+                  )}
+                </div>
+              );
+            },
           },
           {
             key: 'e',
