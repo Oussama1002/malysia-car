@@ -17,6 +17,7 @@ use App\Models\Reservation;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
 use App\Services\RentalAvailabilityService;
+use App\Services\ReservationInvoiceService;
 use App\Services\WalletService;
 use App\Support\PaymentMethodNormalizer;
 use Carbon\Carbon;
@@ -32,6 +33,7 @@ class ContractController extends Controller
         private readonly NotificationService $notifications,
         private readonly RentalAvailabilityService $rentalAvailability,
         private readonly WalletService $walletService,
+        private readonly ReservationInvoiceService $reservationInvoiceService,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -245,6 +247,29 @@ class ContractController extends Controller
         // Auto-create a reservation if none exists for this contract's customer+vehicle+period.
         // Business rule: every contract must have a matching reservation.
         $this->ensureReservationForContract($c, $request);
+
+        // Business rule: every contract must also have a Facture — the agent
+        // and the client get the same document on web and mobile without
+        // having to press a second button. Idempotent — reuses an existing
+        // invoice when one already covers the reservation.
+        try {
+            $linkedReservation = $c->reservation_id
+                ? Reservation::withoutGlobalScopes()->find($c->reservation_id)
+                : Reservation::withoutGlobalScopes()
+                    ->where('customer_id', $c->customer_id)
+                    ->where('vehicle_id', $c->vehicle_id)
+                    ->whereNotIn('status', ['cancelled'])
+                    ->orderByDesc('created_at')
+                    ->first();
+            if ($linkedReservation) {
+                $this->reservationInvoiceService->ensure($linkedReservation, auth()->id());
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('contract.auto_invoice_failed', [
+                'contract_id' => $c->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         if ((string) $c->status === 'pending_approval') {
             $this->notifications->notifyRoles(
@@ -509,6 +534,26 @@ class ContractController extends Controller
             legal: true,
             label: 'Contrat activé',
         );
+
+        // Filet de sécurité : si l'activation emprunte un chemin qui n'est
+        // pas passé par store() (contrat de brouillon activé plus tard), on
+        // ouvre la facture ici aussi. ensure() est idempotent — un appel
+        // supplémentaire sur une facture déjà émise n'en crée pas une
+        // deuxième.
+        try {
+            if ($updated->reservation_id) {
+                $linked = \App\Models\Reservation::withoutGlobalScopes()->find($updated->reservation_id);
+                if ($linked) {
+                    $this->reservationInvoiceService->ensure($linked, auth()->id());
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('contract.auto_invoice_failed_on_activate', [
+                'contract_id' => $updated->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $this->notifications->notifyRoles(
             roleCodes: ['AGENT_COMMERCIAL', 'COMPTABLE', 'DIRECTEUR', 'ADMIN'],
             category: 'contract.activated',
