@@ -85,17 +85,24 @@ const DocPreviewTile: React.FC<{
   onToggle: () => void;
 }> = ({ doc, checked, onToggle }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const isImage = (doc.mimeType ?? '').startsWith('image/');
-  const isPdf = (doc.mimeType ?? '').includes('pdf');
+  const mime = (doc.mimeType ?? '').toLowerCase();
+  const isImage = mime.startsWith('image/');
+  const isPdf = mime.includes('pdf');
 
   // Charge le fichier côté client (route protégée Sanctum) et transforme la
   // réponse en blob: URL — permet d'afficher la miniature en <img> ou
-  // <embed> sans exposer le token dans un href.
+  // <iframe> sans exposer le token dans un href. On tente systématiquement
+  // la requête, même quand le mime est inconnu (certaines pièces OCR n'ont
+  // pas mime_type en base) : si le blob est une image ou un PDF on le
+  // montre quand même.
   useEffect(() => {
-    if (!isImage && !isPdf) return;
     let revoked = false;
     let objectUrl: string | null = null;
+    setLoading(true);
+    setPreviewError(null);
+    setPreviewUrl(null);
     (async () => {
       try {
         const base = getApiBase();
@@ -114,15 +121,19 @@ const DocPreviewTile: React.FC<{
         if (!revoked) setPreviewUrl(objectUrl);
       } catch (e) {
         if (!revoked) setPreviewError(e instanceof Error ? e.message : 'Aperçu impossible');
+      } finally {
+        if (!revoked) setLoading(false);
       }
     })();
     return () => {
       revoked = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [doc.id, isImage, isPdf]);
+  }, [doc.id]);
 
   const label = CATEGORY_FR[doc.category ?? ''] ?? doc.title ?? doc.category ?? 'Document';
+  const showAsImage = isImage || (!isPdf && !!previewUrl && !mime);
+  const showAsPdf = isPdf;
 
   return (
     <label
@@ -130,24 +141,31 @@ const DocPreviewTile: React.FC<{
         checked ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-200 bg-white hover:border-slate-300'
       }`}
     >
-      <div className="relative mb-2 flex h-32 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-        {isImage && previewUrl && (
-          <img src={previewUrl} alt={label} className="h-full w-full object-cover" />
+      <div className="relative mb-2 flex h-40 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+        {loading && (
+          <div className="text-[11px] font-semibold text-slate-400">Chargement…</div>
         )}
-        {isPdf && previewUrl && (
-          <embed src={previewUrl} type="application/pdf" className="h-full w-full" />
+        {!loading && previewUrl && showAsImage && (
+          <img src={previewUrl} alt={label} className="h-full w-full object-contain" />
         )}
-        {!isImage && !isPdf && (
+        {!loading && previewUrl && showAsPdf && (
+          <iframe
+            src={`${previewUrl}#toolbar=0&navpanes=0&view=FitH`}
+            title={label}
+            className="h-full w-full"
+            style={{ border: 0 }}
+          />
+        )}
+        {!loading && !previewUrl && !previewError && (
           <div className="text-center text-[11px] font-semibold text-slate-500">
             <div className="text-2xl">📄</div>
             <div className="mt-1">{doc.mimeType ?? 'Fichier'}</div>
           </div>
         )}
-        {(isImage || isPdf) && !previewUrl && !previewError && (
-          <div className="text-[11px] text-slate-400">Chargement…</div>
-        )}
-        {previewError && (
-          <div className="px-2 text-center text-[10px] font-semibold text-rose-500">{previewError}</div>
+        {!loading && previewError && (
+          <div className="px-2 text-center text-[10px] font-semibold text-rose-500">
+            Aperçu indisponible<br />{previewError}
+          </div>
         )}
       </div>
 
@@ -168,7 +186,7 @@ const DocPreviewTile: React.FC<{
         </div>
         <button
           type="button"
-          onClick={(e) => { e.preventDefault(); documentCenterApi.openInNewTab(doc.id).catch(() => {}); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); documentCenterApi.openInNewTab(doc.id).catch(() => {}); }}
           className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100"
           title="Ouvrir en grand"
         >
