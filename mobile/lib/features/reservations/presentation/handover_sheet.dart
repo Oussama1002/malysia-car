@@ -1,10 +1,16 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:pdfx/pdfx.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../documents/data/document_dto.dart';
 import '../../documents/data/entity_documents_repo.dart';
+import '../../documents/presentation/document_viewer_screen.dart';
 import '../data/reservation_detail_dto.dart';
 import '../data/reservations_repo.dart';
 
@@ -599,6 +605,10 @@ class _VehicleDocumentsSectionState
     extends ConsumerState<_VehicleDocumentsSection> {
   bool _uploading = false;
   String? _error;
+  // Documents cochés localement — l'agent confirme pièce par pièce avant
+  // de valider la remise. State non persisté : repart à zéro à chaque
+  // réouverture de la feuille.
+  final Set<String> _checked = <String>{};
 
   Future<void> _pickAndUpload(ImageSource source) async {
     setState(() {
@@ -694,7 +704,28 @@ class _VehicleDocumentsSectionState
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (final d in docs) _docRow(d, dateFmt),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          'Cochez chaque pièce après l\'avoir contrôlée (${_checked.length}/${docs.length} vérifié${_checked.length > 1 ? "s" : ""}).',
+                          style: const TextStyle(fontSize: 11.5, color: Colors.black54),
+                        ),
+                      ),
+                      for (final d in docs)
+                        _DocPreviewTile(
+                          doc: d,
+                          checked: _checked.contains(d.id),
+                          onToggle: () {
+                            setState(() {
+                              if (_checked.contains(d.id)) {
+                                _checked.remove(d.id);
+                              } else {
+                                _checked.add(d.id);
+                              }
+                            });
+                          },
+                          dateFmt: dateFmt,
+                        ),
                     ],
                   ),
           ),
@@ -805,41 +836,215 @@ class _VehicleDocumentsSectionState
     }
   }
 
-  Widget _docRow(DocumentDto d, DateFormat dateFmt) {
+}
+
+/// Vignette "document véhicule" : charge le fichier (route Sanctum) et en
+/// affiche un aperçu — image pour les photos, PdfView pour les PDF — avec
+/// une case à cocher pour que l'agent valide la pièce. Un tap sur la
+/// vignette ouvre le visualiseur plein écran.
+class _DocPreviewTile extends ConsumerStatefulWidget {
+  const _DocPreviewTile({
+    required this.doc,
+    required this.checked,
+    required this.onToggle,
+    required this.dateFmt,
+  });
+
+  final DocumentDto doc;
+  final bool checked;
+  final VoidCallback onToggle;
+  final DateFormat dateFmt;
+
+  @override
+  ConsumerState<_DocPreviewTile> createState() => _DocPreviewTileState();
+}
+
+class _DocPreviewTileState extends ConsumerState<_DocPreviewTile> {
+  Uint8List? _bytes;
+  PdfController? _pdfController;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _pdfController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final api = ref.read(apiClientProvider);
+      final res = await api.raw.get(
+        '/documents/${widget.doc.id}/preview',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (!mounted) return;
+      final data = res.data;
+      if (data is! List<int>) {
+        setState(() {
+          _error = 'Format inattendu.';
+          _loading = false;
+        });
+        return;
+      }
+      final bytes = Uint8List.fromList(data);
+      PdfController? pdf;
+      if (_isPdf(bytes)) {
+        pdf = PdfController(document: PdfDocument.openData(bytes));
+      }
+      if (!mounted) {
+        pdf?.dispose();
+        return;
+      }
+      setState(() {
+        _bytes = bytes;
+        _pdfController = pdf;
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = '$e';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  bool _isPdf(Uint8List b) {
+    final mime = (widget.doc.mimeType ?? '').toLowerCase();
+    if (mime == 'application/pdf') return true;
+    return b.length >= 4 &&
+        b[0] == 0x25 && b[1] == 0x50 && b[2] == 0x44 && b[3] == 0x46;
+  }
+
+  bool _isImage(Uint8List b) {
+    final mime = (widget.doc.mimeType ?? '').toLowerCase();
+    if (mime.startsWith('image/')) return true;
+    if (b.length < 4) return false;
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true; // PNG
+    if (b[0] == 0xFF && b[1] == 0xD8) return true; // JPEG
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return true; // GIF
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.doc;
     final expired = d.expiryDate != null && d.expiryDate!.isBefore(DateTime.now());
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(
-            expired ? Icons.error_outline : Icons.check_circle_outline,
-            size: 16,
-            color: expired ? const Color(0xFFE11D48) : const Color(0xFF059669),
+    final label = d.title.isNotEmpty ? d.title : docCategoryLabel(d.category);
+
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => DocumentViewerScreen(
+            id: d.id,
+            title: label,
+            mimeType: d.mimeType,
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  d.title.isNotEmpty ? d.title : (d.category ?? 'Document'),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 12),
+        ));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: widget.checked ? const Color(0xFFECFDF5) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: widget.checked ? const Color(0xFF34D399) : Colors.black12,
+            width: widget.checked ? 1.2 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Mini-aperçu 72×88
+            SizedBox(
+              width: 72,
+              height: 88,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  color: const Color(0xFFF1F5F9),
+                  alignment: Alignment.center,
+                  child: _buildThumb(),
                 ),
-                if (d.expiryDate != null)
-                  Text(
-                    'Expire ${dateFmt.format(d.expiryDate!)}${expired ? " · expiré" : ""}',
-                    style: TextStyle(
-                        fontSize: 10.5,
-                        color: expired ? const Color(0xFFE11D48) : Colors.black54,
-                        fontWeight: expired ? FontWeight.w800 : FontWeight.w500),
-                  ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                  if (d.expiryDate != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Expire ${widget.dateFmt.format(d.expiryDate!)}${expired ? " · expiré" : ""}',
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          color: expired ? const Color(0xFFE11D48) : Colors.black54,
+                          fontWeight: expired ? FontWeight.w800 : FontWeight.w500),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Case à cocher — ne doit pas déclencher l'ouverture plein écran.
+            SizedBox(
+              width: 32,
+              child: Checkbox(
+                value: widget.checked,
+                onChanged: (_) => widget.onToggle(),
+                activeColor: const Color(0xFF059669),
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildThumb() {
+    if (_loading) {
+      return const SizedBox(
+        width: 16, height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    if (_error != null || _bytes == null) {
+      return const Icon(Icons.broken_image_outlined, color: Colors.black26, size: 28);
+    }
+    if (_pdfController != null) {
+      // Première page du PDF, non interactive (le tap global ouvre le plein écran).
+      return IgnorePointer(
+        child: PdfView(
+          controller: _pdfController!,
+          scrollDirection: Axis.horizontal,
+          builders: PdfViewBuilders<DefaultBuilderOptions>(
+            options: const DefaultBuilderOptions(),
+            documentLoaderBuilder: (_) => const SizedBox.shrink(),
+            pageLoaderBuilder: (_) => const SizedBox.shrink(),
+            errorBuilder: (_, __) => const Icon(Icons.picture_as_pdf_outlined,
+                color: Colors.black45, size: 28),
+          ),
+        ),
+      );
+    }
+    if (_isImage(_bytes!)) {
+      return Image.memory(_bytes!, fit: BoxFit.cover, width: 72, height: 88);
+    }
+    return const Icon(Icons.insert_drive_file_outlined,
+        color: Colors.black38, size: 28);
   }
 }
 
