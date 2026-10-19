@@ -90,9 +90,12 @@ class _PaymentSheetState extends ConsumerState<PaymentSheet> {
   @override
   void initState() {
     super.initState();
-    if (widget.reservationBalance != null && widget.reservationBalance! > 0) {
-      _amount.text = widget.reservationBalance!.toStringAsFixed(2);
-    }
+    // Volontairement : on NE pré-remplit PAS le Montant avec le solde
+    // restant. Pour une réservation d'un jour sans paiement, le solde vaut
+    // le tarif journalier, et l'agent lit alors "la machine affirme un
+    // paiement de X MAD alors que rien n'a été encaissé". Le "Reste à
+    // payer" reste visible juste au-dessus en indication — l'agent tape
+    // le montant réellement reçu.
   }
 
   @override
