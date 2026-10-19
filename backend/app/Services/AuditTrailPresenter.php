@@ -24,6 +24,14 @@ class AuditTrailPresenter
         'reader_document_uploaded' => 'Document téléversé',
         'payment_recorded' => 'Paiement enregistré',
         'vehicle_swapped' => 'Changement de véhicule',
+        'vehicle_swap_requested' => 'Changement de véhicule demandé',
+        'vehicle_swap_approved' => 'Changement de véhicule validé',
+        'vehicle_swap_approved_instant' => 'Changement de véhicule immédiat',
+        'vehicle_swap_rejected' => 'Changement de véhicule refusé',
+        'check_in' => 'Check-in effectué',
+        'check_out' => 'Check-out effectué',
+        'extension_applied' => 'Prolongation appliquée',
+        'extension_requested' => 'Prolongation demandée',
     ];
 
     /** Champs dont le nom technique n'évoque rien. */

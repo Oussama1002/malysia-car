@@ -25,7 +25,14 @@ const ACTION_ICONS: Record<string, string> = {
   pdf_generated: '📄',
   payment_recorded: '💰',
   vehicle_swapped: '🚗',
+  vehicle_swap_requested: '🚗',
+  vehicle_swap_approved: '🚗',
+  vehicle_swap_approved_instant: '🚗',
   reader_document_uploaded: '📎',
+  check_in: '🔑',
+  check_out: '🏁',
+  extension_applied: '⏱️',
+  extension_requested: '⏱️',
 };
 
 const fmtDate = (v: string | null | undefined) =>

@@ -734,6 +734,22 @@ class ReservationController extends Controller
             ]);
         });
 
+        // Dépose une entrée dédiée dans le journal — les status_changed seuls
+        // ne nomment pas l'opération de check-in dans la timeline.
+        AuditLogger::record(
+            action: 'check_in',
+            user: $request->user(),
+            entityType: $reservation->getMorphClass(),
+            entityId: $reservation->id,
+            module: 'rentals',
+            after: [
+                'odometer' => $data['odometer'] ?? null,
+                'fuel_level' => $data['fuel_level'] ?? null,
+            ],
+            request: $request,
+            label: 'Check-in effectué',
+        );
+
         return ApiResponse::success($report, null, null, 201);
     }
 
@@ -780,6 +796,21 @@ class ReservationController extends Controller
             ]);
         });
 
+        AuditLogger::record(
+            action: 'extension_applied',
+            user: $request->user(),
+            entityType: $reservation->getMorphClass(),
+            entityId: $reservation->id,
+            module: 'rentals',
+            before: ['desired_end_at' => (string) $oldEnd],
+            after: [
+                'desired_end_at' => (string) $newEnd,
+                'additional_amount' => $data['additional_amount'] ?? 0,
+            ],
+            request: $request,
+            label: 'Prolongation appliquée',
+        );
+
         return ApiResponse::success($ext, null, null, 201);
     }
 
@@ -799,7 +830,7 @@ class ReservationController extends Controller
             $this->transitionReservation($reservation, 'returned', $request);
             $this->transitionReservation($reservation, 'inspection_pending', $request);
 
-            return RentalHandoverReport::query()->create([
+            $r = RentalHandoverReport::query()->create([
                 'id' => (string) Str::uuid(),
                 'vehicle_id' => $reservation->vehicle_id,
                 'customer_id' => $reservation->customer_id,
@@ -815,7 +846,23 @@ class ReservationController extends Controller
                 'performed_by' => $request->user()?->id,
                 'performed_at' => now(),
             ]);
+
+            return $r;
         });
+
+        AuditLogger::record(
+            action: 'check_out',
+            user: $request->user(),
+            entityType: $reservation->getMorphClass(),
+            entityId: $reservation->id,
+            module: 'rentals',
+            after: [
+                'odometer' => $data['odometer'] ?? null,
+                'fuel_level' => $data['fuel_level'] ?? null,
+            ],
+            request: $request,
+            label: 'Check-out effectué',
+        );
 
         return ApiResponse::success($report, null, null, 201);
     }

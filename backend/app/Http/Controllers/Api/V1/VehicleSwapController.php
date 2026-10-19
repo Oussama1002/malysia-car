@@ -315,6 +315,21 @@ class VehicleSwapController extends Controller
             after: ['old_vehicle_id' => $swap->old_vehicle_id, 'new_vehicle_id' => $swap->new_vehicle_id],
         );
 
+        // Rend l'évènement visible dans la timeline de la réservation elle-même
+        // (sinon l'agent ne le voit que dans le journal global).
+        if ($swap->reservation_id) {
+            AuditLogger::record(
+                action: 'vehicle_swapped',
+                user: $request->user(),
+                entityType: (new Reservation)->getMorphClass(),
+                entityId: $swap->reservation_id,
+                module: 'rentals',
+                after: ['old_vehicle_id' => $swap->old_vehicle_id, 'new_vehicle_id' => $swap->new_vehicle_id],
+                request: $request,
+                label: 'Changement de véhicule',
+            );
+        }
+
         return ApiResponse::success($swap->load(['oldVehicle.brand', 'oldVehicle.model', 'newVehicle.brand', 'newVehicle.model']), null, null, 201);
     }
 
@@ -381,6 +396,29 @@ class VehicleSwapController extends Controller
                 entity: $swap,
             );
         } catch (\Throwable) {}
+
+        AuditLogger::record(
+            action: 'vehicle_swap_approved',
+            user: $request->user(),
+            entityType: $swap->getMorphClass(),
+            entityId: $swap->id,
+            module: 'fleet',
+            after: ['old_vehicle_id' => $swap->old_vehicle_id, 'new_vehicle_id' => $swap->new_vehicle_id],
+            request: $request,
+        );
+
+        if ($swap->reservation_id) {
+            AuditLogger::record(
+                action: 'vehicle_swapped',
+                user: $request->user(),
+                entityType: (new Reservation)->getMorphClass(),
+                entityId: $swap->reservation_id,
+                module: 'rentals',
+                after: ['old_vehicle_id' => $swap->old_vehicle_id, 'new_vehicle_id' => $swap->new_vehicle_id],
+                request: $request,
+                label: 'Changement de véhicule',
+            );
+        }
 
         return ApiResponse::success($swap->fresh()->load(['oldVehicle.brand', 'oldVehicle.model', 'newVehicle.brand', 'newVehicle.model']));
     }
