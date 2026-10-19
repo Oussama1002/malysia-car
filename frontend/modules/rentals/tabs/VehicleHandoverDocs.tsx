@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { documentCenterApi } from '@/services/documentCenterApi';
-import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
+import { documentCenterApi, type DocumentCenterItem } from '@/services/documentCenterApi';
+import { endpoints, getApiBase } from '@/services/apiClient';
 
 /**
  * Carte "Documents véhicule" affichée sur Check-Out / Check-In :
@@ -10,8 +10,9 @@ import { EntityDocuments } from '@/modules/shared/components/EntityDocuments';
  *     Autorisation de circulation, Visite technique) pour guider
  *     l'agent sur le dossier minimum à constituer avant de remettre
  *     le véhicule.
- *   - sinon on affiche l'EntityDocuments habituel qui liste tout
- *     (incluant les uploads ad hoc).
+ *   - sinon on affiche une grille de prévisualisations : miniature du
+ *     document + case à cocher pour que l'agent valide pièce par pièce
+ *     ce qu'il a bien vérifié avant de valider la remise.
  */
 export const VehicleHandoverDocs: React.FC<{ vehicleId: string }> = ({ vehicleId }) => {
   const q = useQuery({
@@ -22,7 +23,7 @@ export const VehicleHandoverDocs: React.FC<{ vehicleId: string }> = ({ vehicleId
 
   const attachments = q.data?.data?.attachments ?? [];
   const generated = q.data?.data?.generated ?? [];
-  const total = attachments.length + generated.length;
+  const docs = [...attachments, ...generated];
 
   if (q.isLoading) {
     return (
@@ -33,11 +34,149 @@ export const VehicleHandoverDocs: React.FC<{ vehicleId: string }> = ({ vehicleId
     );
   }
 
-  if (total === 0) {
+  if (docs.length === 0) {
     return <VehicleDocsStarterGrid vehicleId={vehicleId} />;
   }
 
-  return <EntityDocuments entityType="vehicle" entityId={vehicleId} title="Documents véhicule" />;
+  return <VehicleDocsPreviewGrid docs={docs} />;
+};
+
+const CATEGORY_FR: Record<string, string> = {
+  carte_grise_recto: 'Carte grise — Recto',
+  carte_grise_verso: 'Carte grise — Verso',
+  insurance: 'Assurance',
+  circulation_authorization: 'Autorisation de circulation',
+  technical_inspection: 'Visite technique',
+};
+
+const VehicleDocsPreviewGrid: React.FC<{ docs: DocumentCenterItem[] }> = ({ docs }) => {
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) => setChecked((s) => ({ ...s, [id]: !s[id] }));
+  const checkedCount = Object.values(checked).filter(Boolean).length;
+
+  return (
+    <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="mb-1 flex items-center justify-between">
+        <div className="text-sm font-black uppercase tracking-wider text-slate-700">Documents véhicule</div>
+        <div className="text-[11px] font-semibold text-slate-500">
+          {checkedCount} / {docs.length} vérifié{checkedCount > 1 ? 's' : ''}
+        </div>
+      </div>
+      <p className="mb-4 text-xs text-slate-500">
+        Cochez chaque pièce après l'avoir contrôlée avec le client.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {docs.map((d) => (
+          <DocPreviewTile
+            key={d.id}
+            doc={d}
+            checked={!!checked[d.id]}
+            onToggle={() => toggle(d.id)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const DocPreviewTile: React.FC<{
+  doc: DocumentCenterItem;
+  checked: boolean;
+  onToggle: () => void;
+}> = ({ doc, checked, onToggle }) => {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const isImage = (doc.mimeType ?? '').startsWith('image/');
+  const isPdf = (doc.mimeType ?? '').includes('pdf');
+
+  // Charge le fichier côté client (route protégée Sanctum) et transforme la
+  // réponse en blob: URL — permet d'afficher la miniature en <img> ou
+  // <embed> sans exposer le token dans un href.
+  useEffect(() => {
+    if (!isImage && !isPdf) return;
+    let revoked = false;
+    let objectUrl: string | null = null;
+    (async () => {
+      try {
+        const base = getApiBase();
+        if (!base) throw new Error('API indisponible');
+        const session = localStorage.getItem('df_session');
+        let token: string | undefined;
+        try {
+          token = session ? (JSON.parse(session) as { token?: string }).token : undefined;
+        } catch { /* ignore */ }
+        const res = await fetch(`${base}${endpoints.documents.download(doc.id)}`, {
+          headers: token ? { Authorization: `Bearer ${token}`, Accept: '*/*' } : { Accept: '*/*' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!revoked) setPreviewUrl(objectUrl);
+      } catch (e) {
+        if (!revoked) setPreviewError(e instanceof Error ? e.message : 'Aperçu impossible');
+      }
+    })();
+    return () => {
+      revoked = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [doc.id, isImage, isPdf]);
+
+  const label = CATEGORY_FR[doc.category ?? ''] ?? doc.title ?? doc.category ?? 'Document';
+
+  return (
+    <label
+      className={`flex cursor-pointer flex-col rounded-xl border p-3 transition ${
+        checked ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-200 bg-white hover:border-slate-300'
+      }`}
+    >
+      <div className="relative mb-2 flex h-32 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+        {isImage && previewUrl && (
+          <img src={previewUrl} alt={label} className="h-full w-full object-cover" />
+        )}
+        {isPdf && previewUrl && (
+          <embed src={previewUrl} type="application/pdf" className="h-full w-full" />
+        )}
+        {!isImage && !isPdf && (
+          <div className="text-center text-[11px] font-semibold text-slate-500">
+            <div className="text-2xl">📄</div>
+            <div className="mt-1">{doc.mimeType ?? 'Fichier'}</div>
+          </div>
+        )}
+        {(isImage || isPdf) && !previewUrl && !previewError && (
+          <div className="text-[11px] text-slate-400">Chargement…</div>
+        )}
+        {previewError && (
+          <div className="px-2 text-center text-[10px] font-semibold text-rose-500">{previewError}</div>
+        )}
+      </div>
+
+      <div className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-emerald-600"
+          checked={checked}
+          onChange={onToggle}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-black text-slate-800">{label}</div>
+          {doc.expiryDate && (
+            <div className="truncate text-[10px] text-slate-500">
+              Expire le {new Date(doc.expiryDate).toLocaleDateString('fr-MA')}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); documentCenterApi.openInNewTab(doc.id).catch(() => {}); }}
+          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100"
+          title="Ouvrir en grand"
+        >
+          Ouvrir
+        </button>
+      </div>
+    </label>
+  );
 };
 
 interface StarterSlot {
