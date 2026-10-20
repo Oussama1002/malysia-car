@@ -1259,6 +1259,20 @@
       var pickupIso = toIso(form.elements.pickup_at.value.trim());
       var returnIso = toIso(form.elements.return_at.value.trim());
 
+      // Fige le prix / jour affiché au client au moment du submit : si la
+      // fleet change de tarif après, l'agent retrouve celui que le client a
+      // vu. On réutilise la même règle (palier qui couvre `days`, repli vers
+      // les paliers plus courts, puis sur price_per_day) que l'affichage de
+      // l'estimation.
+      var quotedDailyRate = null;
+      if (vehicleId && FLEET_BY_ID[vehicleId]) {
+        var dur = daysBetween(pickupIso, returnIso);
+        var r = dailyRateForDays(FLEET_BY_ID[vehicleId], dur);
+        if (r && isFinite(r) && r > 0) {
+          quotedDailyRate = r;
+        }
+      }
+
       var data = {
         full_name: form.elements.full_name.value.trim(),
         phone: form.elements.phone.value.trim(),
@@ -1267,6 +1281,7 @@
         pickup_at: pickupIso,
         return_at: returnIso,
         message: form.elements.message.value.trim() || null,
+        quoted_daily_rate: quotedDailyRate,
         website: form.elements.website.value
       };
 

@@ -189,10 +189,26 @@ class PublicSiteController extends Controller
             'pickup_at' => ['nullable', 'date'],
             'return_at' => ['nullable', 'date', 'after_or_equal:pickup_at'],
             'message' => ['nullable', 'string', 'max:2000'],
+            // Tarif / jour affiché au client sur la landing : la page l'envoie
+            // en même temps que le reste du formulaire pour qu'il soit figé au
+            // moment où le client valide (si la fleet change le prix après,
+            // la demande garde quand même celui qui a été montré). On recalcule
+            // côté serveur quand il n'est pas fourni (vieux clients, scripts
+            // tiers, ...).
+            'quoted_daily_rate' => ['nullable', 'numeric', 'min:0'],
             'website' => ['nullable', 'string', 'max:0'],
         ], [
             'return_at.after_or_equal' => 'La date de retour doit suivre la date de départ.',
         ]);
+
+        $quotedDaily = isset($data['quoted_daily_rate']) ? (float) $data['quoted_daily_rate'] : null;
+        if ($quotedDaily === null && ! empty($data['vehicle_id'])) {
+            $quotedDaily = $this->computeQuotedDailyRate(
+                vehicleId: (string) $data['vehicle_id'],
+                pickupAt: $data['pickup_at'] ?? null,
+                returnAt: $data['return_at'] ?? null,
+            );
+        }
 
         $lead = WebsiteLead::query()->create([
             'company_id' => $this->defaultCompanyId(),
@@ -205,6 +221,7 @@ class PublicSiteController extends Controller
             'pickup_at' => $data['pickup_at'] ?? null,
             'return_at' => $data['return_at'] ?? null,
             'message' => $data['message'] ?? null,
+            'quoted_daily_rate' => $quotedDaily,
             'status' => WebsiteLead::STATUS_NEW,
             'ip_address' => $request->ip(),
             'user_agent' => substr((string) $request->userAgent(), 0, 255),
@@ -264,5 +281,69 @@ class PublicSiteController extends Controller
             3600,
             fn () => \DB::table('companies')->orderBy('created_at')->value('id'),
         );
+    }
+
+    /**
+     * Fige le tarif / jour qui a été montré au client au moment du submit.
+     * Mêmes bornes de paliers que l'app.js de la landing + fallback sur
+     * daily_rental_price. Retourne null si le véhicule n'a aucun prix saisi.
+     */
+    private function computeQuotedDailyRate(string $vehicleId, ?string $pickupAt, ?string $returnAt): ?float
+    {
+        $vehicle = Vehicle::query()->find($vehicleId);
+        if (! $vehicle) {
+            return null;
+        }
+        $days = 0;
+        if ($pickupAt && $returnAt) {
+            try {
+                $start = \Carbon\Carbon::parse($pickupAt);
+                $end = \Carbon\Carbon::parse($returnAt);
+                $days = max(0, (int) $end->diffInDays($start));
+            } catch (\Throwable) {
+                $days = 0;
+            }
+        }
+
+        $tiers = is_array($vehicle->rental_price_tiers) ? $vehicle->rental_price_tiers : [];
+        $tierOrder = ['tier_1_2', 'tier_3_6', 'tier_7_14', 'tier_15_29', 'tier_30'];
+        $bounds = [
+            'tier_1_2' => [1, 2],
+            'tier_3_6' => [3, 6],
+            'tier_7_14' => [7, 14],
+            'tier_15_29' => [15, 29],
+            'tier_30' => [30, PHP_INT_MAX],
+        ];
+        if ($days > 0) {
+            $idx = 0;
+            foreach ($tierOrder as $i => $key) {
+                [$min, $max] = $bounds[$key];
+                if ($days >= $min && $days <= $max) {
+                    $idx = $i;
+                    break;
+                }
+                if ($days > $max) {
+                    $idx = $i;
+                }
+            }
+            // On redescend vers le plus court palier rempli (jamais plus cher).
+            for ($j = $idx; $j >= 0; $j--) {
+                $v = $tiers[$tierOrder[$j]] ?? null;
+                if (is_numeric($v) && (float) $v > 0) {
+                    return (float) $v;
+                }
+            }
+            // Puis on remonte, puis le tarif journalier de base.
+            for ($k = $idx + 1; $k < count($tierOrder); $k++) {
+                $v = $tiers[$tierOrder[$k]] ?? null;
+                if (is_numeric($v) && (float) $v > 0) {
+                    return (float) $v;
+                }
+            }
+        }
+        // Pas de durée connue : repli sur le plus bas palier rempli, puis
+        // le daily_rental_price de base — même règle que la landing.
+        $min = $vehicle->minTierDailyPrice();
+        return $min !== null ? (float) $min : null;
     }
 }

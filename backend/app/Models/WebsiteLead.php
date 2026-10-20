@@ -23,6 +23,7 @@ class WebsiteLead extends Model
     protected $fillable = [
         'id', 'company_id', 'full_name', 'phone', 'email', 'city',
         'vehicle_id', 'vehicle_label', 'pickup_at', 'return_at', 'message',
+        'quoted_daily_rate',
         'status', 'handled_by', 'handled_at', 'handling_notes',
         'ip_address', 'user_agent',
     ];
@@ -31,6 +32,7 @@ class WebsiteLead extends Model
         'pickup_at' => 'datetime',
         'return_at' => 'datetime',
         'handled_at' => 'datetime',
+        'quoted_daily_rate' => 'decimal:2',
     ];
 
     protected static function boot(): void

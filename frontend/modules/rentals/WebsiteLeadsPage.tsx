@@ -48,6 +48,9 @@ interface WebsiteLead {
   pickup_at?: string | null;
   return_at?: string | null;
   message?: string | null;
+  /** Tarif / jour exact affiché au client sur la landing au moment du
+   *  submit. Priorité absolue sur un recalcul à partir de la fleet. */
+  quoted_daily_rate?: number | string | null;
   status: 'new' | 'contacted' | 'converted' | 'rejected';
   handling_notes?: string | null;
   handled_at?: string | null;
@@ -429,20 +432,27 @@ export const WebsiteLeadsPage: React.FC = () => {
                         // là-bas après la création effective. Si l'agent veut
                         // juste marquer la demande sans créer, il peut rouvrir
                         // la page et utiliser l'ancien raccourci (ci-dessous).
-                        // Tarif / jour tel qu'il a été présenté au client :
-                        // on prend le palier le plus bas s'il existe, sinon
-                        // le daily_rental_price du véhicule. C'est le même
-                        // calcul que la landing publique.
-                        const tiers = lead.vehicle?.rental_price_tiers ?? null;
-                        const tierValues = tiers
-                          ? Object.values(tiers)
-                              .map((n) => Number(n))
-                              .filter((n) => Number.isFinite(n) && n > 0)
-                          : [];
-                        const dailyFromTiers = tierValues.length ? Math.min(...tierValues) : null;
-                        const dailyRentalPrice = Number(lead.vehicle?.daily_rental_price ?? 0);
-                        const quotedDaily = dailyFromTiers
-                          ?? (dailyRentalPrice > 0 ? dailyRentalPrice : null);
+                        // Tarif / jour affiché au client :
+                        //   1. priorité absolue à `quoted_daily_rate` figé
+                        //      à la soumission (le prix qu'il a réellement
+                        //      vu, même si la fleet a été modifiée depuis) ;
+                        //   2. sinon on reconstitue depuis la fleet actuelle
+                        //      (plus bas palier > daily_rental_price) pour
+                        //      les leads antérieurs au stockage du quote.
+                        const storedQuote = Number(lead.quoted_daily_rate ?? 0);
+                        let quotedDaily: number | null = storedQuote > 0 ? storedQuote : null;
+                        if (quotedDaily === null) {
+                          const tiers = lead.vehicle?.rental_price_tiers ?? null;
+                          const tierValues = tiers
+                            ? Object.values(tiers)
+                                .map((n) => Number(n))
+                                .filter((n) => Number.isFinite(n) && n > 0)
+                            : [];
+                          const dailyFromTiers = tierValues.length ? Math.min(...tierValues) : null;
+                          const dailyRentalPrice = Number(lead.vehicle?.daily_rental_price ?? 0);
+                          quotedDaily = dailyFromTiers
+                            ?? (dailyRentalPrice > 0 ? dailyRentalPrice : null);
+                        }
                         const payload: FromLeadNavState = {
                           id: lead.id,
                           full_name: lead.full_name,
