@@ -53,7 +53,7 @@ import { documentCenterApi, type DocumentCenterItem } from '@/services/documentC
 import { DateField } from '@/modules/shared/components/DateField';
 import { requiredDocsFor } from '@/modules/shared/customerDocCatalog';
 
-type StepKey = 'client' | 'vehicle' | 'type' | 'terms' | 'annex' | 'review';
+type StepKey = 'setup' | 'annex' | 'review';
 
 interface PaymentEntry {
   id: string;
@@ -73,10 +73,11 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { key: 'client', title: 'Client', hint: 'Identité & conformité', icon: 'users' },
-  { key: 'vehicle', title: 'Véhicule', hint: 'Choix de l\u2019actif', icon: 'car' },
-  { key: 'type', title: 'Type', hint: 'LLD / LOA / Crédit / VO', icon: 'doc' },
-  { key: 'terms', title: 'Conditions', hint: 'Durée, loyer, garanties', icon: 'coin' },
+  // Un seul écran de saisie qui réunit Client, Véhicule, Type et
+  // Conditions — l'agent voit tout en bloc au lieu de cliquer entre
+  // quatre étapes consécutives. Annexes et Validation conservent leur
+  // étape dédiée.
+  { key: 'setup', title: 'Détails contrat', hint: 'Client, véhicule, type, conditions', icon: 'doc' },
   { key: 'annex', title: 'Annexes', hint: 'Pièces & justificatifs', icon: 'upload' },
   { key: 'review', title: 'Validation', hint: 'Relecture & signature', icon: 'sign' },
 ];
@@ -637,13 +638,14 @@ export const ContractWizardPage: React.FC = () => {
   );
 
   const canNext = useMemo(() => {
-    if (step.key === 'client') return !!state.clientId && identityComplete;
-    if (step.key === 'vehicle') return !!state.vehicleId;
-    if (step.key === 'terms') {
-      // Terms step gating: on top of the kilometrage, Date de début, Date
-      // de fin, Loyer and Franchise d'assurance are all required before
-      // the agent can move on. A loyer of 0 is treated as not entered.
+    if (step.key === 'setup') {
+      // Un seul écran : on cumule les critères des anciens pas Client,
+      // Véhicule, Type et Conditions — tout ou rien avant Annexes.
       return (
+        !!state.clientId &&
+        identityComplete &&
+        !!state.vehicleId &&
+        !!state.type &&
         state.kmInclMonth > 0 &&
         !!state.startDate &&
         !!state.endDate &&
@@ -1143,7 +1145,7 @@ export const ContractWizardPage: React.FC = () => {
       </div>
 
       {/* Two-pane: form + summary */}
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="grid gap-6">
         <div className="df-card">
           <div className="df-card__header">
             <div>
@@ -1164,7 +1166,7 @@ export const ContractWizardPage: React.FC = () => {
                 {draftInfo}
               </div>
             )}
-            {step.key === 'client' && (
+            {step.key === 'setup' && (
               <>
                 <div>
                   <label className="df-label">Rechercher un client</label>
@@ -1261,7 +1263,7 @@ export const ContractWizardPage: React.FC = () => {
               </>
             )}
 
-            {step.key === 'vehicle' && (
+            {step.key === 'setup' && (
               <>
                 <div>
                   <label className="df-label">Véhicule disponible</label>
@@ -1329,7 +1331,7 @@ export const ContractWizardPage: React.FC = () => {
               </>
             )}
 
-            {step.key === 'type' && (
+            {step.key === 'setup' && (
               <div className="grid gap-3 md:grid-cols-2">
                 {visibleContractTypes.map((t) => {
                   const active = state.type === t.value;
@@ -1376,7 +1378,7 @@ export const ContractWizardPage: React.FC = () => {
               </div>
             )}
 
-            {step.key === 'terms' && (
+            {step.key === 'setup' && (
               <>
                 {/* Date de début = date système, figée au moment où le
                     contrat est généré. Lecture seule — c'est la source
@@ -1898,61 +1900,9 @@ export const ContractWizardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Summary */}
-        <aside className="space-y-6">
-          <div className="df-card df-card--elev sticky top-20 overflow-hidden">
-            <div
-              className="relative px-5 py-4"
-              style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--df-brand-500) 18%, transparent), transparent)' }}
-            >
-              <div className="df-card__hint">Résumé contrat</div>
-              <div className="mt-1 flex items-center gap-2">
-                <Icon name={selectedType?.icon ?? 'doc'} size={18} className="text-[color:var(--df-brand-600)]" />
-                <div className="text-[15px] font-bold">{selectedType?.label ?? '—'}</div>
-              </div>
-            </div>
-            <div className="divide-y divide-[color:var(--df-border)]">
-              <SummaryRow label="Client" value={selectedClient?.name ?? '—'} />
-              <SummaryRow label="Véhicule" value={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : '—'} />
-              <SummaryRow label="Immatriculation" value={selectedVehicle?.registration ?? '—'} mono />
-              <SummaryRow
-                label="Durée"
-                value={
-                  state.durationExtraDays > 0
-                    ? `${state.durationMonths} mois et ${state.durationExtraDays} jour${state.durationExtraDays > 1 ? 's' : ''}`
-                    : `${state.durationMonths} mois`
-                }
-              />
-              <SummaryRow
-                label={isDailyRent ? 'Loyer / jour' : 'Mensualité'}
-                value={formatCurrencyMad(state.monthlyRentMad)}
-                highlight
-              />
-              <SummaryRow label="Km inclus / mois" value={state.kmInclMonth.toLocaleString('fr-MA')} />
-              <SummaryRow label="Franchise d'assurance" value={formatCurrencyMad(state.securityDepositMad)} />
-              {state.type === 'LOA' && <SummaryRow label="Valeur résiduelle" value={`${state.residualValuePct}%`} />}
-              <div className="px-4 py-3">
-                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[color:var(--df-text-faint)]">Total engagement</div>
-                <div className="df-num mt-1 text-[color:var(--df-brand-600)]" style={{ fontSize: 26, fontWeight: 800 }}>
-                  {formatCurrencyMad(totalAmount)}
-                </div>
-                <div className="mt-0.5 text-[11px] text-[color:var(--df-text-muted)]">hors frais de dossier · TVA 20% applicable</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="df-card p-4">
-            <div className="df-card__hint">Checklist conformité</div>
-            <ul className="mt-3 space-y-2 text-[12.5px]">
-              <CheckRow done={!!selectedClient} label="Client sélectionné" />
-              <CheckRow done={!!selectedVehicle} label="Véhicule sélectionné" />
-              <CheckRow done={stepIdx >= 2} label="Type de contrat défini" />
-              <CheckRow done={stepIdx >= 3} label="Conditions financières" />
-              <CheckRow done={stepIdx >= 4} label="Pièces jointes" />
-              <CheckRow done={stepIdx === 5} label="Prêt à signer" />
-            </ul>
-          </div>
-        </aside>
+        {/* Aside « Résumé contrat » volontairement retirée : l'écran
+            unique Détails contrat porte déjà tous les champs, les doublons
+            dans la colonne de droite n'apportaient plus rien. */}
       </section>
 
       <DrawerPanel
@@ -2010,26 +1960,6 @@ const AIHint: React.FC<{ text: string; tone?: 'brand' | 'success' | 'warning' | 
     </div>
   );
 };
-
-const SummaryRow: React.FC<{ label: string; value: string; mono?: boolean; highlight?: boolean }> = ({ label, value, mono, highlight }) => (
-  <div className="flex items-center justify-between px-4 py-2.5 text-[12.5px]">
-    <span className="text-[color:var(--df-text-muted)]">{label}</span>
-    <span className={`${mono ? 'font-mono' : ''} ${highlight ? 'font-bold text-[color:var(--df-brand-600)] dark:text-indigo-300' : 'font-semibold'}`}>{value}</span>
-  </div>
-);
-
-const CheckRow: React.FC<{ done: boolean; label: string }> = ({ done, label }) => (
-  <li className="flex items-center gap-2">
-    <span
-      className={`flex h-5 w-5 items-center justify-center rounded-full ${
-        done ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'bg-[color:var(--df-surface-sunk)] text-[color:var(--df-text-faint)]'
-      }`}
-    >
-      <Icon name={done ? 'check' : 'minus'} size={12} />
-    </span>
-    <span className={done ? 'font-semibold' : 'text-[color:var(--df-text-muted)]'}>{label}</span>
-  </li>
-);
 
 const ExistingDocRow: React.FC<{ doc: DocumentCenterItem; label: string }> = ({ doc, label }) => (
   <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
