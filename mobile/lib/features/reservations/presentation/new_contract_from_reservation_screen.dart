@@ -891,11 +891,15 @@ class _NewContractFromReservationScreenState
           toId: (c) => c.id,
           toLabel: (c) {
             final name = c.displayName ?? c.code;
-            final cin = (c.nationalId ?? '').trim();
-            // CIN right next to the name — just the value, no 'CIN' prefix.
-            final cinSuffix = cin.isNotEmpty ? ' · $cin' : '';
-            final kind = c.type == 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)';
-            return '$name$cinSuffix $kind';
+            // Libellé explicite dans la génération de contrat : CIN XXXX
+            // (Particulier) ou ICE XXXX (Entreprise). On n'économise plus le
+            // préfixe — pour un contrat, l'agent doit lire l'identifiant
+            // sans deviner.
+            final isCompany = c.type == 'ENTREPRISE';
+            final id = (isCompany ? (c.ice ?? '') : (c.nationalId ?? '')).trim();
+            final idLabel = isCompany ? 'ICE' : 'CIN';
+            final kind = isCompany ? '(Entreprise)' : '(Particulier)';
+            return '$name · $idLabel ${id.isEmpty ? '—' : id} $kind';
           },
           onChanged: (id) => setState(() => _clientId = id),
           hint: 'Sélectionner un client…',

@@ -1151,16 +1151,18 @@ export const ContractWizardPage: React.FC = () => {
                     >
                       <option value="">— Sélectionner —</option>
                       {(clients.data ?? []).map((c) => {
-                        // CIN next to the name — just the value, no 'CIN'
-                        // prefix. complianceStatus (verified / incomplete)
-                        // was dropped from the dropdown label: it belongs
-                        // to the selected-client card below, not to a line
-                        // in a long picker list.
-                        const cin = (c.idNumber ?? '').toString().trim();
-                        const cinSuffix = cin ? ` · ${cin}` : '';
+                        // Label the identifier explicitly in the dropdown so
+                        // an agent generating a contract never signs off on
+                        // the wrong Mohamed : CIN XXXXXXX for an individual,
+                        // ICE XXXXXXX for a company. "CIN —" is shown when
+                        // the client has no national_id_number stored so the
+                        // missing data is obvious instead of silent.
+                        const id = (c.idNumber ?? '').toString().trim();
+                        const label = c.kind === 'ENTREPRISE' ? 'ICE' : 'CIN';
+                        const suffix = ` · ${label} ${id || '—'}`;
                         return (
                           <option key={c.id} value={c.id}>
-                            {c.name}{cinSuffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
+                            {c.name}{suffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
                           </option>
                         );
                       })}
