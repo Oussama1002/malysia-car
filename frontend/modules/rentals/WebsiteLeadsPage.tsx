@@ -364,6 +364,57 @@ export const WebsiteLeadsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {(() => {
+                  // Rangée commerciale : la Durée vient des dates, le
+                  // Tarif / jour reprend le quote figé au submit (sinon on
+                  // retombe sur la fleet comme pour la conversion), et le
+                  // Montant = Durée × Tarif. Les cases vides affichent "—".
+                  const days = (() => {
+                    if (!lead.pickup_at || !lead.return_at) return 0;
+                    const a = new Date(lead.pickup_at).getTime();
+                    const b = new Date(lead.return_at).getTime();
+                    if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+                    return Math.max(0, Math.round((b - a) / 86_400_000));
+                  })();
+                  const storedQuote = Number(lead.quoted_daily_rate ?? 0);
+                  let daily: number | null = storedQuote > 0 ? storedQuote : null;
+                  if (daily === null) {
+                    const tiers = lead.vehicle?.rental_price_tiers ?? null;
+                    const tierValues = tiers
+                      ? Object.values(tiers)
+                          .map((n) => Number(n))
+                          .filter((n) => Number.isFinite(n) && n > 0)
+                      : [];
+                    const base = Number(lead.vehicle?.daily_rental_price ?? 0);
+                    daily = tierValues.length ? Math.min(...tierValues) : (base > 0 ? base : null);
+                  }
+                  const total = daily !== null && days > 0 ? daily * days : null;
+                  const fmtMad = (n: number) =>
+                    `${n.toLocaleString('fr-MA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} MAD`;
+                  return (
+                    <div className="grid gap-2 text-sm sm:grid-cols-3">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400">Durée</div>
+                        <div className="font-black text-slate-800">
+                          {days > 0 ? `${days} jour${days > 1 ? 's' : ''}` : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400">Tarif / jour</div>
+                        <div className="font-black text-indigo-700">
+                          {daily !== null ? fmtMad(daily) : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400">Montant</div>
+                        <div className="font-black text-emerald-700">
+                          {total !== null ? fmtMad(total) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {lead.availability?.available === false && (
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
                     <span className="font-black">⚠ Véhicule indisponible</span>{' '}
