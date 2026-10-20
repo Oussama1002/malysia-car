@@ -377,6 +377,20 @@ body {
 textarea.df-input { height: auto; padding: 12px 14px; min-height: 96px; resize: vertical; }
 select.df-input { cursor: pointer; }
 
+/* Mode compact — appliqué sur la carte Détails contrat du wizard pour
+ * entasser plus de champs sans scroller. On rétrécit la hauteur des
+ * contrôles, le padding et la taille de police. */
+.df-wizard-compact .df-input {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+}
+.df-wizard-compact textarea.df-input { height: auto; padding: 8px 10px; min-height: 64px; }
+.df-wizard-compact .df-label { font-size: 10px; margin-bottom: 4px; letter-spacing: 0.1em; }
+.df-wizard-compact .df-card__body { gap: 12px; }
+.df-wizard-compact .df-card__body > * + * { margin-top: 10px; }
+
 .df-label {
   display: block;
   font-size: 11px;

@@ -1146,7 +1146,7 @@ export const ContractWizardPage: React.FC = () => {
 
       {/* Two-pane: form + summary */}
       <section className="grid gap-6">
-        <div className="df-card">
+        <div className="df-card df-wizard-compact">
           <div className="df-card__header">
             <div>
               <div className="df-card__hint">Étape {stepIdx + 1} / {STEPS.length}</div>
