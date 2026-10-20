@@ -103,6 +103,24 @@ export const AppLayout: React.FC = () => {
   });
   const criticalMaintenanceCount = maintenanceQ.data?.data?.criticalAlertsCount ?? 0;
 
+  // Demandes du site non traitées — compteur temps réel sur l'item sidebar.
+  // On ne demande qu'une page de résultat : seule `meta.new_count` nous
+  // intéresse pour le badge.
+  const websiteLeadsBadgeQ = useQuery({
+    queryKey: ['website-leads', 'new-count-badge'],
+    queryFn: async () => {
+      const { apiClient: api, getApiBase: base } = await import('@/services/apiClient');
+      if (!base()) return 0;
+      const res = await api<{ data: unknown[]; meta?: { new_count?: number } }>(
+        '/v1/website-leads?status=new&per_page=1',
+      );
+      return Number(res.meta?.new_count ?? 0);
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const websiteLeadsNewCount = websiteLeadsBadgeQ.data ?? 0;
+
   const fleetPendingQ = useQuery({
     queryKey: ['fleet', 'pending-docs'],
     queryFn: async () => {
@@ -212,6 +230,11 @@ export const AppLayout: React.FC = () => {
       {!sidebarCollapsed && it.to === '/fleet' && criticalMaintenanceCount > 0 && (
         <span className="ms-auto rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
           {criticalMaintenanceCount > 99 ? '99+' : criticalMaintenanceCount}
+        </span>
+      )}
+      {!sidebarCollapsed && it.to === '/reservations/website-leads' && websiteLeadsNewCount > 0 && (
+        <span className="ms-auto rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+          {websiteLeadsNewCount > 99 ? '99+' : websiteLeadsNewCount}
         </span>
       )}
     </NavLink>
