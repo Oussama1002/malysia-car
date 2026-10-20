@@ -174,7 +174,10 @@ const INITIAL: WizardState = {
   payments: [{ id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
   paymentTerms: '',
   expectedPaymentDay: 5,
-  startDate: null,
+  // Date de début = date système au moment où l'agent ouvre le wizard. Le
+  // champ est en lecture seule : la génération part toujours de maintenant,
+  // la Date de fin se dérive de la durée saisie.
+  startDate: new Date().toISOString().slice(0, 10),
   endDate: null,
   secondDriverName: '',
   assignedAgent: '',
@@ -1356,14 +1359,14 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'terms' && (
               <>
-                {/* Date de début (lecture seule — valeur figée depuis la
-                    réservation ou saisie plus bas). Le champ Date de fin
-                    éditable reste la source de vérité pour la durée. */}
+                {/* Date de début = date système, figée au moment où le
+                    contrat est généré. Lecture seule — c'est la source
+                    de vérité pour la durée, pas une saisie libre. */}
                 <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Field label="Date de début">
                     <DateField
                       className="df-input bg-slate-50 text-slate-500"
-                      value={state.startDate ?? ''}
+                      value={new Date().toISOString().slice(0, 10)}
                       onChange={() => {}}
                       disabled
                     />
@@ -1371,35 +1374,10 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {/* Date de début / fin — surfaced when the wizard was NOT
-                      pre-filled from a reservation, so the user can enter the
-                      window directly and the Durée is derived from it. When
-                      the contract comes from a reservation these are already
-                      set from the reservation window (see prefill effect). */}
-                  <Field label="Date de début *">
-                    <DateField
-                      className="df-input"
-                      value={state.startDate ?? ''}
-                      required
-                      onChange={(dfValue) => {
-                        const v = dfValue || null;
-                        setState((s) => {
-                          const next = { ...s, startDate: v };
-                          if (v && s.endDate) {
-                            const dur = durationBetween(v, s.endDate);
-                            next.durationMonths = dur.months;
-                            next.durationExtraDays = dur.days;
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    {!state.startDate && (
-                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
-                        Requis pour continuer.
-                      </div>
-                    )}
-                  </Field>
+                  {/* Date de début a été figée au-dessus (date système,
+                      lecture seule). On ne garde ici que la Date de fin
+                      éditable — la Durée se dérive automatiquement de
+                      start→end. */}
                   <Field label="Date de fin *">
                     <DateField
                       className="df-input"
