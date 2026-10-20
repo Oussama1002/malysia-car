@@ -125,6 +125,7 @@ class ReservationsRepo {
     String? reason,
     double? newRate,
     String? financialAction,
+    bool createMissions = true,
     bool oldVehicleRecovered = false,
   }) async {
     await _api.raw.post('/vehicle-swaps/instant', data: {
@@ -134,8 +135,41 @@ class ReservationsRepo {
       if (reason != null) 'reason': reason,
       if (newRate != null) 'new_rate': newRate,
       if (financialAction != null) 'financial_action': financialAction,
+      'create_missions': createMissions,
       'old_vehicle_recovered': oldVehicleRecovered,
     });
+  }
+
+  /// Dépose une demande de changement (statut pending) — pendant de
+  /// `opsApi.requestVehicleSwap()` côté web.
+  Future<void> requestVehicleSwap({
+    String? reservationId,
+    String? contractId,
+    required String newVehicleId,
+    String? reason,
+  }) async {
+    await _api.raw.post('/vehicle-swaps', data: {
+      if (reservationId != null) 'reservation_id': reservationId,
+      if (contractId != null) 'contract_id': contractId,
+      'new_vehicle_id': newVehicleId,
+      if (reason != null) 'reason': reason,
+    });
+  }
+
+  /// Historique des changements liés à la réservation ou au contrat.
+  Future<List<Map<String, dynamic>>> vehicleSwaps({
+    String? reservationId,
+    String? contractId,
+  }) async {
+    final data = await _api.getData('/vehicle-swaps', query: {
+      if (reservationId != null) 'reservation_id': reservationId,
+      if (contractId != null) 'contract_id': contractId,
+    });
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
+        .toList();
   }
 }
 
