@@ -20,7 +20,10 @@ class WebsiteLeadController extends Controller
     public function index(Request $request): JsonResponse
     {
         $q = WebsiteLead::query()
-            ->with(['handler', 'vehicle:id,registration_number,brand_id,model_id'])
+            // On charge aussi daily_rental_price + rental_price_tiers pour
+            // pouvoir pré-remplir le Tarif / jour de la future réservation
+            // avec le prix affiché au client sur la landing.
+            ->with(['handler', 'vehicle:id,registration_number,brand_id,model_id,daily_rental_price,rental_price_tiers'])
             ->orderByDesc('created_at');
 
         if ($status = $request->query('status')) {

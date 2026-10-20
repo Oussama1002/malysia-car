@@ -528,35 +528,40 @@ export const ReservationsOpsPage: React.FC = () => {
     const startInput = isoToLocalInput(lead.pickup_at);
     const endInput = isoToLocalInput(lead.return_at);
 
-    // 1) Véhicule : match "best-score" sur mots de ≥3 caractères.
-    //    Tarif : NOT prefilled. Even for a lead coming from the landing
-    //    page the daily rate must be entered by the agent on the
-    //    réservation form; a vehicle's fleet tarif never flows here.
-    //    See feedback-no-vehicle-tarif.
-    let matchedVehicleId = '';
-    const hint = (lead.vehicle_label ?? '').trim();
-    if (hint) {
-      const words = hint
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((w) => w.length >= 3);
-      let bestScore = 0;
-      let best: FleetVehicleDto | null = null;
-      for (const v of vehiclesQ.data ?? []) {
-        const hay = `${v.brand ?? ''} ${v.model ?? ''} ${v.registration ?? ''}`.toLowerCase();
-        const score = words.reduce((s, w) => s + (hay.includes(w) ? 1 : 0), 0);
-        if (score > bestScore) { bestScore = score; best = v; }
-      }
-      if (best) {
-        matchedVehicleId = String(best.id);
+    // 1) Véhicule : lien direct si le lead a été laissé sur une fiche
+    //    précise, sinon match "best-score" sur mots de ≥3 caractères.
+    //    Tarif : exception à la règle feedback-no-vehicle-tarif —
+    //    AGENTS.md autorise une réservation `website_lead` à hériter du
+    //    tarif/jour affiché au client sur la landing. On le reçoit déjà
+    //    pré-calculé dans `lead.daily_rate`.
+    let matchedVehicleId = String(lead.vehicle_id ?? '');
+    if (!matchedVehicleId) {
+      const hint = (lead.vehicle_label ?? '').trim();
+      if (hint) {
+        const words = hint
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((w) => w.length >= 3);
+        let bestScore = 0;
+        let best: FleetVehicleDto | null = null;
+        for (const v of vehiclesQ.data ?? []) {
+          const hay = `${v.brand ?? ''} ${v.model ?? ''} ${v.registration ?? ''}`.toLowerCase();
+          const score = words.reduce((s, w) => s + (hay.includes(w) ? 1 : 0), 0);
+          if (score > bestScore) { bestScore = score; best = v; }
+        }
+        if (best) {
+          matchedVehicleId = String(best.id);
+        }
       }
     }
 
+    const quotedDaily = Number(lead.daily_rate ?? 0);
     setForm((s) => ({
       ...s,
       desired_start_at: startInput || s.desired_start_at,
       desired_end_at: endInput || s.desired_end_at,
       vehicle_id: matchedVehicleId || s.vehicle_id,
+      daily_rate: quotedDaily > 0 ? String(quotedDaily) : s.daily_rate,
     }));
 
     // 2) Client : match par les 8 derniers chiffres du téléphone, sinon on

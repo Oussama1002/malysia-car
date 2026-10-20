@@ -10,9 +10,14 @@ export interface FromLeadNavState {
   full_name: string;
   phone: string;
   email?: string | null;
+  vehicle_id?: string | null;
   vehicle_label?: string | null;
   pickup_at?: string | null;
   return_at?: string | null;
+  /** Tarif / jour affiché au client sur la landing (le plus bas palier
+   *  disponible, sinon le daily_rental_price du véhicule). Pré-remplit la
+   *  modale « Nouvelle réservation ». */
+  daily_rate?: number | null;
 }
 
 /** Une demande laissée sur le site public de l'agence. */
@@ -28,6 +33,10 @@ interface WebsiteLead {
   vehicle?: {
     id: string;
     registration_number?: string | null;
+    /** Tarifs renseignés côté fleet — repris pour pré-remplir la future
+     *  réservation (plus petit palier > tarif journalier). */
+    daily_rental_price?: number | string | null;
+    rental_price_tiers?: Record<string, number | string> | null;
   } | null;
   /** Résultat de la vérif de disponibilité sur la période souhaitée.
    *  `null` quand le véhicule ou les dates ne sont pas renseignés. */
@@ -420,14 +429,30 @@ export const WebsiteLeadsPage: React.FC = () => {
                         // là-bas après la création effective. Si l'agent veut
                         // juste marquer la demande sans créer, il peut rouvrir
                         // la page et utiliser l'ancien raccourci (ci-dessous).
+                        // Tarif / jour tel qu'il a été présenté au client :
+                        // on prend le palier le plus bas s'il existe, sinon
+                        // le daily_rental_price du véhicule. C'est le même
+                        // calcul que la landing publique.
+                        const tiers = lead.vehicle?.rental_price_tiers ?? null;
+                        const tierValues = tiers
+                          ? Object.values(tiers)
+                              .map((n) => Number(n))
+                              .filter((n) => Number.isFinite(n) && n > 0)
+                          : [];
+                        const dailyFromTiers = tierValues.length ? Math.min(...tierValues) : null;
+                        const dailyRentalPrice = Number(lead.vehicle?.daily_rental_price ?? 0);
+                        const quotedDaily = dailyFromTiers
+                          ?? (dailyRentalPrice > 0 ? dailyRentalPrice : null);
                         const payload: FromLeadNavState = {
                           id: lead.id,
                           full_name: lead.full_name,
                           phone: lead.phone,
                           email: lead.email,
+                          vehicle_id: lead.vehicle?.id ?? null,
                           vehicle_label: lead.vehicle_label,
                           pickup_at: lead.pickup_at,
                           return_at: lead.return_at,
+                          daily_rate: quotedDaily,
                         };
                         nav('/reservations', { state: { fromLead: payload } });
                       }}
