@@ -190,6 +190,20 @@ class VehiclesRepo {
     return {'document_id': docId, 'fields': fields};
   }
 
+  /// Rattache un scan OCR (ReaderDocument) à une entité véhicule. Le
+  /// backend crée en même temps un entity_attachment pour que le fichier
+  /// apparaisse sous l'onglet Documents du véhicule et sur Check-In /
+  /// Check-Out.
+  Future<void> linkReaderDocumentToVehicle({
+    required String readerDocumentId,
+    required String vehicleId,
+  }) async {
+    await _api.raw.post(
+      '/document-reader/documents/$readerDocumentId/link',
+      data: {'entity_type': 'vehicle', 'entity_id': vehicleId},
+    );
+  }
+
   Future<VehicleDetailDto> fetchDetail(String id) async {
     final data = await _api.getData('/vehicles/$id');
     if (data is Map) {

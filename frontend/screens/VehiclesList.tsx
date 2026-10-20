@@ -254,6 +254,10 @@ const VehiclesList: React.FC = () => {
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm());
   const carteGriseRef = useRef<HTMLDivElement>(null);
+  // Les scans OCR arrivent sur /v1/document-reader (statut OCR) et pas
+  // encore rattachés au véhicule. On garde leurs IDs pour les lier à
+  // la fiche véhicule juste après la création/édition.
+  const pendingReaderDocs = useRef<string[]>([]);
   // ── View mode (cards / table / analysis) ────────────────────────────────
   // The 'analysis' mode merges the former /fleet/analysis page into this
   // screen so the sidebar stays short and the dirigeant has one place for
@@ -529,6 +533,7 @@ const VehiclesList: React.FC = () => {
 
   const handleOpenModal = async (v?: Vehicle) => {
     selectedPhotoFiles.current = [];
+    pendingReaderDocs.current = [];
     if (!v) {
       setEditingVehicle(null);
       setFormData(emptyForm());
@@ -611,6 +616,19 @@ const VehiclesList: React.FC = () => {
             throw new Error((err as any)?.message ?? `Photo upload failed (${photoRes.status})`);
           }
           selectedPhotoFiles.current = [];
+        }
+        // Rattache les scans OCR en attente à la fiche véhicule : le
+        // backend crée alors un entity_attachment visible sous l'onglet
+        // Documents du véhicule, et surfacé sur Check-In / Check-Out.
+        if (vehicleId && pendingReaderDocs.current.length > 0) {
+          const ids = [...pendingReaderDocs.current];
+          pendingReaderDocs.current = [];
+          await Promise.all(ids.map((id) =>
+            apiClient(`/v1/document-reader/documents/${id}/link`, {
+              method: 'POST',
+              body: JSON.stringify({ entity_type: 'vehicle', entity_id: vehicleId }),
+            }).catch(() => { /* non-bloquant : la fiche véhicule reste créée */ })
+          ));
         }
         setIsModalOpen(false);
         fetchVehicles();
@@ -1273,10 +1291,15 @@ const VehiclesList: React.FC = () => {
               <VehicleDocumentScanner
                 carteGriseRecue={formData.carteGriseStatus === 'recue'}
                 carteGriseRef={carteGriseRef}
-                onDocumentUploaded={(slot) => {
+                onDocumentUploaded={(slot, readerDocumentId) => {
                   // Uploader la carte grise => statut « Reçue » automatiquement.
                   if (slot === 'registration_card') {
                     setFormData(fd => ({ ...fd, carteGriseStatus: 'recue' }));
+                  }
+                  // Mémorise l'ID pour pouvoir rattacher le fichier à la
+                  // fiche véhicule une fois le véhicule créé/sauvegardé.
+                  if (readerDocumentId && !pendingReaderDocs.current.includes(readerDocumentId)) {
+                    pendingReaderDocs.current.push(readerDocumentId);
                   }
                 }}
                 onPrefill={(data) => setFormData(fd => {

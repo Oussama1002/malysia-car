@@ -842,6 +842,22 @@ class _NewVehicleScreenState extends ConsumerState<NewVehicleScreen> {
           });
         }
       }
+      // Rattache les scans OCR au véhicule : les fichiers étaient restés
+      // dans document_reader sans être liés, donc invisibles côté
+      // véhicule. Le backend crée un entity_attachment lors du link, ce
+      // qui les fait apparaître sur l'onglet Documents du véhicule.
+      if (id.isNotEmpty) {
+        final readerIds = _scanDocId.values.whereType<String>().toSet();
+        for (final rid in readerIds) {
+          try {
+            await ref
+                .read(vehiclesRepoProvider)
+                .linkReaderDocumentToVehicle(readerDocumentId: rid, vehicleId: id);
+          } catch (_) {
+            // non-bloquant : la fiche véhicule reste créée
+          }
+        }
+      }
       ref.invalidate(vehiclesListProvider);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
