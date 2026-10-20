@@ -1356,13 +1356,14 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'terms' && (
               <>
-                {/* Date & heure de création (auto, non modifiable) */}
+                {/* Date de début (lecture seule — valeur figée depuis la
+                    réservation ou saisie plus bas). Le champ Date de fin
+                    éditable reste la source de vérité pour la durée. */}
                 <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Date & heure de création">
+                  <Field label="Date de début">
                     <DateField
-                      withTime
                       className="df-input bg-slate-50 text-slate-500"
-                      value={new Date().toISOString().slice(0, 16)}
+                      value={state.startDate ?? ''}
                       onChange={() => {}}
                       disabled
                     />
