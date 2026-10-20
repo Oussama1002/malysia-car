@@ -377,20 +377,44 @@ body {
 textarea.df-input { height: auto; padding: 12px 14px; min-height: 96px; resize: vertical; }
 select.df-input { cursor: pointer; }
 
-/* Mode compact — appliqué sur la carte Détails contrat du wizard : on
- * ne rétrécit PAS la hauteur (elle reste confortable), seulement la
- * LARGEUR des champs — un input ne doit pas s'étirer sur toute la ligne
- * quand il attend un petit nombre ou une plaque. Chaque Field pose un
- * max-width ciblé via les sous-classes ci-dessous ; par défaut on
- * plafonne tous les .df-input de la carte. Les inputs qui ont vraiment
- * besoin de place (dropdowns clients/véhicules, textarea notes) sont
- * marqués .df-input--wide pour reprendre toute la largeur. */
+/* Mode compact — carte Détails contrat du wizard. On laisse la hauteur
+ * tranquille et on recompacte le layout : chaque Field prend la largeur
+ * de son contenu, les Fields s'alignent les uns à côté des autres avec
+ * un gap minuscule, et les grid 2 colonnes qui séparaient Durée / Loyer
+ * sont forcées en flex-wrap pour qu'il n'y ait plus d'espace vide. Les
+ * dropdowns Client / Véhicule gardent la largeur complète via
+ * .df-input--wide. */
 .df-wizard-compact .df-input {
-  max-width: 240px;
+  max-width: 220px;
 }
 .df-wizard-compact textarea.df-input,
 .df-wizard-compact .df-input.df-input--wide {
   max-width: 100%;
+}
+
+/* Tous les sous-blocs du formulaire : passage de .grid ... à flex-wrap
+ * serré. On vise .grid directement (et pas .grid-cols-*) pour couvrir
+ * les deux grilles 2-colonnes existantes. */
+.df-wizard-compact .df-card__body > .grid,
+.df-wizard-compact .df-card__body .grid.gap-4,
+.df-wizard-compact .df-card__body .grid.gap-6 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+/* Chaque Field (bloc label+input) rétrécit à son contenu au lieu de
+ * remplir la demi-colonne. */
+.df-wizard-compact .df-card__body > .grid > div,
+.df-wizard-compact .df-card__body .grid.gap-4 > div,
+.df-wizard-compact .df-card__body .grid.gap-6 > div {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+/* Les blocs explicitement « wide » (Client, Véhicule, Type cards)
+ * reprennent toute la largeur. */
+.df-wizard-compact .df-field--wide,
+.df-wizard-compact .df-card__body > .grid > .df-field--wide {
+  flex: 1 1 100%;
 }
 
 .df-label {
