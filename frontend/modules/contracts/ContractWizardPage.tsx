@@ -1172,7 +1172,7 @@ export const ContractWizardPage: React.FC = () => {
                   <label className="df-label">Rechercher un client</label>
                   <div className="flex items-stretch gap-2">
                     <select
-                      className="df-input flex-1"
+                      className="df-input df-input--wide flex-1"
                       value={state.clientId ?? ''}
                       onChange={(e) => patch('clientId', e.target.value || null)}
                     >
@@ -1268,7 +1268,7 @@ export const ContractWizardPage: React.FC = () => {
                 <div>
                   <label className="df-label">Véhicule disponible</label>
                   <select
-                    className="df-input"
+                    className="df-input df-input--wide"
                     value={state.vehicleId ?? ''}
                     onChange={(e) => patch('vehicleId', e.target.value || null)}
                   >
