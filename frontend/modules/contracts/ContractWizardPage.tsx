@@ -601,10 +601,13 @@ export const ContractWizardPage: React.FC = () => {
   );
   const selectedType = CONTRACT_TYPES.find((t) => t.value === state.type);
 
-  // When the rental is less than a month long, treat monthlyRentMad as a
-  // daily rate — the UI relabels the field "Loyer journalier" accordingly and
-  // the total engagement is rent × days instead of rent × months.
-  const isDailyRent = state.durationMonths === 0 && state.durationExtraDays > 0;
+  // Un contrat LCD facture au jour — le champ "Loyer" représente alors un
+  // tarif / jour et le total est rent × jours. En LLD/LOA/… c'est une
+  // mensualité, et le total devient rent × mois. On s'aligne désormais sur
+  // le TYPE de contrat (plus déterministe que la durée saisie), avec un
+  // ancien fallback "mois=0 & jours>0" pour les brouillons existants.
+  const isDailyRent = state.type === 'LOCATION_COURTE'
+    || (state.durationMonths === 0 && state.durationExtraDays > 0);
   const totalAmount = Math.round(
     isDailyRent
       ? state.monthlyRentMad * state.durationExtraDays
@@ -1459,7 +1462,7 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
-                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer journalier' : 'Loyer mensuel'} (MAD) *`}>
+                  <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer / jour' : 'Loyer mensuel'} (MAD) *`}>
                     <input
                       type="number"
                       min={1}
@@ -1906,7 +1909,7 @@ export const ContractWizardPage: React.FC = () => {
                 }
               />
               <SummaryRow
-                label={isDailyRent ? 'Loyer journalier' : 'Mensualité'}
+                label={isDailyRent ? 'Loyer / jour' : 'Mensualité'}
                 value={formatCurrencyMad(state.monthlyRentMad)}
                 highlight
               />

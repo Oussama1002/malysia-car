@@ -1053,7 +1053,7 @@ class _NewContractFromReservationScreenState
         _Section('${_type == 'CREDIT_AUTO'
             ? 'Mensualité'
             : isShort
-                ? 'Prix par jour'
+                ? 'Loyer / jour'
                 : 'Loyer mensuel'} (MAD) *'),
         _NumberField(
           controller: _monthly,
@@ -1392,7 +1392,7 @@ class _NewContractFromReservationScreenState
         _type == 'CREDIT_AUTO'
             ? 'Mensualité'
             : _isShort
-                ? 'Prix / jour'
+                ? 'Loyer / jour'
                 : 'Loyer mensuel',
         '${money.format(double.tryParse(_monthly.text) ?? 0)} MAD'
       ),
