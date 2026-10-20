@@ -233,7 +233,7 @@ export const AppLayout: React.FC = () => {
         </span>
       )}
       {!sidebarCollapsed && it.to === '/reservations/website-leads' && websiteLeadsNewCount > 0 && (
-        <span className="ms-auto rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+        <span className="ms-auto rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
           {websiteLeadsNewCount > 99 ? '99+' : websiteLeadsNewCount}
         </span>
       )}
