@@ -174,10 +174,10 @@ const INITIAL: WizardState = {
   payments: [{ id: String(Date.now()), method: 'virement', amount: '', reference: '', chequeNumber: '' }],
   paymentTerms: '',
   expectedPaymentDay: 5,
-  // Date de début = date système au moment où l'agent ouvre le wizard. Le
-  // champ est en lecture seule : la génération part toujours de maintenant,
+  // Date & heure de début = horodatage système au moment où l'agent ouvre
+  // le wizard. Lecture seule : la génération part toujours de maintenant,
   // la Date de fin se dérive de la durée saisie.
-  startDate: new Date().toISOString().slice(0, 10),
+  startDate: new Date().toISOString().slice(0, 16),
   endDate: null,
   secondDriverName: '',
   assignedAgent: '',
@@ -219,18 +219,23 @@ async function scanCheque(file: File): Promise<WizardChequeScan> {
   return res.data ?? {};
 }
 
-/** Ajoute `months` + `days` à une date ISO `YYYY-MM-DD` et retourne la
- *  nouvelle date au même format. Permet de dériver Date de fin à partir
- *  de Date de début + Durée sans se tromper sur la longueur des mois. */
+/** Ajoute `months` + `days` à une date ISO (`YYYY-MM-DD` ou
+ *  `YYYY-MM-DDTHH:mm`) et retourne la nouvelle date au même format que
+ *  l'entrée (avec heure si l'entrée en avait une). */
 function addDurationIso(startIso: string, months: number, days: number): string {
-  const d = new Date(`${startIso.slice(0, 10)}T00:00:00`);
+  const hasTime = /T\d{2}:\d{2}/.test(startIso);
+  const base = hasTime ? startIso.slice(0, 16) : `${startIso.slice(0, 10)}T00:00:00`;
+  const d = new Date(base);
   if (isNaN(d.getTime())) return '';
   d.setMonth(d.getMonth() + (Number.isFinite(months) ? months : 0));
   d.setDate(d.getDate() + (Number.isFinite(days) ? days : 0));
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  if (!hasTime) return `${yyyy}-${mm}-${dd}`;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
 function durationBetween(start: string, end: string): { months: number; days: number } {
@@ -1377,10 +1382,11 @@ export const ContractWizardPage: React.FC = () => {
                     contrat est généré. Lecture seule — c'est la source
                     de vérité pour la durée, pas une saisie libre. */}
                 <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Date de début">
+                  <Field label="Date & heure de début">
                     <DateField
+                      withTime
                       className="df-input bg-slate-50 text-slate-500"
-                      value={new Date().toISOString().slice(0, 10)}
+                      value={new Date().toISOString().slice(0, 16)}
                       onChange={() => {}}
                       disabled
                     />
@@ -1446,8 +1452,9 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
-                  <Field label="Date de fin *">
+                  <Field label="Date & heure de fin *">
                     <DateField
+                      withTime
                       className="df-input"
                       value={state.endDate ?? ''}
                       required

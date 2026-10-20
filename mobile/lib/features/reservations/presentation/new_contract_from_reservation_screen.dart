@@ -1113,14 +1113,16 @@ class _NewContractFromReservationScreenState
         // jours pour LCD, en mois arrondi pour LLD/LOA/…) pour que les
         // deux champs restent cohérents dans les deux sens.
         _DateField(
-            label: 'Date de début',
+            label: 'Date & heure de début',
             value: _startDate ?? DateTime.now(),
             onChanged: (_) {},
             dateFmt: dateFmt,
-            enabled: false),
+            enabled: false,
+            withTime: true),
         _DateField(
-            label: 'Date de fin',
+            label: 'Date & heure de fin',
             value: _endDate,
+            withTime: true,
             onChanged: (d) {
               if (d == null) return;
               final start = _startDate ?? DateTime.now();
@@ -1823,15 +1825,19 @@ class _DateField extends StatelessWidget {
     required this.onChanged,
     required this.dateFmt,
     this.enabled = true,
+    this.withTime = false,
   });
   final String label;
   final DateTime? value;
   final ValueChanged<DateTime?> onChanged;
   final DateFormat dateFmt;
   final bool enabled;
+  final bool withTime;
 
   @override
   Widget build(BuildContext context) {
+    final effFmt =
+        withTime ? DateFormat('dd/MM/yyyy HH:mm', 'fr') : dateFmt;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
@@ -1844,7 +1850,18 @@ class _DateField extends StatelessWidget {
                   firstDate: DateTime(2015),
                   lastDate: DateTime(2100),
                 );
-                if (d != null) onChanged(d);
+                if (d == null) return;
+                if (!withTime) {
+                  onChanged(d);
+                  return;
+                }
+                if (!context.mounted) return;
+                final t = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(value ?? DateTime.now()),
+                );
+                if (t == null) return;
+                onChanged(DateTime(d.year, d.month, d.day, t.hour, t.minute));
               },
         child: InputDecorator(
           decoration: _dec(label: label).copyWith(
@@ -1852,7 +1869,7 @@ class _DateField extends StatelessWidget {
             fillColor: !enabled ? const Color(0xFFF1F5F9) : null,
           ),
           child: Text(
-            value != null ? dateFmt.format(value!) : '—',
+            value != null ? effFmt.format(value!) : '—',
             style: TextStyle(
               color: enabled ? null : Colors.black54,
             ),
