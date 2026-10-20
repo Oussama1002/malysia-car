@@ -1494,6 +1494,23 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
+                  {/* Montant total — Loyer × Durée. Lecture seule : recalculé
+                      à la volée pour que l'agent voit tout de suite ce qui
+                      sera facturé au client. */}
+                  <Field label="Montant total (MAD)">
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      className="df-input bg-slate-50 font-black text-[color:var(--df-brand-600)]"
+                      value={totalAmount > 0 ? formatCurrencyMad(totalAmount) : '—'}
+                    />
+                    <div className="mt-1 text-[10px] text-[color:var(--df-text-muted)]">
+                      {isDailyRent
+                        ? `${state.monthlyRentMad || 0} MAD × ${state.durationExtraDays || 0} jour${state.durationExtraDays > 1 ? 's' : ''}`
+                        : `${state.monthlyRentMad || 0} MAD × ${state.durationMonths || 0} mois${state.durationExtraDays > 0 ? ` + ${state.durationExtraDays} j` : ''}`}
+                    </div>
+                  </Field>
                   <Field label="Kilométrage mensuel inclus *">
                     <input
                       type="number"
