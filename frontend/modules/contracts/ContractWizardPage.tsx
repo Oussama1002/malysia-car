@@ -219,6 +219,20 @@ async function scanCheque(file: File): Promise<WizardChequeScan> {
   return res.data ?? {};
 }
 
+/** Ajoute `months` + `days` à une date ISO `YYYY-MM-DD` et retourne la
+ *  nouvelle date au même format. Permet de dériver Date de fin à partir
+ *  de Date de début + Durée sans se tromper sur la longueur des mois. */
+function addDurationIso(startIso: string, months: number, days: number): string {
+  const d = new Date(`${startIso.slice(0, 10)}T00:00:00`);
+  if (isNaN(d.getTime())) return '';
+  d.setMonth(d.getMonth() + (Number.isFinite(months) ? months : 0));
+  d.setDate(d.getDate() + (Number.isFinite(days) ? days : 0));
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function durationBetween(start: string, end: string): { months: number; days: number } {
   const s = new Date(start);
   const e = new Date(end);
@@ -1374,72 +1388,70 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {/* Date de début a été figée au-dessus (date système,
-                      lecture seule). On ne garde ici que la Date de fin
-                      éditable — la Durée se dérive automatiquement de
-                      start→end. */}
-                  <Field label="Date de fin *">
-                    <DateField
-                      className="df-input"
-                      value={state.endDate ?? ''}
-                      required
-                      onChange={(dfValue) => {
-                        const v = dfValue || null;
-                        setState((s) => {
-                          const next = { ...s, endDate: v };
-                          if (v && s.startDate) {
-                            const dur = durationBetween(s.startDate, v);
-                            next.durationMonths = dur.months;
-                            next.durationExtraDays = dur.days;
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    {!state.endDate && (
-                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
-                        Requis pour continuer.
-                      </div>
-                    )}
-                  </Field>
-                  <Field label="Durée (calculée)">
+                  {/* Durée saisie en premier (mois pour LLD/LOA/…, jours
+                      pour LCD) ; la Date de fin est recalculée à chaque
+                      changement et s'affiche en lecture seule. */}
+                  <Field label="Durée *">
                     <div className="flex items-stretch gap-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            disabled
-                            className="df-input bg-slate-50 cursor-not-allowed"
-                            value={state.durationMonths}
-                            readOnly
-                          />
-                          <span className="text-xs font-bold text-slate-500">mois</span>
+                      {!isDailyRent && (
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              className="df-input"
+                              value={state.durationMonths || ''}
+                              onChange={(e) => {
+                                const months = Math.max(0, Number(e.target.value) || 0);
+                                setState((s) => {
+                                  const next = { ...s, durationMonths: months };
+                                  if (s.startDate) {
+                                    next.endDate = addDurationIso(s.startDate, months, s.durationExtraDays);
+                                  }
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span className="text-xs font-bold text-slate-500">mois</span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div className="flex-1">
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
                             min={0}
-                            max={30}
-                            disabled
-                            className="df-input bg-slate-50 cursor-not-allowed"
-                            value={state.durationExtraDays}
-                            readOnly
+                            max={isDailyRent ? undefined : 30}
+                            className="df-input"
+                            value={state.durationExtraDays || ''}
+                            onChange={(e) => {
+                              const days = Math.max(0, Number(e.target.value) || 0);
+                              setState((s) => {
+                                const next = { ...s, durationExtraDays: days };
+                                if (s.startDate) {
+                                  next.endDate = addDurationIso(s.startDate, s.durationMonths, days);
+                                }
+                                return next;
+                              });
+                            }}
                           />
                           <span className="text-xs font-bold text-slate-500">jours</span>
                         </div>
                       </div>
                     </div>
-                    {(state.durationMonths > 0 || state.durationExtraDays > 0) && (
-                      <div className="mt-1 text-[11px] font-semibold text-slate-500">
-                        Total :{' '}
-                        {state.durationMonths > 0 && <>{state.durationMonths} mois</>}
-                        {state.durationMonths > 0 && state.durationExtraDays > 0 && <> et </>}
-                        {state.durationExtraDays > 0 && <>{state.durationExtraDays} jour{state.durationExtraDays > 1 ? 's' : ''}</>}
+                    {(state.durationMonths === 0 && state.durationExtraDays === 0) && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
                       </div>
                     )}
+                  </Field>
+                  <Field label="Date de fin (calculée)">
+                    <DateField
+                      className="df-input bg-slate-50 text-slate-500"
+                      value={state.endDate ?? ''}
+                      disabled
+                      onChange={() => {}}
+                    />
                   </Field>
                   <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer / jour' : 'Loyer mensuel'} (MAD) *`}>
                     <input

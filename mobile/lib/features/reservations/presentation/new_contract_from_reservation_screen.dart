@@ -1048,8 +1048,24 @@ class _NewContractFromReservationScreenState
           },
         ),
         const SizedBox(height: 6),
-        _Section(isShort ? 'Durée (jours)' : 'Durée (mois)'),
-        _NumberField(controller: _duration),
+        _Section(isShort ? 'Durée (jours) *' : 'Durée (mois) *'),
+        _NumberField(
+          controller: _duration,
+          // L'agent saisit la durée en premier — la Date de fin est
+          // recalculée depuis Date de début + Durée (en jours pour LCD,
+          // en mois pour LLD/LOA/…). Date de début reste figée sur
+          // aujourd'hui.
+          onChanged: (v) {
+            final n = int.tryParse(v.trim()) ?? 0;
+            final start = _startDate ?? DateTime.now();
+            setState(() {
+              _startDate = start;
+              _endDate = isShort
+                  ? start.add(Duration(days: n))
+                  : DateTime(start.year, start.month + n, start.day);
+            });
+          },
+        ),
         _Section('${_type == 'CREDIT_AUTO'
             ? 'Mensualité'
             : isShort
@@ -1092,16 +1108,20 @@ class _NewContractFromReservationScreenState
           _NumberField(controller: _residual),
         ],
         const _Section('Période *'),
+        // Date de début = date système, verrouillée. Date de fin se dérive
+        // de la durée saisie plus haut.
         _DateField(
             label: 'Date de début',
-            value: _startDate,
-            onChanged: (d) => setState(() => _startDate = d),
-            dateFmt: dateFmt),
+            value: _startDate ?? DateTime.now(),
+            onChanged: (_) {},
+            dateFmt: dateFmt,
+            enabled: false),
         _DateField(
-            label: 'Date de fin',
+            label: 'Date de fin (calculée)',
             value: _endDate,
-            onChanged: (d) => setState(() => _endDate = d),
-            dateFmt: dateFmt),
+            onChanged: (_) {},
+            dateFmt: dateFmt,
+            enabled: false),
         const _Section('Modes de paiement'),
         for (final p in _payments) _paymentCard(p),
         Align(
@@ -1787,29 +1807,41 @@ class _DateField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.dateFmt,
+    this.enabled = true,
   });
   final String label;
   final DateTime? value;
   final ValueChanged<DateTime?> onChanged;
   final DateFormat dateFmt;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
-        onTap: () async {
-          final d = await showDatePicker(
-            context: context,
-            initialDate: value ?? DateTime.now(),
-            firstDate: DateTime(2015),
-            lastDate: DateTime(2100),
-          );
-          if (d != null) onChanged(d);
-        },
+        onTap: !enabled
+            ? null
+            : () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: value ?? DateTime.now(),
+                  firstDate: DateTime(2015),
+                  lastDate: DateTime(2100),
+                );
+                if (d != null) onChanged(d);
+              },
         child: InputDecorator(
-          decoration: _dec(label: label),
-          child: Text(value != null ? dateFmt.format(value!) : '—'),
+          decoration: _dec(label: label).copyWith(
+            filled: !enabled,
+            fillColor: !enabled ? const Color(0xFFF1F5F9) : null,
+          ),
+          child: Text(
+            value != null ? dateFmt.format(value!) : '—',
+            style: TextStyle(
+              color: enabled ? null : Colors.black54,
+            ),
+          ),
         ),
       ),
     );
