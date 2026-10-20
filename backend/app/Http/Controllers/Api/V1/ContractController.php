@@ -246,28 +246,45 @@ class ContractController extends Controller
 
         // Auto-create a reservation if none exists for this contract's customer+vehicle+period.
         // Business rule: every contract must have a matching reservation.
-        $this->ensureReservationForContract($c, $request);
+        $linkedReservation = $this->ensureReservationForContract($c, $request);
 
         // Business rule: every contract must also have a Facture — the agent
         // and the client get the same document on web and mobile without
         // having to press a second button. Idempotent — reuses an existing
-        // invoice when one already covers the reservation.
-        try {
-            $linkedReservation = $c->reservation_id
-                ? Reservation::withoutGlobalScopes()->find($c->reservation_id)
-                : Reservation::withoutGlobalScopes()
-                    ->where('customer_id', $c->customer_id)
-                    ->where('vehicle_id', $c->vehicle_id)
-                    ->whereNotIn('status', ['cancelled'])
-                    ->orderByDesc('created_at')
-                    ->first();
-            if ($linkedReservation) {
-                $this->reservationInvoiceService->ensure($linkedReservation, auth()->id());
+        // invoice when one already covers the reservation. We trace both the
+        // success and the failure so a missing facture can be investigated.
+        $linkedReservation ??= $c->reservation_id
+            ? Reservation::withoutGlobalScopes()->find($c->reservation_id)
+            : Reservation::withoutGlobalScopes()
+                ->where('customer_id', $c->customer_id)
+                ->where('vehicle_id', $c->vehicle_id)
+                ->whereNotIn('status', ['cancelled'])
+                ->orderByDesc('created_at')
+                ->first();
+        if ($linkedReservation) {
+            try {
+                $invoice = $this->reservationInvoiceService->ensure($linkedReservation, auth()->id());
+                \Illuminate\Support\Facades\Log::info('contract.auto_invoice_ensured', [
+                    'contract_id' => $c->id,
+                    'reservation_id' => $linkedReservation->id,
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'total_amount' => (float) $invoice->total_amount,
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('contract.auto_invoice_failed', [
+                    'contract_id' => $c->id,
+                    'reservation_id' => $linkedReservation->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('contract.auto_invoice_failed', [
+        } else {
+            \Illuminate\Support\Facades\Log::warning('contract.auto_invoice_skipped_no_reservation', [
                 'contract_id' => $c->id,
-                'error' => $e->getMessage(),
+                'has_reservation_id' => (bool) $c->reservation_id,
+                'customer_id' => $c->customer_id,
+                'vehicle_id' => $c->vehicle_id,
             ]);
         }
 
@@ -788,12 +805,16 @@ class ContractController extends Controller
      * Ensure a reservation exists for this contract.
      * Business rule: every valid contract must have an associated reservation.
      * If no reservation exists for the same customer+vehicle+period, auto-create one.
+     *
+     * Returns the resolved reservation (existing or newly created) so the caller
+     * can wire the invoice onto it; returns null only when the contract is too
+     * incomplete to tie a reservation to it (no vehicle or no start date).
      */
-    private function ensureReservationForContract(Contract $contract, Request $request): void
+    private function ensureReservationForContract(Contract $contract, Request $request): ?Reservation
     {
         // Skip if no vehicle or dates — contract not yet fully formed
         if (! $contract->vehicle_id || ! $contract->start_date) {
-            return;
+            return null;
         }
 
         try {
@@ -819,7 +840,8 @@ class ContractController extends Controller
                     $existing->update(['status' => 'reserved']);
                     AuditLogger::statusChanged($existing, 'draft', 'reserved', $request->user(), $request, module: 'rentals');
                 }
-                return;
+                $this->bindContractToReservation($contract, $existing);
+                return $existing;
             }
 
             // Auto-create reservation
@@ -841,10 +863,38 @@ class ContractController extends Controller
             ]);
 
             AuditLogger::statusChanged($reservation, 'new', 'reserved', $request->user(), $request, module: 'rentals');
+            $this->bindContractToReservation($contract, $reservation);
+            return $reservation;
         } catch (\Throwable $e) {
             // Non-blocking — contract creation should never fail because of reservation auto-creation
             \Illuminate\Support\Facades\Log::warning('contract.auto_reservation_failed', [
                 'contract_id' => $contract->id,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Persist the reservation_id onto the contract so later reads
+     * (ReservationInvoiceService::resolveContract, swap, activation, …) can
+     * resolve the pair without a customer+vehicle scan.
+     */
+    private function bindContractToReservation(Contract $contract, Reservation $reservation): void
+    {
+        if (! \Schema::hasColumn('contracts', 'reservation_id')) {
+            return;
+        }
+        if ((string) $contract->reservation_id === (string) $reservation->id) {
+            return;
+        }
+        try {
+            $contract->reservation_id = (string) $reservation->id;
+            $contract->saveQuietly();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('contract.bind_reservation_failed', [
+                'contract_id' => $contract->id,
+                'reservation_id' => $reservation->id,
                 'error' => $e->getMessage(),
             ]);
         }

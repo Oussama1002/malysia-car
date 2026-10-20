@@ -379,19 +379,44 @@ class ReservationController extends Controller
             ->orderByDesc('payment_date')
             ->get();
 
-        // Invoices linked via invoice_line metadata
+        // Factures de la réservation : on les retrouve par
+        //   (a) invoice.contract_id = contrat lié à la réservation  — chemin
+        //       direct, le plus fiable (indexé, pas de parsing JSON);
+        //   (b) invoice_lines.metadata.reservation_id = <id>          — repli
+        //       pour les factures saisies à la main sans contract_id, et
+        //       pour les anciennes factures d'avant la liaison directe.
         $invoices = collect();
         try {
+            $contractIdsForReservation = Contract::withoutGlobalScopes()
+                ->where(function ($q) use ($reservation) {
+                    $q->where('reservation_id', $reservation->id)
+                      ->orWhere(function ($qq) use ($reservation) {
+                          $qq->where('customer_id', $reservation->customer_id)
+                             ->where('vehicle_id', $reservation->vehicle_id)
+                             ->whereNotIn('status', ['cancelled', 'rejected', 'expired']);
+                      });
+                })
+                ->pluck('id')
+                ->all();
+
             $invoices = Invoice::query()
                 ->where('customer_id', $reservation->customer_id)
-                ->whereHas('lines', function ($lq) use ($reservation) {
-                    $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]);
+                ->where(function ($q) use ($reservation, $contractIdsForReservation) {
+                    if (!empty($contractIdsForReservation)) {
+                        $q->whereIn('contract_id', $contractIdsForReservation);
+                    }
+                    $q->orWhereHas('lines', function ($lq) use ($reservation) {
+                        $lq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.reservation_id')) = ?", [$reservation->id]);
+                    });
                 })
                 ->with(['lines', 'allocations.payment', 'customer'])
                 ->orderByDesc('issue_date')
                 ->get();
-        } catch (\Throwable) {
-            // JSON query might fail on some DB configs
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('reservation.invoices_lookup_failed', [
+                'reservation_id' => $reservation->id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         // Audit trail — raw rows mean nothing to an agent (action_type,
