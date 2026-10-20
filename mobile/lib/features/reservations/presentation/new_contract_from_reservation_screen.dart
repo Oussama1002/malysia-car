@@ -1108,8 +1108,10 @@ class _NewContractFromReservationScreenState
           _NumberField(controller: _residual),
         ],
         const _Section('Période *'),
-        // Date de début = date système, verrouillée. Date de fin se dérive
-        // de la durée saisie plus haut.
+        // Date de début = date système, verrouillée. Date de fin reste
+        // éditable : si l'agent la change, on recalcule la Durée (en
+        // jours pour LCD, en mois arrondi pour LLD/LOA/…) pour que les
+        // deux champs restent cohérents dans les deux sens.
         _DateField(
             label: 'Date de début',
             value: _startDate ?? DateTime.now(),
@@ -1117,11 +1119,24 @@ class _NewContractFromReservationScreenState
             dateFmt: dateFmt,
             enabled: false),
         _DateField(
-            label: 'Date de fin (calculée)',
+            label: 'Date de fin',
             value: _endDate,
-            onChanged: (_) {},
-            dateFmt: dateFmt,
-            enabled: false),
+            onChanged: (d) {
+              if (d == null) return;
+              final start = _startDate ?? DateTime.now();
+              setState(() {
+                _startDate = start;
+                _endDate = d;
+                if (isShort) {
+                  final days = d.difference(start).inDays;
+                  _duration.text = '${days > 0 ? days : 0}';
+                } else {
+                  final months = (d.year - start.year) * 12 + (d.month - start.month);
+                  _duration.text = '${months > 0 ? months : 0}';
+                }
+              });
+            },
+            dateFmt: dateFmt),
         const _Section('Modes de paiement'),
         for (final p in _payments) _paymentCard(p),
         Align(

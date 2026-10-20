@@ -1388,9 +1388,10 @@ export const ContractWizardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {/* Durée saisie en premier (mois pour LLD/LOA/…, jours
-                      pour LCD) ; la Date de fin est recalculée à chaque
-                      changement et s'affiche en lecture seule. */}
+                  {/* Durée ET Date de fin sont éditables, et se recalculent
+                      l'un l'autre : Durée → endDate = start + durée ;
+                      endDate → durée = endDate − start. L'agent peut
+                      choisir l'angle qu'il préfère. */}
                   <Field label="Durée *">
                     <div className="flex items-stretch gap-2">
                       {!isDailyRent && (
@@ -1445,13 +1446,29 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                     )}
                   </Field>
-                  <Field label="Date de fin (calculée)">
+                  <Field label="Date de fin *">
                     <DateField
-                      className="df-input bg-slate-50 text-slate-500"
+                      className="df-input"
                       value={state.endDate ?? ''}
-                      disabled
-                      onChange={() => {}}
+                      required
+                      onChange={(dfValue) => {
+                        const v = dfValue || null;
+                        setState((s) => {
+                          const next = { ...s, endDate: v };
+                          if (v && s.startDate) {
+                            const dur = durationBetween(s.startDate, v);
+                            next.durationMonths = dur.months;
+                            next.durationExtraDays = dur.days;
+                          }
+                          return next;
+                        });
+                      }}
                     />
+                    {!state.endDate && (
+                      <div className="mt-1 text-[11px] font-semibold text-rose-600">
+                        Requis pour continuer.
+                      </div>
+                    )}
                   </Field>
                   <Field label={`${state.type === 'CREDIT_AUTO' ? 'Mensualité' : isDailyRent ? 'Loyer / jour' : 'Loyer mensuel'} (MAD) *`}>
                     <input
