@@ -1369,7 +1369,7 @@ export const ContractWizardPage: React.FC = () => {
                       key={t.value}
                       type="button"
                       onClick={() => patch('type', t.value)}
-                      className={`group relative flex text-start gap-3 rounded-2xl border p-4 transition ${
+                      className={`group relative flex items-center text-start gap-3 rounded-2xl border p-4 pe-10 min-h-[76px] transition ${
                         active
                           ? 'border-[color:var(--df-brand-500)] bg-[color:var(--df-brand-50)] dark:bg-[color:var(--df-brand-100)] shadow-[var(--df-ring)]'
                           : 'border-[color:var(--df-border)] bg-[color:var(--df-surface)] hover:border-[color:var(--df-border-strong)]'
@@ -1385,23 +1385,13 @@ export const ContractWizardPage: React.FC = () => {
                         <Icon name={t.icon} size={18} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[14px] font-bold">{t.label}</div>
+                        <div className="text-[14px] font-bold leading-tight">{t.label}</div>
                         {t.sub && (
-                          <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)]">{t.sub}</div>
-                        )}
-                        {t.legal && (
-                          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[color:var(--df-text-faint)]">
-                            <Icon name="shield" size={12} /> {t.legal}
-                          </div>
-                        )}
-                        {t.ai && (
-                          <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--df-brand-500)]/30 bg-[color:var(--df-brand-500)]/10 px-2 py-1 text-[11px] font-semibold text-[color:var(--df-brand-600)] dark:text-indigo-300">
-                            <Icon name="sparkles" size={12} /> {t.ai}
-                          </div>
+                          <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)] leading-snug">{t.sub}</div>
                         )}
                       </div>
                       {active && (
-                        <span className="absolute top-3 end-3 flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--df-brand-500)] text-white">
+                        <span className="absolute top-1/2 -translate-y-1/2 end-3 flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--df-brand-500)] text-white">
                           <Icon name="check" size={12} />
                         </span>
                       )}
