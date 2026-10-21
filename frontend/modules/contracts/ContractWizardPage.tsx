@@ -93,10 +93,9 @@ const CONTRACT_TYPES: {
   {
     value: 'LLD',
     label: 'Location Longue Durée',
-    sub: 'Sans option d\u2019achat · véhicule restitué au terme',
+    sub: '',
     icon: 'key',
-    legal: 'Art. 625 DOC · Loi 31-08 sur la protection du consommateur',
-    ai: 'Loyer IA optimal: 4 200 MAD/mois (durée 36 mois, 20 000 km/an).',
+    legal: '',
   },
   {
     value: 'LOA',
@@ -1387,10 +1386,14 @@ export const ContractWizardPage: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[14px] font-bold">{t.label}</div>
-                        <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)]">{t.sub}</div>
-                        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[color:var(--df-text-faint)]">
-                          <Icon name="shield" size={12} /> {t.legal}
-                        </div>
+                        {t.sub && (
+                          <div className="mt-0.5 text-[12px] text-[color:var(--df-text-muted)]">{t.sub}</div>
+                        )}
+                        {t.legal && (
+                          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[color:var(--df-text-faint)]">
+                            <Icon name="shield" size={12} /> {t.legal}
+                          </div>
+                        )}
                         {t.ai && (
                           <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--df-brand-500)]/30 bg-[color:var(--df-brand-500)]/10 px-2 py-1 text-[11px] font-semibold text-[color:var(--df-brand-600)] dark:text-indigo-300">
                             <Icon name="sparkles" size={12} /> {t.ai}
