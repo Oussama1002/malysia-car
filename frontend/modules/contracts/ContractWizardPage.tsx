@@ -1168,43 +1168,73 @@ export const ContractWizardPage: React.FC = () => {
             )}
             {step.key === 'setup' && (
               <>
-                <div>
-                  <label className="df-label">Rechercher un client</label>
-                  <div className="flex items-stretch gap-2">
-                    <select
-                      className="df-input df-input--wide flex-1"
-                      value={state.clientId ?? ''}
-                      onChange={(e) => patch('clientId', e.target.value || null)}
-                    >
-                      <option value="">— Sélectionner —</option>
-                      {(clients.data ?? []).map((c) => {
-                        // Label the identifier explicitly in the dropdown so
-                        // an agent generating a contract never signs off on
-                        // the wrong Mohamed : CIN XXXXXXX for an individual,
-                        // ICE XXXXXXX for a company. "CIN —" is shown when
-                        // the client has no national_id_number stored so the
-                        // missing data is obvious instead of silent.
-                        const id = (c.idNumber ?? '').toString().trim();
-                        const label = c.kind === 'ENTREPRISE' ? 'ICE' : 'CIN';
-                        const suffix = ` · ${label} ${id || '—'}`;
-                        return (
-                          <option key={c.id} value={c.id}>
-                            {c.name}{suffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <button
-                      type="button"
-                      className="df-btn df-btn--primary whitespace-nowrap"
-                      onClick={() => {
-                        setNewClientError(null);
-                        setNewClientDrawerOpen(true);
-                      }}
-                    >
-                      + Nouveau client
-                    </button>
+                {/* Client + Locataire 2 + Agent assigné sur une seule ligne
+                    (flex-wrap) — le 2e conducteur et l'agent se lisent juste
+                    à côté du nom du client plutôt qu'au bas du formulaire. */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-[260px] flex-1">
+                    <label className="df-label">Rechercher un client</label>
+                    <div className="flex items-stretch gap-2">
+                      <select
+                        className="df-input df-input--wide flex-1"
+                        value={state.clientId ?? ''}
+                        onChange={(e) => patch('clientId', e.target.value || null)}
+                      >
+                        <option value="">— Sélectionner —</option>
+                        {(clients.data ?? []).map((c) => {
+                          // Label the identifier explicitly in the dropdown so
+                          // an agent generating a contract never signs off on
+                          // the wrong Mohamed : CIN XXXXXXX for an individual,
+                          // ICE XXXXXXX for a company. "CIN —" is shown when
+                          // the client has no national_id_number stored so the
+                          // missing data is obvious instead of silent.
+                          const id = (c.idNumber ?? '').toString().trim();
+                          const label = c.kind === 'ENTREPRISE' ? 'ICE' : 'CIN';
+                          const suffix = ` · ${label} ${id || '—'}`;
+                          return (
+                            <option key={c.id} value={c.id}>
+                              {c.name}{suffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <button
+                        type="button"
+                        className="df-btn df-btn--primary whitespace-nowrap"
+                        onClick={() => {
+                          setNewClientError(null);
+                          setNewClientDrawerOpen(true);
+                        }}
+                      >
+                        + Nouveau client
+                      </button>
+                    </div>
                   </div>
+                  <Field label="Client locataire 2 (optionnel)">
+                    <input
+                      className="df-input"
+                      placeholder="Nom du 2e conducteur"
+                      value={state.secondDriverName}
+                      onChange={(e) => patch('secondDriverName', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Agent assigné">
+                    {/* Verrouillé sur l'utilisateur courant : un contrat est
+                        généré par l'agent qui le signe. */}
+                    <select
+                      className="df-input cursor-not-allowed opacity-80"
+                      value={state.assignedAgent}
+                      disabled
+                      aria-disabled
+                      title="L'agent assigné est automatiquement l'utilisateur connecté."
+                    >
+                      {state.assignedAgent ? (
+                        <option value={state.assignedAgent}>{state.assignedAgent}</option>
+                      ) : (
+                        <option value="">— Chargement de la session… —</option>
+                      )}
+                    </select>
+                  </Field>
                 </div>
 
                 {!selectedClient && prefillClientName && (
@@ -1380,10 +1410,11 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'setup' && (
               <>
-                {/* Date de début = date système, figée au moment où le
-                    contrat est généré. Lecture seule — c'est la source
-                    de vérité pour la durée, pas une saisie libre. */}
-                <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Date de début (date système, lecture seule) + Durée +
+                      Date de fin sur la même rangée. Durée ET Date de fin se
+                      recalculent l'un l'autre : Durée → endDate = start +
+                      durée ; endDate → durée = endDate − start. */}
                   <Field label="Date & heure de début">
                     <DateField
                       withTime
@@ -1393,13 +1424,6 @@ export const ContractWizardPage: React.FC = () => {
                       disabled
                     />
                   </Field>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {/* Durée ET Date de fin sont éditables, et se recalculent
-                      l'un l'autre : Durée → endDate = start + durée ;
-                      endDate → durée = endDate − start. L'agent peut
-                      choisir l'angle qu'il préfère. */}
                   <Field label="Durée *">
                     <div className="flex items-stretch gap-2">
                       {!isDailyRent && (
@@ -1754,36 +1778,6 @@ export const ContractWizardPage: React.FC = () => {
                       <input className="df-input" value={state.paymentTerms} onChange={(e) => patch('paymentTerms', e.target.value)} />
                     </Field>
                   </div>
-                </div>
-                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Client locataire 2 (optionnel)">
-                    <input
-                      className="df-input"
-                      placeholder="Nom complet du 2e conducteur"
-                      value={state.secondDriverName}
-                      onChange={(e) => patch('secondDriverName', e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Agent assigné">
-                    {/* Verrouillé sur l'utilisateur courant : un contrat est
-                        généré par l'agent qui le signe. Le select est
-                        désactivé pour laisser l'option de ré-ouvrir si on
-                        change d'avis plus tard, mais c'est une valeur
-                        choisie par l'app, pas par l'agent. */}
-                    <select
-                      className="df-input cursor-not-allowed opacity-80"
-                      value={state.assignedAgent}
-                      disabled
-                      aria-disabled
-                      title="L'agent assigné est automatiquement l'utilisateur connecté."
-                    >
-                      {state.assignedAgent ? (
-                        <option value={state.assignedAgent}>{state.assignedAgent}</option>
-                      ) : (
-                        <option value="">— Chargement de la session… —</option>
-                      )}
-                    </select>
-                  </Field>
                 </div>
               </>
             )}
