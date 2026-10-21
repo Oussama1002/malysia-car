@@ -77,8 +77,8 @@ const STEPS: Step[] = [
   // Conditions — l'agent voit tout en bloc au lieu de cliquer entre
   // quatre étapes consécutives. Annexes et Validation conservent leur
   // étape dédiée.
-  { key: 'setup', title: 'Détails contrat', hint: 'Client, véhicule, type, conditions', icon: 'doc' },
   { key: 'annex', title: 'Annexes', hint: 'Pièces & justificatifs', icon: 'upload' },
+  { key: 'setup', title: 'Détails contrat', hint: 'Client, véhicule, type, conditions', icon: 'doc' },
   { key: 'review', title: 'Validation', hint: 'Relecture & signature', icon: 'sign' },
 ];
 
