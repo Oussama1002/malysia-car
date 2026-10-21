@@ -134,6 +134,35 @@ class CustomerController extends Controller
     public function store(StoreCustomerRequest $request): JsonResponse
     {
         $data = $request->validated();
+
+        // Dé-doublonnage : une demande du site convertie en réservation crée
+        // un client. Si le même visiteur revient (ou si l'agent relance la
+        // conversion), on retombait sur un nouveau CL-00xx à chaque fois
+        // parce que la liste clients ne charge pas les contacts côté front.
+        // On vérifie donc ici, par téléphone (8 derniers chiffres), qu'un
+        // particulier identique n'existe pas déjà dans la même société —
+        // si oui on le renvoie tel quel au lieu d'en créer un doublon.
+        $primaryPhone = collect($data['contacts'] ?? [])
+            ->first(fn ($c) => in_array(($c['contact_type'] ?? ''), ['mobile', 'phone'], true));
+        $phoneDigits = $primaryPhone ? preg_replace('/\D+/', '', (string) ($primaryPhone['value'] ?? '')) : '';
+        if ($phoneDigits !== '' && strlen($phoneDigits) >= 6) {
+            $tail = substr($phoneDigits, -8);
+            $companyId = $data['company_id'] ?? $request->user()?->company_id;
+            $existing = Customer::query()
+                ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+                ->where('is_blacklisted', false)
+                ->whereHas('contacts', function ($q) use ($tail) {
+                    $q->whereIn('contact_type', ['mobile', 'phone'])
+                      ->whereRaw("RIGHT(REGEXP_REPLACE(COALESCE(value, ''), '[^0-9]', ''), 8) = ?", [$tail]);
+                })
+                ->with(['individualProfile', 'companyProfile', 'addresses', 'contacts', 'bankAccounts', 'latestKycCase'])
+                ->orderBy('created_at')
+                ->first();
+            if ($existing) {
+                return ApiResponse::success((new CustomerResource($existing))->resolve($request), ['message' => 'Client existant réutilisé.']);
+            }
+        }
+
         $customer = DB::transaction(function () use ($data, $request) {
             $c = new Customer;
             $c->id = (string) Str::uuid();
