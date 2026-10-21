@@ -1875,7 +1875,10 @@ export const ContractWizardPage: React.FC = () => {
             <button
               className="df-btn df-btn--ghost df-btn--sm"
               disabled={stepIdx === 0}
-              onClick={() => setStepIdx((s) => Math.max(0, s - 1))}
+              onClick={() => {
+                setStepIdx((s) => Math.max(0, s - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             >
               <Icon name="chevron-left" size={14} /> Précédent
             </button>
@@ -1895,13 +1898,16 @@ export const ContractWizardPage: React.FC = () => {
                 <button
                   className="df-btn df-btn--primary df-btn--sm"
                   disabled={!canNext}
-                  onClick={() =>
+                  onClick={() => {
                     setStepIdx((s) => {
                       const next = Math.min(STEPS.length - 1, s + 1);
                       setMaxStepIdx((m) => Math.max(m, next));
                       return next;
-                    })
-                  }
+                    });
+                    // Remonter en haut : sinon on reste collé au bas de
+                    // l'étape précédente et on rate le début de la suivante.
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                 >
                   Suivant <Icon name="chevron-right" size={14} />
                 </button>
