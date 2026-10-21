@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createCustomer,
+  updateCustomer,
+  deleteCustomer,
   listCustomers,
   type Customer,
   type CustomerCreatePayload,
@@ -52,9 +54,12 @@ const riskLabel: Record<RiskLevel, string> = {
 
 export const CustomersPage: React.FC = () => {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<CustomerListParams>({ page: 1, per_page: 20 });
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Customer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const listQ = useQuery({
@@ -117,6 +122,35 @@ export const CustomersPage: React.FC = () => {
       setDrawerOpen(false);
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur de création'),
+  });
+
+  // Édition d'un client existant via le même CustomerForm (mode edit).
+  const editMut = useMutation({
+    mutationFn: (vars: { id: string; payload: Partial<CustomerCreatePayload> }) =>
+      updateCustomer(vars.id, vars.payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers'] });
+      setEditTarget(null);
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur de modification'),
+  });
+
+  // Archiver / réactiver = bascule du statut actif ↔ inactif (pas de
+  // suppression : le dossier et son historique restent consultables).
+  const archiveMut = useMutation({
+    mutationFn: (c: Customer) =>
+      updateCustomer(c.id, { status: c.status === 'inactive' ? 'active' : 'inactive' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur d\'archivage'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteCustomer(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers'] });
+      setDeleteTarget(null);
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Suppression impossible'),
   });
 
   const rows = listQ.data?.data ?? [];
@@ -405,14 +439,40 @@ export const CustomersPage: React.FC = () => {
           },
           {
             key: 'actions',
-            header: '',
+            header: 'Actions',
+            className: 'text-right',
             render: (r) => (
-              <Link className="text-sm font-black text-indigo-600 hover:underline" to={`/customers/${r.id}`}>
-                Dossier →
-              </Link>
+              <div className="flex items-center justify-end gap-1.5">
+                <button
+                  type="button"
+                  title="Modifier"
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+                  onClick={() => { setError(null); setEditTarget(r); }}
+                >
+                  Modifier
+                </button>
+                <button
+                  type="button"
+                  title={r.status === 'inactive' ? 'Réactiver' : 'Archiver'}
+                  disabled={archiveMut.isPending}
+                  className="rounded-lg border border-amber-200 px-2.5 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                  onClick={() => archiveMut.mutate(r)}
+                >
+                  {r.status === 'inactive' ? 'Réactiver' : 'Archiver'}
+                </button>
+                <button
+                  type="button"
+                  title="Supprimer le dossier"
+                  className="rounded-lg border border-rose-200 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-50"
+                  onClick={() => setDeleteTarget(r)}
+                >
+                  Supprimer
+                </button>
+              </div>
             ),
           },
         ]}
+        onRowClick={(r) => navigate(`/customers/${r.id}`)}
       />
 
       {meta && meta.last_page > 1 && (
@@ -455,6 +515,68 @@ export const CustomersPage: React.FC = () => {
           }}
         />
       </DrawerPanel>
+
+      <DrawerPanel
+        open={!!editTarget}
+        title="Modifier le client"
+        onClose={() => setEditTarget(null)}
+        widthClass="max-w-2xl"
+      >
+        {editTarget && (
+          <CustomerForm
+            mode="edit"
+            initial={editTarget}
+            error={error}
+            submitting={editMut.isPending}
+            branches={branchesQ.data?.data ?? []}
+            onCancel={() => setEditTarget(null)}
+            onSubmit={(payload) => {
+              setError(null);
+              editMut.mutate({ id: editTarget.id, payload });
+            }}
+          />
+        )}
+      </DrawerPanel>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !deleteMut.isPending && setDeleteTarget(null)}
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-100 px-6 py-5">
+              <h3 className="text-base font-black text-slate-900">Supprimer ce dossier ?</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Le client <strong>{deleteTarget.display_name}</strong> ({deleteTarget.customer_code}) sera
+                supprimé. Cette action est irréversible — préférez « Archiver » pour conserver l'historique.
+              </p>
+            </div>
+            {error && (
+              <div className="mx-6 mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                {error}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                className="df-btn df-btn--ghost"
+                disabled={deleteMut.isPending}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                disabled={deleteMut.isPending}
+                onClick={() => deleteMut.mutate(deleteTarget.id)}
+              >
+                {deleteMut.isPending ? 'Suppression…' : 'Oui, supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
