@@ -1795,22 +1795,35 @@ export const ContractWizardPage: React.FC = () => {
                         Configurer dans Paramètres
                       </Link>
                     </div>
-                  ) : requiredDocs.map((d) => {
-                    const existing = existingByCode[d.code];
-                    return existing
-                      ? <ExistingDocRow key={d.code} doc={existing} label={d.label} />
-                      : <UploadZone key={d.code} label={d.label} hint={d.sub} />;
-                  })}
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {requiredDocs.map((d) => {
+                        const existing = existingByCode[d.code];
+                        return existing
+                          ? <ExistingDocRow key={d.code} doc={existing} label={d.label} />
+                          : <UploadZone key={d.code} label={d.label} hint={d.sub} />;
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-5 space-y-3">
+                  <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Documents du véhicule</div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <UploadZone label="Carte grise" hint="Recto / verso · JPG / PDF" />
+                    <UploadZone label="Assurance" hint="Attestation en cours · JPG / PDF" />
+                    <UploadZone label="Visite technique" hint="Certificat · JPG / PDF" />
+                    <UploadZone label="Autorisation de circulation" hint="Vignette / TSAV · JPG / PDF" />
+                  </div>
                 </div>
                 <div className="mt-5 space-y-3">
                   <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-[color:var(--df-text-faint)]">Photos véhicule avant livraison</div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <UploadZone label="Avant" hint="JPG / PNG" />
                     <UploadZone label="Arrière" hint="JPG / PNG" />
                     <UploadZone label="Côté gauche" hint="JPG / PNG" />
                     <UploadZone label="Côté droit" hint="JPG / PNG" />
+                    <UploadZone label="Intérieur / tableau de bord" hint="JPG / PNG" />
                   </div>
-                  <UploadZone label="Intérieur / tableau de bord" hint="JPG / PNG" />
                 </div>
                 <AIHint tone="info" text="Tous les documents sont chiffrés et conformes Loi 09-08 sur la protection des données." />
               </>
