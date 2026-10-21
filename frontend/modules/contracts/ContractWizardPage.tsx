@@ -1235,6 +1235,43 @@ export const ContractWizardPage: React.FC = () => {
                       )}
                     </select>
                   </Field>
+                  {/* Véhicule disponible directement à côté du client. */}
+                  <div className="min-w-[260px] flex-1">
+                    <label className="df-label">Véhicule disponible</label>
+                    <select
+                      className="df-input df-input--wide"
+                      value={state.vehicleId ?? ''}
+                      onChange={(e) => patch('vehicleId', e.target.value || null)}
+                    >
+                      <option value="">— Sélectionner —</option>
+                      {(vehicles.data ?? []).map((v) => {
+                        // Build the human label. Fall back to "Véhicule" when
+                        // both brand and model are empty so the option never
+                        // collapses to just the registration.
+                        const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
+                        const label = brandModel || 'Véhicule';
+                        const isSL = isSubRental(v.ownershipStatus);
+                        const { label: statusFr, free } = vehicleAvailability(v);
+                        return (
+                          <option
+                            key={v.id}
+                            value={v.id}
+                            // A contract created from a reservation arrives with
+                            // that reservation's vehicle, which is reserved by
+                            // definition — never lock the current choice out.
+                            disabled={!free && state.vehicleId !== v.id}
+                          >
+                            {isSL ? '🟣 SL · ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''} — {statusFr}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {isSubRental(selectedVehicle?.ownershipStatus) && (
+                      <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                        ⚠️ Véhicule en sous-location (SL) — vérifiez les conditions de re-location.
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {!selectedClient && prefillClientName && (
@@ -1295,43 +1332,6 @@ export const ContractWizardPage: React.FC = () => {
 
             {step.key === 'setup' && (
               <>
-                <div>
-                  <label className="df-label">Véhicule disponible</label>
-                  <select
-                    className="df-input df-input--wide"
-                    value={state.vehicleId ?? ''}
-                    onChange={(e) => patch('vehicleId', e.target.value || null)}
-                  >
-                    <option value="">— Sélectionner —</option>
-                    {(vehicles.data ?? []).map((v) => {
-                      // Build the human label. Fall back to "Véhicule" when
-                      // both brand and model are empty so the option never
-                      // collapses to just the registration.
-                      const brandModel = [v.brand, v.model].filter(Boolean).join(' ').trim();
-                      const label = brandModel || 'Véhicule';
-                      const isSL = isSubRental(v.ownershipStatus);
-                      const { label: statusFr, free } = vehicleAvailability(v);
-                      return (
-                        <option
-                          key={v.id}
-                          value={v.id}
-                          // A contract created from a reservation arrives with
-                          // that reservation's vehicle, which is reserved by
-                          // definition — never lock the current choice out.
-                          disabled={!free && state.vehicleId !== v.id}
-                        >
-                          {isSL ? '🟣 SL · ' : ''}{label} · {v.registration}{v.year ? ` · ${v.year}` : ''} — {statusFr}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  {isSubRental(selectedVehicle?.ownershipStatus) && (
-                    <p className="mt-1 text-[11px] font-semibold text-amber-700">
-                      ⚠️ Véhicule en sous-location (SL) — vérifiez les conditions de re-location.
-                    </p>
-                  )}
-                </div>
-
                 {!selectedVehicle && prefillVehicleName && (
                   <div className="rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface-sunk)] p-4">
                     <div className="text-[15px] font-bold">{prefillVehicleName}</div>
