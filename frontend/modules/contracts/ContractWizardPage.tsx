@@ -1825,7 +1825,6 @@ export const ContractWizardPage: React.FC = () => {
                     <UploadZone label="Intérieur / tableau de bord" hint="JPG / PNG" />
                   </div>
                 </div>
-                <AIHint tone="info" text="Tous les documents sont chiffrés et conformes Loi 09-08 sur la protection des données." />
               </>
               );
             })()}
