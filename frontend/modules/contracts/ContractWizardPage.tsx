@@ -123,10 +123,10 @@ const CONTRACT_TYPES: {
   },
   {
     value: 'LOCATION_COURTE',
-    label: 'LCD',
-    sub: 'Location Courte Durée — journalière / hebdomadaire',
+    label: 'Location Courte Durée',
+    sub: '',
     icon: 'play',
-    legal: "DOC · Franchise d'assurance obligatoire",
+    legal: '',
   },
 ];
 
