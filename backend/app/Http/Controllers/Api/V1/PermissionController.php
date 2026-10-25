@@ -15,9 +15,9 @@ class PermissionController extends Controller
     {
         $q = Permission::query();
         if ($m = $request->query('module')) {
-            $q->where('module', $m);
+            $q->where('module_name', $m);
         }
-        $perms = $q->orderBy('module')->orderBy('code')->get();
+        $perms = $q->orderBy('module_name')->orderBy('code')->get();
 
         return ApiResponse::success(PermissionResource::collection($perms)->resolve($request));
     }

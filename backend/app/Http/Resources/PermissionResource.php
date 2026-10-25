@@ -17,8 +17,9 @@ class PermissionResource extends JsonResource
         return [
             'id' => $p->id,
             'code' => $p->code,
-            'name' => $p->name,
-            'module' => $p->module,
+            // Colonnes réelles : action_name (libellé) et module_name.
+            'name' => $p->action_name ?? $p->code,
+            'module' => $p->module_name,
             'description' => $p->description,
         ];
     }

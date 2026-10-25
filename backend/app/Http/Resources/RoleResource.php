@@ -30,8 +30,8 @@ class RoleResource extends JsonResource
                 ? $perms->map(fn ($p) => [
                     'id' => $p->id,
                     'code' => $p->code,
-                    'name' => $p->name,
-                    'module' => $p->module,
+                    'name' => $p->action_name ?? $p->code,
+                    'module' => $p->module_name,
                 ])->values()->all()
                 : null,
             'created_at' => optional($r->created_at)->toAtomString(),
