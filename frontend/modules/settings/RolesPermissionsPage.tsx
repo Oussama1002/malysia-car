@@ -227,7 +227,6 @@ export const RolesPermissionsPage: React.FC = () => {
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   {!r.is_active && <StatusBadge label="Inactif" tone="default" />}
-                  {r.is_system_role && <StatusBadge label="Système" tone="warning" />}
                   {typeof r.users_count === 'number' && (
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
                       {r.users_count}
