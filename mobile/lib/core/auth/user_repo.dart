@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
+import 'auth_notifier.dart';
 import 'user_dto.dart';
 
 class UserRepo {
@@ -28,5 +29,11 @@ class UserRepo {
 final userRepoProvider =
     Provider<UserRepo>((ref) => UserRepo(ref.watch(apiClientProvider)));
 
-final currentUserProvider =
-    FutureProvider<UserDto>((ref) => ref.watch(userRepoProvider).me());
+/// Profil de l'utilisateur connecté. On observe `authProvider` pour que le
+/// profil (et donc le rôle) soit refetché à chaque connexion / déconnexion —
+/// sinon un premier appel avant login mettrait le provider en erreur en cache
+/// et le rôle ne serait jamais résolu après la connexion.
+final currentUserProvider = FutureProvider<UserDto>((ref) {
+  ref.watch(authProvider);
+  return ref.watch(userRepoProvider).me();
+});

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:intl/intl.dart';
 
+import '../../../core/auth/user_repo.dart';
 import '../../../core/router/modules.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../customers/presentation/new_customer_screen.dart';
@@ -34,14 +35,26 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   /// Index de l'onglet actif déduit du chemin courant. Les modules ouverts
   /// depuis l'accueil gardent l'onglet Accueil surligné.
-  int get _tab => switch (widget.location) {
-        '/missions' => 1,
-        '/discussions' => 3,
-        '/profil' => 4,
-        _ => 0,
-      };
+  ///
+  /// Le MISSIONNAIRE (agent terrain) n'a que deux onglets : Missions + Profil.
+  int _tabFor(bool missionnaireOnly) {
+    if (missionnaireOnly) {
+      return widget.location == '/profil' ? 1 : 0;
+    }
+    return switch (widget.location) {
+      '/missions' => 1,
+      '/discussions' => 3,
+      '/profil' => 4,
+      _ => 0,
+    };
+  }
 
-  void _select(int i) {
+  void _select(int i, bool missionnaireOnly) {
+    if (missionnaireOnly) {
+      // Barre réduite : 0 = Missions, 1 = Profil. Rien d'autre.
+      context.go(i == 1 ? '/profil' : '/missions');
+      return;
+    }
     switch (i) {
       case 0:
         context.go('/');
@@ -86,15 +99,22 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Rôle courant : le MISSIONNAIRE (agent terrain) n'a droit qu'aux
+    // missions — pas de grille modules, pas de drawer, pas de création
+    // rapide, pas de chat. Les autres rôles gardent la barre complète.
+    final role =
+        ref.watch(currentUserProvider).valueOrNull?.role?.toUpperCase();
+    final missionnaireOnly = role == 'MISSIONNAIRE';
     return Scaffold(
       key: _scaffoldKey,
-      drawer: const _ModulesDrawer(),
+      drawer: missionnaireOnly ? null : const _ModulesDrawer(),
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
             _PersistentTopBar(
               onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+              showMenu: !missionnaireOnly,
             ),
             Expanded(child: widget.child),
           ],
@@ -103,36 +123,47 @@ class _AppShellState extends ConsumerState<AppShell> {
       bottomNavigationBar: NavigationBar(
         // L'index 2 est le bouton d'action rapide (pas un ecran) : on
         // ne le selectionne jamais, donc on reporte sur un autre onglet.
-        selectedIndex: _tab,
-        onDestinationSelected: _select,
-        destinations: const [
-            NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home),
-                label: 'Accueil'),
-            NavigationDestination(
-                icon: Icon(Icons.map_outlined),
-                selectedIcon: Icon(Icons.map),
-                label: 'Missions'),
-            // Bouton d'action rapide central — n'ouvre pas d'ecran, mais
-            // un dropup de creations (reservation / client / contrat).
-            // L'index 2 est intercepte dans _select().
-            NavigationDestination(
-              icon: _QuickAddIcon(),
-              selectedIcon: _QuickAddIcon(),
-              label: 'Nouveau',
-            ),
-            NavigationDestination(
-                icon: Icon(Icons.chat_bubble_outline),
-                selectedIcon: Icon(Icons.chat_bubble),
-                label: 'Chat'),
-            NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: 'Profil'),
-          ],
-        ),
-      );
+        selectedIndex: _tabFor(missionnaireOnly),
+        onDestinationSelected: (i) => _select(i, missionnaireOnly),
+        destinations: missionnaireOnly
+            ? const [
+                NavigationDestination(
+                    icon: Icon(Icons.map_outlined),
+                    selectedIcon: Icon(Icons.map),
+                    label: 'Missions'),
+                NavigationDestination(
+                    icon: Icon(Icons.person_outline),
+                    selectedIcon: Icon(Icons.person),
+                    label: 'Profil'),
+              ]
+            : const [
+                NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home),
+                    label: 'Accueil'),
+                NavigationDestination(
+                    icon: Icon(Icons.map_outlined),
+                    selectedIcon: Icon(Icons.map),
+                    label: 'Missions'),
+                // Bouton d'action rapide central — n'ouvre pas d'ecran, mais
+                // un dropup de creations (reservation / client / contrat).
+                // L'index 2 est intercepte dans _select().
+                NavigationDestination(
+                  icon: _QuickAddIcon(),
+                  selectedIcon: _QuickAddIcon(),
+                  label: 'Nouveau',
+                ),
+                NavigationDestination(
+                    icon: Icon(Icons.chat_bubble_outline),
+                    selectedIcon: Icon(Icons.chat_bubble),
+                    label: 'Chat'),
+                NavigationDestination(
+                    icon: Icon(Icons.person_outline),
+                    selectedIcon: Icon(Icons.person),
+                    label: 'Profil'),
+              ],
+      ),
+    );
   }
 }
 
@@ -244,8 +275,10 @@ class _ModulesDrawer extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _PersistentTopBar extends ConsumerStatefulWidget {
-  const _PersistentTopBar({required this.onMenu});
+  const _PersistentTopBar({required this.onMenu, this.showMenu = true});
   final VoidCallback onMenu;
+  // Masqué pour le MISSIONNAIRE : il n'a pas de drawer de modules.
+  final bool showMenu;
 
   @override
   ConsumerState<_PersistentTopBar> createState() => _PersistentTopBarState();
@@ -293,7 +326,7 @@ class _PersistentTopBarState extends ConsumerState<_PersistentTopBar> {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        _TopIcon(icon: Icons.menu, onTap: widget.onMenu),
+        if (widget.showMenu) _TopIcon(icon: Icons.menu, onTap: widget.onMenu),
         const SizedBox(width: 4),
         Expanded(
           child: Row(

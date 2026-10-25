@@ -136,6 +136,8 @@ DateTime? _date(dynamic v) {
 /// voit en français côté backoffice.
 const Map<String, String> kRoleFr = {
   'ADMIN': 'Administrateur',
+  'ASSISTANT': 'Assistant(e)',
+  'MISSIONNAIRE': 'Missionnaire',
   'DIRECTEUR': 'Directeur',
   'GESTIONNAIRE_FLOTTE': 'Gestionnaire de flotte',
   'AGENT_COMMERCIAL': 'Agent commercial',
