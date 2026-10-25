@@ -56,6 +56,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // UI 100 % francophone : on force la locale pour que les messages de
+        // validation (et autres chaînes traduites) sortent en français, quelle
+        // que soit la valeur d'APP_LOCALE dans l'environnement.
+        $this->app->setLocale('fr');
+
         RateLimiter::for('login', function (Request $request) {
             $email = (string) $request->input('email', '');
 

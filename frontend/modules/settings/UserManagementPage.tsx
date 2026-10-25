@@ -446,7 +446,9 @@ const UserForm: React.FC<{
       status: form.status,
       role_ids: form.roleIds,
       branch_ids: form.branchIds,
-      primary_branch_id: form.primaryBranchId || null,
+      // À défaut d'un choix explicite, la première agence cochée devient
+      // l'agence principale ; sinon null (aucune agence).
+      primary_branch_id: form.primaryBranchId || form.branchIds[0] || null,
     };
     if (!user || form.password) {
       payload.password = form.password;

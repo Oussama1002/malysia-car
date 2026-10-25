@@ -28,7 +28,7 @@ class StoreUserRequest extends FormRequest
             'role_ids.*' => ['integer', 'exists:roles,id'],
             'branch_ids' => ['sometimes', 'array'],
             'branch_ids.*' => ['uuid', 'exists:branches,id'],
-            'primary_branch_id' => ['sometimes', 'uuid', 'exists:branches,id'],
+            'primary_branch_id' => ['sometimes', 'nullable', 'uuid', 'exists:branches,id'],
             'company_id' => ['sometimes', 'uuid'],
             'locale' => ['sometimes', 'string', 'in:fr,en,ar'],
             'status' => ['sometimes', 'string', 'in:active,inactive,suspended'],
