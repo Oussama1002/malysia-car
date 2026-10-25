@@ -36,7 +36,10 @@ const PERMISSION_ROLES: Record<string, AppRole[]> = {
 export type ErpPermission = keyof typeof PERMISSION_ROLES;
 
 export function canPerform(role: AppRole, permission: ErpPermission): boolean {
-  if (role === 'ADMIN' || role === 'DIRECTEUR') {
+  // ASSISTANT a l'accès opérationnel complet (tout sauf admin
+  // utilisateurs / rôles / paramètres), donc il passe toutes les
+  // portes « view_* » grossières au même titre qu'ADMIN / DIRECTEUR.
+  if (role === 'ADMIN' || role === 'DIRECTEUR' || role === 'ASSISTANT') {
     return true;
   }
   return (PERMISSION_ROLES[permission] ?? []).includes(role);

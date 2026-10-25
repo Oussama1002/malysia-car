@@ -1,6 +1,8 @@
 /** CDC-aligned roles (front permission keys). */
 export const APP_ROLES = [
   'ADMIN',
+  'ASSISTANT', // power user: tout sauf admin utilisateurs / rôles / paramètres
+  'MISSIONNAIRE', // agent terrain : missions uniquement
   'DIRECTEUR',
   'ANALYSTE_CREDIT',
   'AGENT_COMMERCIAL',
@@ -47,6 +49,15 @@ export const ROLE_MODULE_ACCESS: Record<AppRole, ModuleKey[]> = {
     'arrears', 'signatures', 'usedCars', 'gps', 'ai', 'mobileOps', 'notifications',
     'settings', 'audit', 'documents', 'rentals', 'subRentals',
   ],
+  // Assistant(e) : accès opérationnel complet SAUF les paramètres système
+  // (gestion utilisateurs / rôles). Tous les autres modules sont ouverts.
+  ASSISTANT: [
+    'dashboard', 'fleet', 'customers', 'contracts', 'credit', 'finance', 'accounting',
+    'arrears', 'signatures', 'usedCars', 'gps', 'ai', 'mobileOps', 'notifications',
+    'audit', 'documents', 'rentals', 'subRentals',
+  ],
+  // Missionnaire : agent terrain, missions uniquement — rien d'autre.
+  MISSIONNAIRE: ['mobileOps'],
   ANALYSTE_CREDIT: ['dashboard', 'customers', 'credit', 'contracts', 'ai', 'notifications', 'documents'],
   AGENT_COMMERCIAL: ['dashboard', 'customers', 'contracts', 'usedCars', 'rentals', 'signatures', 'notifications', 'documents'],
   GESTIONNAIRE_FLOTTE: ['dashboard', 'fleet', 'gps', 'ai', 'mobileOps', 'notifications', 'documents', 'subRentals'],

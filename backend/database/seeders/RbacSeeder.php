@@ -301,6 +301,28 @@ class RbacSeeder extends Seeder
 
         $missions_field = ['missions.view', 'missions.start', 'missions.complete', 'missions.add_checklist', 'missions.upload_photo', 'missions.customer_signature', 'documents.upload', 'documents.view'];
 
+        // Missionnaire — agent terrain : ne voit QUE les missions. Pas de
+        // tableau de bord, pas de flotte, pas de finance, pas de paramètres.
+        // Il accède au véhicule / client rattachés à sa mission (lecture) et
+        // effectue les handovers pickup/return + relevé compteur.
+        $missionnaire_field = array_merge(
+            ['view_mobile_ops', 'notifications.view', 'vehicles.view', 'customers.view', 'odometer.create', 'gps.positions.view'],
+            $missions_field,
+            ['rentals.handover_pickup', 'rentals.handover_return']
+        );
+
+        // Assistant(e) — power user : accès opérationnel complet SAUF
+        // l'administration des utilisateurs, des rôles et des paramètres
+        // système. Calculé comme « tout le catalogue moins la liste ci-dessous »
+        // pour rester correct quand de nouvelles permissions sont ajoutées.
+        $assistant_denied = [
+            'manage_users', 'manage_roles', 'manage_branches', 'manage_settings',
+            'users.view', 'users.create', 'users.update', 'users.delete', 'users.activate', 'users.assign_branches', 'users.view_login_history',
+            'roles.view', 'roles.manage', 'roles.sync_permissions', 'permissions.view',
+            'branches.manage',
+        ];
+        $assistant_full = array_values(array_diff(array_column($permissions, 0), $assistant_denied));
+
         $admin_full = ['users.view', 'users.create', 'users.update', 'users.delete', 'users.activate', 'users.assign_branches', 'users.view_login_history', 'roles.view', 'roles.manage', 'roles.sync_permissions', 'permissions.view', 'branches.view', 'branches.manage', 'audit.view', 'documents.view', 'documents.upload', 'documents.delete', 'documents.generate'];
 
         $sub_rental_read  = ['sub_rentals.view', 'supplier_agencies.view'];
@@ -309,6 +331,12 @@ class RbacSeeder extends Seeder
 
         $roleMatrix = [
             'ADMIN' => ['Administrateur système', '*'],
+
+            // Assistant(e) : tout sauf admin utilisateurs / rôles / paramètres.
+            'ASSISTANT' => ['Assistant(e)', $assistant_full],
+
+            // Missionnaire : agent terrain, missions uniquement.
+            'MISSIONNAIRE' => ['Missionnaire', $missionnaire_field],
 
             'DIRECTEUR' => ['Directeur général', array_merge(
                 ['view_dashboard', 'view_fleet', 'view_gps', 'view_customers', 'view_contracts', 'view_credit', 'view_finance', 'view_arrears', 'view_used_cars', 'view_audit', 'view_ai', 'view_mobile_ops', 'view_notifications', 'notifications.view', 'notifications.manage', 'notifications.retry', 'manage_customers', 'manage_fleet', 'manage_contracts', 'decide_credit', 'manage_finance', 'manage_arrears'],

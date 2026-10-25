@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuthSession } from '@/modules/auth/AuthContext';
+import { canAccessModule, type AppRole } from '@/domain/appRole';
 import { SessionExpiredBanner } from '@/modules/auth/SessionExpiredBanner';
 import { LoginPage } from '@/modules/auth/LoginPage';
 import { ForgotPasswordPage } from '@/modules/auth/ForgotPasswordPage';
@@ -139,8 +140,16 @@ function SettingsRoleGate({ children }: { children: React.ReactNode }): React.Re
 }
 
 function HomeRedirect(): React.ReactElement {
+  const { session } = useAuthSession();
   const isMobile = typeof window !== 'undefined'
     && window.matchMedia('(max-width: 767px)').matches;
+  // Les rôles sans accès au tableau de bord (ex. MISSIONNAIRE, agent
+  // terrain) atterrissent sur leur écran missions, sinon ModuleGate les
+  // renvoie en boucle vers /dashboard.
+  const role = session?.user.role as AppRole | undefined;
+  if (role && !canAccessModule(role, 'dashboard')) {
+    return <Navigate to="/mobile-ops" replace />;
+  }
   return <Navigate to={isMobile ? '/mobile-ops' : '/dashboard'} replace />;
 }
 

@@ -12,8 +12,11 @@
  */
 return [
 
+    // Ordre = hiérarchie (le plus fort en premier). primaryRoleCode() s'en
+    // sert pour choisir le rôle dominant d'un compte multi-rôles.
     'app_roles' => [
         'ADMIN',
+        'ASSISTANT',      // power user : tout sauf admin utilisateurs / rôles / paramètres
         'DIRECTEUR',
         'ANALYSTE_CREDIT',
         'AGENT_COMMERCIAL',
@@ -21,6 +24,7 @@ return [
         'COMPTABLE',
         'CONTENTIEUX',
         'AGENT_LIVRAISON',
+        'MISSIONNAIRE',   // agent terrain : missions uniquement
         'CLIENT_PORTAL',
         'AGENT',
     ],

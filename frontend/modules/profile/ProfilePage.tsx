@@ -6,6 +6,8 @@ import { getApiBase } from '@/services/apiClient';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrateur',
+  ASSISTANT: 'Assistant(e)',
+  MISSIONNAIRE: 'Missionnaire',
   DIRECTEUR: 'Directeur',
   COMPTABLE: 'Comptable',
   AGENT_COMMERCIAL: 'Agent commercial',
