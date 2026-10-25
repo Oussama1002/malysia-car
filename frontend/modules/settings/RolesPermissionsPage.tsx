@@ -213,19 +213,23 @@ export const RolesPermissionsPage: React.FC = () => {
             <div className="text-xs font-black uppercase tracking-wider text-slate-500">Rôles</div>
             {rolesQ.isLoading && <div className="text-sm text-slate-500">Chargement…</div>}
             {roles.map((r) => (
-              <button
+              <div
                 key={r.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedId(r.id)}
-                className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setSelectedId(r.id);
+                }}
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition ${
                   selectedId === r.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                <div>
-                  <div className="font-bold text-slate-900">{r.name}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-bold text-slate-900">{r.name}</div>
                   <div className="text-xs text-slate-500">{r.code}</div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
                   {!r.is_active && <StatusBadge label="Inactif" tone="default" />}
                   {r.is_system_role && <StatusBadge label="Système" tone="warning" />}
                   {typeof r.users_count === 'number' && (
@@ -233,8 +237,29 @@ export const RolesPermissionsPage: React.FC = () => {
                       {r.users_count}
                     </span>
                   )}
+                  {/* Activer / désactiver directement depuis la liste. Un rôle
+                      inactif disparaît du formulaire de création d'utilisateur.
+                      ADMIN n'est jamais désactivable (verrou anti-lockout). */}
+                  {r.code !== 'ADMIN' && (
+                    <button
+                      type="button"
+                      disabled={updateMut.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateMut.mutate({ id: r.id, payload: { is_active: !r.is_active } });
+                      }}
+                      title={r.is_active ? 'Désactiver ce rôle' : 'Activer ce rôle'}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition disabled:opacity-50 ${
+                        r.is_active
+                          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                          : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                      }`}
+                    >
+                      {r.is_active ? 'Désactiver' : 'Activer'}
+                    </button>
+                  )}
                 </div>
-              </button>
+              </div>
             ))}
             {!rolesQ.isLoading && !roles.length && (
               <p className="text-sm text-slate-500">Aucun rôle — créez le premier.</p>
