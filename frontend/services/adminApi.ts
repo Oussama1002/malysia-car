@@ -163,6 +163,7 @@ export interface AdminRole {
   description: string | null;
   company_id: string | null;
   is_system_role: boolean;
+  is_active: boolean;
   users_count?: number;
   permissions?: { id: number; code: string; name: string; module: string }[] | null;
   created_at?: string;
@@ -195,12 +196,18 @@ export async function createRole(payload: {
 
 export async function updateRole(
   id: number,
-  payload: { code?: string; name?: string; description?: string | null; permission_ids?: number[] },
+  payload: { code?: string; name?: string; description?: string | null; is_active?: boolean; permission_ids?: number[] },
 ): Promise<{ data: AdminRole }> {
   return apiClient<{ data: AdminRole }>(`/v1/roles/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+}
+
+/** Active / désactive un rôle. Un rôle inactif n'apparaît plus dans le
+ * formulaire de création d'utilisateur, mais reste intact par ailleurs. */
+export async function setRoleActive(id: number, isActive: boolean): Promise<{ data: AdminRole }> {
+  return updateRole(id, { is_active: isActive });
 }
 
 export async function deleteRole(id: number): Promise<{ message: string }> {

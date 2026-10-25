@@ -414,7 +414,7 @@ export const UserManagementPage: React.FC = () => {
 
 const UserForm: React.FC<{
   user: AdminUser | null;
-  roles: { id: number; code: string; name: string }[];
+  roles: { id: number; code: string; name: string; is_active?: boolean }[];
   branches: Branch[];
   errorMsg: string | null;
   submitting: boolean;
@@ -548,7 +548,12 @@ const UserForm: React.FC<{
       </div>
       <Field label="Rôles">
         <div className="flex flex-wrap gap-2">
-          {roles.map((r) => {
+          {roles
+            // Seuls les rôles actifs sont proposés. En édition, on garde
+            // visible un rôle déjà affecté même s'il a été désactivé depuis,
+            // pour que l'admin puisse le retirer.
+            .filter((r) => r.is_active !== false || form.roleIds.includes(r.id))
+            .map((r) => {
             const on = form.roleIds.includes(r.id);
             return (
               <button

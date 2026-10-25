@@ -226,6 +226,7 @@ export const RolesPermissionsPage: React.FC = () => {
                   <div className="text-xs text-slate-500">{r.code}</div>
                 </div>
                 <div className="flex items-center gap-1">
+                  {!r.is_active && <StatusBadge label="Inactif" tone="default" />}
                   {r.is_system_role && <StatusBadge label="Système" tone="warning" />}
                   {typeof r.users_count === 'number' && (
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
@@ -252,12 +253,33 @@ export const RolesPermissionsPage: React.FC = () => {
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-lg font-black text-slate-900">{selected.name}</h2>
+                    <h2 className="flex items-center gap-2 text-lg font-black text-slate-900">
+                      {selected.name}
+                      {!selected.is_active && <StatusBadge label="Inactif" tone="default" />}
+                    </h2>
                     <p className="text-xs text-slate-500">
                       {selected.code} · {selected.description ?? 'Sans description'}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Activer / désactiver : un rôle inactif disparaît du
+                        formulaire de création d'utilisateur. On interdit de
+                        désactiver ADMIN pour ne pas se verrouiller dehors. */}
+                    {selected.code !== 'ADMIN' && (
+                      <button
+                        type="button"
+                        className="df-btn df-btn--ghost"
+                        disabled={updateMut.isPending}
+                        onClick={() =>
+                          updateMut.mutate({
+                            id: selected.id,
+                            payload: { is_active: !selected.is_active },
+                          })
+                        }
+                      >
+                        {selected.is_active ? 'Désactiver' : 'Activer'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="df-btn df-btn--ghost"

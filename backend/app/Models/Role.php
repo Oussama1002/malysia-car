@@ -13,10 +13,12 @@ class Role extends Model
         'name',
         'description',
         'is_system_role',
+        'is_active',
     ];
 
     protected $casts = [
         'is_system_role' => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     /**

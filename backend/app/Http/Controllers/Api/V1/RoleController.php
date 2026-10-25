@@ -54,7 +54,7 @@ class RoleController extends Controller
     public function update(UpdateRoleRequest $request, Role $role): JsonResponse
     {
         $data = $request->validated();
-        $role->fill(array_intersect_key($data, array_flip(['code', 'name', 'description'])))->save();
+        $role->fill(array_intersect_key($data, array_flip(['code', 'name', 'description', 'is_active'])))->save();
         if (array_key_exists('permission_ids', $data)) {
             $role->permissions()->sync($data['permission_ids']);
         }

@@ -23,6 +23,8 @@ class RoleResource extends JsonResource
             'description' => $r->description,
             'company_id' => $r->company_id,
             'is_system_role' => (bool) $r->is_system_role,
+            // Les anciens rôles créés avant la colonne sont considérés actifs.
+            'is_active' => (bool) ($r->is_active ?? true),
             'users_count' => $this->whenCounted('users'),
             'permissions' => $perms
                 ? $perms->map(fn ($p) => [
