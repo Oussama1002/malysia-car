@@ -10,6 +10,7 @@ use App\Services\AuditLogger;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -37,14 +38,26 @@ class FieldOpsAdminController extends Controller
     {
         $companyId = $request->user()?->company_id;
 
-        $users = User::query()
+        $query = User::query()
             ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+            // N'exclure que les comptes explicitement désactivés : selon le
+            // schéma importé, `status` peut être NULL ou 'active' — un filtre
+            // strict « = active » vidait la liste.
             ->where(function ($q) {
-                $q->whereNull('status')->orWhere('status', 'active');
-            })
-            ->orderBy('first_name')
-            ->orderBy('last_name')
-            ->get()
+                $q->whereNull('status')
+                    ->orWhereNotIn('status', ['inactive', 'INACTIVE', 'disabled', 'suspended']);
+            });
+
+        // Le tri dépend du schéma : driveflow (MySQL) a first_name/last_name ;
+        // le dev SQLite n'a que `name`/`email`. Trier sur une colonne absente
+        // provoquait une 500 → le menu « Affectation » restait vide.
+        if (Schema::hasColumn('users', 'first_name')) {
+            $query->orderBy('first_name')->orderBy('last_name');
+        } else {
+            $query->orderBy('email');
+        }
+
+        $users = $query->get()
             ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,

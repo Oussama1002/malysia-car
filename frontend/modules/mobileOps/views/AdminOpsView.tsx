@@ -475,7 +475,7 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
                     className="df-input flex-1 text-xs"
                   >
                     <option value="">
-                      {agentsQ.isLoading ? 'Chargement…' : '— Choisir un agent —'}
+                      {agentsQ.isLoading ? 'Chargement…' : agentsQ.isError ? 'Erreur de chargement des agents' : '— Choisir un agent —'}
                     </option>
                     {(agentsQ.data ?? []).map((a) => (
                       <option key={a.id} value={a.id}>
@@ -747,7 +747,9 @@ const CreateMissionDrawer: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           <div>
             <label className="mb-1 block text-xs font-bold text-slate-700">Affectation (agent)</label>
             <select value={form.assigned_user_id} onChange={(e) => set('assigned_user_id', e.target.value)} className="df-input w-full text-xs">
-              <option value="">{agentsQ.isLoading ? 'Chargement…' : '— Non assignée —'}</option>
+              <option value="">
+                {agentsQ.isLoading ? 'Chargement…' : agentsQ.isError ? 'Erreur de chargement des agents' : '— Non assignée —'}
+              </option>
               {(agentsQ.data ?? []).map((a) => (
                 <option key={a.id} value={a.id}>{a.name}{a.email ? ` · ${a.email}` : ''}</option>
               ))}
