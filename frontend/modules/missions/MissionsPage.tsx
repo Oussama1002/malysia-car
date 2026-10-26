@@ -13,12 +13,11 @@ import { AdminOpsView } from '@/modules/mobileOps/views/AdminOpsView';
  */
 export const MissionsPage: React.FC = () => {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6">
-      <div className="mb-5">
-        <div className="text-xs font-black uppercase tracking-wider text-slate-400">Opérations</div>
-        <h1 className="mt-1 text-2xl font-black text-slate-900">Missions</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-slate-900">Missions</h1>
         <p className="text-sm text-slate-500">
-          Opérations terrain — livraisons, récupérations et inspections : suivi en temps réel,
+          Opérations terrain — livraisons, récupérations et inspections : suivi,
           assignation des agents et preuves de mission.
         </p>
       </div>

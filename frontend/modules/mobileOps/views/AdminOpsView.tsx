@@ -8,6 +8,20 @@ import {
 } from '@/services/mobileOpsApi';
 import { formatDate } from '@/modules/shared/formatters';
 import { DateField } from '@/modules/shared/components/DateField';
+import { DataTable } from '@/modules/shared/components/DataTable';
+import { StatusBadge } from '@/modules/shared/components/StatusBadge';
+
+// Statut → ton du badge standard de l'app (comme les autres modules).
+const STATUS_BADGE_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
+  pending: 'default',
+  assigned: 'info',
+  accepted: 'info',
+  in_progress: 'warning',
+  arrived: 'warning',
+  completed: 'success',
+  cancelled: 'default',
+  failed: 'danger',
+};
 
 // ── Label maps ───────────────────────────────────────────────────────
 
@@ -22,24 +36,28 @@ const STATUS_LABEL: Record<string, string> = {
   failed: 'Échec',
 };
 
-const STATUS_TONE: Record<string, string> = {
-  pending: 'bg-slate-100 text-slate-700',
-  assigned: 'bg-blue-100 text-blue-800',
-  accepted: 'bg-sky-100 text-sky-800',
-  in_progress: 'bg-amber-100 text-amber-800',
-  arrived: 'bg-purple-100 text-purple-800',
-  completed: 'bg-emerald-100 text-emerald-800',
-  cancelled: 'bg-slate-200 text-slate-600',
-  failed: 'bg-rose-100 text-rose-800',
-};
-
 const TYPE_LABEL: Record<string, string> = {
   delivery: 'Livraison',
   pickup: 'Récupération',
-  check_in: 'Check-in',
-  check_out: 'Check-out',
+  check_in: 'État des lieux (entrée)',
+  check_out: 'État des lieux (sortie)',
   inspection: 'Inspection',
   assistance: 'Assistance',
+};
+
+const ISSUE_TYPE_LABEL: Record<string, string> = {
+  vehicle_damage: 'Dommage véhicule',
+  customer_absent: 'Client absent',
+  wrong_address: 'Adresse incorrecte',
+  mechanical: 'Problème mécanique',
+  other: 'Autre',
+};
+
+const SEVERITY_LABEL: Record<string, string> = {
+  low: 'Faible',
+  medium: 'Moyenne',
+  high: 'Élevée',
+  critical: 'Critique',
 };
 
 type DrawerMode = null | 'detail' | 'create';
@@ -80,9 +98,9 @@ export const AdminOpsView: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-900">Suivi des missions terrain</h1>
+          <h2 className="text-lg font-black text-slate-900">Suivi des missions terrain</h2>
           <p className="text-xs text-slate-500">
-            {meta ? `${meta.total} mission(s)` : 'Chargement...'} — moniteur admin/gestionnaire
+            {meta ? `${meta.total} mission(s)` : 'Chargement…'}
           </p>
         </div>
         <button
@@ -124,57 +142,65 @@ export const AdminOpsView: React.FC = () => {
         />
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50">
-              <th className="px-3 py-2 text-left font-bold text-slate-600">Mission</th>
-              <th className="px-3 py-2 text-left font-bold text-slate-600">Type</th>
-              <th className="px-3 py-2 text-left font-bold text-slate-600">Statut</th>
-              <th className="px-3 py-2 text-left font-bold text-slate-600">Agent</th>
-              <th className="px-3 py-2 text-left font-bold text-slate-600">Véhicule</th>
-              <th className="px-3 py-2 text-left font-bold text-slate-600">Planifiée</th>
-              <th className="px-3 py-2 text-left font-bold text-slate-600">Preuves</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listQ.isLoading && (
-              <tr><td colSpan={7} className="py-6 text-center text-slate-400">Chargement...</td></tr>
-            )}
-            {!listQ.isLoading && missions.length === 0 && (
-              <tr><td colSpan={7} className="py-6 text-center text-slate-400">Aucune mission trouvée</td></tr>
-            )}
-            {missions.map((m) => (
-              <tr
-                key={m.id}
-                className="cursor-pointer border-b border-slate-50 transition hover:bg-slate-50"
-                onClick={() => openDetail(m.id)}
-              >
-                <td className="px-3 py-2">
-                  <div className="font-mono text-[10px] text-slate-400">{m.mission_number ?? m.id.slice(0, 8)}</div>
-                </td>
-                <td className="px-3 py-2 font-bold">{TYPE_LABEL[m.mission_type] ?? m.mission_type}</td>
-                <td className="px-3 py-2">
-                  <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-black uppercase ${STATUS_TONE[m.status]}`}>
-                    {STATUS_LABEL[m.status] ?? m.status}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-slate-600">{m.assigned_agent?.email ?? '—'}</td>
-                <td className="px-3 py-2 font-mono">{m.vehicle?.registration_number ?? '—'}</td>
-                <td className="px-3 py-2 text-slate-500">{m.planned_at ? formatDate(m.planned_at) : '—'}</td>
-                <td className="px-3 py-2">
-                  <div className="flex gap-1.5 text-[10px]">
-                    {(m.photos_count ?? 0) > 0 && <span className="text-slate-500">{m.photos_count} ph</span>}
-                    {(m.inspections_count ?? 0) > 0 && <span className="text-indigo-500">{m.inspections_count} insp</span>}
-                    {(m.issues_count ?? 0) > 0 && <span className="text-rose-500">{m.issues_count} pb</span>}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Tableau standard de l'app (comme Contrats). */}
+      <DataTable
+        loading={listQ.isLoading}
+        rows={missions}
+        rowKey={(m) => m.id}
+        onRowClick={(m) => openDetail(m.id)}
+        emptyTitle="Aucune mission"
+        emptyDescription="Aucune mission ne correspond à ces filtres."
+        columns={[
+          {
+            key: 'mission',
+            header: 'Mission',
+            render: (m) => (
+              <span className="font-mono text-xs font-black text-slate-900">
+                {m.mission_number ?? m.id.slice(0, 8)}
+              </span>
+            ),
+          },
+          {
+            key: 'type',
+            header: 'Type',
+            render: (m) => <StatusBadge label={TYPE_LABEL[m.mission_type] ?? m.mission_type} tone="info" />,
+          },
+          {
+            key: 'status',
+            header: 'Statut',
+            render: (m) => (
+              <StatusBadge label={STATUS_LABEL[m.status] ?? m.status} tone={STATUS_BADGE_TONE[m.status] ?? 'default'} />
+            ),
+          },
+          {
+            key: 'agent',
+            header: 'Agent',
+            render: (m) => <span className="font-semibold text-slate-700">{m.assigned_agent?.email ?? '—'}</span>,
+          },
+          {
+            key: 'vehicle',
+            header: 'Véhicule',
+            render: (m) => <span className="font-mono text-xs text-slate-700">{m.vehicle?.registration_number ?? '—'}</span>,
+          },
+          {
+            key: 'planned',
+            header: 'Planifiée',
+            render: (m) => <span className="text-xs text-slate-500">{m.planned_at ? formatDate(m.planned_at) : '—'}</span>,
+          },
+          {
+            key: 'proofs',
+            header: 'Preuves',
+            render: (m) => (
+              <div className="flex gap-2 text-[11px] font-semibold">
+                {(m.photos_count ?? 0) > 0 && <span className="text-slate-500">{m.photos_count} photo(s)</span>}
+                {(m.inspections_count ?? 0) > 0 && <span className="text-indigo-500">{m.inspections_count} inspection(s)</span>}
+                {(m.issues_count ?? 0) > 0 && <span className="text-rose-500">{m.issues_count} litige(s)</span>}
+                {!(m.photos_count || m.inspections_count || m.issues_count) && <span className="text-slate-300">—</span>}
+              </div>
+            ),
+          },
+        ]}
+      />
 
       {/* Pagination */}
       {meta && meta.last_page > 1 && (
@@ -268,10 +294,10 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
         <div className="flex items-start justify-between">
           <div>
             <div className="font-mono text-xs text-slate-500">{m?.mission_number ?? missionId.slice(0, 8)}</div>
-            <h2 className="text-lg font-black">{m ? (TYPE_LABEL[m.mission_type] ?? m.mission_type) : '...'}</h2>
+            <h2 className="text-lg font-black">{m ? (TYPE_LABEL[m.mission_type] ?? m.mission_type) : '…'}</h2>
             {m && (
-              <span className={`mt-1 inline-block rounded-md px-2 py-0.5 text-[10px] font-black uppercase ${STATUS_TONE[m.status]}`}>
-                {STATUS_LABEL[m.status] ?? m.status}
+              <span className="mt-1 inline-block">
+                <StatusBadge label={STATUS_LABEL[m.status] ?? m.status} tone={STATUS_BADGE_TONE[m.status] ?? 'default'} />
               </span>
             )}
           </div>
@@ -364,13 +390,13 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
                 {(m.issues ?? []).map((iss) => (
                   <div key={iss.id} className="mb-2 rounded-lg border border-slate-100 p-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold">{iss.issue_type}</span>
+                      <span className="font-bold">{ISSUE_TYPE_LABEL[iss.issue_type] ?? iss.issue_type}</span>
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                         iss.severity === 'critical' ? 'bg-rose-100 text-rose-700' :
                         iss.severity === 'high' ? 'bg-orange-100 text-orange-700' :
                         'bg-slate-100 text-slate-600'
                       }`}>
-                        {iss.severity}
+                        {SEVERITY_LABEL[iss.severity] ?? iss.severity}
                       </span>
                     </div>
                     <div className="mt-1 text-slate-600">{iss.description}</div>
@@ -499,7 +525,7 @@ const ProofView: React.FC<{ proof: MissionProofBundle }> = ({ proof }) => (
       <div className="mb-2 font-bold text-slate-700">Problèmes ({proof.issues.length})</div>
       {proof.issues.map((iss) => (
         <div key={iss.id} className="mb-1 rounded-lg border border-slate-100 p-2">
-          <span className="font-bold">{iss.issue_type}</span> — {iss.severity} — {iss.description}
+          <span className="font-bold">{ISSUE_TYPE_LABEL[iss.issue_type] ?? iss.issue_type}</span> — {SEVERITY_LABEL[iss.severity] ?? iss.severity} — {iss.description}
           {iss.resolved_at && <span className="text-emerald-600"> (Résolu)</span>}
         </div>
       ))}
@@ -600,12 +626,12 @@ const CreateMissionDrawer: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700">Véhicule (UUID)</label>
+            <label className="mb-1 block text-xs font-bold text-slate-700">Véhicule (identifiant)</label>
             <input type="text" value={form.vehicle_id} onChange={(e) => set('vehicle_id', e.target.value)} className="df-input w-full text-xs" placeholder="Optionnel" />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700">Client (UUID)</label>
+            <label className="mb-1 block text-xs font-bold text-slate-700">Client (identifiant)</label>
             <input type="text" value={form.client_id} onChange={(e) => set('client_id', e.target.value)} className="df-input w-full text-xs" placeholder="Optionnel" />
           </div>
 
