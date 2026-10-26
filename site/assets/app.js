@@ -500,12 +500,14 @@
         var input = document.getElementById(display.getAttribute('data-for'));
         if (!input) return;
         function refresh() {
-          var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value);
+          // Gère date (YYYY-MM-DD) ET date-heure (YYYY-MM-DDTHH:mm).
+          var m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?$/.exec(input.value);
           if (m) {
-            display.textContent = m[3] + '/' + m[2] + '/' + m[1];
+            var base = m[3] + '/' + m[2] + '/' + m[1];
+            display.textContent = m[4] ? base + ' ' + m[4] + ':' + m[5] : base;
             display.dataset.empty = 'false';
           } else {
-            display.textContent = 'JJ/MM/AAAA';
+            display.textContent = input.type === 'datetime-local' ? 'JJ/MM/AAAA HH:MM' : 'JJ/MM/AAAA';
             display.dataset.empty = 'true';
           }
         }
