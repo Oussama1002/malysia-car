@@ -334,12 +334,20 @@ export const ContractsPage: React.FC = () => {
           },
           {
             key: 'monthly',
-            header: 'Mensualité',
-            render: (r: any) => (
-              <span className="text-xs font-semibold text-slate-700">
-                {formatAmount(r.monthlyPayment ?? r.monthly_payment)}
-              </span>
-            ),
+            // LCD (Location Courte Durée) se facture au jour : le « loyer »
+            // est alors un tarif / jour, pas une mensualité. L'unité suit le
+            // type du contrat ligne par ligne.
+            header: 'Loyer',
+            render: (r: any) => {
+              const isDaily = r.type === 'LOCATION_COURTE';
+              const value = r.monthlyPayment ?? r.monthly_payment;
+              return (
+                <span className="text-xs font-semibold text-slate-700">
+                  {formatAmount(value)}
+                  {value ? <span className="text-slate-400"> / {isDaily ? 'jour' : 'mois'}</span> : null}
+                </span>
+              );
+            },
           },
           {
             key: 'total',
