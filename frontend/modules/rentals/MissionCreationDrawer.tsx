@@ -337,9 +337,12 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
 
   /* ── Agents query ────────────────────────────────────────────── */
   const agentsQ = useQuery({
-    queryKey: ['users', 'agents', 'AGENT_LIVRAISON'],
+    // Toute personne du staff peut être affectée à une mission (admin,
+    // missionnaire, assistant·e, gestionnaire…) — on ne filtre pas par rôle,
+    // sinon un rôle précis comme AGENT_LIVRAISON renvoyait « Aucun agent ».
+    queryKey: ['users', 'agents', 'all'],
     queryFn: async () => {
-      const res = await listUsers({ role: 'AGENT_LIVRAISON', status: 'active', per_page: 100 });
+      const res = await listUsers({ status: 'active', per_page: 100 });
       return res.data;
     },
     enabled: open,
