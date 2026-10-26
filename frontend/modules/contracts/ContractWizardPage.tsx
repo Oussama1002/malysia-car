@@ -1242,24 +1242,19 @@ export const ContractWizardPage: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <Field label="Client locataire 2 (optionnel)">
-                    <input
-                      className="df-input"
-                      placeholder="Nom du 2e conducteur"
-                      value={state.secondDriverName}
-                      onChange={(e) => patch('secondDriverName', e.target.value)}
-                    />
-                  </Field>
-                  {/* Entreprise : la société ne conduit pas — on saisit le
-                      conducteur autorisé (nom + CIN + permis). Ce sont ces
-                      pièces, pas celles de la société, qui conditionnent la
-                      génération du contrat. */}
-                  {selectedClient?.kind === 'ENTREPRISE' && (
+                  {/* Entreprise : la société ne conduit pas. On saisit donc
+                      les locataires (personnes physiques). Locataire 1 =
+                      conducteur autorisé — nom + CIN + permis obligatoires,
+                      ce sont SES pièces (pas l'ICE de la société) qui
+                      conditionnent la génération. Locataire 2 = optionnel.
+                      Pour un particulier, le client EST le locataire 1 ;
+                      on ne montre que le locataire 2 optionnel. */}
+                  {selectedClient?.kind === 'ENTREPRISE' ? (
                     <>
-                      <Field label="Second conducteur (entreprise)">
+                      <Field label="Locataire 1 — conducteur *">
                         <input
                           className="df-input"
-                          placeholder="Nom du second conducteur"
+                          placeholder="Nom du conducteur"
                           value={state.companySecondDriverName}
                           onChange={(e) => patch('companySecondDriverName', e.target.value)}
                         />
@@ -1280,7 +1275,24 @@ export const ContractWizardPage: React.FC = () => {
                           onChange={(e) => patch('companyDriverLicense', e.target.value)}
                         />
                       </Field>
+                      <Field label="Locataire 2 (optionnel)">
+                        <input
+                          className="df-input"
+                          placeholder="Nom du 2e conducteur"
+                          value={state.secondDriverName}
+                          onChange={(e) => patch('secondDriverName', e.target.value)}
+                        />
+                      </Field>
                     </>
+                  ) : (
+                    <Field label="Client locataire 2 (optionnel)">
+                      <input
+                        className="df-input"
+                        placeholder="Nom du 2e conducteur"
+                        value={state.secondDriverName}
+                        onChange={(e) => patch('secondDriverName', e.target.value)}
+                      />
+                    </Field>
                   )}
                   <Field label="Agent assigné">
                     {/* Verrouillé sur l'utilisateur courant : un contrat est
