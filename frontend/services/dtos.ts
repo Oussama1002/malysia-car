@@ -123,6 +123,8 @@ export interface ContractDto {
   bankReference?: string | null;
   chequeNumber?: string | null;
   expectedPaymentDay?: number | null;
+  /** Réf. dossier assistance — saisie pour les clients entreprise. */
+  assistanceRef?: string | null;
 }
 
 export type CreditCaseStatus =

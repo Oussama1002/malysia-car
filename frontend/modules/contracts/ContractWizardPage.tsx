@@ -162,6 +162,8 @@ interface WizardState {
   companySecondDriverName: string;
   companyDriverCin: string;
   companyDriverLicense: string;
+  // Réf. dossier assistance (clients entreprise uniquement).
+  assistanceRef: string;
   assignedAgent: string;
 }
 
@@ -193,6 +195,7 @@ const INITIAL: WizardState = {
   companySecondDriverName: '',
   companyDriverCin: '',
   companyDriverLicense: '',
+  assistanceRef: '',
   assignedAgent: '',
 };
 
@@ -782,6 +785,8 @@ export const ContractWizardPage: React.FC = () => {
       depositCheckBank: state.depositMethod === 'cheque' ? state.depositChequeBank || undefined : undefined,
       depositCheckDate: state.depositMethod === 'cheque' ? state.depositChequeDate || undefined : undefined,
       notes: state.notes,
+      // Réf. dossier assistance — persistée (entreprise). Vide = non envoyée.
+      assistanceRef: state.assistanceRef || undefined,
       paymentMethod: primary?.method ?? 'virement',
       paymentTerms: state.paymentTerms || undefined,
       bankReference: state.payments.map((p) => p.reference || p.chequeBank).filter(Boolean).join(', ') || undefined,
@@ -1273,6 +1278,14 @@ export const ContractWizardPage: React.FC = () => {
                           placeholder="N° de permis du conducteur"
                           value={state.companyDriverLicense}
                           onChange={(e) => patch('companyDriverLicense', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Réf. dossier assistance">
+                        <input
+                          className="df-input"
+                          placeholder="Référence du dossier d'assistance"
+                          value={state.assistanceRef}
+                          onChange={(e) => patch('assistanceRef', e.target.value)}
                         />
                       </Field>
                       <Field label="Locataire 2 (optionnel)">

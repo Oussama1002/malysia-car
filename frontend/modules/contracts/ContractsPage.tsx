@@ -359,6 +359,17 @@ export const ContractsPage: React.FC = () => {
             ),
           },
           {
+            // Réf. dossier assistance — renseignée pour les contrats entreprise.
+            key: 'assistanceRef',
+            header: 'Réf. assistance',
+            render: (r: any) => {
+              const ref = r.assistanceRef ?? r.assistance_ref;
+              return ref
+                ? <span className="text-xs font-semibold text-slate-700">{ref}</span>
+                : <span className="text-xs text-slate-300">—</span>;
+            },
+          },
+          {
             key: 'status',
             header: 'Statut',
             render: (r: any) => {

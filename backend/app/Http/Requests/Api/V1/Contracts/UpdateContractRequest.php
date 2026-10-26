@@ -45,6 +45,7 @@ class UpdateContractRequest extends ApiFormRequest
             'insurance_included' => ['sometimes', 'nullable', 'boolean'],
             'maintenance_included' => ['sometimes', 'nullable', 'boolean'],
             'notes' => ['sometimes', 'nullable', 'string'],
+            'assistance_ref' => ['sometimes', 'nullable', 'string', 'max:120'],
 
             'payment_method' => ['sometimes', 'nullable', 'string', 'max:40'],
             'payment_terms' => ['sometimes', 'nullable', 'string'],

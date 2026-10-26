@@ -62,6 +62,7 @@ class Contract extends Model
         'signed_at',
         'terminated_reason',
         'notes',
+        'assistance_ref',
         'created_by',
         'approved_by',
         'payment_method',

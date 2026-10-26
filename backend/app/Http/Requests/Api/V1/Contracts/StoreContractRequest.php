@@ -51,6 +51,7 @@ class StoreContractRequest extends ApiFormRequest
             'insurance_included' => ['nullable', 'boolean'],
             'maintenance_included' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
+            'assistance_ref' => ['nullable', 'string', 'max:120'],
 
             'payment_method' => ['nullable', 'string', 'max:40'],
             'payment_terms' => ['nullable', 'string'],
