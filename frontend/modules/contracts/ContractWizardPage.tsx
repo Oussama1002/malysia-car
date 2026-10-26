@@ -653,7 +653,7 @@ export const ContractWizardPage: React.FC = () => {
     || (state.durationMonths === 0 && state.durationExtraDays > 0);
   const totalAmount = Math.round(
     isDailyRent
-      ? state.monthlyRentMad * state.durationExtraDays
+      ? state.monthlyRentMad * (state.durationMonths * 30 + state.durationExtraDays)
       : state.monthlyRentMad * (state.durationMonths + state.durationExtraDays / 30),
   );
 
@@ -1447,30 +1447,48 @@ export const ContractWizardPage: React.FC = () => {
                       disabled
                     />
                   </Field>
-                  {/* Durée en une seule saisie : l'unité dépend du type —
-                      jours pour LCD, mois pour LLD/LOA/… La Date de fin est
-                      recalculée à chaque frappe. */}
-                  <Field label={`Durée (${isDailyRent ? 'jours' : 'mois'}) *`}>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min={0}
-                        className="df-input"
-                        value={(isDailyRent ? state.durationExtraDays : state.durationMonths) || ''}
-                        onChange={(e) => {
-                          const n = Math.max(0, Number(e.target.value) || 0);
-                          setState((s) => {
-                            const months = isDailyRent ? 0 : n;
-                            const days = isDailyRent ? n : 0;
-                            const next = { ...s, durationMonths: months, durationExtraDays: days };
-                            if (s.startDate) {
-                              next.endDate = addDurationIso(s.startDate, months, days);
-                            }
-                            return next;
-                          });
-                        }}
-                      />
-                      <span className="text-xs font-bold text-slate-500">{isDailyRent ? 'jours' : 'mois'}</span>
+                  {/* Durée en mois ET jours : les deux champs sont saisissables.
+                      La Date de fin est recalculée à chaque frappe. */}
+                  <Field label="Durée (mois / jours) *">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={0}
+                          className="df-input w-20"
+                          value={state.durationMonths || ''}
+                          onChange={(e) => {
+                            const months = Math.max(0, Number(e.target.value) || 0);
+                            setState((s) => {
+                              const next = { ...s, durationMonths: months };
+                              if (s.startDate) {
+                                next.endDate = addDurationIso(s.startDate, months, s.durationExtraDays);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="text-xs font-bold text-slate-500">mois</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={0}
+                          className="df-input w-20"
+                          value={state.durationExtraDays || ''}
+                          onChange={(e) => {
+                            const days = Math.max(0, Number(e.target.value) || 0);
+                            setState((s) => {
+                              const next = { ...s, durationExtraDays: days };
+                              if (s.startDate) {
+                                next.endDate = addDurationIso(s.startDate, s.durationMonths, days);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="text-xs font-bold text-slate-500">jours</span>
+                      </div>
                     </div>
                     {(state.durationMonths === 0 && state.durationExtraDays === 0) && (
                       <div className="mt-1 text-[11px] font-semibold text-rose-600">
@@ -1489,16 +1507,11 @@ export const ContractWizardPage: React.FC = () => {
                         setState((s) => {
                           const next = { ...s, endDate: v };
                           if (v && s.startDate) {
-                            if (isDailyRent) {
-                              // LCD : la Durée est exprimée en jours totaux.
-                              const ms = new Date(v).getTime() - new Date(s.startDate).getTime();
-                              next.durationMonths = 0;
-                              next.durationExtraDays = Math.max(0, Math.round(ms / 86_400_000));
-                            } else {
-                              const dur = durationBetween(s.startDate, v);
-                              next.durationMonths = dur.months;
-                              next.durationExtraDays = dur.days;
-                            }
+                            // Durée toujours scindée en mois + jours restants,
+                            // pour alimenter les deux champs de saisie.
+                            const dur = durationBetween(s.startDate, v);
+                            next.durationMonths = dur.months;
+                            next.durationExtraDays = dur.days;
                           }
                           return next;
                         });
