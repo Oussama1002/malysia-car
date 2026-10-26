@@ -610,6 +610,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware('role:ADMIN,DIRECTEUR,GESTIONNAIRE_FLOTTE')->group(function () {
             Route::get('mobile-ops/admin/missions', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'index'])
                 ->middleware('permission:missions.view');
+            Route::get('mobile-ops/admin/agents', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'agents'])
+                ->middleware('permission:missions.view');
             Route::post('mobile-ops/admin/missions', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'store'])
                 ->middleware('permission:missions.start');
             Route::post('mobile-ops/admin/missions/{mission}/assign', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'assign'])

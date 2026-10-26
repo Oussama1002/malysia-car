@@ -375,6 +375,12 @@ export const mobileOpsApi = {
     }));
   },
 
+  adminListAgents(): Promise<{ id: string; name: string; email: string; role?: string | null }[]> {
+    return apiClient<ApiResponseEnvelope<{ id: string; name: string; email: string; role?: string | null }[]>>(
+      '/v1/mobile-ops/admin/agents',
+    ).then((r) => r.data);
+  },
+
   adminCreateMission(data: {
     mission_type: MissionType;
     vehicle_id?: string;

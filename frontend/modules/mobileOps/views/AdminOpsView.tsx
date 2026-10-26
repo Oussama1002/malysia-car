@@ -230,6 +230,11 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
     queryFn: () => mobileOpsApi.getMission(missionId),
   });
 
+  const agentsQ = useQuery({
+    queryKey: ['mobile-ops', 'admin', 'agents'],
+    queryFn: () => mobileOpsApi.adminListAgents(),
+  });
+
   const proofQ = useQuery({
     queryKey: ['mobile-ops', 'admin', 'proof', missionId],
     queryFn: () => mobileOpsApi.getMissionProof(missionId),
@@ -311,13 +316,20 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
               <div className="rounded-xl border border-slate-100 p-3">
                 <div className="mb-2 text-xs font-bold text-slate-700">Assigner / réassigner un agent</div>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
+                  <select
                     value={assignUserId}
                     onChange={(e) => setAssignUserId(e.target.value)}
-                    placeholder="UUID de l'agent"
                     className="df-input flex-1 text-xs"
-                  />
+                  >
+                    <option value="">
+                      {agentsQ.isLoading ? 'Chargement…' : '— Choisir un agent —'}
+                    </option>
+                    {(agentsQ.data ?? []).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}{a.email ? ` · ${a.email}` : ''}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     className="df-btn df-btn--primary text-xs"
                     onClick={() => { setError(null); assignMut.mutate(); }}
@@ -527,6 +539,11 @@ const CreateMissionDrawer: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     notes: '',
   });
 
+  const agentsQ = useQuery({
+    queryKey: ['mobile-ops', 'admin', 'agents'],
+    queryFn: () => mobileOpsApi.adminListAgents(),
+  });
+
   const createMut = useMutation({
     mutationFn: () =>
       mobileOpsApi.adminCreateMission({
@@ -573,8 +590,13 @@ const CreateMissionDrawer: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700">Agent (UUID)</label>
-            <input type="text" value={form.assigned_user_id} onChange={(e) => set('assigned_user_id', e.target.value)} className="df-input w-full text-xs" placeholder="Optionnel" />
+            <label className="mb-1 block text-xs font-bold text-slate-700">Affectation (agent)</label>
+            <select value={form.assigned_user_id} onChange={(e) => set('assigned_user_id', e.target.value)} className="df-input w-full text-xs">
+              <option value="">{agentsQ.isLoading ? 'Chargement…' : '— Non assignée —'}</option>
+              {(agentsQ.data ?? []).map((a) => (
+                <option key={a.id} value={a.id}>{a.name}{a.email ? ` · ${a.email}` : ''}</option>
+              ))}
+            </select>
           </div>
 
           <div>

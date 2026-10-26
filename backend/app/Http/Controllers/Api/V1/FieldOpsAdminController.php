@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\Mission;
+use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,32 @@ class FieldOpsAdminController extends Controller
      *
      * Paginated, filterable list for admin monitoring.
      */
+    /**
+     * Agents assignables à une mission : utilisateurs actifs de la société.
+     * Alimente le menu déroulant « Affectation » du formulaire Créer/Assigner.
+     */
+    public function agents(Request $request): JsonResponse
+    {
+        $companyId = $request->user()?->company_id;
+
+        $users = User::query()
+            ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', 'active');
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'role' => method_exists($u, 'primaryRoleCode') ? $u->primaryRoleCode() : null,
+            ]);
+
+        return ApiResponse::success($users->values()->all());
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = Mission::query()
