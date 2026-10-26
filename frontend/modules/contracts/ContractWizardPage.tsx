@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiBase } from '@/services/apiClient';
 import { queryKeys } from '@/services/queryKeys';
 import { companySettingsApi } from '@/services/companySettingsApi';
+import { listFranchiseRules, resolveFranchise } from '@/services/franchiseRulesApi';
 import { ContractPaperPreview } from '@/modules/contracts/ContractPaperPreview';
 import { ChequeDuplicateWarning } from '@/modules/shared/components/ChequeDuplicateWarning';
 import type { CustomerDto, FleetVehicleDto } from '@/services/dtos';
@@ -13,6 +14,8 @@ type WizardVehicle = FleetVehicleDto & {
   hasActiveReservation?: boolean;
   hasActiveContract?: boolean;
   insuranceDeductible?: number;
+  brandId?: string | null;
+  modelId?: string | null;
 };
 
 /** Véhicule pris en sous-location : la valeur varie selon l'origine des données. */
@@ -538,12 +541,21 @@ export const ContractWizardPage: React.FC = () => {
         // toujours undefined, donc aucun véhicule n'était marqué SL.
         ownershipStatus: v.ownershipStatus ?? v.ownership_status,
         insuranceDeductible: v.insuranceDeductible ?? v.insurance_deductible ?? undefined,
+        brandId: v.brand_id ?? null,
+        modelId: v.model_id ?? null,
         // The list endpoint resolves live usage: a vehicle can sit at status
         // AVAILABLE in the fleet table while a reservation or contract holds it.
         hasActiveReservation: !!v.hasActiveReservation,
         hasActiveContract: !!v.hasActiveContract,
       }));
     },
+  });
+
+  // Règles de Franchise d'assurance par marque / modèle (Paramètres).
+  const franchiseRulesQ = useQuery({
+    queryKey: ['franchise-rules'],
+    queryFn: () => listFranchiseRules().then((r) => r.data),
+    enabled: !!getApiBase(),
   });
 
   // Pré-remplit une seule fois, et seulement si l'utilisateur n'a rien saisi.
@@ -560,19 +572,24 @@ export const ContractWizardPage: React.FC = () => {
   }, [settingsQ.data]);
 
   // La franchise du véhicule choisi prime sur la valeur par défaut de la
-  // société : un 4x4 et une citadine n'ont pas la même franchise.
+  // société : un 4x4 et une citadine n'ont pas la même franchise. Priorité :
+  // franchise propre du véhicule → règle modèle → règle marque (Paramètres).
   const vehicleFranchiseFor = useRef<string | null>(null);
   useEffect(() => {
     const id = state.vehicleId ? String(state.vehicleId) : null;
     if (!id || vehicleFranchiseFor.current === id) return;
     const picked = (vehicles.data ?? []).find((v) => String(v.id) === id);
     if (!picked) return;
+    // On attend que les règles soient chargées pour résoudre correctement.
+    if (franchiseRulesQ.isLoading) return;
     vehicleFranchiseFor.current = id;
-    const franchise = Number(picked.insuranceDeductible ?? 0);
+    const own = Number(picked.insuranceDeductible ?? 0);
+    const byRule = resolveFranchise(franchiseRulesQ.data ?? [], picked.brandId, picked.modelId);
+    const franchise = own > 0 ? own : byRule ?? 0;
     if (franchise > 0) {
       setState((prev) => ({ ...prev, securityDepositMad: franchise }));
     }
-  }, [state.vehicleId, vehicles.data]);
+  }, [state.vehicleId, vehicles.data, franchiseRulesQ.data, franchiseRulesQ.isLoading]);
 
   const customerDocs = useQuery({
     queryKey: ['customer-docs', state.clientId],

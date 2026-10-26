@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { companySettingsApi, type CompanySettingsPayload } from '@/services/companySettingsApi';
+import { apiClient } from '@/services/apiClient';
+import {
+  listFranchiseRules,
+  createFranchiseRule,
+  deleteFranchiseRule,
+  type FranchiseRule,
+} from '@/services/franchiseRulesApi';
 import {
   CUSTOMER_DOC_CATALOG_INDIVIDUAL,
   CUSTOMER_DOC_CATALOG_ENTERPRISE,
@@ -165,6 +172,10 @@ export const ParametersPage: React.FC = () => {
               <NumberField label="Padding numérotation" value={draft.contracts.contract_number_padding} min={2} max={8} onChange={(v) => setField('contracts', 'contract_number_padding', v)} />
               <BoolField label="Générer le PDF automatiquement à l'enregistrement" value={draft.contracts.auto_generate_pdf} onChange={(v) => setField('contracts', 'auto_generate_pdf', v)} />
             </div>
+
+            {/* Franchise d'assurance par marque / modèle — pré-remplit la
+                franchise du wizard selon le véhicule choisi. */}
+            <FranchiseRulesSection />
           </div>
         )}
 
@@ -437,6 +448,149 @@ export const ParametersPage: React.FC = () => {
 };
 
 /* Small controlled inputs */
+
+type BrandWithModels = { id: string; name: string; models: { id: string; name: string }[] };
+
+/**
+ * Franchise d'assurance par marque / modèle. Une règle « modèle » (ex. Clio 5
+ * → 5 500) prime sur une règle « marque » (ex. Bentley → 250 000), elle-même
+ * prioritaire sur la valeur par défaut société. Le wizard de contrat applique
+ * cette résolution au moment du choix du véhicule.
+ */
+const FranchiseRulesSection: React.FC = () => {
+  const qc = useQueryClient();
+  const brandsQ = useQuery({
+    queryKey: ['vehicle-brands'],
+    queryFn: () => apiClient<{ data: BrandWithModels[] }>('/v1/vehicle-brands').then((r) => r.data),
+  });
+  const rulesQ = useQuery({
+    queryKey: ['franchise-rules'],
+    queryFn: () => listFranchiseRules().then((r) => r.data),
+  });
+
+  const [brandId, setBrandId] = useState('');
+  const [modelId, setModelId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+
+  const models = (brandsQ.data ?? []).find((b) => b.id === brandId)?.models ?? [];
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['franchise-rules'] });
+  const createMut = useMutation({
+    mutationFn: createFranchiseRule,
+    onSuccess: () => {
+      invalidate();
+      setBrandId('');
+      setModelId('');
+      setAmount('');
+      setErr(null);
+    },
+    onError: (e) => setErr(e instanceof Error ? e.message : 'Erreur à la création'),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteFranchiseRule(id),
+    onSuccess: invalidate,
+  });
+
+  const add = () => {
+    const value = Number(amount);
+    if (!brandId) {
+      setErr('Choisissez une marque.');
+      return;
+    }
+    if (!(value > 0)) {
+      setErr('Saisissez un montant valide.');
+      return;
+    }
+    // Une règle modèle est la plus spécifique ; sinon on crée une règle marque.
+    createMut.mutate(modelId ? { model_id: modelId, amount_mad: value } : { brand_id: brandId, amount_mad: value });
+  };
+
+  const fmt = (n: number) => new Intl.NumberFormat('fr-MA').format(n);
+
+  return (
+    <div className="df-card">
+      <div className="df-card__body space-y-4">
+        <div>
+          <h3 className="text-sm font-black text-slate-900">Franchise d'assurance par véhicule</h3>
+          <p className="text-xs text-slate-500">
+            Montant pré-rempli sur le contrat selon le véhicule. Une règle <strong>modèle</strong> (ex. Clio 5 → 5 500)
+            prime sur une règle <strong>marque</strong> (ex. Bentley → 250 000), sinon la valeur par défaut ci-dessus.
+          </p>
+        </div>
+
+        {/* Ajout d'une règle */}
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_140px_auto]">
+          <select
+            className="df-input"
+            value={brandId}
+            onChange={(e) => {
+              setBrandId(e.target.value);
+              setModelId('');
+            }}
+          >
+            <option value="">Marque…</option>
+            {(brandsQ.data ?? []).map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+          <select
+            className="df-input disabled:opacity-50"
+            value={modelId}
+            disabled={!brandId}
+            onChange={(e) => setModelId(e.target.value)}
+          >
+            <option value="">Tous les modèles</option>
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min={0}
+            className="df-input"
+            placeholder="Montant MAD"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          <button type="button" className="df-btn df-btn--primary" disabled={createMut.isPending} onClick={add}>
+            Ajouter
+          </button>
+        </div>
+        {err && <p className="text-xs font-semibold text-rose-500">{err}</p>}
+
+        {/* Liste des règles */}
+        <div className="space-y-1">
+          {rulesQ.isLoading && <p className="text-sm text-slate-500">Chargement…</p>}
+          {(rulesQ.data ?? []).map((r: FranchiseRule) => (
+            <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+              <div className="min-w-0 text-sm">
+                <span className="font-bold text-slate-900">{r.brand_name ?? '—'}</span>
+                {r.model_name
+                  ? <span className="text-slate-600"> · {r.model_name}</span>
+                  : <span className="text-slate-400"> · toute la marque</span>}
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="font-black text-slate-900">{fmt(r.amount_mad)} MAD</span>
+                <button
+                  type="button"
+                  className="text-xs font-bold text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                  disabled={deleteMut.isPending}
+                  onClick={() => deleteMut.mutate(r.id)}
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          ))}
+          {!rulesQ.isLoading && !(rulesQ.data ?? []).length && (
+            <p className="text-sm text-slate-500">Aucune règle — ajoutez-en une ci-dessus.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const TextField: React.FC<{ label: string; value: string; onChange: (v: string) => void; hint?: string; multiline?: boolean }> = ({ label, value, onChange, hint, multiline }) => (
   <label className="block">

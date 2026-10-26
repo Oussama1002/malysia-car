@@ -275,6 +275,12 @@ Route::prefix('v1')->group(function () {
         Route::post('vehicle-models', [VehicleBrandController::class, 'storeModel'])
             ->middleware('permission:vehicles.create');
 
+        // Franchise d'assurance par marque / modèle (lecture) : consommée par
+        // le wizard de contrat pour pré-remplir la franchise et par l'écran
+        // Paramètres. L'écriture est plus bas (groupe ADMIN/DIRECTEUR).
+        Route::get('franchise-rules', [\App\Http\Controllers\Api\V1\FranchiseRuleController::class, 'index'])
+            ->middleware('permission:contracts.view');
+
         Route::get('vehicles', [VehicleController::class, 'index'])
             ->middleware('permission:vehicles.view');
         Route::post('vehicles', [VehicleController::class, 'store'])
@@ -1169,6 +1175,11 @@ Route::prefix('v1')->group(function () {
             // { group: { key: value, … }, … } payload and persists each
             // group through the same per-group audit path as PUT settings/{group}.
             Route::put('company-settings', [CompanySettingsController::class, 'updateAll']);
+
+            // Franchise d'assurance par marque / modèle (écriture).
+            Route::post('franchise-rules', [\App\Http\Controllers\Api\V1\FranchiseRuleController::class, 'store']);
+            Route::put('franchise-rules/{franchiseRule}', [\App\Http\Controllers\Api\V1\FranchiseRuleController::class, 'update']);
+            Route::delete('franchise-rules/{franchiseRule}', [\App\Http\Controllers\Api\V1\FranchiseRuleController::class, 'destroy']);
         });
     });
 });
