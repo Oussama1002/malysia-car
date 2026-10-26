@@ -13,6 +13,7 @@ import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 
 // Statut → ton du badge standard de l'app (comme les autres modules).
 const STATUS_BADGE_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
+  planned: 'default',
   pending: 'default',
   assigned: 'info',
   accepted: 'info',
@@ -26,6 +27,7 @@ const STATUS_BADGE_TONE: Record<string, 'default' | 'success' | 'warning' | 'dan
 // ── Label maps ───────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
+  planned: 'Planifiée',
   pending: 'En attente',
   assigned: 'Assignée',
   accepted: 'Acceptée',
@@ -39,10 +41,16 @@ const STATUS_LABEL: Record<string, string> = {
 const TYPE_LABEL: Record<string, string> = {
   delivery: 'Livraison',
   pickup: 'Récupération',
+  transfer: 'Transfert',
+  convoy: 'Convoyage',
   check_in: 'État des lieux (entrée)',
   check_out: 'État des lieux (sortie)',
   inspection: 'Inspection',
+  cleaning: 'Nettoyage',
+  workshop: 'Atelier',
+  fuel: 'Carburant',
   assistance: 'Assistance',
+  other: 'Autre',
 };
 
 const ISSUE_TYPE_LABEL: Record<string, string> = {
@@ -228,13 +236,13 @@ export const AdminOpsView: React.FC = () => {
           {
             key: 'type',
             header: 'Type',
-            render: (m) => <StatusBadge label={TYPE_LABEL[m.mission_type] ?? m.mission_type} tone="info" />,
+            render: (m) => <StatusBadge label={TYPE_LABEL[m.mission_type] ?? labelize(m.mission_type)} tone="info" />,
           },
           {
             key: 'status',
             header: 'Statut',
             render: (m) => (
-              <StatusBadge label={STATUS_LABEL[m.status] ?? m.status} tone={STATUS_BADGE_TONE[m.status] ?? 'default'} />
+              <StatusBadge label={STATUS_LABEL[m.status] ?? labelize(m.status)} tone={STATUS_BADGE_TONE[m.status] ?? 'default'} />
             ),
           },
           {
@@ -411,10 +419,10 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
         <div className="flex items-start justify-between">
           <div>
             <div className="font-mono text-xs text-slate-500">{m?.mission_number ?? missionId.slice(0, 8)}</div>
-            <h2 className="text-lg font-black">{m ? (TYPE_LABEL[m.mission_type] ?? m.mission_type) : '…'}</h2>
+            <h2 className="text-lg font-black">{m ? (TYPE_LABEL[m.mission_type] ?? labelize(m.mission_type)) : '…'}</h2>
             {m && (
               <span className="mt-1 inline-block">
-                <StatusBadge label={STATUS_LABEL[m.status] ?? m.status} tone={STATUS_BADGE_TONE[m.status] ?? 'default'} />
+                <StatusBadge label={STATUS_LABEL[m.status] ?? labelize(m.status)} tone={STATUS_BADGE_TONE[m.status] ?? 'default'} />
               </span>
             )}
           </div>
