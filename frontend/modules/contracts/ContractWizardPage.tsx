@@ -156,8 +156,12 @@ interface WizardState {
   endDate: string | null;
   secondDriverName: string;
   // Deuxième conducteur spécifique aux clients entreprise : la société ne
-  // conduit pas, on capture la personne autorisée à conduire.
+  // conduit pas, on capture la personne autorisée à conduire (nom + CIN +
+  // permis). Pour une entreprise, le contrôle pièce d'identité / permis porte
+  // sur ce conducteur, pas sur la société (qui n'a qu'un ICE).
   companySecondDriverName: string;
+  companyDriverCin: string;
+  companyDriverLicense: string;
   assignedAgent: string;
 }
 
@@ -187,6 +191,8 @@ const INITIAL: WizardState = {
   endDate: null,
   secondDriverName: '',
   companySecondDriverName: '',
+  companyDriverCin: '',
+  companyDriverLicense: '',
   assignedAgent: '',
 };
 
@@ -621,13 +627,19 @@ export const ContractWizardPage: React.FC = () => {
   // passeport) ET un permis — soit comme numéros saisis sur l'étape 1, soit
   // comme documents attachés dans le centre des documents. Tant que les deux
   // manquent, on bloque « Suivant » et le bouton final de création.
-  const hasIdentityForContract =
-    Boolean((selectedClient?.idNumber ?? '').trim()) ||
-    Boolean((selectedClient?.passportNumber ?? '').trim()) ||
-    Boolean(cinDoc) ||
-    Boolean(passportDoc);
-  const hasLicenseForContract =
-    Boolean((selectedClient?.licenseNumber ?? '').trim()) || Boolean(permisDoc);
+  //
+  // Entreprise : la société n'a pas de CIN / permis — ces pièces sont celles
+  // du conducteur autorisé saisi plus bas. On contrôle donc ce conducteur.
+  const isCompanyClient = selectedClient?.kind === 'ENTREPRISE';
+  const hasIdentityForContract = isCompanyClient
+    ? Boolean(state.companyDriverCin.trim()) || Boolean(cinDoc) || Boolean(passportDoc)
+    : Boolean((selectedClient?.idNumber ?? '').trim()) ||
+      Boolean((selectedClient?.passportNumber ?? '').trim()) ||
+      Boolean(cinDoc) ||
+      Boolean(passportDoc);
+  const hasLicenseForContract = isCompanyClient
+    ? Boolean(state.companyDriverLicense.trim()) || Boolean(permisDoc)
+    : Boolean((selectedClient?.licenseNumber ?? '').trim()) || Boolean(permisDoc);
   const identityComplete = hasIdentityForContract && hasLicenseForContract;
   const selectedVehicle = vehicles.data?.find((v) => String(v.id) === String(state.vehicleId));
   // Filter the contract-type catalog by the admin's whitelist stored in
@@ -1239,16 +1251,36 @@ export const ContractWizardPage: React.FC = () => {
                     />
                   </Field>
                   {/* Entreprise : la société ne conduit pas — on saisit le
-                      second conducteur (personne physique) autorisé. */}
+                      conducteur autorisé (nom + CIN + permis). Ce sont ces
+                      pièces, pas celles de la société, qui conditionnent la
+                      génération du contrat. */}
                   {selectedClient?.kind === 'ENTREPRISE' && (
-                    <Field label="Second conducteur (entreprise)">
-                      <input
-                        className="df-input"
-                        placeholder="Nom du second conducteur"
-                        value={state.companySecondDriverName}
-                        onChange={(e) => patch('companySecondDriverName', e.target.value)}
-                      />
-                    </Field>
+                    <>
+                      <Field label="Second conducteur (entreprise)">
+                        <input
+                          className="df-input"
+                          placeholder="Nom du second conducteur"
+                          value={state.companySecondDriverName}
+                          onChange={(e) => patch('companySecondDriverName', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="CIN conducteur *">
+                        <input
+                          className="df-input"
+                          placeholder="CIN du conducteur"
+                          value={state.companyDriverCin}
+                          onChange={(e) => patch('companyDriverCin', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Permis conducteur *">
+                        <input
+                          className="df-input"
+                          placeholder="N° de permis du conducteur"
+                          value={state.companyDriverLicense}
+                          onChange={(e) => patch('companyDriverLicense', e.target.value)}
+                        />
+                      </Field>
+                    </>
                   )}
                   <Field label="Agent assigné">
                     {/* Verrouillé sur l'utilisateur courant : un contrat est
@@ -1343,14 +1375,24 @@ export const ContractWizardPage: React.FC = () => {
                         <div className="font-black">Documents obligatoires manquants</div>
                         <ul className="mt-1 list-disc pl-5 text-[11.5px]">
                           {!hasIdentityForContract && (
-                            <li>CIN ou passeport — ni numéro saisi ni document attaché.</li>
+                            <li>
+                              {isCompanyClient
+                                ? 'CIN du conducteur — à saisir ci-dessus.'
+                                : 'CIN ou passeport — ni numéro saisi ni document attaché.'}
+                            </li>
                           )}
                           {!hasLicenseForContract && (
-                            <li>Permis de conduire — ni numéro saisi ni document attaché.</li>
+                            <li>
+                              {isCompanyClient
+                                ? 'Permis du conducteur — à saisir ci-dessus.'
+                                : 'Permis de conduire — ni numéro saisi ni document attaché.'}
+                            </li>
                           )}
                         </ul>
                         <div className="mt-1 text-[11px]">
-                          Ajoutez les documents dans la fiche client puis revenez ici — le contrat ne peut pas être généré sans.
+                          {isCompanyClient
+                            ? 'Pour une entreprise, la CIN et le permis sont ceux du conducteur autorisé.'
+                            : 'Ajoutez les documents dans la fiche client puis revenez ici — le contrat ne peut pas être généré sans.'}
                         </div>
                       </div>
                     )}
@@ -1872,6 +1914,9 @@ export const ContractWizardPage: React.FC = () => {
                   customer_address: selectedClient?.address,
                   customer_phone: selectedClient?.phone,
                   driver_last_name: state.companySecondDriverName || state.secondDriverName,
+                  // Entreprise : CIN / permis du conducteur autorisé.
+                  driver_cin: isCompanyClient ? state.companyDriverCin || null : null,
+                  driver_license: isCompanyClient ? state.companyDriverLicense || null : null,
                   vehicle_brand: selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}`.trim() : null,
                   vehicle_plate: selectedVehicle?.registration,
                   start_date: state.startDate ? formatDate(state.startDate) : null,
