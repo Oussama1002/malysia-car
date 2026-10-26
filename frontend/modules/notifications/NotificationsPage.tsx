@@ -245,9 +245,6 @@ export const NotificationsPage: React.FC = () => {
       <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-black text-[color:var(--df-text)]">Notifications</h1>
-          <p className="text-[color:var(--df-text-muted)]">
-            Centre de notifications — <strong>{unreadTotal}</strong> non lue(s)
-          </p>
         </div>
         {unreadTotal > 0 && (
           <button

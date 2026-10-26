@@ -1117,7 +1117,6 @@ export const ContractWizardPage: React.FC = () => {
             <span className="df-crumb__current">Nouveau</span>
           </div>
           <h1 className="mt-1 text-3xl font-black tracking-tight">Nouveau contrat</h1>
-          <p className="text-[color:var(--df-text-muted)]">Génération assistée — juridiquement conforme au droit marocain (DOC · Loi 31-08 · Loi 09-08).</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Auto-save indicator — visible on step 6 */}

@@ -48,7 +48,6 @@ export const FleetAnalysisPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-[color:var(--df-text)]">Analyse de parc</h1>
-        <p className="text-sm text-[color:var(--df-text-muted)]">Rentabilité, disponibilité et coûts par véhicule.</p>
       </header>
 
       {!apiReady && (

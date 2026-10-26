@@ -24,7 +24,6 @@ export const AiHubPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-slate-900">IA operationnelle</h1>
-        <p className="text-slate-500">Insights ERP deterministes avec option AI-assisted si un provider externe est configure.</p>
       </header>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

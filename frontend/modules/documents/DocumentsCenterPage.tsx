@@ -47,7 +47,6 @@ export const DocumentsCenterPage: React.FC = () => {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Centre documentaire</h1>
-          <p className="text-sm text-slate-500">Référentiel unique des pièces KYC, flotte, sinistres, missions et PDFs générés.</p>
         </div>
         <Link
           to="/documents/reader"

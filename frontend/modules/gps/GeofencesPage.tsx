@@ -28,7 +28,6 @@ export const GeofencesPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-slate-900">Géofences</h1>
-        <p className="text-slate-500">Création et affectation véhicule (zones dépôt, agences, zones interdites).</p>
       </header>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-3">

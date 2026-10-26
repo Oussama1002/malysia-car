@@ -132,10 +132,6 @@ export const DocumentReaderPage: React.FC = () => {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-black text-slate-900">Softnovation Document Reader</h1>
-        <p className="text-sm text-slate-500">
-          Numérisation, OCR (Tesseract) et extraction automatique des champs pour les CIN, passeports, permis,
-          cartes grises et contrats. L'admin valide avant tout enregistrement.
-        </p>
       </header>
 
       <UploadCard

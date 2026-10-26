@@ -16,7 +16,6 @@ export const FinancePage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-slate-900">Finance & trésorerie</h1>
-        <p className="text-slate-500">Facturation, encaissements, trésorerie, relevés clients.</p>
       </header>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">

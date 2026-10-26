@@ -151,7 +151,6 @@ export const PaymentsPage: React.FC = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Paiements</h1>
-          <p className="text-slate-500">Encaissements clients et allocations.</p>
         </div>
         <button
           type="button"

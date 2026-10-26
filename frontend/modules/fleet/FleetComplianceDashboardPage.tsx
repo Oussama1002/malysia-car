@@ -53,9 +53,6 @@ export const FleetComplianceDashboardPage: React.FC = () => {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-black text-[color:var(--df-text)]">Conformite vehicules</h1>
-        <p className="text-sm text-[color:var(--df-text-muted)]">
-          Assurance, visite technique et documents — alertes generees automatiquement.
-        </p>
       </header>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

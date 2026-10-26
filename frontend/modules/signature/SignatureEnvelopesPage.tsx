@@ -48,7 +48,6 @@ export const SignatureEnvelopesPage: React.FC = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Signature électronique</h1>
-          <p className="text-slate-500">Enveloppes, signataires, suivi des signatures en temps réel.</p>
         </div>
         <button className="df-btn df-btn--primary" onClick={() => { setError(null); setDrawerOpen(true); }}>
           + Nouvelle enveloppe

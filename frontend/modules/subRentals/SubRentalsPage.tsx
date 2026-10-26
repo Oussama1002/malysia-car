@@ -87,7 +87,6 @@ export const SubRentalsPage: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Sous-location</h1>
-          <p className="text-sm text-slate-500">Contrats de sous-location avec agences fournisseurs</p>
         </div>
         <div className="flex gap-2">
           <Link

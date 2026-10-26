@@ -200,7 +200,6 @@ export const ContractsPage: React.FC = () => {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Contrats</h1>
-          <p className="text-slate-500">LLD, LOA, crédit auto, vente occasion, location courte durée.</p>
         </div>
         <Link
           to="/contracts/new"

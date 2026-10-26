@@ -57,7 +57,6 @@ export const ArrearsDashboardPage: React.FC = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Contentieux & Impayés</h1>
-          <p className="text-slate-500">Gestion des dossiers de recouvrement et procédures juridiques.</p>
         </div>
         <div className="flex gap-2">
           <Link to="/arrears/legal" className="df-btn df-btn--ghost">Dossiers juridiques →</Link>

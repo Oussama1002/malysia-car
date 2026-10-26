@@ -11,7 +11,6 @@ export const SettingsPage: React.FC = () => (
   <div className="space-y-8">
     <header>
       <h1 className="text-2xl font-black text-slate-900">Paramètres</h1>
-      <p className="text-slate-500">Administration de la plateforme, configuration métier, utilisateurs, véhicules et agences.</p>
     </header>
 
     {/* ── Administration ─────────────────────────────────────────── */}

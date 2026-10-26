@@ -64,7 +64,6 @@ export const UsedCarsPage: React.FC = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Véhicules d’occasion</h1>
-          <p className="text-slate-500">Mise en vente → évaluation → publication → réservation → vente.</p>
         </div>
         <button
           type="button"

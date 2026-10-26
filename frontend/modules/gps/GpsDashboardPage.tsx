@@ -200,7 +200,6 @@ export const GpsDashboardPage: React.FC = () => {
             Flux GPS temps réel · {formatDate(new Date())}
           </div>
           <h1 className="mt-1 text-3xl font-black tracking-tight">Flotte & géolocalisation</h1>
-          <p className="text-[color:var(--df-text-muted)]">Suivi en temps réel, historique des trajets, géofences et alertes contractuelles.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link to="/gps/geofences" className="df-btn df-btn--ghost df-btn--sm"><Icon name="pin" size={14} /> Gérer géofences</Link>

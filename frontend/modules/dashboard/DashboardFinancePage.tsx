@@ -49,7 +49,6 @@ export const DashboardFinancePage: React.FC = () => {
         <div>
           <Link to="/dashboard" className="text-xs font-bold text-indigo-600">← Cockpit</Link>
           <h1 className="text-2xl font-black text-slate-900">Tableau de bord Finance</h1>
-          <p className="text-slate-500">Facturation, encaissements, impayés — données réelles.</p>
         </div>
         <div className="df-tabs" role="tablist">
           {RANGES.map((r) => (

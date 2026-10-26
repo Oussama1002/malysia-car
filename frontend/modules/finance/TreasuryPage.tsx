@@ -41,7 +41,6 @@ export const TreasuryPage: React.FC = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Trésorerie</h1>
-          <p className="text-slate-500">Comptes bancaires, rapprochement, projection de cashflow.</p>
         </div>
         <button
           type="button"

@@ -209,7 +209,6 @@ export const ContractSettingsPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black">Paramètres Contrats & Réservations</h1>
-        <p className="text-[color:var(--df-text-muted)]">Valeurs par défaut, limites de durée et conditions financières.</p>
       </header>
 
       <div className="space-y-5">

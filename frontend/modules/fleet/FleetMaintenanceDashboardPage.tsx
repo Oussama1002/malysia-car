@@ -17,7 +17,6 @@ export const FleetMaintenanceDashboardPage: React.FC = () => {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-black">Maintenance proactive</h1>
-        <p className="text-sm text-[color:var(--df-text-muted)]">Alertes critiques, entretiens a venir, immobilisations et couts.</p>
       </header>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

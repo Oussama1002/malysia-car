@@ -8,7 +8,6 @@ export const ContractTemplatesPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Templates de contrats</h1>
-          <p className="text-sm text-slate-500">Variables type {'{{client.name}}'} — moteur côté serveur.</p>
         </div>
         <Link className="text-sm font-bold text-indigo-600" to="/contracts">
           ← Contrats

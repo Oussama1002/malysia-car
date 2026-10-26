@@ -220,9 +220,6 @@ export const AuditPage: React.FC = () => {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Audit & traçabilité</h1>
-          <p className="text-slate-500">
-            Journal des changements sensibles ({q.data?.meta?.total ?? rows.length} entrée(s)).
-          </p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <button

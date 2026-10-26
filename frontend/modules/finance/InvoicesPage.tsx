@@ -53,7 +53,6 @@ export const InvoicesPage: React.FC = () => {
         <div>
           <Link to="/finance" className="text-xs font-bold text-indigo-600">← Finance</Link>
           <h1 className="text-2xl font-black text-slate-900">Factures</h1>
-          <p className="text-slate-500">Factures contrat, vente VO et services.</p>
         </div>
         <button
           type="button"

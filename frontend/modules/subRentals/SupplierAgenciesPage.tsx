@@ -164,7 +164,6 @@ export const SupplierAgenciesPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Agences fournisseurs</h1>
-          <p className="text-sm text-slate-500">Gestion des agences depuis lesquelles vous sous-louez des véhicules</p>
         </div>
         <div className="flex gap-2">
           <Link to="/fleet/sub-rentals" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">

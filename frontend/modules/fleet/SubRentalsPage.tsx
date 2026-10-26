@@ -85,7 +85,6 @@ export const SubRentalsPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-[color:var(--df-text)]">Sous-location</h1>
-        <p className="text-sm text-[color:var(--df-text-muted)]">Fournisseurs externes et contrats de sous-location.</p>
       </header>
 
       <div className="df-card p-5">

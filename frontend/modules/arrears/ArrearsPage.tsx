@@ -20,7 +20,6 @@ export const ArrearsPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-slate-900">Impayés & recouvrement</h1>
-        <p className="text-slate-500">Relances, mises en demeure, contentieux.</p>
       </header>
 
       <DataTable

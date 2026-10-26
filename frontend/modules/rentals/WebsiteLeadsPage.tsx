@@ -231,9 +231,6 @@ export const WebsiteLeadsPage: React.FC = () => {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Demandes du site</h1>
-          <p className="text-sm text-slate-500">
-            Les réservations demandées depuis le site public. Rappelez le client, puis créez sa fiche et sa réservation.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           {newCount > 0 && (

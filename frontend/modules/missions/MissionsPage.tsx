@@ -16,10 +16,6 @@ export const MissionsPage: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-black text-slate-900">Missions</h1>
-        <p className="text-sm text-slate-500">
-          Opérations terrain — livraisons, récupérations et inspections : suivi,
-          assignation des agents et preuves de mission.
-        </p>
       </div>
       <AdminOpsView />
     </div>

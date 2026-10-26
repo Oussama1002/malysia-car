@@ -147,7 +147,6 @@ export const FixedChargesPage: React.FC = () => {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Dépenses</h1>
-          <p className="text-sm text-slate-500">Intelligence des coûts flotte & opérations</p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}

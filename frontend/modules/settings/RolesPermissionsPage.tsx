@@ -187,7 +187,6 @@ export const RolesPermissionsPage: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Rôles & permissions</h1>
-          <p className="text-sm text-slate-500">Configurez les rôles et leurs droits fonctionnels.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link className="text-sm font-bold text-indigo-600" to="/settings">

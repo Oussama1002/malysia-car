@@ -61,7 +61,6 @@ export const CreditAnalysisPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-slate-900">Analyse crédit</h1>
-        <p className="text-slate-500">Dossiers, scoring, décision.</p>
       </header>
       <SearchFilterBar placeholder="Filtrer…" value={q} onChange={setQ} />
       <DataTable

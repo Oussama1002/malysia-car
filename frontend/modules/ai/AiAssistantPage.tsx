@@ -29,7 +29,6 @@ export const AiAssistantPage: React.FC = () => {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Assistant IA</h1>
-          <p className="text-sm text-slate-500">Reponses ERP deterministes; AI-assisted uniquement si provider externe configure.</p>
         </div>
         <Link className="text-sm font-bold text-indigo-600" to="/ai">
           ← Hub

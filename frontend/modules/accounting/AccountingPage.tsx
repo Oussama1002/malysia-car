@@ -15,7 +15,6 @@ export const AccountingPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-slate-900">Comptabilité générale</h1>
-        <p className="text-slate-500">Plan comptable · Journaux · Écritures · Immobilisations · États financiers.</p>
       </header>
 
       <div className="grid gap-4 md:grid-cols-4">

@@ -49,7 +49,6 @@ export const LegalCasesPage: React.FC = () => {
         <div>
           <Link to="/arrears" className="text-xs font-bold text-indigo-600">← Contentieux</Link>
           <h1 className="text-2xl font-black text-slate-900">Dossiers juridiques</h1>
-          <p className="text-slate-500">Procédures judiciaires, jugements et ordres de saisie.</p>
         </div>
       </header>
 

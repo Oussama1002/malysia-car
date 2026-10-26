@@ -275,7 +275,6 @@ export const SubRentalCreatePage: React.FC<SubRentalCreatePageProps> = ({
       {!embedded && (
         <div>
           <h1 className="text-xl font-bold text-slate-900">Nouveau contrat de sous-location</h1>
-          <p className="text-sm text-slate-500">Renseignez les informations du contrat avec le fournisseur.</p>
         </div>
       )}
 

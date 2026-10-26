@@ -135,7 +135,6 @@ export const ProfilePage: React.FC = () => {
       <div>
         <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-500">Mon compte</p>
         <h1 className="text-3xl font-black tracking-tight text-slate-900">Profil</h1>
-        <p className="text-slate-500">Gérez vos informations personnelles et vos préférences.</p>
       </div>
 
       {/* Avatar card */}

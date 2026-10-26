@@ -12,7 +12,6 @@ export const GpsAlertsPage: React.FC = () => {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-black text-slate-900">Alertes GPS</h1>
-        <p className="text-slate-500">Détection rule-driven (zones, immobilisation, mouvements non autorisés).</p>
       </header>
 
       <DataTable

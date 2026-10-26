@@ -56,7 +56,6 @@ export const VehicleBrandsPage: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Véhicules — Marques &amp; modèles</h1>
-          <p className="text-sm text-slate-500">Gérez le catalogue des marques et modèles du parc.</p>
         </div>
         <Link className="text-sm font-bold text-indigo-600" to="/settings">← Paramètres</Link>
       </div>

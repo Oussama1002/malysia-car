@@ -91,9 +91,6 @@ export const AgencePage: React.FC = () => {
         <div>
           <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-500">Organisation</p>
           <h1 className="text-3xl font-black tracking-tight text-slate-900">Agences</h1>
-          <p className="text-slate-500">
-            {isAdmin ? 'Toutes les agences de l\'entreprise.' : 'Vos agences assignées.'}
-          </p>
         </div>
         {isAdmin && (
           <Link to="/settings/branches" className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition shadow-xl shadow-indigo-600/20 whitespace-nowrap">
