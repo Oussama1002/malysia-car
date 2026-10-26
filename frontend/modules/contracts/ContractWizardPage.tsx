@@ -1338,9 +1338,6 @@ export const ContractWizardPage: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    {selectedClient.complianceStatus !== 'VERIFIED' && (
-                      <AIHint text="KYC incomplet. IA recommande : compléter l'attestation CNSS et scanner la CIN recto/verso avant de poursuivre." tone="warning" />
-                    )}
                   </div>
                 )}
               </>
