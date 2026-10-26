@@ -61,7 +61,9 @@ export interface MobileOpsMissionDto {
   // Eager-loaded relations
   vehicle?: { id: string; registration_number: string } | null;
   assigned_agent?: { id: string; email: string } | null;
-  client?: { id: string; customer_code: string; customer_type: string } | null;
+  client?: { id: string; customer_code: string; customer_type: string; full_name?: string | null } | null;
+  reservation?: { id: string; reservation_number: string | null } | null;
+  contract?: { id: string; contract_number: string | null } | null;
   // Counts
   photos_count?: number;
   inspections_count?: number;

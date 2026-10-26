@@ -140,6 +140,11 @@ class Mission extends Model
         return $this->belongsTo(Reservation::class, 'reservation_id');
     }
 
+    public function contract(): BelongsTo
+    {
+        return $this->belongsTo(Contract::class, 'contract_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

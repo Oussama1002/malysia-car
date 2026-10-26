@@ -60,6 +60,64 @@ const SEVERITY_LABEL: Record<string, string> = {
   critical: 'Critique',
 };
 
+// État d'inspection (exterior/interior_condition côté backend).
+const CONDITION_LABEL: Record<string, string> = {
+  good: 'Bon',
+  minor_damage: 'Dégâts mineurs',
+  major_damage: 'Dégâts majeurs',
+};
+
+// Statut d'un élément de check-list (item_status côté backend).
+const ITEM_STATUS_LABEL: Record<string, string> = {
+  DONE: 'Fait',
+  done: 'Fait',
+  ok: 'OK',
+  pending: 'En attente',
+  skipped: 'Ignoré',
+  failed: 'Échec',
+  todo: 'À faire',
+};
+
+// Phase d'une photo / d'un élément de check-list (champ libre côté mobile).
+const PHASE_LABEL: Record<string, string> = {
+  delivery: 'Livraison',
+  pickup: 'Récupération',
+  return: 'Retour',
+  check_in: 'État des lieux (entrée)',
+  check_out: 'État des lieux (sortie)',
+  departure: 'Départ',
+  arrival: 'Arrivée',
+  before: 'Avant',
+  during: 'Pendant',
+  after: 'Après',
+  inspection: 'Inspection',
+};
+
+function labelize(raw?: string | null): string {
+  if (!raw) return '—';
+  return raw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function conditionLabel(raw?: string | null): string {
+  if (!raw) return '—';
+  return CONDITION_LABEL[raw] ?? labelize(raw);
+}
+
+function itemStatusLabel(raw?: string | null): string {
+  if (!raw) return '—';
+  return ITEM_STATUS_LABEL[raw] ?? labelize(raw);
+}
+
+function phaseLabel(raw?: string | null): string {
+  if (!raw) return '—';
+  return PHASE_LABEL[raw] ?? labelize(raw);
+}
+
+function clientLabel(client?: MobileOpsMissionDto['client']): string {
+  if (!client) return '—';
+  return client.full_name || client.customer_code || '—';
+}
+
 type DrawerMode = null | 'detail' | 'create';
 
 export const AdminOpsView: React.FC = () => {
@@ -89,10 +147,17 @@ export const AdminOpsView: React.FC = () => {
   const missions = listQ.data?.data ?? [];
   const meta = listQ.data?.meta;
 
+  const cancelMut = useMutation({
+    mutationFn: (id: string) => mobileOpsApi.adminCancelMission(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mobile-ops'] }),
+  });
+
   const openDetail = (id: string) => {
     setSelectedId(id);
     setDrawerMode('detail');
   };
+
+  const TERMINAL_STATUSES = ['completed', 'cancelled', 'failed'];
 
   return (
     <div className="space-y-4">
@@ -173,6 +238,31 @@ export const AdminOpsView: React.FC = () => {
             ),
           },
           {
+            key: 'client',
+            header: 'Client',
+            render: (m) => <span className="font-semibold text-slate-700">{clientLabel(m.client)}</span>,
+          },
+          {
+            key: 'reservation',
+            header: 'Réservation',
+            render: (m) =>
+              m.reservation?.reservation_number ? (
+                <span className="font-mono text-xs text-slate-700">{m.reservation.reservation_number}</span>
+              ) : (
+                <span className="text-slate-300">—</span>
+              ),
+          },
+          {
+            key: 'contract',
+            header: 'Contrat',
+            render: (m) =>
+              m.contract?.contract_number ? (
+                <span className="font-mono text-xs text-slate-700">{m.contract.contract_number}</span>
+              ) : (
+                <span className="text-slate-300">—</span>
+              ),
+          },
+          {
             key: 'agent',
             header: 'Agent',
             render: (m) => <span className="font-semibold text-slate-700">{m.assigned_agent?.email ?? '—'}</span>,
@@ -196,6 +286,33 @@ export const AdminOpsView: React.FC = () => {
                 {(m.inspections_count ?? 0) > 0 && <span className="text-indigo-500">{m.inspections_count} inspection(s)</span>}
                 {(m.issues_count ?? 0) > 0 && <span className="text-rose-500">{m.issues_count} litige(s)</span>}
                 {!(m.photos_count || m.inspections_count || m.issues_count) && <span className="text-slate-300">—</span>}
+              </div>
+            ),
+          },
+          {
+            key: 'actions',
+            header: 'Actions',
+            render: (m) => (
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="df-btn df-btn--ghost text-[11px]"
+                  onClick={() => openDetail(m.id)}
+                >
+                  Détails
+                </button>
+                {!TERMINAL_STATUSES.includes(m.status) && (
+                  <button
+                    type="button"
+                    className="df-btn df-btn--ghost text-[11px] text-rose-600"
+                    disabled={cancelMut.isPending}
+                    onClick={() => {
+                      if (confirm('Annuler cette mission ?')) cancelMut.mutate(m.id);
+                    }}
+                  >
+                    Annuler
+                  </button>
+                )}
               </div>
             ),
           },
@@ -324,7 +441,9 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
             <div className="grid grid-cols-2 gap-2 text-xs">
               <InfoCell label="Agent" value={m.assigned_agent?.email ?? '—'} />
               <InfoCell label="Véhicule" value={m.vehicle?.registration_number ?? '—'} />
-              <InfoCell label="Client" value={m.client?.customer_code ?? '—'} />
+              <InfoCell label="Client" value={clientLabel(m.client)} />
+              <InfoCell label="Réservation" value={m.reservation?.reservation_number ?? '—'} />
+              <InfoCell label="Contrat" value={m.contract?.contract_number ?? '—'} />
               <InfoCell label="Planifiée" value={m.planned_at ? formatDate(m.planned_at) : '—'} />
               <InfoCell label="Départ" value={m.pickup_address ?? m.origin_address ?? '—'} />
               <InfoCell label="Arrivée" value={m.dropoff_address ?? m.destination_address ?? '—'} />
@@ -475,7 +594,7 @@ const ProofView: React.FC<{ proof: MissionProofBundle }> = ({ proof }) => (
       ) : (
         Object.entries(proof.photos_by_phase).map(([phase, photos]) => (
           <div key={phase} className="mb-2">
-            <div className="font-mono text-[10px] uppercase text-slate-500">{phase}</div>
+            <div className="text-[10px] font-bold uppercase text-slate-500">{phaseLabel(phase)}</div>
             <div className="grid grid-cols-3 gap-1 mt-1">
               {(photos as import('@/services/mobileOpsApi').MobileOpsPhoto[]).map((p) => (
                 <div key={p.id} className="rounded border border-slate-100 p-1.5">
@@ -496,11 +615,13 @@ const ProofView: React.FC<{ proof: MissionProofBundle }> = ({ proof }) => (
       ) : (
         proof.inspections.map((insp) => (
           <div key={insp.id} className="mb-2 rounded-lg bg-slate-50 p-2">
-            <div className="font-bold">{insp.inspection_type === 'check_in' ? 'Check-in' : 'Check-out'}</div>
+            <div className="font-bold">
+              {insp.inspection_type === 'check_in' ? 'État des lieux (entrée)' : 'État des lieux (sortie)'}
+            </div>
             <div className="text-slate-500">
               {insp.odometer_km != null && `${insp.odometer_km} km · `}
               {insp.fuel_level != null && `${insp.fuel_level}% carburant · `}
-              Ext: {insp.exterior_condition ?? '—'} · Int: {insp.interior_condition ?? '—'}
+              Ext. : {conditionLabel(insp.exterior_condition)} · Int. : {conditionLabel(insp.interior_condition)}
             </div>
             {insp.damage_notes && <div className="mt-1 text-rose-600">{insp.damage_notes}</div>}
           </div>
@@ -538,10 +659,10 @@ const ProofView: React.FC<{ proof: MissionProofBundle }> = ({ proof }) => (
       {proof.checklist.map((c) => (
         <div key={String(c.id)} className="mb-1 flex justify-between rounded bg-slate-50 px-2 py-1">
           <span>
-            <span className="font-mono text-[10px] text-slate-400">{c.checklist_phase}</span>{' '}
+            <span className="text-[10px] font-bold uppercase text-slate-400">{phaseLabel(c.checklist_phase)}</span>{' '}
             {c.item_label}
           </span>
-          <span className="text-slate-500">{c.item_status ?? '—'}</span>
+          <span className="text-slate-500">{itemStatusLabel(c.item_status)}</span>
         </div>
       ))}
       {proof.checklist.length === 0 && <div className="text-slate-400">Aucun élément</div>}
