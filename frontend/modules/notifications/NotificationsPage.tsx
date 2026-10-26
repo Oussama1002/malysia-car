@@ -26,6 +26,7 @@ const CATEGORY_FR: Record<string, string> = {
   'fleet.maintenance_overdue': 'Maintenance en retard',
   'fleet.oil_change_due': 'Vidange à prévoir',
   'fleet.tire_change_due': 'Changement pneus',
+  'fleet.price_missing': 'Tarif à définir',
   'fleet.immobilized': 'Véhicule immobilisé',
   'fleet.accident_declared': 'Accident déclaré',
   'fleet.document_expired': 'Document expiré',
@@ -298,7 +299,7 @@ export const NotificationsPage: React.FC = () => {
               key={n.id}
               type="button"
               onClick={() => openDrawer(n)}
-              className={`w-full text-left rounded-2xl border p-4 transition hover:border-[color:var(--df-brand-300)] ${n.read_at ? 'border-[color:var(--df-border)] bg-[color:var(--df-surface)]' : 'border-[color:var(--df-brand-200)] bg-[color:var(--df-brand-500)]/[0.04]'}`}
+              className={`w-full text-left rounded-2xl border p-4 transition hover:border-[color:var(--df-brand-300)] ${n.read_at ? 'border-[color:var(--df-brand-200)] bg-[color:var(--df-brand-500)]/[0.04]' : 'border-[color:var(--df-border)] bg-[color:var(--df-surface)]'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -319,7 +320,7 @@ export const NotificationsPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  {!n.read_at && <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--df-brand-500)]" />}
+                  {n.read_at && <span className="h-2.5 w-2.5 rounded-full bg-[color:var(--df-brand-500)]" />}
                   <span className="text-[11px] font-bold text-[color:var(--df-brand-500)]">Détail →</span>
                 </div>
               </div>

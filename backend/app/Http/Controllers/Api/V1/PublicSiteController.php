@@ -55,28 +55,54 @@ class PublicSiteController extends Controller
 
     private function alertMissingPrices(array $vehicles, NotificationService $notifications): void
     {
+        // Collect every vehicle shown on the landing without a price / jour, then
+        // raise ONE aggregated notification instead of repeating the same alert
+        // for each vehicle (feedback: don't spam a notification per vehicle).
+        $labels = [];
         foreach ($vehicles as $v) {
             if (! empty($v['price_per_day'])) {
                 continue;
             }
-            $key = 'public_site.pricing_alert:'.$v['id'];
-            if (Cache::has($key)) {
-                continue;
-            }
-            $label = trim(($v['brand'] ?? '').' '.($v['model'] ?? '')) ?: 'Véhicule sans marque';
-            try {
-                $notifications->notifyRoles(
-                    roleCodes: ['ADMIN', 'GESTIONNAIRE_FLOTTE'],
-                    category: 'fleet.price_missing',
-                    title: 'Tarif à définir pour un véhicule du site',
-                    body: $label.' est affiché sur la landing sans prix / jour. Merci de renseigner le tarif.',
-                    module: 'fleet',
-                    priority: 'high',
-                    linkUrl: '/fleet/'.$v['id'],
-                );
-                Cache::put($key, true, now()->addDay());
-            } catch (\Throwable) {
-            }
+            $labels[] = trim(($v['brand'] ?? '').' '.($v['model'] ?? '')) ?: 'Véhicule sans marque';
+        }
+
+        if ($labels === []) {
+            return;
+        }
+
+        $key = 'public_site.pricing_alert';
+        if (Cache::has($key)) {
+            return;
+        }
+
+        $count = count($labels);
+        $sample = array_slice($labels, 0, 5);
+        $listed = implode(', ', $sample);
+        if ($count > count($sample)) {
+            $listed .= '…';
+        }
+
+        if ($count === 1) {
+            $title = 'Tarif à définir pour un véhicule du site';
+            $body = $sample[0].' est affiché sur la landing sans prix / jour. Merci de renseigner le tarif.';
+        } else {
+            $title = $count.' véhicules du site sans tarif / jour';
+            $body = $count.' véhicules affichés sur la landing n\'ont pas de prix / jour ('.$listed.'). Merci de renseigner les tarifs.';
+        }
+
+        try {
+            $notifications->notifyRoles(
+                roleCodes: ['ADMIN', 'GESTIONNAIRE_FLOTTE'],
+                category: 'fleet.price_missing',
+                title: $title,
+                body: $body,
+                module: 'fleet',
+                priority: 'high',
+                linkUrl: '/fleet',
+                payload: ['missing_count' => $count],
+            );
+            Cache::put($key, true, now()->addDay());
+        } catch (\Throwable) {
         }
     }
 
