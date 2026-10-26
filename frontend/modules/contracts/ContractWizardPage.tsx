@@ -155,6 +155,9 @@ interface WizardState {
   startDate: string | null;
   endDate: string | null;
   secondDriverName: string;
+  // Deuxième conducteur spécifique aux clients entreprise : la société ne
+  // conduit pas, on capture la personne autorisée à conduire.
+  companySecondDriverName: string;
   assignedAgent: string;
 }
 
@@ -183,6 +186,7 @@ const INITIAL: WizardState = {
   startDate: new Date().toISOString().slice(0, 16),
   endDate: null,
   secondDriverName: '',
+  companySecondDriverName: '',
   assignedAgent: '',
 };
 
@@ -1234,6 +1238,18 @@ export const ContractWizardPage: React.FC = () => {
                       onChange={(e) => patch('secondDriverName', e.target.value)}
                     />
                   </Field>
+                  {/* Entreprise : la société ne conduit pas — on saisit le
+                      second conducteur (personne physique) autorisé. */}
+                  {selectedClient?.kind === 'ENTREPRISE' && (
+                    <Field label="Second conducteur (entreprise)">
+                      <input
+                        className="df-input"
+                        placeholder="Nom du second conducteur"
+                        value={state.companySecondDriverName}
+                        onChange={(e) => patch('companySecondDriverName', e.target.value)}
+                      />
+                    </Field>
+                  )}
                   <Field label="Agent assigné">
                     {/* Verrouillé sur l'utilisateur courant : un contrat est
                         généré par l'agent qui le signe. */}
@@ -1842,7 +1858,7 @@ export const ContractWizardPage: React.FC = () => {
                   customer_license: selectedClient?.licenseNumber,
                   customer_address: selectedClient?.address,
                   customer_phone: selectedClient?.phone,
-                  driver_last_name: state.secondDriverName,
+                  driver_last_name: state.companySecondDriverName || state.secondDriverName,
                   vehicle_brand: selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}`.trim() : null,
                   vehicle_plate: selectedVehicle?.registration,
                   start_date: state.startDate ? formatDate(state.startDate) : null,
