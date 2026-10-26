@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:intl/intl.dart';
 
+import '../../../core/auth/auth_notifier.dart';
 import '../../../core/auth/user_repo.dart';
 import '../../../core/router/modules.dart';
 import '../../../core/theme/theme_mode_provider.dart';
@@ -307,6 +308,31 @@ class _PersistentTopBarState extends ConsumerState<_PersistentTopBar> {
     setState(() => _searching = false);
   }
 
+  /// Déconnexion depuis la top bar, avec confirmation explicite.
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Déconnexion'),
+        content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+            child: const Text('Déconnexion'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(authProvider.notifier).signOut();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -357,7 +383,7 @@ class _PersistentTopBarState extends ConsumerState<_PersistentTopBar> {
         ),
         _TopIcon(icon: Icons.search, onTap: _openSearch),
         const _NotificationsBell(),
-        _TopIcon(icon: Icons.open_in_new, onTap: () {}),
+        _TopIcon(icon: Icons.logout, onTap: _confirmLogout),
         const SizedBox(width: 6),
       ],
     );
