@@ -75,6 +75,7 @@ import {
   AiVehiclePricingPredictionPage,
 } from '@/modules/ai/AiPredictionPages';
 import { MobileOpsPage } from '@/modules/mobileOps/MobileOpsPage';
+import { MissionsPage } from '@/modules/missions/MissionsPage';
 import { NotificationsPage } from '@/modules/notifications/NotificationsPage';
 import { SettingsPage } from '@/modules/settings/SettingsPage';
 import { UserManagementPage } from '@/modules/settings/UserManagementPage';
@@ -676,6 +677,15 @@ export default function AppRoutes(): React.ReactElement {
               element={
                 <ModuleGate module="mobileOps">
                   <MobileOpsPage />
+                </ModuleGate>
+              }
+            />
+
+            <Route
+              path="/missions"
+              element={
+                <ModuleGate module="missions">
+                  <MissionsPage />
                 </ModuleGate>
               }
             />

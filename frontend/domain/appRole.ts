@@ -35,18 +35,19 @@ export type ModuleKey =
   | 'audit'
   | 'documents'
   | 'rentals'
-  | 'subRentals';
+  | 'subRentals'
+  | 'missions';
 
 /** Which modules each role may access (baseline; ADMIN = all). */
 export const ROLE_MODULE_ACCESS: Record<AppRole, ModuleKey[]> = {
   ADMIN: [
     'dashboard', 'fleet', 'customers', 'contracts', 'credit', 'finance', 'accounting',
-    'arrears', 'signatures', 'usedCars', 'gps', 'ai', 'mobileOps', 'notifications',
+    'arrears', 'signatures', 'usedCars', 'gps', 'ai', 'mobileOps', 'missions', 'notifications',
     'settings', 'audit', 'documents', 'rentals', 'subRentals',
   ],
   DIRECTEUR: [
     'dashboard', 'fleet', 'customers', 'contracts', 'credit', 'finance', 'accounting',
-    'arrears', 'signatures', 'usedCars', 'gps', 'ai', 'mobileOps', 'notifications',
+    'arrears', 'signatures', 'usedCars', 'gps', 'ai', 'mobileOps', 'missions', 'notifications',
     'settings', 'audit', 'documents', 'rentals', 'subRentals',
   ],
   // Assistant(e) : accès opérationnel complet SAUF les paramètres système
@@ -60,7 +61,7 @@ export const ROLE_MODULE_ACCESS: Record<AppRole, ModuleKey[]> = {
   MISSIONNAIRE: ['mobileOps'],
   ANALYSTE_CREDIT: ['dashboard', 'customers', 'credit', 'contracts', 'ai', 'notifications', 'documents'],
   AGENT_COMMERCIAL: ['dashboard', 'customers', 'contracts', 'usedCars', 'rentals', 'signatures', 'notifications', 'documents'],
-  GESTIONNAIRE_FLOTTE: ['dashboard', 'fleet', 'gps', 'ai', 'mobileOps', 'notifications', 'documents', 'subRentals'],
+  GESTIONNAIRE_FLOTTE: ['dashboard', 'fleet', 'gps', 'ai', 'mobileOps', 'missions', 'notifications', 'documents', 'subRentals'],
   COMPTABLE: ['dashboard', 'finance', 'accounting', 'contracts', 'arrears', 'ai', 'signatures', 'notifications', 'documents', 'subRentals'],
   CONTENTIEUX: ['dashboard', 'arrears', 'customers', 'contracts', 'ai', 'signatures', 'notifications', 'documents', 'subRentals'],
   AGENT_LIVRAISON: ['dashboard', 'mobileOps', 'fleet', 'gps', 'notifications', 'documents'],
