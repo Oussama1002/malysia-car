@@ -1594,6 +1594,9 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--line-strong);
   background: linear-gradient(135deg, #fbf5e4, #f6edd2);
 }
+/* L'attribut [hidden] doit l'emporter sur display:flex ci-dessus — sinon la
+   boîte de prix reste visible, vide, quand « Peu importe » est sélectionné. */
+.quote__price[hidden] { display: none; }
 .quote__priceTotal { font-size: 1.35rem; font-weight: 800; color: var(--gold-deep); }
 .quote__priceFrom { font-size: 1.05rem; font-weight: 700; color: var(--gold-deep); }
 .quote__priceHint { font-size: 0.8rem; color: var(--mist); font-weight: 600; }
