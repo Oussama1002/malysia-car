@@ -434,9 +434,21 @@ const UserForm: React.FC<{
     primaryBranchId: (user?.branches ?? []).find((b) => b.is_primary)?.id ?? '',
   });
   const [showPwd, setShowPwd] = useState(false);
+  const [localErr, setLocalErr] = useState<string | null>(null);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Rôle et agence sont obligatoires : un utilisateur sans rôle n'a aucun
+    // droit, et sans agence il n'est rattaché à rien.
+    if (form.roleIds.length === 0) {
+      setLocalErr('Sélectionnez au moins un rôle.');
+      return;
+    }
+    if (form.branchIds.length === 0) {
+      setLocalErr('Sélectionnez au moins une agence.');
+      return;
+    }
+    setLocalErr(null);
     const payload: UserPayload = {
       email: form.email,
       first_name: form.first_name,
@@ -474,9 +486,9 @@ const UserForm: React.FC<{
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      {errorMsg && (
+      {(errorMsg || localErr) && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
-          {errorMsg}
+          {errorMsg ?? localErr}
         </div>
       )}
       <div className="grid gap-3 md:grid-cols-2">
@@ -570,7 +582,7 @@ const UserForm: React.FC<{
           </select>
         </Field>
       </div>
-      <Field label="Rôles">
+      <Field label="Rôles" required>
         <div className="flex flex-wrap gap-2">
           {roles
             // Seuls les rôles actifs sont proposés. En édition, on garde
@@ -595,8 +607,11 @@ const UserForm: React.FC<{
             );
           })}
         </div>
+        {form.roleIds.length === 0 && (
+          <p className="mt-1 text-xs font-semibold text-rose-500">Requis pour continuer.</p>
+        )}
       </Field>
-      <Field label="Agences">
+      <Field label="Agences" required>
         <div className="space-y-1">
           {branches.map((b) => {
             const on = form.branchIds.includes(b.id);
@@ -622,6 +637,9 @@ const UserForm: React.FC<{
           })}
           {!branches.length && <p className="text-xs text-slate-500">Aucune agence configurée.</p>}
         </div>
+        {branches.length > 0 && form.branchIds.length === 0 && (
+          <p className="mt-1 text-xs font-semibold text-rose-500">Requis pour continuer.</p>
+        )}
       </Field>
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" onClick={onCancel} className="df-btn df-btn--ghost">
@@ -746,9 +764,12 @@ const LoginHistoryList: React.FC<{ userId: string }> = ({ userId }) => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({ label, required, children }) => (
   <div>
-    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">{label}</label>
+    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
+      {label}
+      {required && <span className="ml-1 text-rose-500">*</span>}
+    </label>
     {children}
   </div>
 );

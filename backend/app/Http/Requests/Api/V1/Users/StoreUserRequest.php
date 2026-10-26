@@ -24,9 +24,11 @@ class StoreUserRequest extends FormRequest
             'name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'role' => ['nullable', 'string', 'max:50'],
-            'role_ids' => ['sometimes', 'array'],
+            // Rôle et agence obligatoires à la création : un utilisateur sans
+            // rôle n'a aucun droit, sans agence il n'est rattaché à rien.
+            'role_ids' => ['required', 'array', 'min:1'],
             'role_ids.*' => ['integer', 'exists:roles,id'],
-            'branch_ids' => ['sometimes', 'array'],
+            'branch_ids' => ['required', 'array', 'min:1'],
             'branch_ids.*' => ['uuid', 'exists:branches,id'],
             'primary_branch_id' => ['sometimes', 'nullable', 'uuid', 'exists:branches,id'],
             'company_id' => ['sometimes', 'uuid'],
