@@ -185,11 +185,11 @@ export const AdminOpsView: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex items-center gap-2">
         <select
           value={filters.status}
           onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))}
-          className="df-input text-xs"
+          className="df-input w-auto text-xs"
         >
           <option value="">Tous les statuts</option>
           {Object.entries(STATUS_LABEL).map(([k, v]) => (
@@ -199,7 +199,7 @@ export const AdminOpsView: React.FC = () => {
         <select
           value={filters.mission_type}
           onChange={(e) => setFilters((f) => ({ ...f, mission_type: e.target.value, page: 1 }))}
-          className="df-input text-xs"
+          className="df-input w-auto text-xs"
         >
           <option value="">Tous les types</option>
           {Object.entries(TYPE_LABEL).map(([k, v]) => (
@@ -211,7 +211,7 @@ export const AdminOpsView: React.FC = () => {
           value={filters.q}
           onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value, page: 1 }))}
           placeholder="Rechercher..."
-          className="df-input text-xs"
+          className="df-input min-w-0 flex-1 text-xs"
         />
       </div>
 
