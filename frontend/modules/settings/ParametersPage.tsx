@@ -6,6 +6,7 @@ import { apiClient } from '@/services/apiClient';
 import {
   listFranchiseRules,
   createFranchiseRule,
+  updateFranchiseRule,
   deleteFranchiseRule,
   type FranchiseRule,
 } from '@/services/franchiseRulesApi';
@@ -473,6 +474,11 @@ const FranchiseRulesSection: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
+  // Édition en ligne du montant d'une règle existante.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editErr, setEditErr] = useState<string | null>(null);
+
   const models = (brandsQ.data ?? []).find((b) => b.id === brandId)?.models ?? [];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['franchise-rules'] });
@@ -491,6 +497,31 @@ const FranchiseRulesSection: React.FC = () => {
     mutationFn: (id: string) => deleteFranchiseRule(id),
     onSuccess: invalidate,
   });
+  const updateMut = useMutation({
+    mutationFn: ({ rule, value }: { rule: FranchiseRule; value: number }) =>
+      updateFranchiseRule(rule.id, { brand_id: rule.brand_id, model_id: rule.model_id, amount_mad: value }),
+    onSuccess: () => {
+      invalidate();
+      setEditingId(null);
+      setEditAmount('');
+      setEditErr(null);
+    },
+    onError: (e) => setEditErr(e instanceof Error ? e.message : 'Erreur à la modification'),
+  });
+
+  const startEdit = (r: FranchiseRule) => {
+    setEditingId(r.id);
+    setEditAmount(String(r.amount_mad));
+    setEditErr(null);
+  };
+  const saveEdit = (r: FranchiseRule) => {
+    const value = Number(editAmount);
+    if (!(value > 0)) {
+      setEditErr('Saisissez un montant valide.');
+      return;
+    }
+    updateMut.mutate({ rule: r, value });
+  };
 
   const add = () => {
     const value = Number(amount);
@@ -571,18 +602,61 @@ const FranchiseRulesSection: React.FC = () => {
                   : <span className="text-slate-400"> · toute la marque</span>}
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <span className="font-black text-slate-900">{fmt(r.amount_mad)} MAD</span>
-                <button
-                  type="button"
-                  className="text-xs font-bold text-rose-500 hover:text-rose-700 disabled:opacity-50"
-                  disabled={deleteMut.isPending}
-                  onClick={() => deleteMut.mutate(r.id)}
-                >
-                  Supprimer
-                </button>
+                {editingId === r.id ? (
+                  <>
+                    <input
+                      type="number"
+                      min={0}
+                      autoFocus
+                      className="df-input w-32 text-right"
+                      value={editAmount}
+                      onChange={(e) => setEditAmount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdit(r);
+                        if (e.key === 'Escape') setEditingId(null);
+                      }}
+                    />
+                    <span className="text-xs font-bold text-slate-500">MAD</span>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+                      disabled={updateMut.isPending}
+                      onClick={() => saveEdit(r)}
+                    >
+                      Enregistrer
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-slate-500 hover:text-slate-700"
+                      onClick={() => { setEditingId(null); setEditErr(null); }}
+                    >
+                      Annuler
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-black text-slate-900">{fmt(r.amount_mad)} MAD</span>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+                      onClick={() => startEdit(r)}
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                      disabled={deleteMut.isPending}
+                      onClick={() => deleteMut.mutate(r.id)}
+                    >
+                      Supprimer
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
+          {editErr && <p className="text-xs font-semibold text-rose-500">{editErr}</p>}
           {!rulesQ.isLoading && !(rulesQ.data ?? []).length && (
             <p className="text-sm text-slate-500">Aucune règle — ajoutez-en une ci-dessus.</p>
           )}

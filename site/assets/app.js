@@ -54,7 +54,7 @@
 
   // ── Slider des marques ───────────────────────────────────
   var BRAND_FILES = [
-    'abarth-1707227603.png', 'alfa-romeo-1707227628.png', 'audi-1707227800.png',
+    'abarth-1707227603.png', 'alfa-romeo-1707227657.png', 'audi-1707227800.png',
     'bmw-1707227856.png', 'chery-1707227888.png', 'chevrolet-1707227932.png',
     'chrysler-1707227968.png', 'citroen-1707227988.png', 'cupra-1707228025.png',
     'dacia-1707228045.png', 'daihatsu-1707228069.png', 'dfsk-1707228085.png',
