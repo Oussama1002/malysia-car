@@ -226,6 +226,11 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     return branches.length === 1 ? branches[0] : null;
   }, [detail, reservation, customerDetail, vehicle, branches]);
 
+  // Agence de départ par défaut pour l'Adresse d'origine : l'agence résolue,
+  // sinon la première agence connue (mono-agence → Malysia Car). La mission
+  // part toujours d'une agence, donc on pré-remplit l'origine avec elle.
+  const homeBranch = useMemo(() => branch ?? branches[0] ?? null, [branch, branches]);
+
   // Options for the location dropdowns: agences, the addresses saved on the
   // reservation, and the client's own addresses.
   const locationOptions = useMemo(() => {
@@ -259,7 +264,7 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     customDuration: '',
     assigned_user_id: '',
     assignLater: false,
-    origin_address: branch?.name ?? '',
+    origin_address: homeBranch?.name ?? '',
     destination_address: reservation?.delivery_address ?? '',
     pickup_address: reservation?.pickup_address ?? '',
     dropoff_address: reservation?.delivery_address ?? '',
@@ -268,7 +273,7 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     notes: '',
     prepChecked: new Set<string>(),
     checklistItems: [] as string[],
-  }), [reservation, branch]);
+  }), [reservation, homeBranch]);
 
   const [form, setForm] = useState(defaultForm);
   const [agentSearch, setAgentSearch] = useState('');
@@ -302,10 +307,10 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   // The agence can resolve after the form was initialised (customer detail
   // loads asynchronously) — backfill the origin address if still empty.
   useEffect(() => {
-    if (branch?.name) {
-      setForm((s) => (s.origin_address ? s : { ...s, origin_address: branch.name }));
+    if (homeBranch?.name) {
+      setForm((s) => (s.origin_address ? s : { ...s, origin_address: homeBranch.name }));
     }
-  }, [branch]);
+  }, [homeBranch]);
 
   // Reset form when reservation changes
   const prevResId = useRef<string | null>(null);
