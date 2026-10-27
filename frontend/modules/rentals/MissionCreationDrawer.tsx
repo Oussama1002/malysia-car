@@ -219,7 +219,10 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
       const found = branches.find((b) => String(b.id) === String(id));
       if (found) return found;
     }
-    return null;
+    // Single-agency fallback: when nothing on the reservation/customer/vehicle
+    // carries a branch_id, default to the only agency (Malysia Car) rather than
+    // showing "—". Stay null if multiple branches exist (ambiguous).
+    return branches.length === 1 ? branches[0] : null;
   }, [detail, reservation, customerDetail, vehicle, branches]);
 
   // Options for the location dropdowns: agences, the addresses saved on the
