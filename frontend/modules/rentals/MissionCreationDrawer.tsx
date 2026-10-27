@@ -66,20 +66,6 @@ const PRIORITIES = [
   { value: 'urgent', label: 'Urgente', cls: 'bg-red-100 text-red-700' },
 ];
 
-const DURATION_PRESETS = [
-  { value: 30, label: '30 min' },
-  { value: 60, label: '1 h' },
-  { value: 90, label: '1h30' },
-  { value: 120, label: '2 h' },
-  { value: 180, label: '3 h' },
-];
-
-const TOLERANCE_PRESETS = [
-  { value: 15, label: '± 15 min' },
-  { value: 30, label: '± 30 min' },
-  { value: 60, label: '± 1 h' },
-];
-
 const PREP_ITEMS = [
   'Documents préparés',
   'Double clé',
@@ -267,7 +253,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     time: toTimeInput(reservation?.desired_start_at) || '09:00',
     duration: 60,
     customDuration: '',
-    tolerance: 30,
     assigned_user_id: '',
     assignLater: false,
     origin_address: branch?.name ?? '',
@@ -522,45 +507,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
             <div>
               <label className={LABEL}>Heure prévue</label>
               <input type="time" className={INPUT} value={form.time} onChange={(e) => setForm((s) => ({ ...s, time: e.target.value }))} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mt-3">
-            <div>
-              <label className={LABEL}>Durée estimée</label>
-              <div className="flex flex-wrap gap-1.5">
-                {DURATION_PRESETS.map((d) => (
-                  <button
-                    key={d.value}
-                    type="button"
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${form.duration === d.value && !form.customDuration ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                    onClick={() => setForm((s) => ({ ...s, duration: d.value, customDuration: '' }))}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-                <input
-                  type="number"
-                  placeholder="Autre (min)"
-                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                  value={form.customDuration}
-                  onChange={(e) => setForm((s) => ({ ...s, customDuration: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Fenêtre de tolérance</label>
-              <div className="flex gap-1.5">
-                {TOLERANCE_PRESETS.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${form.tolerance === t.value ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                    onClick={() => setForm((s) => ({ ...s, tolerance: t.value }))}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         </section>
