@@ -269,10 +269,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     notes: '',
     prepChecked: new Set<string>(),
     checklistItems: [] as string[],
-    notifyAgent: true,
-    notifyEmail: true,
-    notifyPush: true,
-    notifyClient: false,
   }), [reservation, branch]);
 
   const [form, setForm] = useState(defaultForm);
@@ -868,31 +864,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
               ))}
             </div>
           )}
-        </section>
-
-        <hr className="border-slate-100" />
-
-        {/* ── Section 11: Notifications ─────────────────────────── */}
-        <section>
-          <h3 className={SECTION_TITLE}>11 — Notifications</h3>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { key: 'notifyAgent' as const, label: "Notifier l'agent" },
-              { key: 'notifyEmail' as const, label: 'Envoyer un email' },
-              { key: 'notifyPush' as const, label: 'Notification Push' },
-              { key: 'notifyClient' as const, label: 'Informer le client' },
-            ].map((n) => (
-              <label key={n.key} className="flex items-center gap-2.5 rounded-lg border border-slate-100 px-3 py-2.5 cursor-pointer hover:bg-slate-50">
-                <input
-                  type="checkbox"
-                  className="rounded border-slate-300 text-indigo-600"
-                  checked={form[n.key]}
-                  onChange={(e) => setForm((s) => ({ ...s, [n.key]: e.target.checked }))}
-                />
-                <span className="text-sm text-slate-700">{n.label}</span>
-              </label>
-            ))}
-          </div>
         </section>
 
         {error && (
