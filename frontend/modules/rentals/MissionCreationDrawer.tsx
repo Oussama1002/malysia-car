@@ -147,7 +147,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
 }) => {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* ── Derived reservation context ─────────────────────────────── */
   // NOTE: the customers prop may hold the raw API shape (display_name,
@@ -274,7 +273,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   const [form, setForm] = useState(defaultForm);
   const [agentSearch, setAgentSearch] = useState('');
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
   const [savedLocationId, setSavedLocationId] = useState<string | null>(null);
   const [newCheckItem, setNewCheckItem] = useState('');
   const [busy, setBusy] = useState(false);
@@ -314,7 +312,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   if (reservation && reservation.id !== prevResId.current) {
     prevResId.current = reservation.id;
     setForm(defaultForm());
-    setFiles([]);
     setSavedLocationId(null);
     setError(null);
     setAgentSearch('');
@@ -349,19 +346,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     [form.assigned_user_id, agentsQ.data],
   );
 
-  /* ── File handling ───────────────────────────────────────────── */
-  const handleFileDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const dropped = Array.from(e.dataTransfer.files);
-    setFiles((prev) => [...prev, ...dropped]);
-  }, []);
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files ?? []);
-    setFiles((prev) => [...prev, ...selected]);
-    e.target.value = '';
-  }, []);
-
   /* ── Submit ──────────────────────────────────────────────────── */
   const handleSubmit = useCallback(async (action: 'create' | 'assign' | 'open') => {
     if (!reservation) return;
@@ -394,7 +378,7 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
 
       const missionId = mission.id;
 
-      // Post-creation: checklist items + files
+      // Post-creation: checklist items
       const postOps: Promise<unknown>[] = [];
 
       // Preparation items
@@ -409,11 +393,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
         if (item.trim()) {
           postOps.push(opsApi.addChecklistItem(missionId, { checklist_phase: 'custom', item_label: item.trim(), item_status: 'PENDING' }));
         }
-      }
-
-      // File uploads
-      for (const file of files) {
-        postOps.push(opsApi.uploadPhoto(missionId, file, { phase: 'attachment', label: file.name }));
       }
 
       if (postOps.length > 0) {
@@ -434,7 +413,7 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     } finally {
       setBusy(false);
     }
-  }, [reservation, form, files, nav, qc, onClose, onSuccess]);
+  }, [reservation, form, nav, qc, onClose, onSuccess]);
 
   if (!reservation) return null;
 
@@ -835,35 +814,6 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
             value={form.notes}
             onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
           />
-        </section>
-
-        <hr className="border-slate-100" />
-
-        {/* ── Section 10: Pièces jointes ────────────────────────── */}
-        <section>
-          <h3 className={SECTION_TITLE}>10 — Pièces jointes</h3>
-          <div
-            className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 cursor-pointer hover:border-indigo-300 transition-colors"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleFileDrop}
-          >
-            <p className="text-sm text-slate-500">Glisser-déposer ou <span className="font-bold text-indigo-600">parcourir</span></p>
-            <p className="text-xs text-slate-400 mt-1">PDF, images, documents</p>
-            <input ref={fileInputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden" onChange={handleFileSelect} />
-          </div>
-          {files.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {files.map((f, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-lg bg-white border border-slate-100 px-3 py-2">
-                  <span className="text-xs text-slate-400">{f.name.endsWith('.pdf') ? '📄' : '🖼️'}</span>
-                  <span className="flex-1 text-sm text-slate-700 truncate">{f.name}</span>
-                  <span className="text-xs text-slate-400">{(f.size / 1024).toFixed(0)} Ko</span>
-                  <button type="button" className="text-slate-300 hover:text-red-500" onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}>&times;</button>
-                </div>
-              ))}
-            </div>
-          )}
         </section>
 
         {error && (
