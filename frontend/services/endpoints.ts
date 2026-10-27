@@ -120,6 +120,11 @@ export const endpoints = {
     drivers: (id: number | string) => `/v1/reservations/${id}/drivers`,
     driver: (id: number | string, driverId: string) => `/v1/reservations/${id}/drivers/${driverId}`,
   },
+  savedLocations: {
+    list: '/v1/saved-locations',
+    create: '/v1/saved-locations',
+    one: (id: string) => `/v1/saved-locations/${id}`,
+  },
   vehicleSwaps: {
     list: '/v1/vehicle-swaps',
     create: '/v1/vehicle-swaps',

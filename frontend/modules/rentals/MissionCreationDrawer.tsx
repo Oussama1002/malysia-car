@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { AddressAutocompleteInput } from '@/modules/shared/components/AddressAutocompleteInput';
+import { SavedLocationPicker } from '@/modules/rentals/SavedLocationPicker';
+import type { SavedLocationDto } from '@/services/savedLocationsApi';
 import { opsApi } from '@/services/opsApi';
 import { listUsers, type AdminUser } from '@/services/adminApi';
 import { getCustomer } from '@/services/customersApi';
@@ -277,6 +279,7 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   const [agentSearch, setAgentSearch] = useState('');
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [savedLocationId, setSavedLocationId] = useState<string | null>(null);
   const [newCheckItem, setNewCheckItem] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -316,6 +319,7 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
     prevResId.current = reservation.id;
     setForm(defaultForm());
     setFiles([]);
+    setSavedLocationId(null);
     setError(null);
     setAgentSearch('');
     setNewCheckItem('');
@@ -608,6 +612,22 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
         <section>
           <h3 className={SECTION_TITLE}>4 — Localisation</h3>
           <div className="grid grid-cols-2 gap-4">
+            <SavedLocationPicker
+              value={savedLocationId}
+              onChange={(loc: SavedLocationDto | null) => {
+                setSavedLocationId(loc?.id ?? null);
+                if (loc) {
+                  // Fill the destination endpoint with the saved location's
+                  // address (fallback to its title), per the active pair.
+                  const text = (loc.address || loc.title || '').trim();
+                  if (text) {
+                    setForm((s) => (usesPickupPair
+                      ? { ...s, dropoff_address: text }
+                      : { ...s, destination_address: text }));
+                  }
+                }
+              }}
+            />
             {usesPickupPair ? (
               <>
                 <div>

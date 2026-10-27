@@ -219,6 +219,8 @@ class RbacSeeder extends Seeder
             ['missions.add_checklist', 'mobile_ops', 'Ajouter check-list mission'],
             ['missions.upload_photo', 'mobile_ops', 'Téléverser photo mission'],
             ['missions.customer_signature', 'mobile_ops', 'Capturer la signature client sur mission'],
+            ['saved_locations.view', 'mobile_ops', 'Voir les lieux enregistrés'],
+            ['saved_locations.manage', 'mobile_ops', 'Gérer les lieux enregistrés'],
             ['mobile_ops.customer_tracking', 'mobile_ops', 'Suivi client de ses propres livraisons'],
             ['reservations.confirm', 'fleet', 'Confirmer une réservation'],
             ['reservations.cancel', 'fleet', 'Annuler une réservation'],
@@ -299,7 +301,10 @@ class RbacSeeder extends Seeder
         $arrears_read = ['arrears.view', 'legal.view'];
         $arrears_write = ['arrears.create', 'arrears.update', 'arrears.action', 'arrears.escalate', 'legal.manage', 'legal.repossess'];
 
-        $missions_field = ['missions.view', 'missions.start', 'missions.complete', 'missions.add_checklist', 'missions.upload_photo', 'missions.customer_signature', 'documents.upload', 'documents.view'];
+        $missions_field = ['missions.view', 'missions.start', 'missions.complete', 'missions.add_checklist', 'missions.upload_photo', 'missions.customer_signature', 'saved_locations.view', 'documents.upload', 'documents.view'];
+
+        // Lieux Google Maps enregistrés — réutilisés sur les formulaires mission.
+        $saved_locations = ['saved_locations.view', 'saved_locations.manage'];
 
         // Missionnaire — agent terrain : ne voit QUE les missions. Pas de
         // tableau de bord, pas de flotte, pas de finance, pas de paramètres.
@@ -353,6 +358,7 @@ class RbacSeeder extends Seeder
                 $arrears_read, $arrears_write,
                 ['reservations.view', 'reservations.create', 'missions.view', 'missions.customer_signature', 'mobile_ops.customer_tracking'],
                 ['reservations.confirm', 'reservations.cancel', 'rentals.availability', 'rentals.handover_pickup', 'rentals.handover_return', 'rentals.extension', 'rentals.damage_report', 'rentals.close_billing'],
+                $saved_locations,
                 ['dashboard.executive', 'dashboard.finance', 'dashboard.risk', 'dashboard.fleet', 'dashboard.gps'],
                 ['users.view', 'users.create', 'users.update', 'users.activate', 'users.assign_branches', 'users.view_login_history', 'roles.view', 'permissions.view', 'branches.view', 'branches.manage', 'audit.view', 'documents.view', 'documents.upload', 'documents.delete', 'documents.generate'],
                 $sub_rental_read, $sub_rental_write, $sub_rental_finance
@@ -379,6 +385,7 @@ class RbacSeeder extends Seeder
                 $usedcars_read, $usedcars_write,
                 ['reservations.view', 'reservations.create', 'reservations.create_mission'],
                 ['reservations.confirm', 'reservations.cancel', 'rentals.availability', 'rentals.extension', 'rentals.damage_report'],
+                $saved_locations,
                 ['credit.view', 'credit.create'],
                 // Agents collect the initial encaissement when a contract is
                 // signed (Loyer + Franchise d'assurance posted straight from
@@ -404,6 +411,7 @@ class RbacSeeder extends Seeder
                 ['reservations.view', 'reservations.create', 'reservations.create_mission'],
                 ['reservations.confirm', 'reservations.cancel', 'rentals.availability', 'rentals.extension', 'rentals.damage_report'],
                 ['missions.view'],
+                $saved_locations,
                 ['dashboard.fleet', 'dashboard.gps'],
                 $sub_rental_read, $sub_rental_write, $sub_rental_finance
             )],

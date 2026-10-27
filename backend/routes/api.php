@@ -572,6 +572,14 @@ Route::prefix('v1')->group(function () {
         Route::post('missions/{mission}/photos', [MissionController::class, 'uploadPhoto'])
             ->middleware('permission:missions.upload_photo');
 
+        // Saved Google Maps locations — shared library reused across mission forms
+        Route::get('saved-locations', [\App\Http\Controllers\Api\V1\SavedLocationController::class, 'index'])
+            ->middleware('permission:saved_locations.view');
+        Route::post('saved-locations', [\App\Http\Controllers\Api\V1\SavedLocationController::class, 'store'])
+            ->middleware('permission:saved_locations.manage');
+        Route::delete('saved-locations/{savedLocation}', [\App\Http\Controllers\Api\V1\SavedLocationController::class, 'destroy'])
+            ->middleware('permission:saved_locations.manage');
+
         // ==================================================================
         // Mobile Ops — role-aware surface for field agents + customer portal
         // (see MobileOpsController for row-scoping rules; the legacy
