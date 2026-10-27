@@ -367,6 +367,9 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
 
     try {
       const scheduledStart = form.date && form.time ? `${form.date}T${form.time}:00` : undefined;
+      // Only persist the address pair that was shown for this mission type
+      // (see usesPickupPair in the render body).
+      const usesPickup = form.mission_type === 'pickup';
       const durationMin = form.customDuration ? Number(form.customDuration) : form.duration;
 
       const mission = await opsApi.createMission(reservation.id, {
@@ -375,10 +378,10 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
         assigned_user_id: (action === 'assign' || !form.assignLater) ? (form.assigned_user_id || undefined) : undefined,
         scheduled_start_at: scheduledStart,
         estimated_duration_minutes: durationMin || undefined,
-        origin_address: form.origin_address || undefined,
-        destination_address: form.destination_address || undefined,
-        pickup_address: form.pickup_address || undefined,
-        dropoff_address: form.dropoff_address || undefined,
+        origin_address: usesPickup ? undefined : (form.origin_address || undefined),
+        destination_address: usesPickup ? undefined : (form.destination_address || undefined),
+        pickup_address: usesPickup ? (form.pickup_address || undefined) : undefined,
+        dropoff_address: usesPickup ? (form.dropoff_address || undefined) : undefined,
         client_id: reservation.customer_id,
         contract_id: reservation.contract_id || undefined,
         client_instructions: form.client_instructions || undefined,
@@ -433,6 +436,11 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
   if (!reservation) return null;
 
   const resNum = reservation.reservation_number ?? reservation.id.slice(0, 8);
+
+  // Localisation fields adapt to the mission type: a Récupération is framed
+  // around the car's journey (Pickup → Drop-off); every other type is framed
+  // around the agent's journey (Origine → Destination).
+  const usesPickupPair = form.mission_type === 'pickup';
 
   return (
     <DrawerPanel open={open} title="Créer une mission" onClose={onClose} widthClass="max-w-3xl">
@@ -597,56 +605,63 @@ export const MissionCreationDrawer: React.FC<MissionCreationDrawerProps> = ({
         <section>
           <h3 className={SECTION_TITLE}>4 — Localisation</h3>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={LABEL}>Adresse d'origine</label>
-              <select
-                className={INPUT}
-                value={branches.some((b) => b.name === form.origin_address) ? form.origin_address : '__custom__'}
-                onChange={(e) => {
-                  if (e.target.value !== '__custom__') setForm((s) => ({ ...s, origin_address: e.target.value }));
-                }}
-              >
-                {branches.map((b) => <option key={b.id} value={b.name}>{b.name}{b.city ? ` — ${b.city}` : ''}</option>)}
-                <option value="__custom__">Personnalisée…</option>
-              </select>
-              {!branches.some((b) => b.name === form.origin_address) && (
-                <div className="mt-2">
-                  <AddressAutocompleteInput
-                    value={form.origin_address}
-                    placeholder="Adresse personnalisée"
-                    inputClassName={INPUT}
-                    onChange={(addr) => setForm((s) => ({ ...s, origin_address: addr }))}
+            {usesPickupPair ? (
+              <>
+                <div>
+                  <label className={LABEL}>Adresse Pickup</label>
+                  <AddressSelect
+                    value={form.pickup_address}
+                    options={locationOptions}
+                    placeholder="Adresse Pickup"
+                    onChange={(addr) => setForm((s) => ({ ...s, pickup_address: addr }))}
                   />
                 </div>
-              )}
-            </div>
-            <div>
-              <label className={LABEL}>Adresse de destination</label>
-              <AddressSelect
-                value={form.destination_address}
-                options={locationOptions}
-                placeholder="Adresse de destination"
-                onChange={(addr) => setForm((s) => ({ ...s, destination_address: addr }))}
-              />
-            </div>
-            <div>
-              <label className={LABEL}>Adresse Pickup</label>
-              <AddressSelect
-                value={form.pickup_address}
-                options={locationOptions}
-                placeholder="Adresse Pickup"
-                onChange={(addr) => setForm((s) => ({ ...s, pickup_address: addr }))}
-              />
-            </div>
-            <div>
-              <label className={LABEL}>Adresse Drop-off</label>
-              <AddressSelect
-                value={form.dropoff_address}
-                options={locationOptions}
-                placeholder="Adresse Drop-off"
-                onChange={(addr) => setForm((s) => ({ ...s, dropoff_address: addr }))}
-              />
-            </div>
+                <div>
+                  <label className={LABEL}>Adresse Drop-off</label>
+                  <AddressSelect
+                    value={form.dropoff_address}
+                    options={locationOptions}
+                    placeholder="Adresse Drop-off"
+                    onChange={(addr) => setForm((s) => ({ ...s, dropoff_address: addr }))}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className={LABEL}>Adresse d'origine</label>
+                  <select
+                    className={INPUT}
+                    value={branches.some((b) => b.name === form.origin_address) ? form.origin_address : '__custom__'}
+                    onChange={(e) => {
+                      if (e.target.value !== '__custom__') setForm((s) => ({ ...s, origin_address: e.target.value }));
+                    }}
+                  >
+                    {branches.map((b) => <option key={b.id} value={b.name}>{b.name}{b.city ? ` — ${b.city}` : ''}</option>)}
+                    <option value="__custom__">Personnalisée…</option>
+                  </select>
+                  {!branches.some((b) => b.name === form.origin_address) && (
+                    <div className="mt-2">
+                      <AddressAutocompleteInput
+                        value={form.origin_address}
+                        placeholder="Adresse personnalisée"
+                        inputClassName={INPUT}
+                        onChange={(addr) => setForm((s) => ({ ...s, origin_address: addr }))}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className={LABEL}>Adresse de destination</label>
+                  <AddressSelect
+                    value={form.destination_address}
+                    options={locationOptions}
+                    placeholder="Adresse de destination"
+                    onChange={(addr) => setForm((s) => ({ ...s, destination_address: addr }))}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </section>
 
