@@ -20,6 +20,21 @@ class HomeTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
+
+    // Avoid flashing the home dashboard before the role is known: while the
+    // profile (/auth/me) is still loading, or for a MISSIONNAIRE — who the
+    // router redirects to /missions as soon as the role resolves — show a
+    // neutral loader instead of the admin landing.
+    final userAsync = ref.watch(currentUserProvider);
+    final role = userAsync.valueOrNull?.role?.toUpperCase();
+    if (userAsync.isLoading || role == 'MISSIONNAIRE') {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFB8933F)),
+        ),
+      );
+    }
+
     return Scaffold(
       body: ListView(
         padding: EdgeInsets.zero,
