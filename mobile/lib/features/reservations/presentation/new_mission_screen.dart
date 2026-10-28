@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/widgets/module_scaffold.dart';
+import 'saved_location_picker.dart';
 
 /// Création d'une mission liée à une réservation — pendant mobile de
 /// `MissionCreationDrawer.tsx` du web. On conserve les mêmes types,
@@ -59,30 +60,14 @@ const _kPriorities = <(String, String, Color, Color)>[
   ('urgent', 'Urgente', Color(0xFFFEE2E2), Color(0xFFB91C1C)),
 ];
 
-const _kDurationPresets = <(int, String)>[
-  (30, '30 min'),
-  (60, '1 h'),
-  (90, '1h30'),
-  (120, '2 h'),
-  (180, '3 h'),
-];
-
-const _kTolerances = <(int, String)>[
-  (15, '± 15 min'),
-  (30, '± 30 min'),
-  (60, '± 1 h'),
-];
-
 class _NewMissionScreenState extends ConsumerState<NewMissionScreen> {
   String _type = 'delivery';
   String _priority = 'normal';
   DateTime? _date;
   TimeOfDay _time = const TimeOfDay(hour: 9, minute: 0);
-  int _duration = 60;
-  final _customDuration = TextEditingController();
-  int _tolerance = 30;
   String? _agentId;
   bool _assignLater = false;
+  String? _savedLocationId;
   final _originAddress = TextEditingController();
   final _destinationAddress = TextEditingController();
   final _pickupAddress = TextEditingController();
@@ -99,11 +84,21 @@ class _NewMissionScreenState extends ConsumerState<NewMissionScreen> {
     _pickupAddress.text = widget.pickupAddress ?? '';
     _dropoffAddress.text = widget.deliveryAddress ?? '';
     _destinationAddress.text = widget.deliveryAddress ?? '';
+    // Adresse d'origine par défaut : l'agence (mono-agence → Malysia Car),
+    // comme sur le web. Les agences se chargent de façon asynchrone.
+    Future.microtask(() async {
+      try {
+        final branches = await ref.read(_branchesProvider.future);
+        if (!mounted || branches.isEmpty) return;
+        if (_originAddress.text.trim().isEmpty) {
+          setState(() => _originAddress.text = branches.first['name']?.toString() ?? '');
+        }
+      } catch (_) {/* best-effort */}
+    });
   }
 
   @override
   void dispose() {
-    _customDuration.dispose();
     _originAddress.dispose();
     _destinationAddress.dispose();
     _pickupAddress.dispose();
@@ -127,22 +122,21 @@ class _NewMissionScreenState extends ConsumerState<NewMissionScreen> {
             _time.hour, _time.minute);
         scheduledStart = DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(d);
       }
-      final durationMin =
-          int.tryParse(_customDuration.text.trim()) ?? _duration;
+      final usesPickup = _type == 'pickup';
       final body = <String, dynamic>{
         'mission_type': _type,
         'priority': _priority,
         if (!_assignLater && _agentId != null) 'assigned_user_id': _agentId,
         if (scheduledStart != null) 'scheduled_start_at': scheduledStart,
-        if (durationMin > 0) 'estimated_duration_minutes': durationMin,
-        'tolerance_minutes': _tolerance,
-        if (_originAddress.text.trim().isNotEmpty)
+        'estimated_duration_minutes': 60,
+        // Only the address pair shown for this mission type (see Localisation).
+        if (!usesPickup && _originAddress.text.trim().isNotEmpty)
           'origin_address': _originAddress.text.trim(),
-        if (_destinationAddress.text.trim().isNotEmpty)
+        if (!usesPickup && _destinationAddress.text.trim().isNotEmpty)
           'destination_address': _destinationAddress.text.trim(),
-        if (_pickupAddress.text.trim().isNotEmpty)
+        if (usesPickup && _pickupAddress.text.trim().isNotEmpty)
           'pickup_address': _pickupAddress.text.trim(),
-        if (_dropoffAddress.text.trim().isNotEmpty)
+        if (usesPickup && _dropoffAddress.text.trim().isNotEmpty)
           'dropoff_address': _dropoffAddress.text.trim(),
         if (widget.customerId != null) 'client_id': widget.customerId,
         if (widget.contractId != null) 'contract_id': widget.contractId,
@@ -280,47 +274,6 @@ class _NewMissionScreenState extends ConsumerState<NewMissionScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  const _MicroLabel('Durée estimée'),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final d in _kDurationPresets)
-                        _ChipPill(
-                          label: d.$2,
-                          selected: _duration == d.$1 &&
-                              _customDuration.text.isEmpty,
-                          onTap: () => setState(() {
-                            _duration = d.$1;
-                            _customDuration.clear();
-                          }),
-                        ),
-                      SizedBox(
-                        width: 110,
-                        child: TextField(
-                          controller: _customDuration,
-                          keyboardType: TextInputType.number,
-                          decoration: _dec(hint: 'Autre (min)'),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const _MicroLabel('Fenêtre de tolérance'),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final t in _kTolerances)
-                        _ChipPill(
-                          label: t.$2,
-                          selected: _tolerance == t.$1,
-                          onTap: () => setState(() => _tolerance = t.$1),
-                        ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -360,25 +313,50 @@ class _NewMissionScreenState extends ConsumerState<NewMissionScreen> {
             ModuleCard(
               child: Column(
                 children: [
-                  TextField(
-                    controller: _originAddress,
-                    decoration: _dec(label: "Adresse d'origine"),
+                  SavedLocationPicker(
+                    value: _savedLocationId,
+                    onChanged: (loc) {
+                      setState(() {
+                        _savedLocationId = loc?.id;
+                        if (loc != null) {
+                          // Fill the destination endpoint with the saved
+                          // location's address (fallback to its title).
+                          final text = (loc.address?.trim().isNotEmpty ?? false)
+                              ? loc.address!.trim()
+                              : loc.title.trim();
+                          if (text.isNotEmpty) {
+                            if (_type == 'pickup') {
+                              _dropoffAddress.text = text;
+                            } else {
+                              _destinationAddress.text = text;
+                            }
+                          }
+                        }
+                      });
+                    },
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    controller: _destinationAddress,
-                    decoration: _dec(label: 'Adresse de destination'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _pickupAddress,
-                    decoration: _dec(label: 'Adresse Pickup'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _dropoffAddress,
-                    decoration: _dec(label: 'Adresse Drop-off'),
-                  ),
+                  if (_type == 'pickup') ...[
+                    TextField(
+                      controller: _pickupAddress,
+                      decoration: _dec(label: 'Adresse Pickup'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _dropoffAddress,
+                      decoration: _dec(label: 'Adresse Drop-off'),
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: _originAddress,
+                      decoration: _dec(label: "Adresse d'origine"),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _destinationAddress,
+                      decoration: _dec(label: 'Adresse de destination'),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -478,23 +456,6 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _MicroLabel extends StatelessWidget {
-  const _MicroLabel(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6, top: 2),
-      child: Text(text.toUpperCase(),
-          style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              color: Colors.black45,
-              letterSpacing: 0.6)),
-    );
-  }
-}
-
 class _LabeledDropdown<T> extends StatelessWidget {
   const _LabeledDropdown({
     required this.label,
@@ -538,37 +499,6 @@ class _PriorityChip extends StatelessWidget {
               fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.4)),
-    );
-  }
-}
-
-class _ChipPill extends StatelessWidget {
-  const _ChipPill({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              selected ? const Color(0xFFB8933F) : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w900,
-                color: selected ? Colors.white : const Color(0xFF475569))),
-      ),
     );
   }
 }
@@ -716,6 +646,17 @@ class _AgentPickerState extends ConsumerState<_AgentPicker> {
     );
   }
 }
+
+final _branchesProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final data = await api.getData('/branches');
+  if (data is! List) return const [];
+  return [
+    for (final b in data)
+      if (b is Map) b.map((k, v) => MapEntry(k.toString(), v)),
+  ];
+});
 
 final _agentsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
