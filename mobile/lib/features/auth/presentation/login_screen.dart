@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_notifier.dart';
-import '../../../core/config/app_config.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -12,9 +11,10 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _email = TextEditingController(text: AppConfig.devEmail);
-  final _password = TextEditingController(text: AppConfig.devPassword);
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -75,9 +75,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _password,
-                      obscureText: true,
+                      obscureText: _obscurePassword,
                       autofillHints: const [AutofillHints.password],
-                      decoration: const InputDecoration(labelText: 'Mot de passe'),
+                      decoration: InputDecoration(
+                        labelText: 'Mot de passe',
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined),
+                          tooltip: _obscurePassword
+                              ? 'Afficher le mot de passe'
+                              : 'Masquer le mot de passe',
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
                       validator: (v) =>
                           (v == null || v.isEmpty) ? 'Mot de passe requis' : null,
                       onFieldSubmitted: (_) => loading ? null : _submit(),
