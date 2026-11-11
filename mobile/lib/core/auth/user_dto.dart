@@ -54,6 +54,22 @@ class UserDto {
     return letters.isEmpty ? '?' : letters;
   }
 
+  /// Vrai si le compte est un agent terrain (missionnaire) et rien d'autre.
+  ///
+  /// On ne se fie pas uniquement à `role` : la colonne héritée côté backend
+  /// peut être restée sur une valeur par défaut (AGENT_COMMERCIAL) à la
+  /// création, alors que le seul rôle réellement assigné est MISSIONNAIRE.
+  /// Dans ce cas on se rabat sur la liste `roles` : si TOUS les rôles
+  /// assignés sont MISSIONNAIRE, on restreint quand même la vue mobile.
+  bool get isMissionnaireOnly {
+    if ((role ?? '').toUpperCase() == 'MISSIONNAIRE') return true;
+    final codes = roles
+        .map((r) => r.code.toUpperCase())
+        .where((c) => c.isNotEmpty)
+        .toList();
+    return codes.isNotEmpty && codes.every((c) => c == 'MISSIONNAIRE');
+  }
+
   UserBranchDto? get primaryBranch =>
       branches.where((b) => b.isPrimary).firstOrNull ??
       (branches.isNotEmpty ? branches.first : null);

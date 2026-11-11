@@ -61,15 +61,18 @@ class MobileOpsController extends Controller
             $query->where('mission_type', $type);
         }
 
-        if ($role === 'AGENT_LIVRAISON' || $role === 'MISSIONNAIRE') {
-            // Agent terrain : il ne voit que les missions qui lui sont assignées.
-            $query->where('assigned_user_id', (string) $user->id);
+        if (in_array($role, ['ADMIN', 'DIRECTEUR'], true)) {
+            // Vue globale, aucun filtre d'assignation.
         } elseif ($role === 'GESTIONNAIRE_FLOTTE') {
             if (! $request->query('include_all')) {
                 $query->whereIn('status', self::ACTIVE_STATUSES);
             }
-        } elseif (! in_array($role, ['ADMIN', 'DIRECTEUR'], true)) {
-            abort(403);
+        } else {
+            // Tout autre utilisateur (agent terrain / missionnaire / livraison,
+            // ou compte dont la colonne `role` héritée n'est pas encore
+            // réalignée) ne voit QUE les missions qui lui sont assignées.
+            // La route exige déjà la permission `missions.view`.
+            $query->where('assigned_user_id', (string) $user->id);
         }
 
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
@@ -569,7 +572,10 @@ class MobileOpsController extends Controller
         if (in_array($role, ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'], true)) {
             return;
         }
-        if (in_array($role, ['AGENT_LIVRAISON', 'MISSIONNAIRE'], true) && (string) $mission->assigned_user_id === (string) $user->id) {
+        // Indépendant du libellé exact du rôle : on peut agir uniquement sur une
+        // mission qui nous est assignée. Robuste même si la colonne `role`
+        // héritée n'est pas encore réalignée.
+        if ((string) $mission->assigned_user_id === (string) $user->id) {
             return;
         }
         abort(404);
@@ -582,7 +588,7 @@ class MobileOpsController extends Controller
         if (in_array($role, ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'], true)) {
             return;
         }
-        if (in_array($role, ['AGENT_LIVRAISON', 'MISSIONNAIRE'], true) && (string) $mission->assigned_user_id === (string) $user->id) {
+        if ((string) $mission->assigned_user_id === (string) $user->id) {
             return;
         }
         abort(404);

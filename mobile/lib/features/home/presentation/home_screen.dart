@@ -26,8 +26,8 @@ class HomeTab extends ConsumerWidget {
     // router redirects to /missions as soon as the role resolves — show a
     // neutral loader instead of the admin landing.
     final userAsync = ref.watch(currentUserProvider);
-    final role = userAsync.valueOrNull?.role?.toUpperCase();
-    if (userAsync.isLoading || role == 'MISSIONNAIRE') {
+    final missionnaireOnly = userAsync.valueOrNull?.isMissionnaireOnly ?? false;
+    if (userAsync.isLoading || missionnaireOnly) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFFB8933F)),

@@ -46,9 +46,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // compris l'accueil « / ») le ramène sur /missions. Tant que le profil
       // n'est pas chargé (rôle inconnu), on laisse passer — l'UI du shell
       // masque déjà les affordances et la redirection se rejoue au chargement.
-      final role =
-          ref.read(currentUserProvider).valueOrNull?.role?.toUpperCase();
-      if (role == 'MISSIONNAIRE' &&
+      final user = ref.read(currentUserProvider).valueOrNull;
+      if ((user?.isMissionnaireOnly ?? false) &&
           !_missionnairePaths.contains(state.matchedLocation)) {
         return '/missions';
       }

@@ -103,9 +103,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     // Rôle courant : le MISSIONNAIRE (agent terrain) n'a droit qu'aux
     // missions — pas de grille modules, pas de drawer, pas de création
     // rapide, pas de chat. Les autres rôles gardent la barre complète.
-    final role =
-        ref.watch(currentUserProvider).valueOrNull?.role?.toUpperCase();
-    final missionnaireOnly = role == 'MISSIONNAIRE';
+    final missionnaireOnly =
+        ref.watch(currentUserProvider).valueOrNull?.isMissionnaireOnly ?? false;
     return Scaffold(
       key: _scaffoldKey,
       drawer: missionnaireOnly ? null : const _ModulesDrawer(),
