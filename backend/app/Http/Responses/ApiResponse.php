@@ -40,18 +40,18 @@ class ApiResponse
         return response()->json($payload, $status);
     }
 
-    public static function paginated(LengthAwarePaginator $paginator): JsonResponse
+    public static function paginated(LengthAwarePaginator $paginator, array $extraMeta = []): JsonResponse
     {
         return response()->json([
             'data' => $paginator->items(),
-            'meta' => [
+            'meta' => array_merge([
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
                 'from' => $paginator->firstItem(),
                 'to' => $paginator->lastItem(),
-            ],
+            ], $extraMeta),
             'links' => [
                 'first' => $paginator->url(1),
                 'last' => $paginator->url($paginator->lastPage()),

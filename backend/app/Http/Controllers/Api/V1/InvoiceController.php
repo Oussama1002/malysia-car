@@ -82,7 +82,14 @@ class InvoiceController extends Controller
         $per = min(100, max(1, (int) $request->query('per_page', 25)));
         $page = $q->orderByDesc('issue_date')->orderByDesc('created_at')->paginate($per);
 
-        return ApiResponse::paginated($page);
+        // Sidebar badge: factures impayées = émises / partielles / en retard
+        // avec un reste à payer.
+        $unpaidCount = Invoice::query()
+            ->whereIn('status', ['issued', 'partial', 'overdue'])
+            ->where('amount_due', '>', 0)
+            ->count();
+
+        return ApiResponse::paginated($page, ['unpaid_count' => $unpaidCount]);
     }
 
     public function show(Invoice $invoice): JsonResponse

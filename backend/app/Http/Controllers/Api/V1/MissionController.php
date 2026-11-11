@@ -26,11 +26,17 @@ class MissionController extends Controller
         $per = min(100, max(1, (int) $request->query('per_page', 50)));
         $page = $q->paginate($per);
 
+        // Sidebar badge: missions en attente = ni terminées, ni échouées, ni annulées.
+        $openCount = Mission::query()
+            ->whereIn('status', ['planned', 'in_progress'])
+            ->count();
+
         return ApiResponse::success($page->items(), [
             'current_page' => $page->currentPage(),
             'last_page' => $page->lastPage(),
             'per_page' => $page->perPage(),
             'total' => $page->total(),
+            'open_count' => $openCount,
         ]);
     }
 

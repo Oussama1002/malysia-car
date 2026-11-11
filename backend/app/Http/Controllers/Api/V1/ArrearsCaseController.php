@@ -46,7 +46,13 @@ class ArrearsCaseController extends Controller
 
         $per = min(100, max(1, (int) $request->query('per_page', 25)));
 
-        return ApiResponse::paginated($q->orderByDesc('days_overdue')->paginate($per));
+        // Sidebar badge: dossiers d'impayés ouverts = résolution encore "pending".
+        $openCount = ArrearsCase::query()->where('resolution', 'pending')->count();
+
+        return ApiResponse::paginated(
+            $q->orderByDesc('days_overdue')->paginate($per),
+            ['open_count' => $openCount],
+        );
     }
 
     public function show(ArrearsCase $arrearsCase): JsonResponse

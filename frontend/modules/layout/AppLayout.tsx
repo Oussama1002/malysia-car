@@ -121,6 +121,48 @@ export const AppLayout: React.FC = () => {
   });
   const websiteLeadsNewCount = websiteLeadsBadgeQ.data ?? 0;
 
+  // Compteurs d'alertes sidebar — on ne récupère qu'une page (per_page=1) et on
+  // lit le compteur agrégé renvoyé dans `meta`. Même pattern que les demandes
+  // du site ci-dessus.
+  const metaBadge = (endpoint: string, metaKey: string) => async () => {
+    const { apiClient: api, getApiBase: base } = await import('@/services/apiClient');
+    if (!base()) return 0;
+    const res = await api<{ data: unknown[]; meta?: Record<string, unknown> }>(endpoint);
+    return Number(res.meta?.[metaKey] ?? 0);
+  };
+
+  const reservationsNewQ = useQuery({
+    queryKey: ['reservations', 'new-count-badge'],
+    queryFn: metaBadge('/v1/reservations?status=reserved&per_page=1', 'new_count'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const reservationsNewCount = reservationsNewQ.data ?? 0;
+
+  const missionsOpenQ = useQuery({
+    queryKey: ['missions', 'open-count-badge'],
+    queryFn: metaBadge('/v1/missions?per_page=1', 'open_count'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const missionsOpenCount = missionsOpenQ.data ?? 0;
+
+  const invoicesUnpaidQ = useQuery({
+    queryKey: ['invoices', 'unpaid-count-badge'],
+    queryFn: metaBadge('/v1/invoices?per_page=1', 'unpaid_count'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const invoicesUnpaidCount = invoicesUnpaidQ.data ?? 0;
+
+  const arrearsOpenQ = useQuery({
+    queryKey: ['arrears', 'open-count-badge'],
+    queryFn: metaBadge('/v1/arrears/cases?per_page=1', 'open_count'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const arrearsOpenCount = arrearsOpenQ.data ?? 0;
+
   const fleetPendingQ = useQuery({
     queryKey: ['fleet', 'pending-docs'],
     queryFn: async () => {
@@ -213,7 +255,19 @@ export const AppLayout: React.FC = () => {
     return t;
   };
 
-  const renderNavLink = (it: NavItem, indent = true) => (
+  // Compteur d'alertes par item de sidebar (0 => pas de pastille).
+  const navBadgeCount: Record<string, number> = {
+    '/fleet': criticalMaintenanceCount,
+    '/reservations/website-leads': websiteLeadsNewCount,
+    '/reservations': reservationsNewCount,
+    '/missions': missionsOpenCount,
+    '/finance/invoices': invoicesUnpaidCount,
+    '/arrears': arrearsOpenCount,
+  };
+
+  const renderNavLink = (it: NavItem, indent = true) => {
+    const badge = navBadgeCount[it.to] ?? 0;
+    return (
     <NavLink
       to={it.to}
       // NavLink matches by prefix, so /fleet/sub-rentals lit up Flotte too.
@@ -227,18 +281,14 @@ export const AppLayout: React.FC = () => {
     >
       <Icon name={it.icon} size={16} className="shrink-0 opacity-70" />
       {!sidebarCollapsed && <span className="truncate">{t(it.labelKey)}</span>}
-      {!sidebarCollapsed && it.to === '/fleet' && criticalMaintenanceCount > 0 && (
+      {!sidebarCollapsed && badge > 0 && (
         <span className="ms-auto rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-          {criticalMaintenanceCount > 99 ? '99+' : criticalMaintenanceCount}
-        </span>
-      )}
-      {!sidebarCollapsed && it.to === '/reservations/website-leads' && websiteLeadsNewCount > 0 && (
-        <span className="ms-auto rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-          {websiteLeadsNewCount > 99 ? '99+' : websiteLeadsNewCount}
+          {badge > 99 ? '99+' : badge}
         </span>
       )}
     </NavLink>
-  );
+    );
+  };
 
   const Sidebar = (
     <aside className="df-sidebar">

@@ -80,11 +80,26 @@ class ReservationController extends Controller
             return $arr;
         });
 
+        // Sidebar badge: nouvelles réservations à traiter = statut "reserved"
+        // sans contrat actif rattaché (même logique que has_contract).
+        $newCount = Reservation::query()
+            ->where('status', 'reserved')
+            ->whereNotExists(function ($sub) {
+                $sub->selectRaw('1')
+                    ->from('contracts')
+                    ->whereColumn('contracts.customer_id', 'reservations.customer_id')
+                    ->whereColumn('contracts.vehicle_id', 'reservations.vehicle_id')
+                    ->whereNotIn('contracts.status', ['cancelled', 'terminated'])
+                    ->whereNull('contracts.deleted_at');
+            })
+            ->count();
+
         return ApiResponse::success($items, [
             'current_page' => $page->currentPage(),
             'last_page' => $page->lastPage(),
             'per_page' => $page->perPage(),
             'total' => $page->total(),
+            'new_count' => $newCount,
         ]);
     }
 
