@@ -7,6 +7,7 @@ use App\Http\Requests\Api\V1\Users\StoreUserRequest;
 use App\Http\Requests\Api\V1\Users\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Http\Responses\ApiResponse;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,55 @@ class UserController extends Controller
         return ApiResponse::success((new UserResource($user))->resolve($request));
     }
 
+    /**
+     * Garder la colonne héritée `users.role` alignée sur les rôles réellement
+     * assignés. L'UI admin n'envoie que `role_ids` : sans ça la colonne retombe
+     * sur sa valeur par défaut (AGENT_COMMERCIAL) et `primaryRoleCode()` — qui
+     * fait confiance à la colonne avant les rôles liés — classe un MISSIONNAIRE
+     * comme agent commercial, ce qui lui ouvre tous les modules (web + mobile).
+     *
+     * Un `role` explicitement fourni dans la requête reste prioritaire.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function alignLegacyRoleColumn(User $user, array $data): void
+    {
+        if (! empty($data['role']) || ! Schema::hasColumn('users', 'role')) {
+            return;
+        }
+        $code = $this->strongestRoleCode((array) ($data['role_ids'] ?? []));
+        if ($code !== null && $code !== $user->role) {
+            $user->role = $code;
+            $user->save();
+        }
+    }
+
+    /**
+     * Code du rôle le plus fort parmi des identifiants, selon la hiérarchie
+     * `erp.app_roles` (même ordre que User::primaryRoleCode()).
+     *
+     * @param  array<int, int|string>  $roleIds
+     */
+    private function strongestRoleCode(array $roleIds): ?string
+    {
+        if ($roleIds === []) {
+            return null;
+        }
+        $codes = Role::query()->whereIn('id', $roleIds)->pluck('code')->filter()->values()->all();
+        if ($codes === []) {
+            return null;
+        }
+        $hierarchy = (array) config('erp.app_roles', []);
+        usort($codes, function (string $a, string $b) use ($hierarchy) {
+            $ra = array_search($a, $hierarchy, true);
+            $rb = array_search($b, $hierarchy, true);
+
+            return ($ra === false ? PHP_INT_MAX : $ra) <=> ($rb === false ? PHP_INT_MAX : $rb);
+        });
+
+        return (string) $codes[0];
+    }
+
     public function store(StoreUserRequest $request): JsonResponse
     {
         $data = $request->validated();
@@ -106,6 +156,7 @@ class UserController extends Controller
 
             if (! empty($data['role_ids']) && Schema::hasTable('user_roles')) {
                 $user->roles()->sync($data['role_ids']);
+                $this->alignLegacyRoleColumn($user, $data);
             }
             if (! empty($data['branch_ids']) && Schema::hasTable('user_branches')) {
                 $sync = [];
@@ -150,6 +201,7 @@ class UserController extends Controller
 
             if (isset($data['role_ids']) && Schema::hasTable('user_roles')) {
                 $user->roles()->sync($data['role_ids']);
+                $this->alignLegacyRoleColumn($user, $data);
             }
             if (isset($data['branch_ids']) && Schema::hasTable('user_branches')) {
                 $sync = [];
