@@ -407,7 +407,6 @@ export const RolesPermissionsPage: React.FC = () => {
                                   <span className="font-bold text-slate-800">
                                     {p.description ?? humanizePermissionCode(p.code)}
                                   </span>
-                                  <span className="block font-mono text-[10px] text-slate-400">{p.code}</span>
                                 </span>
                               </label>
                             );
