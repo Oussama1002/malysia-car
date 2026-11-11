@@ -12,6 +12,7 @@ import '../../features/documents/presentation/documents_screen.dart';
 import '../../features/gps/presentation/gps_screen.dart';
 import '../../features/home/presentation/app_shell.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/missions/presentation/missions_screen.dart';
 import '../../features/ocr/presentation/document_reader_screen.dart';
 import '../../features/payments/presentation/payments_screen.dart';
 import '../../features/reservations/presentation/reservations_screen.dart';

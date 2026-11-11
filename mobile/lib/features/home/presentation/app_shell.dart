@@ -753,36 +753,6 @@ class _NotificationsSheet extends StatelessWidget {
   }
 }
 
-/// Onglet « Mes missions » — placeholder en attendant le module terrain.
-class MissionsScreen extends StatelessWidget {
-  const MissionsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.map_outlined,
-                size: 72, color: cs.onSurface.withOpacity(0.25)),
-            const SizedBox(height: 16),
-            Text('Mes missions',
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                    color: cs.onSurface)),
-            const SizedBox(height: 6),
-            Text('Bientôt disponible.',
-                style: TextStyle(color: cs.onSurface.withOpacity(0.6))),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Icone centrale de la bottom bar : pastille indigo "+" avec legere
 /// ombre pour qu'elle ressorte comme un bouton d'action rapide.
 class _QuickAddIcon extends StatelessWidget {

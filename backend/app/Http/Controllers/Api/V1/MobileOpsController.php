@@ -61,7 +61,8 @@ class MobileOpsController extends Controller
             $query->where('mission_type', $type);
         }
 
-        if ($role === 'AGENT_LIVRAISON') {
+        if ($role === 'AGENT_LIVRAISON' || $role === 'MISSIONNAIRE') {
+            // Agent terrain : il ne voit que les missions qui lui sont assignées.
             $query->where('assigned_user_id', (string) $user->id);
         } elseif ($role === 'GESTIONNAIRE_FLOTTE') {
             if (! $request->query('include_all')) {
@@ -568,7 +569,7 @@ class MobileOpsController extends Controller
         if (in_array($role, ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'], true)) {
             return;
         }
-        if ($role === 'AGENT_LIVRAISON' && (string) $mission->assigned_user_id === (string) $user->id) {
+        if (in_array($role, ['AGENT_LIVRAISON', 'MISSIONNAIRE'], true) && (string) $mission->assigned_user_id === (string) $user->id) {
             return;
         }
         abort(404);
@@ -581,7 +582,7 @@ class MobileOpsController extends Controller
         if (in_array($role, ['ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE'], true)) {
             return;
         }
-        if ($role === 'AGENT_LIVRAISON' && (string) $mission->assigned_user_id === (string) $user->id) {
+        if (in_array($role, ['AGENT_LIVRAISON', 'MISSIONNAIRE'], true) && (string) $mission->assigned_user_id === (string) $user->id) {
             return;
         }
         abort(404);
