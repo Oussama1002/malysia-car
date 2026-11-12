@@ -40,6 +40,7 @@ export interface MobileOpsMissionDto {
   vehicle_id?: string | null;
   client_id?: string | null;
   assigned_user_id?: string | null;
+  assigned_at?: string | null;
   mission_type: string;
   status: MobileOpsMissionStatus;
   scheduled_start_at?: string | null;

@@ -29,6 +29,7 @@ class Mission extends Model
         'vehicle_id',
         'client_id',
         'assigned_user_id',
+        'assigned_at',
         'mission_type',
         'status',
         'priority',
@@ -53,6 +54,7 @@ class Mission extends Model
     protected $casts = [
         'scheduled_start_at' => 'datetime',
         'scheduled_end_at' => 'datetime',
+        'assigned_at' => 'datetime',
         'planned_at' => 'datetime',
         'accepted_at' => 'datetime',
         'actual_start_at' => 'datetime',

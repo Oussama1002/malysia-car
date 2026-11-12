@@ -155,6 +155,7 @@ class FieldOpsAdminController extends Controller
             'reservation_id' => $data['reservation_id'] ?? null,
             'contract_id' => $data['contract_id'] ?? null,
             'assigned_user_id' => $data['assigned_user_id'] ?? null,
+            'assigned_at' => ! empty($data['assigned_user_id']) ? now() : null,
             'pickup_address' => $data['pickup_address'] ?? null,
             'dropoff_address' => $data['dropoff_address'] ?? null,
             'origin_address' => $data['pickup_address'] ?? null,
@@ -192,6 +193,8 @@ class FieldOpsAdminController extends Controller
         $previousStatus = $mission->status;
 
         $mission->assigned_user_id = $data['assigned_user_id'];
+        // Horodate l'affectation (ou la réassignation) — affiché dans la console.
+        $mission->assigned_at = now();
         if (in_array($mission->status, ['pending'], true)) {
             $mission->status = 'assigned';
         }

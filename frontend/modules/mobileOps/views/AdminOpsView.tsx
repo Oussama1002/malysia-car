@@ -6,7 +6,7 @@ import {
   type MissionType,
   type MissionProofBundle,
 } from '@/services/mobileOpsApi';
-import { formatDate } from '@/modules/shared/formatters';
+import { formatDate, formatDateTime } from '@/modules/shared/formatters';
 import { DateField } from '@/modules/shared/components/DateField';
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
@@ -276,6 +276,13 @@ export const AdminOpsView: React.FC = () => {
             render: (m) => <span className="font-semibold text-slate-700">{m.assigned_agent?.email ?? '—'}</span>,
           },
           {
+            key: 'assigned',
+            header: 'Affectée le',
+            render: (m) => (
+              <span className="text-xs text-slate-500">{m.assigned_at ? formatDateTime(m.assigned_at) : '—'}</span>
+            ),
+          },
+          {
             key: 'vehicle',
             header: 'Véhicule',
             render: (m) => <span className="font-mono text-xs text-slate-700">{m.vehicle?.registration_number ?? '—'}</span>,
@@ -448,6 +455,7 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
             {/* Info grid */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <InfoCell label="Agent" value={m.assigned_agent?.email ?? '—'} />
+              <InfoCell label="Affectée le" value={m.assigned_at ? formatDateTime(m.assigned_at) : '—'} />
               <InfoCell label="Véhicule" value={m.vehicle?.registration_number ?? '—'} />
               <InfoCell label="Client" value={clientLabel(m.client)} />
               <InfoCell label="Réservation" value={m.reservation?.reservation_number ?? '—'} />
