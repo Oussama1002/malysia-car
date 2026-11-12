@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   mobileOpsApi,
@@ -124,6 +125,13 @@ function phaseLabel(raw?: string | null): string {
 function clientLabel(client?: MobileOpsMissionDto['client']): string {
   if (!client) return '—';
   return client.full_name || client.customer_code || '—';
+}
+
+/** « Marque Modèle · Immatriculation » (champs disponibles uniquement). */
+function vehicleLabel(vehicle?: MobileOpsMissionDto['vehicle']): string {
+  if (!vehicle) return '—';
+  const name = [vehicle.brand_name, vehicle.model_name].filter(Boolean).join(' ');
+  return [name, vehicle.registration_number].filter(Boolean).join(' · ') || '—';
 }
 
 type DrawerMode = null | 'detail' | 'create';
@@ -253,12 +261,16 @@ export const AdminOpsView: React.FC = () => {
           {
             key: 'reservation',
             header: 'Réservation',
-            render: (m) =>
-              m.reservation?.reservation_number ? (
-                <span className="font-mono text-xs text-slate-700">{m.reservation.reservation_number}</span>
-              ) : (
-                <span className="text-slate-300">—</span>
-              ),
+            render: (m) => {
+              const id = m.reservation?.id ?? m.reservation_id;
+              const num = m.reservation?.reservation_number;
+              if (!id) return <span className="text-slate-300">—</span>;
+              return (
+                <Link to={`/reservations/${id}`} className="font-mono text-xs text-indigo-600 hover:underline">
+                  {num ?? 'Voir'}
+                </Link>
+              );
+            },
           },
           {
             key: 'contract',
@@ -285,7 +297,16 @@ export const AdminOpsView: React.FC = () => {
           {
             key: 'vehicle',
             header: 'Véhicule',
-            render: (m) => <span className="font-mono text-xs text-slate-700">{m.vehicle?.registration_number ?? '—'}</span>,
+            render: (m) => {
+              const id = m.vehicle?.id ?? m.vehicle_id;
+              const label = vehicleLabel(m.vehicle);
+              if (!id) return <span className="text-slate-300">{label}</span>;
+              return (
+                <Link to={`/fleet/${id}`} className="text-xs font-semibold text-indigo-600 hover:underline">
+                  {label}
+                </Link>
+              );
+            },
           },
           {
             key: 'planned',
@@ -456,9 +477,31 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
             <div className="grid grid-cols-2 gap-2 text-xs">
               <InfoCell label="Agent" value={m.assigned_agent?.email ?? '—'} />
               <InfoCell label="Affectée le" value={m.assigned_at ? formatDateTime(m.assigned_at) : '—'} />
-              <InfoCell label="Véhicule" value={m.vehicle?.registration_number ?? '—'} />
+              <InfoCell
+                label="Véhicule"
+                value={
+                  (m.vehicle?.id ?? m.vehicle_id) ? (
+                    <Link to={`/fleet/${m.vehicle?.id ?? m.vehicle_id}`} className="font-semibold text-indigo-600 hover:underline">
+                      {vehicleLabel(m.vehicle)}
+                    </Link>
+                  ) : (
+                    vehicleLabel(m.vehicle)
+                  )
+                }
+              />
               <InfoCell label="Client" value={clientLabel(m.client)} />
-              <InfoCell label="Réservation" value={m.reservation?.reservation_number ?? '—'} />
+              <InfoCell
+                label="Réservation"
+                value={
+                  (m.reservation?.id ?? m.reservation_id) ? (
+                    <Link to={`/reservations/${m.reservation?.id ?? m.reservation_id}`} className="font-mono text-indigo-600 hover:underline">
+                      {m.reservation?.reservation_number ?? 'Voir'}
+                    </Link>
+                  ) : (
+                    '—'
+                  )
+                }
+              />
               <InfoCell label="Contrat" value={m.contract?.contract_number ?? '—'} />
               <InfoCell label="Planifiée" value={m.planned_at ? formatDate(m.planned_at) : '—'} />
               <InfoCell label="Départ" value={m.pickup_address ?? m.origin_address ?? '—'} />
@@ -805,7 +848,7 @@ const CreateMissionDrawer: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
 // ── Helper ──────────────────────────────────────────────────────────
 
-const InfoCell: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+const InfoCell: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div className="rounded-lg bg-slate-50 p-2">
     <div className="text-[10px] font-bold text-slate-400">{label}</div>
     <div className="text-xs text-slate-800">{value}</div>

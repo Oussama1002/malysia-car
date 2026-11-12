@@ -60,7 +60,7 @@ export interface MobileOpsMissionDto {
   created_at?: string;
   updated_at?: string;
   // Eager-loaded relations
-  vehicle?: { id: string; registration_number: string } | null;
+  vehicle?: { id: string; registration_number: string; brand_name?: string | null; model_name?: string | null } | null;
   assigned_agent?: { id: string; email: string } | null;
   client?: { id: string; customer_code: string; customer_type: string; full_name?: string | null } | null;
   reservation?: { id: string; reservation_number: string | null } | null;
