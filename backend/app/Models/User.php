@@ -184,11 +184,13 @@ class User extends Authenticatable
 
     public function primaryRoleCode(): string
     {
-        // Une colonne vide n'est pas un rôle : sans ça on renvoyait '' et le
-        // contrôle de permission ne regardait jamais les rôles liés.
-        if (! empty($this->attributes['role'])) {
-            return (string) $this->attributes['role'];
-        }
+        // Les rôles réellement liés (RBAC) font autorité. La colonne héritée
+        // `users.role` n'est qu'un repli : créée via l'UI admin (qui n'envoie
+        // que `role_ids`), elle retombe sur une valeur par défaut
+        // (AGENT_COMMERCIAL) qui ne correspond pas forcément au rôle assigné —
+        // d'où un MISSIONNAIRE qui se retrouvait classé agent commercial et
+        // voyait tous les modules. On privilégie donc les rôles liés quand il
+        // y en a, et on ne retombe sur la colonne que faute de rôle lié.
         if (Schema::hasTable('user_roles') && Schema::hasTable('roles')) {
             // Un utilisateur peut porter plusieurs rôles : prendre le premier
             // venu donnait un résultat au hasard, et un compte ADMIN pouvait se
@@ -205,6 +207,12 @@ class User extends Authenticatable
 
                 return (string) $codes[0];
             }
+        }
+
+        // Pas de rôle lié : on retombe sur la colonne héritée si elle est
+        // renseignée, sinon sur le rôle le plus courant.
+        if (! empty($this->attributes['role'])) {
+            return (string) $this->attributes['role'];
         }
 
         return 'AGENT_COMMERCIAL';
