@@ -142,7 +142,7 @@
 
     var badge = document.createElement('span');
     badge.className = 'car__badge';
-    badge.textContent = v.categorie || (v.year ? 'Année ' + v.year : 'Nouveau');
+    badge.textContent = v.categorie || 'Nouveau';
     media.appendChild(badge);
 
     function fallbackLogo() {
