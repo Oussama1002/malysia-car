@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -420,11 +420,18 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
     enabled: tab === 'proof',
   });
 
+  // Pré-sélectionne l'agent actuellement affecté à la mission : le sélecteur
+  // doit refléter l'affectation en cours plutôt qu'un placeholder. Se resynchro-
+  // nise après une réassignation (la requête détail est invalidée puis rechargée).
+  const currentAgentId = detailQ.data?.assigned_user_id ?? '';
+  useEffect(() => {
+    setAssignUserId(currentAgentId);
+  }, [currentAgentId]);
+
   const assignMut = useMutation({
     mutationFn: () => mobileOpsApi.adminAssignMission(missionId, assignUserId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['mobile-ops'] });
-      setAssignUserId('');
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Erreur'),
   });
@@ -537,9 +544,9 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
                   <button
                     className="df-btn df-btn--primary text-xs"
                     onClick={() => { setError(null); assignMut.mutate(); }}
-                    disabled={!assignUserId || assignMut.isPending}
+                    disabled={!assignUserId || assignUserId === currentAgentId || assignMut.isPending}
                   >
-                    Assigner
+                    {currentAgentId ? 'Réassigner' : 'Assigner'}
                   </button>
                 </div>
               </div>
