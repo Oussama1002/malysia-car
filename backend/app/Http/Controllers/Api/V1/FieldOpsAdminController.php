@@ -146,9 +146,22 @@ class FieldOpsAdminController extends Controller
         $user = $request->user();
         $status = ! empty($data['assigned_user_id']) ? 'assigned' : 'pending';
 
+        // La mission appartient à l'agence de l'agent affecté : sinon une mission
+        // créée par un compte sans agence (ADMIN/DIRECTEUR) reste sans branch_id
+        // et le TenantScope (filtré par agence pour les rôles terrain) la cache à
+        // l'agent à qui elle est pourtant assignée. On retombe sur l'agence du
+        // créateur quand la mission n'est pas (encore) assignée.
+        $branchId = $user->branch_id ?? null;
+        if (! empty($data['assigned_user_id'])) {
+            $agentBranch = User::whereKey($data['assigned_user_id'])->value('branch_id');
+            if (! empty($agentBranch)) {
+                $branchId = $agentBranch;
+            }
+        }
+
         $mission = Mission::create([
             'company_id' => $user->company_id ?? null,
-            'branch_id' => $user->branch_id ?? null,
+            'branch_id' => $branchId,
             'mission_type' => $data['mission_type'],
             'vehicle_id' => $data['vehicle_id'] ?? null,
             'client_id' => $data['client_id'] ?? null,
@@ -195,6 +208,12 @@ class FieldOpsAdminController extends Controller
         $mission->assigned_user_id = $data['assigned_user_id'];
         // Horodate l'affectation (ou la réassignation) — affiché dans la console.
         $mission->assigned_at = now();
+        // Rattache la mission à l'agence de l'agent affecté pour qu'il la voie
+        // (le TenantScope filtre les rôles terrain par agence).
+        $agentBranch = User::whereKey($data['assigned_user_id'])->value('branch_id');
+        if (! empty($agentBranch)) {
+            $mission->branch_id = $agentBranch;
+        }
         if (in_array($mission->status, ['pending'], true)) {
             $mission->status = 'assigned';
         }
