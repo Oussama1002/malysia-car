@@ -509,7 +509,7 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
                   )
                 }
               />
-              <InfoCell label="Contrat" value={m.contract?.contract_number ?? '—'} />
+              <InfoCell label="Contrat" value={m.contract?.contract_number ?? 'Pas encore généré'} />
               <InfoCell label="Planifiée" value={m.planned_at ? formatDate(m.planned_at) : '—'} />
               <InfoCell label="Départ" value={m.pickup_address ?? m.origin_address ?? '—'} />
               <InfoCell label="Arrivée" value={m.dropoff_address ?? m.destination_address ?? '—'} />
