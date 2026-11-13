@@ -17,6 +17,8 @@ class MissionDto {
     this.notes,
     this.clientInstructions,
     this.vehicleRegistration,
+    this.vehicleBrand,
+    this.vehicleModel,
     this.clientCode,
     this.clientType,
   });
@@ -35,8 +37,23 @@ class MissionDto {
   final String? notes;
   final String? clientInstructions;
   final String? vehicleRegistration;
+  final String? vehicleBrand;
+  final String? vehicleModel;
   final String? clientCode;
   final String? clientType;
+
+  /// « Marque Modèle · Immatriculation » (champs disponibles uniquement).
+  String? get vehicleLabel {
+    final name = [vehicleBrand, vehicleModel]
+        .whereType<String>()
+        .where((s) => s.trim().isNotEmpty)
+        .join(' ');
+    final parts = [name, vehicleRegistration]
+        .whereType<String>()
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   static String? _str(dynamic v) => v?.toString();
 
@@ -64,6 +81,8 @@ class MissionDto {
       clientInstructions: _str(j['client_instructions']),
       vehicleRegistration:
           vehicle is Map ? _str(vehicle['registration_number']) : null,
+      vehicleBrand: vehicle is Map ? _str(vehicle['brand_name']) : null,
+      vehicleModel: vehicle is Map ? _str(vehicle['model_name']) : null,
       clientCode: client is Map ? _str(client['customer_code']) : null,
       clientType: client is Map ? _str(client['customer_type']) : null,
     );

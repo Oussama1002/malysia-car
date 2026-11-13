@@ -47,7 +47,7 @@ class MobileOpsController extends Controller
 
         $query = Mission::query()
             ->with([
-                'vehicle:id,registration_number',
+                'vehicle:id,registration_number,brand_name,model_name',
                 'assignedAgent:id,email',
                 'client:id,customer_code,customer_type',
             ])
@@ -100,7 +100,7 @@ class MobileOpsController extends Controller
             'inspections',
             'signatures',
             'issues',
-            'vehicle:id,registration_number',
+            'vehicle:id,registration_number,brand_name,model_name',
             'assignedAgent:id,email',
             'client:id,customer_code,customer_type',
             'client.individualProfile:customer_id,first_name,last_name',

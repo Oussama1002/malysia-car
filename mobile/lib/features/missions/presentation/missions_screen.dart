@@ -256,14 +256,14 @@ class _MissionCardState extends ConsumerState<_MissionCard> {
               ],
             ),
           ],
-          if (m.vehicleRegistration != null) ...[
+          if (m.vehicleLabel != null) ...[
             const SizedBox(height: 8),
             Row(
               children: [
                 const Icon(Icons.directions_car,
                     size: 15, color: Colors.black45),
                 const SizedBox(width: 6),
-                Text(m.vehicleRegistration!,
+                Text(m.vehicleLabel!,
                     style: const TextStyle(
                         fontSize: 12.5, fontWeight: FontWeight.w700)),
                 if (m.clientCode != null) ...[
