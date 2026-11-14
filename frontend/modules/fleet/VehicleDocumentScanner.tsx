@@ -71,7 +71,7 @@ export const VehicleDocumentScanner: React.FC<{
       />
       <ScanSlot
         title="Autorisation de circulation / Vignette"
-        description="Attestation de paiement TSAV — immat., WW, marque, carburant, mise en circulation, validité vignette"
+        description="Attestation TSAV — immat., marque, carburant, validité vignette"
         onPrefill={onPrefill}
         mapFields={mapAutorisation}
         onDocumentUploaded={(id) => onDocumentUploaded?.('circulation_authorization', id)}
@@ -198,8 +198,11 @@ const ScanSlot: React.FC<{
   return (
     <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-3 gap-2">
       <div className="text-xs font-bold text-slate-700">{title}</div>
-      {/* Fixed-height description block so drop zones align across cards */}
-      <div className="min-h-[42px] text-[10px] leading-snug text-slate-400">{description}</div>
+      {/* Fixed-height description block so drop zones align across cards.
+          Must be a hard height (not min-h): a longer description would
+          otherwise grow the block and shove this card's drop zone down,
+          breaking alignment with its siblings (bug seen on the SL drawer). */}
+      <div className="h-[48px] overflow-hidden text-[10px] leading-snug text-slate-400">{description}</div>
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
