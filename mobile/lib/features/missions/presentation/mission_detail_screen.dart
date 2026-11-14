@@ -447,14 +447,17 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
       buttons.add(_primary('Terminer la mission', _complete));
     }
 
-    final dropoff = m.dropoffAddress ?? m.destinationAddress;
-    final pickup = m.pickupAddress ?? m.originAddress;
-    final navTarget = (dropoff != null && dropoff.isNotEmpty)
-        ? dropoff
-        : (pickup != null && pickup.isNotEmpty ? pickup : null);
-    if (navTarget != null) {
+    // Itinéraire complet tel que défini dans l'ERP web : origine (départ) →
+    // destination (arrivée). On ouvre un vrai itinéraire Google Maps avec les
+    // deux points quand ils sont connus ; sinon une simple recherche du point
+    // disponible.
+    final destination = m.dropoffAddress ?? m.destinationAddress;
+    final origin = m.pickupAddress ?? m.originAddress;
+    final hasDestination = destination != null && destination.trim().isNotEmpty;
+    final hasOrigin = origin != null && origin.trim().isNotEmpty;
+    if (hasDestination || hasOrigin) {
       buttons.add(_ghost('Itinéraire', Icons.navigation_outlined,
-          () => _openMaps(navTarget)));
+          () => _openItinerary(origin, destination)));
     }
     final active = !['completed', 'failed', 'cancelled'].contains(s);
     if (active && (s == 'in_progress' || s == 'arrived')) {
@@ -629,6 +632,34 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
   Future<void> _openMaps(String address) async {
     final uri = Uri.parse(
         'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /// Ouvre l'itinéraire de la mission dans Google Maps. Avec une origine ET une
+  /// destination, on lance un vrai itinéraire routier (dir) — le même trajet
+  /// que celui saisi dans l'ERP web. Avec un seul point connu, on retombe sur
+  /// une recherche simple de ce point.
+  Future<void> _openItinerary(String? origin, String? destination) async {
+    final dest = (destination != null && destination.trim().isNotEmpty)
+        ? destination.trim()
+        : null;
+    final orig = (origin != null && origin.trim().isNotEmpty)
+        ? origin.trim()
+        : null;
+    if (dest == null && orig == null) return;
+
+    if (dest == null || orig == null) {
+      // Un seul point connu → recherche simple de ce point.
+      await _openMaps((dest ?? orig)!);
+      return;
+    }
+    final uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1'
+        '&origin=${Uri.encodeComponent(orig)}'
+        '&destination=${Uri.encodeComponent(dest)}'
+        '&travelmode=driving');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
