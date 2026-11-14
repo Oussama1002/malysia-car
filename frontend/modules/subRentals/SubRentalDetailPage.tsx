@@ -8,6 +8,9 @@ import { ScanProofLink } from '@/modules/shared/components/ScanProofLink';
 import { useChequeDuplicate } from '@/modules/shared/hooks/useChequeDuplicate';
 import { DateField } from '@/modules/shared/components/DateField';
 import { ProofUploader } from '@/modules/shared/components/ProofUploader';
+import { VehicleDocumentScanner, type VehicleDocSlotKey } from '@/modules/fleet/VehicleDocumentScanner';
+import { documentReaderApi } from '@/services/documentReaderApi';
+import { documentCenterApi } from '@/services/documentCenterApi';
 
 type Tab = 'overview' | 'vehicle' | 'supplier' | 'payments' | 'profitability' | 'return';
 
@@ -60,14 +63,116 @@ function InfoRow({ label, value }: { label: string; value?: React.ReactNode }) {
   );
 }
 
+/** Fixed vehicle-angle photo slots captured at return time. */
+const RETURN_PHOTO_SLOTS = [
+  { key: 'avant', label: 'Avant' },
+  { key: 'arriere', label: 'Arrière' },
+  { key: 'cote_droit', label: 'Côté droit' },
+  { key: 'cote_gauche', label: 'Côté gauche' },
+  { key: 'tableau_bord', label: 'Tableau de bord' },
+] as const;
+type ReturnPhotoKey = typeof RETURN_PHOTO_SLOTS[number]['key'];
+
+/** Human labels for the OCR document slots, used when linking to the contract. */
+const SL_DOC_LABELS: Record<VehicleDocSlotKey, string> = {
+  insurance: 'Assurance',
+  circulation_authorization: 'Autorisation de circulation',
+  payment_attestation: 'Attestation de paiement',
+  technical_inspection: 'Visite technique',
+  registration_card: 'Carte grise',
+};
+
+/** A single labeled photo capture tile (camera or file), one image per slot. */
+function ReturnPhotoSlot({ label, file, onPick, onClear }: {
+  label: string;
+  file: File | null;
+  onPick: (f: File) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-bold text-slate-600">{label}</span>
+      {file ? (
+        <div className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+          <img src={URL.createObjectURL(file)} alt={label} className="h-full w-full object-cover" />
+          <button
+            type="button"
+            onClick={onClear}
+            className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-black text-white opacity-0 transition group-hover:opacity-100"
+            aria-label="Retirer"
+          >✕</button>
+        </div>
+      ) : (
+        <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100">
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" strokeWidth="2" /></svg>
+          <span className="text-[10px] font-bold">Ajouter</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ''; }}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
 function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({ returned_at: new Date().toISOString().split('T')[0], odometer_km: '', fuel_level: '', condition_notes: '', damage_notes: '', extra_charges: '', signed_by_supplier: '' });
   const [err, setErr] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<Partial<Record<ReturnPhotoKey, File>>>({});
+  // Reader-document ids captured as soon as the OCR scanner ingests a file.
+  // Linked to the SL contract once the return is recorded.
+  const [scannedDocIds, setScannedDocIds] = useState<Partial<Record<VehicleDocSlotKey, string>>>({});
+  const [attachStatus, setAttachStatus] = useState<string | null>(null);
+
+  /** After the return is saved, link scanned docs + upload the angle photos to
+   *  this contract — the same attachment flow the create drawer uses. */
+  const uploadAttachments = async (): Promise<void> => {
+    const uploads: Array<{ label: string; run: () => Promise<unknown> }> = [];
+
+    for (const [slot, readerId] of Object.entries(scannedDocIds) as Array<[VehicleDocSlotKey, string]>) {
+      if (!readerId) continue;
+      uploads.push({
+        label: SL_DOC_LABELS[slot] ?? slot,
+        run: () => documentReaderApi.link(readerId, 'sub_rental_contract', contractId),
+      });
+    }
+
+    for (const { key, label } of RETURN_PHOTO_SLOTS) {
+      const file = photos[key];
+      if (!file) continue;
+      uploads.push({
+        label: `Photo ${label}`,
+        run: () => {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('category', 'photo');
+          fd.append('label', `Retour — ${label}`);
+          return documentCenterApi.uploadToEntity('sub_rental_contract', contractId, fd);
+        },
+      });
+    }
+
+    if (uploads.length === 0) return;
+    let done = 0;
+    for (const u of uploads) {
+      setAttachStatus(`Envoi ${u.label} (${done + 1}/${uploads.length})…`);
+      try { await u.run(); } catch { /* non-blocking */ }
+      done++;
+    }
+    setAttachStatus(null);
+  };
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => subRentalApi.returnToSupplier(contractId, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sub-rental', contractId] }); onClose(); },
+    onSuccess: async () => {
+      try { await uploadAttachments(); } catch { /* ignore */ }
+      qc.invalidateQueries({ queryKey: ['sub-rental', contractId] });
+      onClose();
+    },
     onError: (e: unknown) => setErr((e as any)?.data?.message ?? (e as any)?.data?.errors?.vehicle_id?.[0] ?? 'Erreur'),
   });
 
@@ -75,28 +180,74 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
   const inp = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
+  const photoCount = Object.values(photos).filter(Boolean).length;
+  const docCount = Object.values(scannedDocIds).filter(Boolean).length;
+  const busy = mutation.isPending || attachStatus !== null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <h2 className="font-bold text-slate-900">Retour au fournisseur</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ ...form, odometer_km: form.odometer_km ? parseFloat(form.odometer_km) : undefined, extra_charges: form.extra_charges ? parseFloat(form.extra_charges) : undefined }); }} className="p-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={inp} value={form.returned_at} onChange={setField('returned_at')} required /></div>
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Kilométrage</label><input className={inp} type="number" min="0" value={form.odometer_km} onChange={set('odometer_km')} /></div>
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Niveau carburant</label><select className={inp} value={form.fuel_level} onChange={set('fuel_level')}><option value="">—</option><option value="empty">Vide</option><option value="quarter">1/4</option><option value="half">1/2</option><option value="three_quarters">3/4</option><option value="full">Plein</option></select></div>
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Frais supplémentaires</label><input className={inp} type="number" min="0" step="0.01" value={form.extra_charges} onChange={set('extra_charges')} /></div>
+        <form
+          onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ ...form, odometer_km: form.odometer_km ? parseFloat(form.odometer_km) : undefined, extra_charges: form.extra_charges ? parseFloat(form.extra_charges) : undefined }); }}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={inp} value={form.returned_at} onChange={setField('returned_at')} required /></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Kilométrage</label><input className={inp} type="number" min="0" value={form.odometer_km} onChange={set('odometer_km')} /></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Niveau carburant</label><select className={inp} value={form.fuel_level} onChange={set('fuel_level')}><option value="">—</option><option value="empty">Vide</option><option value="quarter">1/4</option><option value="half">1/2</option><option value="three_quarters">3/4</option><option value="full">Plein</option></select></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Frais supplémentaires</label><input className={inp} type="number" min="0" step="0.01" value={form.extra_charges} onChange={set('extra_charges')} /></div>
+            </div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">État du véhicule</label><textarea className={`${inp} resize-none`} rows={2} value={form.condition_notes} onChange={set('condition_notes')} /></div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Dommages constatés</label><textarea className={`${inp} resize-none`} rows={2} value={form.damage_notes} onChange={set('damage_notes')} /></div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Signé par le fournisseur</label><input className={inp} value={form.signed_by_supplier} onChange={set('signed_by_supplier')} /></div>
+
+            {/* Vehicle angle photos */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-800">Photos du véhicule</h3>
+                <span className="text-[11px] font-semibold text-slate-400">{photoCount}/{RETURN_PHOTO_SLOTS.length}</span>
+              </div>
+              <p className="text-[11px] text-slate-500">État à la restitution — une photo par angle.</p>
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                {RETURN_PHOTO_SLOTS.map(({ key, label }) => (
+                  <ReturnPhotoSlot
+                    key={key}
+                    label={label}
+                    file={photos[key] ?? null}
+                    onPick={(f) => setPhotos((s) => ({ ...s, [key]: f }))}
+                    onClear={() => setPhotos((s) => { const n = { ...s }; delete n[key]; return n; })}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Documents — OCR scanner, same UX as the create drawer */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-800">Documents véhicule</h3>
+                <span className="text-[11px] font-semibold text-slate-400">{docCount} scanné{docCount > 1 ? 's' : ''}</span>
+              </div>
+              <VehicleDocumentScanner
+                carteGriseRecue
+                onPrefill={() => { /* no vehicle form to prefill at return time */ }}
+                onDocumentUploaded={(slot, id) => setScannedDocIds((s) => ({ ...s, [slot]: id }))}
+              />
+            </div>
+
+            {attachStatus && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700">{attachStatus}</div>
+            )}
+            {err && <p className="text-xs text-red-600">{err}</p>}
           </div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">État du véhicule</label><textarea className={`${inp} resize-none`} rows={2} value={form.condition_notes} onChange={set('condition_notes')} /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Dommages constatés</label><textarea className={`${inp} resize-none`} rows={2} value={form.damage_notes} onChange={set('damage_notes')} /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Signé par le fournisseur</label><input className={inp} value={form.signed_by_supplier} onChange={set('signed_by_supplier')} /></div>
-          {err && <p className="text-xs text-red-600">{err}</p>}
-          <div className="flex justify-end gap-2 pt-2">
+
+          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
             <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Annuler</button>
-            <button type="submit" disabled={mutation.isPending} className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{mutation.isPending ? 'Retour…' : 'Confirmer le retour'}</button>
+            <button type="submit" disabled={busy} className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{busy ? (attachStatus ? 'Envoi…' : 'Retour…') : 'Confirmer le retour'}</button>
           </div>
         </form>
       </div>
