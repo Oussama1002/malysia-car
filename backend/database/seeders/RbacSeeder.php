@@ -306,6 +306,13 @@ class RbacSeeder extends Seeder
         // Lieux Google Maps enregistrés — réutilisés sur les formulaires mission.
         $saved_locations = ['saved_locations.view', 'saved_locations.manage'];
 
+        // Génération de contrat depuis la mission (app mobile) : l'agent terrain
+        // réutilise le MÊME flux que le wizard web — créer le contrat à partir
+        // de la réservation, encaisser le loyer + la franchise d'assurance,
+        // activer le contrat puis imprimer le PDF. Mêmes routes, mêmes règles.
+        // (voir migration 2026_11_14_120000_grant_contract_generation_to_field_agents)
+        $contract_generation_field = ['contracts.view', 'contracts.create', 'contracts.update', 'contracts.activate', 'contracts.view_installments', 'documents.generate', 'payments.view', 'payments.create'];
+
         // Missionnaire — agent terrain : ne voit QUE les missions. Pas de
         // tableau de bord, pas de flotte, pas de finance, pas de paramètres.
         // Il accède au véhicule / client rattachés à sa mission (lecture) et
@@ -340,8 +347,9 @@ class RbacSeeder extends Seeder
             // Assistant(e) : tout sauf admin utilisateurs / rôles / paramètres.
             'ASSISTANT' => ['Assistant(e)', $assistant_full],
 
-            // Missionnaire : agent terrain, missions uniquement.
-            'MISSIONNAIRE' => ['Missionnaire', $missionnaire_field],
+            // Missionnaire : agent terrain, missions uniquement — plus la
+            // génération de contrat depuis la mission (remise du véhicule).
+            'MISSIONNAIRE' => ['Missionnaire', array_merge($missionnaire_field, $contract_generation_field)],
 
             'DIRECTEUR' => ['Directeur général', array_merge(
                 ['view_dashboard', 'view_fleet', 'view_gps', 'view_customers', 'view_contracts', 'view_credit', 'view_finance', 'view_arrears', 'view_used_cars', 'view_audit', 'view_ai', 'view_mobile_ops', 'view_notifications', 'notifications.view', 'notifications.manage', 'notifications.retry', 'manage_customers', 'manage_fleet', 'manage_contracts', 'decide_credit', 'manage_finance', 'manage_arrears'],
@@ -447,6 +455,7 @@ class RbacSeeder extends Seeder
                 ['vehicles.view', 'odometer.create'],
                 ['documents.view'],
                 $missions_field,
+                $contract_generation_field,
                 ['rentals.handover_pickup', 'rentals.handover_return'],
                 ['gps.positions.view']
             )],
