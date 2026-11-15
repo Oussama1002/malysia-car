@@ -196,17 +196,20 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={inp} value={form.returned_at} onChange={setField('returned_at')} required /></div>
-              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Kilométrage</label><input className={inp} type="number" min="0" value={form.odometer_km} onChange={set('odometer_km')} /></div>
-              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Niveau carburant</label><select className={inp} value={form.fuel_level} onChange={set('fuel_level')}><option value="">—</option><option value="empty">Vide</option><option value="quarter">1/4</option><option value="half">1/2</option><option value="three_quarters">3/4</option><option value="full">Plein</option></select></div>
-              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Frais supplémentaires</label><input className={inp} type="number" min="0" step="0.01" value={form.extra_charges} onChange={set('extra_charges')} /></div>
+            {/* Documents — OCR scanner, same UX as the create drawer (en premier) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-800">Documents véhicule</h3>
+                <span className="text-[11px] font-semibold text-slate-400">{docCount} scanné{docCount > 1 ? 's' : ''}</span>
+              </div>
+              <VehicleDocumentScanner
+                carteGriseRecue
+                onPrefill={() => { /* no vehicle form to prefill at return time */ }}
+                onDocumentUploaded={(slot, id) => setScannedDocIds((s) => ({ ...s, [slot]: id }))}
+              />
             </div>
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">État du véhicule</label><textarea className={`${inp} resize-none`} rows={2} value={form.condition_notes} onChange={set('condition_notes')} /></div>
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Dommages constatés</label><textarea className={`${inp} resize-none`} rows={2} value={form.damage_notes} onChange={set('damage_notes')} /></div>
-            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Signé par le fournisseur</label><input className={inp} value={form.signed_by_supplier} onChange={set('signed_by_supplier')} /></div>
 
-            {/* Vehicle angle photos */}
+            {/* Vehicle angle photos (juste après le scanner) */}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-wide text-slate-800">Photos du véhicule</h3>
@@ -226,18 +229,15 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
               </div>
             </div>
 
-            {/* Documents — OCR scanner, same UX as the create drawer */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-800">Documents véhicule</h3>
-                <span className="text-[11px] font-semibold text-slate-400">{docCount} scanné{docCount > 1 ? 's' : ''}</span>
-              </div>
-              <VehicleDocumentScanner
-                carteGriseRecue
-                onPrefill={() => { /* no vehicle form to prefill at return time */ }}
-                onDocumentUploaded={(slot, id) => setScannedDocIds((s) => ({ ...s, [slot]: id }))}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={inp} value={form.returned_at} onChange={setField('returned_at')} required /></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Kilométrage</label><input className={inp} type="number" min="0" value={form.odometer_km} onChange={set('odometer_km')} /></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Niveau carburant</label><select className={inp} value={form.fuel_level} onChange={set('fuel_level')}><option value="">—</option><option value="empty">Vide</option><option value="quarter">1/4</option><option value="half">1/2</option><option value="three_quarters">3/4</option><option value="full">Plein</option></select></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Frais supplémentaires</label><input className={inp} type="number" min="0" step="0.01" value={form.extra_charges} onChange={set('extra_charges')} /></div>
             </div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">État du véhicule</label><textarea className={`${inp} resize-none`} rows={2} value={form.condition_notes} onChange={set('condition_notes')} /></div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Dommages constatés</label><textarea className={`${inp} resize-none`} rows={2} value={form.damage_notes} onChange={set('damage_notes')} /></div>
+            <div><label className="block text-xs font-semibold text-slate-500 mb-1">Signé par le fournisseur</label><input className={inp} value={form.signed_by_supplier} onChange={set('signed_by_supplier')} /></div>
 
             {attachStatus && (
               <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700">{attachStatus}</div>
