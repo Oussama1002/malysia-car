@@ -34,6 +34,9 @@ class MissionDto {
     this.reservationNumber,
     this.contractId,
     this.contractNumber,
+    this.branchName,
+    this.branchAddress,
+    this.branchMapsUrl,
     this.photosCount = 0,
     this.inspectionsCount = 0,
     this.issuesCount = 0,
@@ -67,6 +70,9 @@ class MissionDto {
   final String? reservationNumber;
   final String? contractId;
   final String? contractNumber;
+  final String? branchName;
+  final String? branchAddress;
+  final String? branchMapsUrl;
   final int photosCount;
   final int inspectionsCount;
   final int issuesCount;
@@ -135,6 +141,7 @@ class MissionDto {
     final client = j['client'];
     final reservation = j['reservation'];
     final contract = j['contract'];
+    final branch = j['branch'];
     return MissionDto(
       id: j['id']?.toString() ?? '',
       missionNumber: j['mission_number']?.toString() ?? '',
@@ -169,6 +176,9 @@ class MissionDto {
           contract is Map ? _str(contract['id']) : _str(j['contract_id']),
       contractNumber:
           contract is Map ? _str(contract['contract_number']) : null,
+      branchName: branch is Map ? _str(branch['name']) : null,
+      branchAddress: branch is Map ? _str(branch['address']) : null,
+      branchMapsUrl: branch is Map ? _str(branch['google_maps_url']) : null,
       photosCount: _int(j['photos_count']),
       inspectionsCount: _int(j['inspections_count']),
       issuesCount: _int(j['issues_count']),

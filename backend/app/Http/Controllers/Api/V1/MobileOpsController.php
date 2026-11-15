@@ -107,6 +107,7 @@ class MobileOpsController extends Controller
             'client.companyProfile:customer_id,trade_name,legal_name',
             'reservation:id,reservation_number',
             'contract:id,contract_number',
+            'branch:id,name,address,google_maps_url',
         ]);
 
         return ApiResponse::success($mission);

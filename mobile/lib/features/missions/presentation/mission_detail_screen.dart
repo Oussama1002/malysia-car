@@ -459,6 +459,15 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
       buttons.add(_ghost('Itinéraire', Icons.navigation_outlined,
           () => _openItinerary(origin, destination)));
     }
+
+    // Lien Google Maps de l'agence (tel que saisi dans Paramètres → Agences sur
+    // l'ERP web). On ouvre le lien exact épinglé, pas une recherche d'adresse.
+    final branchMaps = m.branchMapsUrl;
+    if (branchMaps != null && branchMaps.trim().isNotEmpty) {
+      buttons.add(_ghost('Lien Google Maps', Icons.location_on_outlined,
+          () => _openRawUrl(branchMaps.trim())));
+    }
+
     final active = !['completed', 'failed', 'cancelled'].contains(s);
     if (active && (s == 'in_progress' || s == 'arrived')) {
       buttons.add(_ghost('Marquer en échec', Icons.cancel_outlined,
@@ -635,6 +644,18 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     // On lance directement (comme partout ailleurs dans l'app) : sur la PWA
     // Flutter-web `canLaunchUrl` renvoie `false` pour un https externe et le
     // `await` casse le geste utilisateur → l'onglet est bloqué.
+    try {
+      await launchUrl(uri,
+          mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
+    } catch (_) {/* le navigateur a bloqué l'ouverture : on ignore */}
+  }
+
+  /// Ouvre un lien tel quel (ex. le lien Google Maps épinglé de l'agence). On
+  /// lance directement, sans `canLaunchUrl`, pour ne pas casser le geste
+  /// utilisateur sur la PWA Flutter-web.
+  Future<void> _openRawUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
     try {
       await launchUrl(uri,
           mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
