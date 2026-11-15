@@ -451,21 +451,24 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     // destination (arrivée). On ouvre un vrai itinéraire Google Maps avec les
     // deux points quand ils sont connus ; sinon une simple recherche du point
     // disponible.
+    // Un seul bouton de navigation. On privilégie le lien Google Maps épinglé de
+    // l'agence (Paramètres → Agences sur l'ERP web) : c'est le point exact.
+    // Sinon on retombe sur l'itinéraire complet origine (départ) → destination
+    // (arrivée) tel que défini dans l'ERP web.
     final destination = m.dropoffAddress ?? m.destinationAddress;
     final origin = m.pickupAddress ?? m.originAddress;
     final hasDestination = destination != null && destination.trim().isNotEmpty;
     final hasOrigin = origin != null && origin.trim().isNotEmpty;
-    if (hasDestination || hasOrigin) {
-      buttons.add(_ghost('Itinéraire', Icons.navigation_outlined,
-          () => _openItinerary(origin, destination)));
-    }
-
-    // Lien Google Maps de l'agence (tel que saisi dans Paramètres → Agences sur
-    // l'ERP web). On ouvre le lien exact épinglé, pas une recherche d'adresse.
-    final branchMaps = m.branchMapsUrl;
-    if (branchMaps != null && branchMaps.trim().isNotEmpty) {
-      buttons.add(_ghost('Lien Google Maps', Icons.location_on_outlined,
-          () => _openRawUrl(branchMaps.trim())));
+    final branchMaps = m.branchMapsUrl?.trim();
+    final hasBranchMaps = branchMaps != null && branchMaps.isNotEmpty;
+    if (hasBranchMaps || hasDestination || hasOrigin) {
+      buttons.add(_ghost('Itinéraire', Icons.navigation_outlined, () {
+        if (branchMaps != null && branchMaps.isNotEmpty) {
+          _openRawUrl(branchMaps);
+        } else {
+          _openItinerary(origin, destination);
+        }
+      }));
     }
 
     final active = !['completed', 'failed', 'cancelled'].contains(s);
