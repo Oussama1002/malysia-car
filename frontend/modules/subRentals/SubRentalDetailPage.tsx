@@ -118,9 +118,16 @@ function ReturnPhotoSlot({ label, file, onPick, onClear }: {
   );
 }
 
+/** Date-heure locale courante au format 'yyyy-MM-ddTHH:mm' attendu par DateField. */
+function nowLocalIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ returned_at: new Date().toISOString().split('T')[0], odometer_km: '', fuel_level: '', condition_notes: '', damage_notes: '', extra_charges: '', signed_by_supplier: '' });
+  const [form, setForm] = useState({ returned_at: nowLocalIso(), odometer_km: '', fuel_level: '', condition_notes: '', damage_notes: '', extra_charges: '', signed_by_supplier: '' });
   const [err, setErr] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Partial<Record<ReturnPhotoKey, File>>>({});
   // Reader-document ids captured as soon as the OCR scanner ingests a file.
@@ -192,7 +199,7 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
         </div>
         <form
-          onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ ...form, odometer_km: form.odometer_km ? parseFloat(form.odometer_km) : undefined, extra_charges: form.extra_charges ? parseFloat(form.extra_charges) : undefined }); }}
+          onSubmit={(e) => { e.preventDefault(); setErr(null); mutation.mutate({ ...form, returned_at: nowLocalIso(), odometer_km: form.odometer_km ? parseFloat(form.odometer_km) : undefined, extra_charges: form.extra_charges ? parseFloat(form.extra_charges) : undefined }); }}
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
@@ -230,7 +237,7 @@ function ReturnModal({ contractId, onClose }: { contractId: string; onClose: () 
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={inp} value={form.returned_at} onChange={setField('returned_at')} required /></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">Date retour</label><DateField className={`${inp} bg-slate-100 text-slate-500 cursor-not-allowed`} value={form.returned_at} onChange={setField('returned_at')} withTime disabled required /></div>
               <div><label className="block text-xs font-semibold text-slate-500 mb-1">Kilométrage</label><input className={inp} type="number" min="0" value={form.odometer_km} onChange={set('odometer_km')} /></div>
               <div><label className="block text-xs font-semibold text-slate-500 mb-1">Niveau carburant</label><select className={inp} value={form.fuel_level} onChange={set('fuel_level')}><option value="">—</option><option value="empty">Vide</option><option value="quarter">1/4</option><option value="half">1/2</option><option value="three_quarters">3/4</option><option value="full">Plein</option></select></div>
               <div><label className="block text-xs font-semibold text-slate-500 mb-1">Frais supplémentaires</label><input className={inp} type="number" min="0" step="0.01" value={form.extra_charges} onChange={set('extra_charges')} /></div>
