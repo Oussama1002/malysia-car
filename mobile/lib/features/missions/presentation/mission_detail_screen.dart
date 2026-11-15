@@ -632,9 +632,13 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
   Future<void> _openMaps(String address) async {
     final uri = Uri.parse(
         'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    // On lance directement (comme partout ailleurs dans l'app) : sur la PWA
+    // Flutter-web `canLaunchUrl` renvoie `false` pour un https externe et le
+    // `await` casse le geste utilisateur → l'onglet est bloqué.
+    try {
+      await launchUrl(uri,
+          mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
+    } catch (_) {/* le navigateur a bloqué l'ouverture : on ignore */}
   }
 
   /// Ouvre l'itinéraire de la mission dans Google Maps. Avec une origine ET une
@@ -660,9 +664,10 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
         '&origin=${Uri.encodeComponent(orig)}'
         '&destination=${Uri.encodeComponent(dest)}'
         '&travelmode=driving');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    try {
+      await launchUrl(uri,
+          mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
+    } catch (_) {/* le navigateur a bloqué l'ouverture : on ignore */}
   }
 }
 
