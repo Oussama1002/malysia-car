@@ -100,12 +100,21 @@ export const AdminOpsView: React.FC = () => {
             {meta ? `${meta.total} mission(s)` : 'Chargement...'} — moniteur admin/gestionnaire
           </p>
         </div>
-        <button
-          className="df-btn df-btn--primary text-xs"
-          onClick={() => { setDrawerMode('create'); setSelectedId(null); }}
-        >
-          + Nouvelle mission
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className={`df-btn text-xs ${viewingArchived ? 'df-btn--primary' : 'df-btn--ghost'}`}
+            onClick={() => setFilters((f) => ({ ...f, archived: viewingArchived ? '' : '1', page: 1 }))}
+            title={viewingArchived ? 'Revenir aux missions actives' : 'Voir les missions archivées'}
+          >
+            {viewingArchived ? '← Missions actives' : 'Archivées'}
+          </button>
+          <button
+            className="df-btn df-btn--primary text-xs"
+            onClick={() => { setDrawerMode('create'); setSelectedId(null); }}
+          >
+            + Nouvelle mission
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -137,14 +146,6 @@ export const AdminOpsView: React.FC = () => {
           placeholder="Rechercher..."
           className="df-input text-xs"
         />
-        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600">
-          <input
-            type="checkbox"
-            checked={viewingArchived}
-            onChange={(e) => setFilters((f) => ({ ...f, archived: e.target.checked ? '1' : '', page: 1 }))}
-          />
-          Archivées
-        </label>
       </div>
 
       {actionError && (
