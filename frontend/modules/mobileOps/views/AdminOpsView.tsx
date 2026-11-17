@@ -49,10 +49,12 @@ export const AdminOpsView: React.FC = () => {
     status: string;
     mission_type: string;
     q: string;
+    archived: '' | '1';
     page: number;
-  }>({ status: '', mission_type: '', q: '', page: 1 });
+  }>({ status: '', mission_type: '', q: '', archived: '', page: 1 });
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const listQ = useQuery({
     queryKey: ['mobile-ops', 'admin', 'missions', filters],
@@ -61,6 +63,7 @@ export const AdminOpsView: React.FC = () => {
         status: filters.status || undefined,
         mission_type: filters.mission_type || undefined,
         q: filters.q || undefined,
+        archived: filters.archived || undefined,
         page: filters.page,
         per_page: 25,
       }),
@@ -69,6 +72,19 @@ export const AdminOpsView: React.FC = () => {
 
   const missions = listQ.data?.data ?? [];
   const meta = listQ.data?.meta;
+  const viewingArchived = filters.archived === '1';
+
+  const archiveMut = useMutation({
+    mutationFn: (id: string) => mobileOpsApi.adminArchiveMission(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mobile-ops'] }),
+    onError: (e) => setActionError(e instanceof Error ? e.message : 'Erreur lors de l\'archivage'),
+  });
+
+  const unarchiveMut = useMutation({
+    mutationFn: (id: string) => mobileOpsApi.adminUnarchiveMission(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mobile-ops'] }),
+    onError: (e) => setActionError(e instanceof Error ? e.message : 'Erreur lors du désarchivage'),
+  });
 
   const openDetail = (id: string) => {
     setSelectedId(id);
@@ -121,7 +137,19 @@ export const AdminOpsView: React.FC = () => {
           placeholder="Rechercher..."
           className="df-input text-xs"
         />
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600">
+          <input
+            type="checkbox"
+            checked={viewingArchived}
+            onChange={(e) => setFilters((f) => ({ ...f, archived: e.target.checked ? '1' : '', page: 1 }))}
+          />
+          Archivées
+        </label>
       </div>
+
+      {actionError && (
+        <div className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{actionError}</div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
@@ -135,14 +163,17 @@ export const AdminOpsView: React.FC = () => {
               <th className="px-3 py-2 text-left font-bold text-slate-600">Véhicule</th>
               <th className="px-3 py-2 text-left font-bold text-slate-600">Planifiée</th>
               <th className="px-3 py-2 text-left font-bold text-slate-600">Preuves</th>
+              <th className="px-3 py-2 text-right font-bold text-slate-600">Actions</th>
             </tr>
           </thead>
           <tbody>
             {listQ.isLoading && (
-              <tr><td colSpan={7} className="py-6 text-center text-slate-400">Chargement...</td></tr>
+              <tr><td colSpan={8} className="py-6 text-center text-slate-400">Chargement...</td></tr>
             )}
             {!listQ.isLoading && missions.length === 0 && (
-              <tr><td colSpan={7} className="py-6 text-center text-slate-400">Aucune mission trouvée</td></tr>
+              <tr><td colSpan={8} className="py-6 text-center text-slate-400">
+                {viewingArchived ? 'Aucune mission archivée' : 'Aucune mission trouvée'}
+              </td></tr>
             )}
             {missions.map((m) => (
               <tr
@@ -168,6 +199,32 @@ export const AdminOpsView: React.FC = () => {
                     {(m.inspections_count ?? 0) > 0 && <span className="text-indigo-500">{m.inspections_count} insp</span>}
                     {(m.issues_count ?? 0) > 0 && <span className="text-rose-500">{m.issues_count} pb</span>}
                   </div>
+                </td>
+                <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                  {viewingArchived ? (
+                    <button
+                      className="df-btn df-btn--ghost text-[11px]"
+                      disabled={unarchiveMut.isPending}
+                      onClick={() => { setActionError(null); unarchiveMut.mutate(m.id); }}
+                      title="Restaurer la mission dans la liste"
+                    >
+                      Désarchiver
+                    </button>
+                  ) : (
+                    <button
+                      className="df-btn df-btn--ghost text-[11px] text-amber-700"
+                      disabled={archiveMut.isPending}
+                      onClick={() => {
+                        if (confirm(`Archiver la mission ${m.mission_number ?? m.id.slice(0, 8)} ? Elle sera retirée de la liste (données conservées).`)) {
+                          setActionError(null);
+                          archiveMut.mutate(m.id);
+                        }
+                      }}
+                      title="Archiver la mission (retirée de la liste, données conservées)"
+                    >
+                      Archiver
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -246,6 +303,15 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
 
   const cancelMut = useMutation({
     mutationFn: () => mobileOpsApi.adminCancelMission(missionId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mobile-ops'] });
+      onClose();
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : 'Erreur'),
+  });
+
+  const archiveMut = useMutation({
+    mutationFn: () => mobileOpsApi.adminArchiveMission(missionId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['mobile-ops'] });
       onClose();
@@ -341,6 +407,26 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
                 disabled={cancelMut.isPending}
               >
                 Annuler la mission
+              </button>
+            )}
+
+            {/* Archive */}
+            {m.archived_at ? (
+              <div className="rounded-lg bg-slate-50 p-2 text-center text-[11px] text-slate-500">
+                Mission archivée{m.archived_at ? ` le ${formatDate(m.archived_at)}` : ''}
+              </div>
+            ) : (
+              <button
+                className="df-btn df-btn--ghost w-full text-xs text-amber-700"
+                onClick={() => {
+                  if (confirm('Archiver cette mission ? Elle sera retirée de la liste (données conservées).')) {
+                    setError(null);
+                    archiveMut.mutate();
+                  }
+                }}
+                disabled={archiveMut.isPending}
+              >
+                Archiver la mission
               </button>
             )}
 
