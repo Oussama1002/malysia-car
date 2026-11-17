@@ -23,6 +23,7 @@ class BranchResource extends JsonResource
             'country_code' => $b->country_code,
             'phone' => $b->phone,
             'email' => $b->email,
+            'google_maps_url' => $b->google_maps_url,
             'is_active' => (bool) $b->is_active,
             'users_count' => $this->whenCounted('users'),
             'created_at' => optional($b->created_at)->toAtomString(),

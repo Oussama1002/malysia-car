@@ -231,6 +231,7 @@ export interface Branch {
   country_code: string;
   phone: string | null;
   email: string | null;
+  google_maps_url?: string | null;
   is_active: boolean;
   users_count?: number;
   created_at?: string;

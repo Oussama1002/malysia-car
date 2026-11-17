@@ -24,6 +24,7 @@ class Branch extends Model
         'country_code',
         'phone',
         'email',
+        'google_maps_url',
         'is_active',
     ];
 

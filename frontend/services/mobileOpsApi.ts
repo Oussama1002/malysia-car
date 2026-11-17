@@ -64,6 +64,7 @@ export interface MobileOpsMissionDto {
   vehicle?: { id: string; registration_number: string } | null;
   assigned_agent?: { id: string; email: string } | null;
   client?: { id: string; customer_code: string; customer_type: string } | null;
+  branch?: { id: string; name: string; city?: string | null; google_maps_url?: string | null } | null;
   // Counts
   photos_count?: number;
   inspections_count?: number;

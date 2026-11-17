@@ -234,6 +234,7 @@ const BranchForm: React.FC<{
     country_code: branch?.country_code ?? 'MA',
     phone: branch?.phone ?? '',
     email: branch?.email ?? '',
+    google_maps_url: branch?.google_maps_url ?? '',
     is_active: branch?.is_active ?? true,
   });
 
@@ -310,6 +311,21 @@ const BranchForm: React.FC<{
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
           />
         </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
+          Lien Google Maps
+        </label>
+        <input
+          type="url"
+          className="df-input"
+          placeholder="https://maps.google.com/?q=..."
+          value={form.google_maps_url ?? ''}
+          onChange={(e) => setForm((f) => ({ ...f, google_maps_url: e.target.value }))}
+        />
+        <p className="mt-1 text-[11px] text-slate-400">
+          Utilisé par le bouton « Itinéraire » de l'application mobile des agents.
+        </p>
       </div>
       <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
         <input

@@ -504,6 +504,19 @@ const WorkflowTab: React.FC<{
         {m.notes && <InfoRow label="Notes" value={m.notes} />}
       </div>
 
+      {/* Itinéraire vers l'agence (lien Google Maps configuré sur l'agence) */}
+      {m.branch?.google_maps_url && (
+        <a
+          href={m.branch.google_maps_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="df-btn df-btn--ghost flex w-full items-center justify-center gap-2 py-3 text-sm font-bold text-indigo-700"
+        >
+          <span aria-hidden="true">📍</span>
+          Itinéraire vers l'agence{m.branch.name ? ` (${m.branch.name})` : ''}
+        </a>
+      )}
+
       {/* Action buttons */}
       <div className="flex flex-col gap-2">
         {(m.status === 'assigned' || m.status === 'pending') && (

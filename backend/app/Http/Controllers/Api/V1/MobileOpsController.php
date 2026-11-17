@@ -99,6 +99,7 @@ class MobileOpsController extends Controller
             'vehicle:id,registration_number',
             'assignedAgent:id,email',
             'client:id,customer_code,customer_type',
+            'branch:id,name,city,google_maps_url',
         ]);
 
         return ApiResponse::success($mission);

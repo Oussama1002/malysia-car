@@ -157,6 +157,11 @@ class Mission extends Model
         return $this->belongsTo(Reservation::class, 'reservation_id');
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

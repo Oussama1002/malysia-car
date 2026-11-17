@@ -22,6 +22,7 @@ class StoreBranchRequest extends FormRequest
             'country_code' => ['nullable', 'string', 'size:2'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
+            'google_maps_url' => ['nullable', 'string', 'url', 'max:1000'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
