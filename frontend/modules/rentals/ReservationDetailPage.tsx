@@ -41,13 +41,6 @@ const STATUS_FR: Record<string, string> = {
   cancelled:           'Annulé',
 };
 
-function statusTone(s: string): 'success' | 'danger' | 'brand' | 'info' | 'warning' {
-  if (s === 'closed') return 'success';
-  if (s === 'cancelled') return 'danger';
-  if (s === 'active' || s === 'handed_over') return 'brand';
-  if (s.includes('pending') || s === 'extension_requested') return 'warning';
-  return 'info';
-}
 
 const TABS = [
   { id: 'summary',    label: 'Résumé' },
@@ -96,6 +89,25 @@ export const ReservationDetailPage: React.FC = () => {
   const totals = d?.totals ?? { estimated_price: 0, extensions_total: 0, damages_total: 0, paid: 0 };
   const grandTotal = totals.estimated_price + totals.extensions_total + totals.damages_total;
   const balance = grandTotal - totals.paid;
+
+  // Statut affiché — vocabulaire métier simple, indépendant du statut interne
+  // (pickup_scheduled, handed_over…). Réservé par défaut ; Brouillon si draft ;
+  // Confirmé si un contrat est généré ; En cours si le contrat court sur la durée.
+  const displayStatus = ((): { label: string; tone: 'success' | 'danger' | 'brand' | 'info' | 'warning' } => {
+    if (status === 'cancelled') return { label: 'Annulé', tone: 'danger' };
+    if (status === 'closed') return { label: 'Clôturé', tone: 'success' };
+    if (status === 'returned') return { label: 'Retourné', tone: 'success' };
+    if (status === 'draft') return { label: 'Brouillon', tone: 'info' };
+    const now = Date.now();
+    const s = r?.desired_start_at ? new Date(r.desired_start_at).getTime() : NaN;
+    const e = r?.desired_end_at ? new Date(r.desired_end_at).getTime() : NaN;
+    const within = !Number.isNaN(s) && !Number.isNaN(e) && now >= s && now <= e;
+    if (d?.has_contract) {
+      if (within || status === 'active' || status === 'handed_over') return { label: 'En cours', tone: 'brand' };
+      return { label: 'Confirmé', tone: 'success' };
+    }
+    return { label: 'Réservé', tone: 'success' };
+  })();
 
   const validateM = useMutation({
     mutationFn: () => opsApi.validateReservation(rid!),
@@ -239,8 +251,8 @@ export const ReservationDetailPage: React.FC = () => {
               </span>
             ) : (
               <StatusBadge
-                label={STATUS_FR[status] ?? status}
-                tone={statusTone(status)}
+                label={displayStatus.label}
+                tone={displayStatus.tone}
               />
             )}
           </div>

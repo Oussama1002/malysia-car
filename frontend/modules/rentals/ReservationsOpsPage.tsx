@@ -81,6 +81,43 @@ const STATUS_FR: Record<string, string> = {
   cancelled:           'Annulé',
 };
 
+type BadgeTone = 'success' | 'danger' | 'brand' | 'info' | 'warning';
+
+/**
+ * Statut affiché d'une réservation — vocabulaire métier simple, indépendant du
+ * statut interne du backend (qui peut renvoyer pickup_scheduled, handed_over…).
+ *
+ *  - Brouillon            : réservation encore en intention (draft)
+ *  - Réservé (défaut)     : réservation validée, sans contrat
+ *  - Confirmé             : un contrat a été généré
+ *  - En cours             : contrat généré ET on est dans la durée de location
+ *  - Annulé / Clôturé / Retourné : états terminaux conservés
+ */
+function reservationDisplayStatus(r: {
+  status: string;
+  has_contract?: boolean;
+  desired_start_at?: string;
+  desired_end_at?: string;
+}): { label: string; tone: BadgeTone } {
+  if (r.status === 'cancelled') return { label: 'Annulé', tone: 'danger' };
+  if (r.status === 'closed') return { label: 'Clôturé', tone: 'success' };
+  if (r.status === 'returned') return { label: 'Retourné', tone: 'success' };
+  if (r.status === 'draft') return { label: 'Brouillon', tone: 'info' };
+
+  const now = Date.now();
+  const start = r.desired_start_at ? new Date(r.desired_start_at).getTime() : NaN;
+  const end = r.desired_end_at ? new Date(r.desired_end_at).getTime() : NaN;
+  const withinPeriod = !Number.isNaN(start) && !Number.isNaN(end) && now >= start && now <= end;
+
+  if (r.has_contract) {
+    if (withinPeriod || r.status === 'active' || r.status === 'handed_over') {
+      return { label: 'En cours', tone: 'brand' };
+    }
+    return { label: 'Confirmé', tone: 'success' };
+  }
+  return { label: 'Réservé', tone: 'success' };
+}
+
 export const ReservationsOpsPage: React.FC = () => {
   const nav = useNavigate();
   const location = useLocation();
@@ -825,8 +862,8 @@ export const ReservationsOpsPage: React.FC = () => {
                   </span>
                 ) : (
                   <StatusBadge
-                    label={STATUS_FR[r.status] ?? r.status}
-                    tone={r.status === 'closed' ? 'success' : r.status === 'cancelled' ? 'danger' : r.status === 'active' ? 'brand' : r.status === 'reserved' || r.status === 'confirmed' ? 'success' : 'info'}
+                    label={reservationDisplayStatus(r).label}
+                    tone={reservationDisplayStatus(r).tone}
                   />
                 )}
                 {r.status === 'draft' && (
@@ -849,7 +886,7 @@ export const ReservationsOpsPage: React.FC = () => {
                   </button>
                 )}
                 <button
-                  className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
+                  className="whitespace-nowrap shrink-0 rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition-colors"
                   onClick={(e) => { e.stopPropagation(); nav(`/reservations/${r.id}`); }}
                 >
                   Détail →
@@ -857,7 +894,7 @@ export const ReservationsOpsPage: React.FC = () => {
                 {!['cancelled', 'closed', 'draft'].includes(r.status) && !r.has_contract && (
                   <Link
                     to={`/contracts/new?from_reservation=${r.id}`}
-                    className="rounded-2xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
+                    className="whitespace-nowrap shrink-0 rounded-2xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-700 transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
                     Générer contrat
@@ -865,7 +902,7 @@ export const ReservationsOpsPage: React.FC = () => {
                 )}
                 {r.status !== 'draft' && (
                   <button
-                    className="rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
+                    className="whitespace-nowrap shrink-0 rounded-2xl bg-slate-900 px-4 py-2 text-xs font-black text-white"
                     onClick={(e) => { e.stopPropagation(); setMissionDrawerRes(r as ReservationDto); }}
                   >
                     Créer mission

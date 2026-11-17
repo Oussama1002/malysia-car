@@ -359,7 +359,7 @@ export const AdminOpsView: React.FC = () => {
                 >
                   Détails
                 </button>
-                {!viewingArchived && !TERMINAL_STATUSES.includes(m.status) && (
+                {viewingArchived && !TERMINAL_STATUSES.includes(m.status) && (
                   <button
                     type="button"
                     className="df-btn df-btn--ghost text-[11px] text-rose-600"
@@ -608,8 +608,8 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
               </div>
             )}
 
-            {/* Cancel */}
-            {!['completed', 'cancelled', 'failed'].includes(m.status) && (
+            {/* Cancel — seulement sur les missions archivées */}
+            {m.archived_at && !['completed', 'cancelled', 'failed'].includes(m.status) && (
               <button
                 className="df-btn df-btn--ghost w-full text-xs text-rose-600"
                 onClick={() => {
