@@ -59,6 +59,8 @@ export interface MobileOpsMissionDto {
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
+  archived_at?: string | null;
+  archived_by?: string | null;
   // Eager-loaded relations
   vehicle?: { id: string; registration_number: string; brand_name?: string | null; model_name?: string | null } | null;
   assigned_agent?: { id: string; email: string } | null;
@@ -362,6 +364,8 @@ export const mobileOpsApi = {
     date_from?: string;
     date_to?: string;
     q?: string;
+    /** '1' = archived only, 'all' = archived + active, omitted/'' = active only */
+    archived?: '1' | 'all' | '';
     per_page?: number;
     page?: number;
   }): Promise<{ data: MobileOpsMissionDto[]; meta?: PaginationMeta }> {
@@ -413,6 +417,20 @@ export const mobileOpsApi = {
     return apiClient<ApiResponseEnvelope<MobileOpsMissionDto>>(`/v1/mobile-ops/admin/missions/${missionId}/cancel`, {
       method: 'POST',
       body: JSON.stringify(notes ? { notes } : {}),
+    }).then((r) => r.data);
+  },
+
+  adminArchiveMission(missionId: string): Promise<MobileOpsMissionDto> {
+    return apiClient<ApiResponseEnvelope<MobileOpsMissionDto>>(`/v1/mobile-ops/admin/missions/${missionId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }).then((r) => r.data);
+  },
+
+  adminUnarchiveMission(missionId: string): Promise<MobileOpsMissionDto> {
+    return apiClient<ApiResponseEnvelope<MobileOpsMissionDto>>(`/v1/mobile-ops/admin/missions/${missionId}/unarchive`, {
+      method: 'POST',
+      body: JSON.stringify({}),
     }).then((r) => r.data);
   },
 

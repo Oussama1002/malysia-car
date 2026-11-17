@@ -142,8 +142,9 @@ export const AdminOpsView: React.FC = () => {
     status: string;
     mission_type: string;
     q: string;
+    archived: '' | '1';
     page: number;
-  }>({ status: '', mission_type: '', q: '', page: 1 });
+  }>({ status: '', mission_type: '', q: '', archived: '', page: 1 });
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -154,6 +155,7 @@ export const AdminOpsView: React.FC = () => {
         status: filters.status || undefined,
         mission_type: filters.mission_type || undefined,
         q: filters.q || undefined,
+        archived: filters.archived || undefined,
         page: filters.page,
         per_page: 25,
       }),
@@ -162,9 +164,20 @@ export const AdminOpsView: React.FC = () => {
 
   const missions = listQ.data?.data ?? [];
   const meta = listQ.data?.meta;
+  const viewingArchived = filters.archived === '1';
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => mobileOpsApi.adminCancelMission(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mobile-ops'] }),
+  });
+
+  const archiveMut = useMutation({
+    mutationFn: (id: string) => mobileOpsApi.adminArchiveMission(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mobile-ops'] }),
+  });
+
+  const unarchiveMut = useMutation({
+    mutationFn: (id: string) => mobileOpsApi.adminUnarchiveMission(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mobile-ops'] }),
   });
 
@@ -184,12 +197,21 @@ export const AdminOpsView: React.FC = () => {
             {meta ? `${meta.total} mission(s)` : 'Chargement…'}
           </p>
         </div>
-        <button
-          className="df-btn df-btn--primary text-xs"
-          onClick={() => { setDrawerMode('create'); setSelectedId(null); }}
-        >
-          + Nouvelle mission
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className={`df-btn text-xs ${viewingArchived ? 'df-btn--primary' : 'df-btn--ghost'}`}
+            onClick={() => setFilters((f) => ({ ...f, archived: viewingArchived ? '' : '1', page: 1 }))}
+            title={viewingArchived ? 'Revenir aux missions actives' : 'Voir les missions archivées'}
+          >
+            {viewingArchived ? '← Missions actives' : 'Archivées'}
+          </button>
+          <button
+            className="df-btn df-btn--primary text-xs"
+            onClick={() => { setDrawerMode('create'); setSelectedId(null); }}
+          >
+            + Nouvelle mission
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -337,7 +359,7 @@ export const AdminOpsView: React.FC = () => {
                 >
                   Détails
                 </button>
-                {!TERMINAL_STATUSES.includes(m.status) && (
+                {!viewingArchived && !TERMINAL_STATUSES.includes(m.status) && (
                   <button
                     type="button"
                     className="df-btn df-btn--ghost text-[11px] text-rose-600"
@@ -347,6 +369,31 @@ export const AdminOpsView: React.FC = () => {
                     }}
                   >
                     Annuler
+                  </button>
+                )}
+                {viewingArchived ? (
+                  <button
+                    type="button"
+                    className="df-btn df-btn--ghost text-[11px]"
+                    disabled={unarchiveMut.isPending}
+                    onClick={() => unarchiveMut.mutate(m.id)}
+                    title="Restaurer la mission dans la liste"
+                  >
+                    Désarchiver
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="df-btn df-btn--ghost text-[11px] text-amber-700"
+                    disabled={archiveMut.isPending}
+                    onClick={() => {
+                      if (confirm(`Archiver la mission ${m.mission_number ?? m.id.slice(0, 8)} ? Elle sera retirée de la liste (données conservées).`)) {
+                        archiveMut.mutate(m.id);
+                      }
+                    }}
+                    title="Archiver la mission (retirée de la liste, données conservées)"
+                  >
+                    Archiver
                   </button>
                 )}
               </div>
@@ -438,6 +485,15 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
 
   const cancelMut = useMutation({
     mutationFn: () => mobileOpsApi.adminCancelMission(missionId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mobile-ops'] });
+      onClose();
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : 'Erreur'),
+  });
+
+  const archiveMut = useMutation({
+    mutationFn: () => mobileOpsApi.adminArchiveMission(missionId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['mobile-ops'] });
       onClose();
@@ -565,6 +621,26 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
                 disabled={cancelMut.isPending}
               >
                 Annuler la mission
+              </button>
+            )}
+
+            {/* Archive */}
+            {m.archived_at ? (
+              <div className="rounded-lg bg-slate-50 p-2 text-center text-[11px] text-slate-500">
+                Mission archivée{m.archived_at ? ` le ${formatDate(m.archived_at)}` : ''}
+              </div>
+            ) : (
+              <button
+                className="df-btn df-btn--ghost w-full text-xs text-amber-700"
+                onClick={() => {
+                  if (confirm('Archiver cette mission ? Elle sera retirée de la liste (données conservées).')) {
+                    setError(null);
+                    archiveMut.mutate();
+                  }
+                }}
+                disabled={archiveMut.isPending}
+              >
+                Archiver la mission
               </button>
             )}
 

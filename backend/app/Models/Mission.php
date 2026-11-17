@@ -49,6 +49,8 @@ class Mission extends Model
         'notes',
         'client_instructions',
         'created_by',
+        'archived_at',
+        'archived_by',
     ];
 
     protected $casts = [
@@ -60,6 +62,7 @@ class Mission extends Model
         'actual_start_at' => 'datetime',
         'arrived_at' => 'datetime',
         'actual_end_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -93,6 +96,23 @@ class Mission extends Model
         }
 
         return $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    // ── Scopes ───────────────────────────────────────────────────────────
+
+    public function scopeNotArchived($query)
+    {
+        return $query->whereNull('archived_at');
+    }
+
+    public function scopeArchived($query)
+    {
+        return $query->whereNotNull('archived_at');
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
     }
 
     // ── Relationships ────────────────────────────────────────────────────

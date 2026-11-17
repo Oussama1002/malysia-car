@@ -626,6 +626,10 @@ Route::prefix('v1')->group(function () {
                 ->middleware('permission:missions.start');
             Route::post('mobile-ops/admin/missions/{mission}/cancel', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'cancel'])
                 ->middleware('permission:missions.complete');
+            Route::post('mobile-ops/admin/missions/{mission}/archive', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'archive'])
+                ->middleware('permission:missions.complete');
+            Route::post('mobile-ops/admin/missions/{mission}/unarchive', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'unarchive'])
+                ->middleware('permission:missions.complete');
             Route::get('mobile-ops/admin/missions/{mission}/proof', [\App\Http\Controllers\Api\V1\FieldOpsAdminController::class, 'proof'])
                 ->middleware('permission:missions.view');
         });

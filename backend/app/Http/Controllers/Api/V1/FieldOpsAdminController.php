@@ -112,6 +112,16 @@ class FieldOpsAdminController extends Controller
             });
         }
 
+        // Archived missions are hidden from the monitoring list by default so the
+        // table stays clean. Pass ?archived=1 to review archived missions only,
+        // or ?archived=all to show both.
+        $archived = (string) $request->query('archived', '');
+        if ($archived === '1' || $archived === 'true') {
+            $query->archived();
+        } elseif ($archived !== 'all') {
+            $query->notArchived();
+        }
+
         $per = min(100, max(1, (int) $request->query('per_page', 25)));
         $page = $query->paginate($per);
 
@@ -256,6 +266,67 @@ class FieldOpsAdminController extends Controller
             $this->notifyAgent($mission, 'mission_cancelled', 'Mission annulée',
                 "Mission {$mission->mission_number} a été annulée.");
         }
+
+        return ApiResponse::success($mission);
+    }
+
+    /**
+     * POST /api/v1/mobile-ops/admin/missions/{mission}/archive
+     *
+     * Soft-archive a mission: it is removed from the monitoring list but all
+     * data (photos, inspections, signatures, issues, audit trail) is preserved.
+     * Reversible via the unarchive endpoint.
+     */
+    public function archive(Request $request, Mission $mission): JsonResponse
+    {
+        if ($mission->isArchived()) {
+            return ApiResponse::error('Cette mission est déjà archivée.', 422);
+        }
+
+        $user = $request->user();
+        $mission->archived_at = now();
+        $mission->archived_by = $user?->id;
+        $mission->save();
+
+        AuditLogger::record(
+            action: 'archived',
+            user: $user,
+            entityType: Mission::class,
+            entityId: $mission->id,
+            after: ['archived_at' => $mission->archived_at?->toIso8601String()],
+            module: 'mobile_ops',
+            request: $request,
+            label: 'Mission archivée',
+        );
+
+        return ApiResponse::success($mission);
+    }
+
+    /**
+     * POST /api/v1/mobile-ops/admin/missions/{mission}/unarchive
+     *
+     * Restore a previously archived mission back into the monitoring list.
+     */
+    public function unarchive(Request $request, Mission $mission): JsonResponse
+    {
+        if (! $mission->isArchived()) {
+            return ApiResponse::error('Cette mission n\'est pas archivée.', 422);
+        }
+
+        $user = $request->user();
+        $mission->archived_at = null;
+        $mission->archived_by = null;
+        $mission->save();
+
+        AuditLogger::record(
+            action: 'unarchived',
+            user: $user,
+            entityType: Mission::class,
+            entityId: $mission->id,
+            module: 'mobile_ops',
+            request: $request,
+            label: 'Mission désarchivée',
+        );
 
         return ApiResponse::success($mission);
     }
