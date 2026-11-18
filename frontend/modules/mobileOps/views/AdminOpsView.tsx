@@ -11,6 +11,7 @@ import { formatDate, formatDateTime } from '@/modules/shared/formatters';
 import { DateField } from '@/modules/shared/components/DateField';
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
+import { Modal } from '@/modules/shared/components/Modal';
 
 // Statut → ton du badge standard de l'app (comme les autres modules).
 const STATUS_BADGE_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -147,6 +148,8 @@ export const AdminOpsView: React.FC = () => {
   }>({ status: '', mission_type: '', q: '', archived: '', page: 1 });
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Mission currently targeted by the quick "Assigner" popup (list of all users).
+  const [assignMission, setAssignMission] = useState<MobileOpsMissionDto | null>(null);
 
   const listQ = useQuery({
     queryKey: ['mobile-ops', 'admin', 'missions', filters],
@@ -363,6 +366,16 @@ export const AdminOpsView: React.FC = () => {
             header: 'Actions',
             render: (m) => (
               <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                {!viewingArchived && !['completed', 'cancelled', 'failed'].includes(m.status) && (
+                  <button
+                    type="button"
+                    className="df-btn df-btn--primary text-[11px]"
+                    onClick={() => setAssignMission(m)}
+                    title="Assigner / réassigner un agent"
+                  >
+                    {m.assigned_agent ? 'Réassigner' : 'Assigner'}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="df-btn df-btn--ghost text-[11px]"
@@ -450,7 +463,111 @@ export const AdminOpsView: React.FC = () => {
           onClose={() => { setDrawerMode(null); qc.invalidateQueries({ queryKey: ['mobile-ops'] }); }}
         />
       )}
+
+      {/* Popup « Assigner » : liste de tous les utilisateurs/agents */}
+      <AssignMissionModal
+        mission={assignMission}
+        onClose={() => setAssignMission(null)}
+        onAssigned={() => { setAssignMission(null); qc.invalidateQueries({ queryKey: ['mobile-ops'] }); }}
+      />
     </div>
+  );
+};
+
+// ── Assign popup : choose from all users ────────────────────────────
+
+const AssignMissionModal: React.FC<{
+  mission: MobileOpsMissionDto | null;
+  onClose: () => void;
+  onAssigned: () => void;
+}> = ({ mission, onClose, onAssigned }) => {
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset the search box each time the popup opens on a new mission.
+  useEffect(() => { setSearch(''); setError(null); }, [mission?.id]);
+
+  const agentsQ = useQuery({
+    queryKey: ['mobile-ops', 'admin', 'agents'],
+    queryFn: () => mobileOpsApi.adminListAgents(),
+    enabled: !!mission,
+  });
+
+  const assignMut = useMutation({
+    mutationFn: (userId: string) => mobileOpsApi.adminAssignMission(mission!.id, userId),
+    onSuccess: () => onAssigned(),
+    onError: (e) => setError(e instanceof Error ? e.message : "Échec de l'affectation."),
+  });
+
+  const currentAgentId = mission?.assigned_user_id ?? mission?.assigned_agent?.id ?? '';
+
+  const term = search.trim().toLowerCase();
+  const users = (agentsQ.data ?? []).filter((u) => {
+    if (!term) return true;
+    return (
+      (u.name ?? '').toLowerCase().includes(term) ||
+      (u.email ?? '').toLowerCase().includes(term) ||
+      (u.role ?? '').toLowerCase().includes(term)
+    );
+  });
+
+  return (
+    <Modal
+      open={!!mission}
+      title={mission ? `Assigner — ${mission.mission_number ?? mission.id.slice(0, 8)}` : 'Assigner'}
+      onClose={onClose}
+      widthClass="max-w-md"
+    >
+      {error && <div className="mb-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Rechercher un utilisateur (nom, email, rôle)…"
+        className="df-input mb-3 w-full text-sm"
+        autoFocus
+      />
+
+      {agentsQ.isLoading && <div className="py-6 text-center text-sm text-slate-400">Chargement des utilisateurs…</div>}
+      {agentsQ.isError && <div className="py-6 text-center text-sm text-rose-600">Erreur de chargement des utilisateurs.</div>}
+      {agentsQ.data && users.length === 0 && (
+        <div className="py-6 text-center text-sm text-slate-400">Aucun utilisateur ne correspond.</div>
+      )}
+
+      <div className="max-h-[50vh] space-y-1 overflow-y-auto">
+        {users.map((u) => {
+          const isCurrent = u.id === currentAgentId;
+          return (
+            <button
+              key={u.id}
+              type="button"
+              disabled={assignMut.isPending}
+              onClick={() => { setError(null); assignMut.mutate(u.id); }}
+              className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-50 ${
+                isCurrent ? 'border-indigo-300 bg-indigo-50' : 'border-slate-100 hover:bg-slate-50'
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-bold text-slate-900">{u.name || u.email || u.id.slice(0, 8)}</div>
+                <div className="truncate text-xs text-slate-500">
+                  {u.email}{u.role ? `${u.email ? ' · ' : ''}${u.role}` : ''}
+                </div>
+              </div>
+              {isCurrent ? (
+                <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-black text-white">
+                  Assigné
+                </span>
+              ) : (
+                <span className="shrink-0 text-xs font-bold text-indigo-600">
+                  {assignMut.isPending && assignMut.variables === u.id ? '…' : 'Choisir'}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
   );
 };
 
