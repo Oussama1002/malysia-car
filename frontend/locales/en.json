@@ -9,7 +9,8 @@
       "operations": "Operations",
       "finance": "Finance & risk",
       "intelligence": "Intelligence",
-      "system": "System"
+      "system": "System",
+      "settings": "Settings"
     },
     "dashboard": "Executive cockpit",
     "fleet": "Fleet",
@@ -33,6 +34,13 @@
     "documents": "Document center",
     "documentReader": "Document Reader (OCR)",
     "settings": "Settings",
+    "settingsOverview": "Overview",
+    "settingsUsers": "Users",
+    "settingsRoles": "Roles & permissions",
+    "settingsBranches": "Branches",
+    "settingsVehicles": "Makes & models",
+    "settingsParameters": "General settings",
+    "settingsIntegrations": "Integrations",
     "audit": "Audit trail",
     "rentals": "Reservations / Rentals",
     "websiteLeads": "Website requests"

@@ -65,7 +65,24 @@ export const GROUPS: NavGroup[] = [
       { to: '/notifications', module: 'notifications', labelKey: 'nav.notifications', icon: 'bell' },
       { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'folder' },
       { to: '/audit', module: 'audit', labelKey: 'nav.audit', icon: 'audit' },
-      { to: '/settings', module: 'settings', labelKey: 'nav.settings', icon: 'gear' },
+    ],
+  },
+  {
+    // Paramètres is a dropdown group so every admin surface (utilisateurs,
+    // rôles, agences, véhicules, réglages, intégrations) is reachable from the
+    // sidebar without going through the hub page. All items share the
+    // `settings` module, so role access gating stays identical to before.
+    key: 'settings',
+    labelKey: 'nav.group.settings',
+    icon: 'gear',
+    items: [
+      { to: '/settings', module: 'settings', labelKey: 'nav.settingsOverview', icon: 'home' },
+      { to: '/settings/users', module: 'settings', labelKey: 'nav.settingsUsers', icon: 'users' },
+      { to: '/settings/roles', module: 'settings', labelKey: 'nav.settingsRoles', icon: 'shield' },
+      { to: '/settings/branches', module: 'settings', labelKey: 'nav.settingsBranches', icon: 'marketplace' },
+      { to: '/settings/vehicles', module: 'settings', labelKey: 'nav.settingsVehicles', icon: 'car' },
+      { to: '/settings/parameters', module: 'settings', labelKey: 'nav.settingsParameters', icon: 'gear' },
+      { to: '/settings/integrations', module: 'settings', labelKey: 'nav.settingsIntegrations', icon: 'bolt' },
     ],
   },
 ];

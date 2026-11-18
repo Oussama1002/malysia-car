@@ -9,7 +9,8 @@
       "operations": "العمليات",
       "finance": "المالية والمخاطر",
       "intelligence": "الذكاء",
-      "system": "النظام"
+      "system": "النظام",
+      "settings": "الإعدادات"
     },
     "dashboard": "قمرة القيادة التنفيذية",
     "fleet": "الأسطول",
@@ -30,6 +31,13 @@
     "documents": "مركز المستندات",
     "documentReader": "قارئ المستندات (OCR)",
     "settings": "الإعدادات",
+    "settingsOverview": "نظرة عامة",
+    "settingsUsers": "المستخدمون",
+    "settingsRoles": "الأدوار والصلاحيات",
+    "settingsBranches": "الوكالات",
+    "settingsVehicles": "الماركات والطُرز",
+    "settingsParameters": "الإعدادات العامة",
+    "settingsIntegrations": "التكاملات",
     "audit": "التدقيق",
     "rentals": "تأجير قصير الأجل",
     "websiteLeads": "طلبات الموقع"
