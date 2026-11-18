@@ -855,7 +855,7 @@ export const ReservationsOpsPage: React.FC = () => {
                   {new Date(r.desired_start_at).toLocaleString('fr-MA')} → {new Date(r.desired_end_at).toLocaleString('fr-MA')}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 md:gap-3">
                 {r.status === 'draft' ? (
                   <span className="inline-flex items-center gap-1 rounded-full border-2 border-dashed border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-700">
                     ⏳ Intention · Non validée
