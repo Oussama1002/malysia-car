@@ -78,14 +78,19 @@ class ComplianceAlertService
 
     private function openAlert(Vehicle $vehicle, string $type, string $severity, string $title, string $description, ?string $dueDate, array $payload): void
     {
-        // Name the vehicle in every alert: plate on the title (quick scanning
-        // in the list) and the full identity appended to the description.
+        // Name the vehicle in every alert: matricule + marque/modèle on the
+        // title (e.g. "Assurance manquante · 12345-A-6 (Renault Clio)") and the
+        // same identity appended to the description.
         $plate = trim((string) ($vehicle->registration_number ?? ''));
+        $brand = trim((string) ($vehicle->brand_name ?? ''));
+        $model = trim((string) ($vehicle->model_name ?? ''));
         $label = $this->vehicleLabel($vehicle);
-        $title = $plate !== '' ? "{$title} · {$plate}" : $title;
+        $title = $label !== '' ? "{$title} · {$label}" : $title;
         $description = $label !== '' ? rtrim($description, '. ') . " (véhicule {$label})." : $description;
         $payload = array_merge($payload, array_filter([
             'vehicle_registration' => $plate !== '' ? $plate : null,
+            'vehicle_brand' => $brand !== '' ? $brand : null,
+            'vehicle_model' => $model !== '' ? $model : null,
             'vehicle_label' => $label !== '' ? $label : null,
         ]));
 
