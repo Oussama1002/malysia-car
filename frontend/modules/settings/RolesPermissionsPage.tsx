@@ -25,7 +25,44 @@ const MODULE_HELP: Record<string, string> = {
   settings: 'Administration de la plateforme et configuration.',
   audit: 'Historique, traces et conformité.',
   gps: 'Géolocalisation, alertes et suivi des trajets.',
+  admin: 'Utilisateurs, rôles, agences et administration de la plateforme.',
+  ai: 'Analyses, anomalies et prédictions par intelligence artificielle.',
+  arrears: 'Recouvrement, relances et dossiers juridiques.',
+  credit: 'Demandes de crédit, scoring et décisions.',
+  dashboard: 'Tableaux de bord et indicateurs de pilotage.',
+  documents: 'Consultation, génération et gestion des documents.',
+  mobile_ops: 'Missions terrain, livraisons et opérations mobiles.',
+  notifications: 'Notifications et alertes envoyées aux utilisateurs.',
+  used_cars: "Véhicules d'occasion : annonces, évaluations et ventes.",
 };
+
+/** French display name for each permission module (titles on /settings/roles). */
+const MODULE_LABEL: Record<string, string> = {
+  admin: 'Administration',
+  ai: 'Intelligence artificielle',
+  arrears: 'Recouvrement & juridique',
+  accounting: 'Comptabilité',
+  audit: 'Audit & traçabilité',
+  contracts: 'Contrats',
+  credit: 'Crédit',
+  customers: 'Clients',
+  dashboard: 'Tableau de bord',
+  documents: 'Documents',
+  finance: 'Finance',
+  fleet: 'Flotte',
+  gps: 'GPS & géolocalisation',
+  mobile_ops: 'Opérations mobiles',
+  notifications: 'Notifications',
+  settings: 'Paramètres',
+  used_cars: "Véhicules d'occasion",
+};
+
+/** Fallback: turn an unmapped snake_case module key into a readable label. */
+function moduleLabel(key: string): string {
+  if (MODULE_LABEL[key]) return MODULE_LABEL[key];
+  const spaced = key.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 const PERM_VERB_FR: Record<string, string> = {
   view: 'Consulter', create: 'Créer', update: 'Modifier', edit: 'Modifier',
@@ -326,7 +363,7 @@ export const RolesPermissionsPage: React.FC = () => {
                         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-4 py-2">
                           <div>
                             <span className="text-xs font-black uppercase tracking-wider text-slate-700">
-                              {module}
+                              {moduleLabel(module)}
                             </span>
                             <p className="mt-0.5 text-[11px] text-slate-500">
                               {MODULE_HELP[module] ?? 'Permissions fonctionnelles de ce module.'}
