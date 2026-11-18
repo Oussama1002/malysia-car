@@ -169,6 +169,7 @@ export const AdminOpsView: React.FC = () => {
   const cancelMut = useMutation({
     mutationFn: (id: string) => mobileOpsApi.adminCancelMission(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mobile-ops'] }),
+    onError: (e) => alert(e instanceof Error ? e.message : "Impossible d'annuler cette mission."),
   });
 
   const archiveMut = useMutation({
@@ -185,8 +186,6 @@ export const AdminOpsView: React.FC = () => {
     setSelectedId(id);
     setDrawerMode('detail');
   };
-
-  const TERMINAL_STATUSES = ['completed', 'cancelled', 'failed'];
 
   return (
     <div className="space-y-4">
@@ -359,7 +358,7 @@ export const AdminOpsView: React.FC = () => {
                 >
                   Détails
                 </button>
-                {viewingArchived && !TERMINAL_STATUSES.includes(m.status) && (
+                {viewingArchived && m.status !== 'cancelled' && (
                   <button
                     type="button"
                     className="df-btn df-btn--ghost text-[11px] text-rose-600"
@@ -609,7 +608,7 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
             )}
 
             {/* Cancel — seulement sur les missions archivées */}
-            {m.archived_at && !['completed', 'cancelled', 'failed'].includes(m.status) && (
+            {m.archived_at && m.status !== 'cancelled' && (
               <button
                 className="df-btn df-btn--ghost w-full text-xs text-rose-600"
                 onClick={() => {
