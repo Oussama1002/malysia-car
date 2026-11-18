@@ -215,15 +215,15 @@ const ScanSlot: React.FC<{
         } ${loading || disabled ? 'pointer-events-none opacity-70' : ''}`}
       >
         <div className="text-slate-700">Glisser-déposer ou</div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col items-stretch gap-1.5">
           <button type="button" disabled={loading || disabled}
             onClick={() => { onSourceChosen?.('file'); inputRef.current?.click(); }}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+            className="w-full rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
             Choisir
           </button>
           <button type="button" disabled={loading || disabled}
             onClick={() => { onSourceChosen?.('camera'); cameraRef.current?.click(); }}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-50">
             Photo
           </button>
         </div>
