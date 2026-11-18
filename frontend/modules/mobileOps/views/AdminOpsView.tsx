@@ -277,7 +277,12 @@ export const AdminOpsView: React.FC = () => {
           {
             key: 'client',
             header: 'Client',
-            render: (m) => <span className="font-semibold text-slate-700">{clientLabel(m.client)}</span>,
+            render: (m) => {
+              if (!m.client && m.auto_source_type === 'sub_rental') {
+                return <span className="font-semibold text-slate-500">Sous-location</span>;
+              }
+              return <span className="font-semibold text-slate-700">{clientLabel(m.client)}</span>;
+            },
           },
           {
             key: 'reservation',
@@ -296,12 +301,19 @@ export const AdminOpsView: React.FC = () => {
           {
             key: 'contract',
             header: 'Contrat',
-            render: (m) =>
-              m.contract?.contract_number ? (
-                <span className="font-mono text-xs text-slate-700">{m.contract.contract_number}</span>
-              ) : (
-                <span className="text-slate-300">—</span>
-              ),
+            render: (m) => {
+              if (m.contract?.contract_number) {
+                return <span className="font-mono text-xs text-slate-700">{m.contract.contract_number}</span>;
+              }
+              if (m.auto_source_type === 'sub_rental' && m.auto_source_id) {
+                return (
+                  <Link to={`/fleet/sub-rentals/${m.auto_source_id}`} className="font-semibold text-xs text-indigo-600 hover:underline">
+                    Voir le contrat
+                  </Link>
+                );
+              }
+              return <span className="text-slate-300">—</span>;
+            },
           },
           {
             key: 'agent',
