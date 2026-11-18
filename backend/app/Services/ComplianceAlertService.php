@@ -67,9 +67,9 @@ class ComplianceAlertService
 
     public function syncAll(): void
     {
-        // Load the identity columns too (registration / brand / model) so the
-        // generated alerts can name the vehicle, not just its id.
-        Vehicle::query()->chunk(200, function ($vehicles): void {
+        // Eager-load the brand/model relations so alerts can name the vehicle
+        // even when the denormalized brand_name/model_name columns are empty.
+        Vehicle::query()->with(['brand', 'model'])->chunk(200, function ($vehicles): void {
             foreach ($vehicles as $vehicle) {
                 $this->syncVehicle($vehicle);
             }
@@ -82,8 +82,8 @@ class ComplianceAlertService
         // title (e.g. "Assurance manquante · 12345-A-6 (Renault Clio)") and the
         // same identity appended to the description.
         $plate = trim((string) ($vehicle->registration_number ?? ''));
-        $brand = trim((string) ($vehicle->brand_name ?? ''));
-        $model = trim((string) ($vehicle->model_name ?? ''));
+        $brand = $this->vehicleBrand($vehicle);
+        $model = $this->vehicleModel($vehicle);
         $label = $this->vehicleLabel($vehicle);
         $title = $label !== '' ? "{$title} · {$label}" : $title;
         $description = $label !== '' ? rtrim($description, '. ') . " (véhicule {$label})." : $description;
@@ -130,8 +130,8 @@ class ComplianceAlertService
     {
         $plate = trim((string) ($vehicle->registration_number ?? ''));
         $makeModel = trim(implode(' ', array_filter([
-            trim((string) ($vehicle->brand_name ?? '')),
-            trim((string) ($vehicle->model_name ?? '')),
+            $this->vehicleBrand($vehicle),
+            $this->vehicleModel($vehicle),
         ])));
 
         if ($plate !== '' && $makeModel !== '') {
@@ -139,5 +139,17 @@ class ComplianceAlertService
         }
 
         return $plate !== '' ? $plate : $makeModel;
+    }
+
+    /** Brand from the relation first, then the denormalized column. */
+    private function vehicleBrand(Vehicle $vehicle): string
+    {
+        return trim((string) ($vehicle->brand?->name ?? $vehicle->brand_name ?? ''));
+    }
+
+    /** Model from the relation first, then the denormalized column. */
+    private function vehicleModel(Vehicle $vehicle): string
+    {
+        return trim((string) ($vehicle->model?->model_name ?? $vehicle->model?->name ?? $vehicle->model_name ?? ''));
     }
 }
