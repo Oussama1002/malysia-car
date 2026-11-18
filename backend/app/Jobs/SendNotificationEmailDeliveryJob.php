@@ -88,7 +88,7 @@ class SendNotificationEmailDeliveryJob implements ShouldQueue
     private function resolveActionUrl(Notification $notification): ?string
     {
         if ($notification->link_url) {
-            $frontend = rtrim((string) env('FRONTEND_URL', ''), '/');
+            $frontend = rtrim((string) config('app.frontend_url', ''), '/');
             $path = ltrim((string) $notification->link_url, '/');
 
             return $frontend !== '' ? $frontend.'/'.$path : $notification->link_url;

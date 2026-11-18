@@ -174,12 +174,16 @@ class SubRentalService
                 'created_by'             => $userId,
             ]);
 
-            // Update vehicle status
+            // Update vehicle status. The vehicle belongs to the supplier, not
+            // us — once returned it stays 'sub_rented' (never 'owned', which
+            // would miscount it as a company asset in FleetAnalysisService and
+            // drop it from sub-rental reporting) and becomes unavailable so it
+            // can no longer be picked for a new rental.
             if ($contract->vehicle_id) {
                 Vehicle::whereKey($contract->vehicle_id)->update([
-                    'ownership_status'    => 'owned',
+                    'ownership_status'    => 'sub_rented',
                     'availability_status' => 'unavailable',
-                    'status'              => 'available',
+                    'status'              => 'unavailable',
                 ]);
             }
 

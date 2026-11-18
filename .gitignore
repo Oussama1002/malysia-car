@@ -1,0 +1,8 @@
+# Claude Code local worktrees — never commit these (see AGENTS.md "No worktrees")
+.claude/worktrees/
+
+# Build artifacts / release bundles
+*.zip
+
+# Stray tinker / shell-redirect artifacts (e.g. "count())", "toArray())")
+*))
