@@ -67,8 +67,11 @@ class SubRentalService
                 ]);
             }
 
-            // Auto-create the "collect from supplier" mission (idempotent).
-            app(MissionAutomationService::class)->forSubRentalPickup($contract);
+            // Auto-create the field missions: collect from supplier (start) and
+            // the planned return to supplier (end). Both idempotent.
+            $automation = app(MissionAutomationService::class);
+            $automation->forSubRentalPickup($contract);
+            $automation->forSubRentalScheduledReturn($contract);
 
             return $contract;
         });
@@ -120,9 +123,11 @@ class SubRentalService
                 'vehicle_id'   => $contract->vehicle_id,
             ]);
 
-            // Ensure the "collect from supplier" mission exists (idempotent —
-            // no duplicate if it was already created at contract creation).
-            app(MissionAutomationService::class)->forSubRentalPickup($contract);
+            // Ensure the pickup + planned-return missions exist (idempotent —
+            // no duplicate if they were already created at contract creation).
+            $automation = app(MissionAutomationService::class);
+            $automation->forSubRentalPickup($contract);
+            $automation->forSubRentalScheduledReturn($contract);
 
             return $contract->fresh(['vehicle', 'supplierAgency']);
         });

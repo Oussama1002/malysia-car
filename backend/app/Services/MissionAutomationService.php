@@ -119,10 +119,28 @@ class MissionAutomationService
     }
 
     /**
+     * A sub-rental was created/activated → schedule the return-to-supplier
+     * mission on the contract end date, so an active sub-rental already shows
+     * its planned return (idempotent with the actual return below).
+     */
+    public function forSubRentalScheduledReturn(SubRentalContract $contract): void
+    {
+        if (! $contract->end_date) {
+            return;
+        }
+        $this->makeSubRentalReturnMission($contract, $contract->end_date, 'Retour véhicule au fournisseur (prévu)');
+    }
+
+    /**
      * A sub-rental is being returned to the supplier → a mission to bring the
-     * vehicle back to the supplier agency.
+     * vehicle back to the supplier agency (same mission as the scheduled one).
      */
     public function forSubRentalReturn(SubRentalContract $contract): void
+    {
+        $this->makeSubRentalReturnMission($contract, $contract->returned_at ?? now(), 'Retour véhicule au fournisseur');
+    }
+
+    private function makeSubRentalReturnMission(SubRentalContract $contract, $when, string $noteBase): void
     {
         $agency = $contract->supplierAgency;
         $address = $this->agencyAddress($contract);
@@ -131,11 +149,11 @@ class MissionAutomationService
             'company_id' => $contract->company_id,
             'branch_id' => $contract->branch_id,
             'vehicle_id' => $contract->vehicle_id,
-            'scheduled_start_at' => $contract->returned_at ?? now(),
-            'planned_at' => $contract->returned_at ?? now(),
+            'scheduled_start_at' => $when,
+            'planned_at' => $when,
             'destination_address' => $address,
             'dropoff_address' => $address,
-            'notes' => 'Retour véhicule au fournisseur'
+            'notes' => $noteBase
                 . ($agency ? " — {$agency->name}" : '')
                 . ($contract->contract_number ? " (SL {$contract->contract_number})" : ''),
         ]);
