@@ -61,6 +61,9 @@ export interface MobileOpsMissionDto {
   updated_at?: string;
   archived_at?: string | null;
   archived_by?: string | null;
+  // Provenance of an auto-generated mission (e.g. 'reservation', 'sub_rental')
+  auto_source_type?: string | null;
+  auto_source_id?: string | null;
   // Eager-loaded relations
   vehicle?: { id: string; registration_number: string; brand_name?: string | null; model_name?: string | null } | null;
   assigned_agent?: { id: string; email: string } | null;

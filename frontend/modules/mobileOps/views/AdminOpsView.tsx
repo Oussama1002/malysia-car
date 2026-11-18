@@ -564,7 +564,18 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
                   )
                 }
               />
-              <InfoCell label="Contrat" value={m.contract?.contract_number ?? 'Pas encore généré'} />
+              {m.auto_source_type === 'sub_rental' && m.auto_source_id ? (
+                <InfoCell
+                  label="Sous-location"
+                  value={
+                    <Link to={`/fleet/sub-rentals/${m.auto_source_id}`} className="font-semibold text-indigo-600 hover:underline">
+                      Voir le contrat
+                    </Link>
+                  }
+                />
+              ) : (
+                <InfoCell label="Contrat" value={m.contract?.contract_number ?? 'Pas encore généré'} />
+              )}
               <InfoCell label="Planifiée" value={m.planned_at ? formatDate(m.planned_at) : '—'} />
               <InfoCell label="Départ" value={m.pickup_address ?? m.origin_address ?? '—'} />
               <InfoCell label="Arrivée" value={m.dropoff_address ?? m.destination_address ?? '—'} />
