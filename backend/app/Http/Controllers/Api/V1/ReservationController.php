@@ -217,6 +217,11 @@ class ReservationController extends Controller
         $initialStatus = $isDraft ? 'draft' : 'reserved';
         AuditLogger::statusChanged($r, 'new', $initialStatus, $request->user(), $request, module: 'rentals');
 
+        // Firm booking → auto-create delivery (start) + pickup (end) missions.
+        if ($initialStatus === 'reserved') {
+            app(\App\Services\MissionAutomationService::class)->forReservationReserved($r);
+        }
+
         // Auto-create primary driver from customer
         try {
             $customer = \App\Models\Customer::with(['individualProfile', 'contacts'])->find($data['customer_id']);
@@ -329,6 +334,9 @@ class ReservationController extends Controller
 
             $locked->save();
             $this->transitionReservation($locked, 'reserved', $request);
+
+            // Firm booking → auto-create delivery (start) + pickup (end) missions.
+            app(\App\Services\MissionAutomationService::class)->forReservationReserved($locked);
         });
 
         // Notify that reservation is now confirmed

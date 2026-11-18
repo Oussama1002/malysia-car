@@ -67,6 +67,9 @@ class SubRentalService
                 ]);
             }
 
+            // Auto-create the "collect from supplier" mission (idempotent).
+            app(MissionAutomationService::class)->forSubRentalPickup($contract);
+
             return $contract;
         });
     }
@@ -116,6 +119,10 @@ class SubRentalService
                 'activated_at' => now(),
                 'vehicle_id'   => $contract->vehicle_id,
             ]);
+
+            // Ensure the "collect from supplier" mission exists (idempotent —
+            // no duplicate if it was already created at contract creation).
+            app(MissionAutomationService::class)->forSubRentalPickup($contract);
 
             return $contract->fresh(['vehicle', 'supplierAgency']);
         });
@@ -176,6 +183,9 @@ class SubRentalService
                 'returned_by' => $userId,
                 'returned_at' => now(),
             ]);
+
+            // Auto-create the "return to supplier" mission (idempotent).
+            app(MissionAutomationService::class)->forSubRentalReturn($contract->fresh());
 
             return $contract->fresh(['returnReport', 'vehicle']);
         });

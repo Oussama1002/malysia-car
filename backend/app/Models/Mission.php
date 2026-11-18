@@ -49,6 +49,8 @@ class Mission extends Model
         'notes',
         'client_instructions',
         'created_by',
+        'auto_source_type',
+        'auto_source_id',
         'archived_at',
         'archived_by',
     ];
