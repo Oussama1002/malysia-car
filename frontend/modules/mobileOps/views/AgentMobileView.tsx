@@ -5,6 +5,7 @@ import { formatDate } from '@/modules/shared/formatters';
 import { SignaturePad } from '../components/SignaturePad';
 import { VehicleInspectionForm } from '../components/VehicleInspectionForm';
 import { IssueReportForm } from '../components/IssueReportForm';
+import { missionTypeLabel } from '@/modules/mobileOps/missionTypes';
 
 // ── Label maps ───────────────────────────────────────────────────────
 
@@ -28,15 +29,6 @@ const STATUS_TONE: Record<string, string> = {
   completed: 'bg-emerald-100 text-emerald-800',
   cancelled: 'bg-slate-200 text-slate-600',
   failed: 'bg-rose-100 text-rose-800',
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  delivery: 'Livraison',
-  pickup: 'Récupération',
-  check_in: 'Check-in',
-  check_out: 'Check-out',
-  inspection: 'Inspection',
-  assistance: 'Assistance',
 };
 
 const PHOTO_PHASES = [
@@ -137,7 +129,7 @@ const MissionCard: React.FC<{ mission: MobileOpsMissionDto; onSelect: () => void
       <div className="flex items-start justify-between">
         <div>
           <div className="font-mono text-[10px] text-slate-400">{m.mission_number ?? m.id.slice(0, 8)}</div>
-          <div className="text-sm font-bold text-slate-900">{TYPE_LABEL[m.mission_type] ?? m.mission_type}</div>
+          <div className="text-sm font-bold text-slate-900">{missionTypeLabel(m)}</div>
         </div>
         <span className={`rounded-lg px-2 py-0.5 text-[10px] font-black uppercase ${STATUS_TONE[m.status] ?? 'bg-slate-100'}`}>
           {STATUS_LABEL[m.status] ?? m.status}
@@ -267,7 +259,7 @@ const MissionWorkflow: React.FC<{ missionId: string; onBack: () => void }> = ({ 
         <button onClick={onBack} className="text-xs font-bold text-indigo-600">&larr; Retour</button>
         <div className="flex-1">
           <div className="font-mono text-[10px] text-slate-400">{m.mission_number ?? m.id.slice(0, 8)}</div>
-          <div className="text-lg font-black text-slate-900">{TYPE_LABEL[m.mission_type] ?? m.mission_type}</div>
+          <div className="text-lg font-black text-slate-900">{missionTypeLabel(m)}</div>
         </div>
         <span className={`rounded-lg px-2.5 py-1 text-xs font-black uppercase ${STATUS_TONE[m.status]}`}>
           {STATUS_LABEL[m.status] ?? m.status}
@@ -493,7 +485,7 @@ const WorkflowTab: React.FC<{
 
       {/* Mission info */}
       <div className="rounded-2xl border border-slate-100 bg-white p-4 space-y-2 text-sm">
-        <InfoRow label="Type" value={TYPE_LABEL[m.mission_type] ?? m.mission_type} />
+        <InfoRow label="Type" value={missionTypeLabel(m)} />
         {m.vehicle && <InfoRow label="Véhicule" value={m.vehicle.registration_number} />}
         {m.client && <InfoRow label="Client" value={`${m.client.customer_code} (${m.client.customer_type})`} />}
         {(m.pickup_address || m.origin_address) && <InfoRow label="Adresse départ" value={(m.pickup_address ?? m.origin_address)!} />}

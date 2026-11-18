@@ -12,6 +12,7 @@ import { DateField } from '@/modules/shared/components/DateField';
 import { DataTable } from '@/modules/shared/components/DataTable';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { Modal } from '@/modules/shared/components/Modal';
+import { MISSION_TYPE_LABEL as TYPE_LABEL, missionTypeLabel } from '@/modules/mobileOps/missionTypes';
 
 // Statut → ton du badge standard de l'app (comme les autres modules).
 const STATUS_BADGE_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -40,20 +41,9 @@ const STATUS_LABEL: Record<string, string> = {
   failed: 'Échec',
 };
 
-const TYPE_LABEL: Record<string, string> = {
-  delivery: 'Livraison',
-  pickup: 'Récupération',
-  transfer: 'Transfert',
-  convoy: 'Convoyage',
-  check_in: 'État des lieux (entrée)',
-  check_out: 'État des lieux (sortie)',
-  inspection: 'Inspection',
-  cleaning: 'Nettoyage',
-  workshop: 'Atelier',
-  fuel: 'Carburant',
-  assistance: 'Assistance',
-  other: 'Autre',
-};
+// TYPE_LABEL (the generic per-code map, used by the filter + create dropdowns)
+// and missionTypeLabel (context-aware, for displaying a specific mission) are
+// imported from ../missionTypes so every mission surface stays in sync.
 
 const ISSUE_TYPE_LABEL: Record<string, string> = {
   vehicle_damage: 'Dommage véhicule',
@@ -268,7 +258,7 @@ export const AdminOpsView: React.FC = () => {
           {
             key: 'type',
             header: 'Type',
-            render: (m) => <StatusBadge label={TYPE_LABEL[m.mission_type] ?? labelize(m.mission_type)} tone="info" />,
+            render: (m) => <StatusBadge label={missionTypeLabel(m)} tone="info" />,
           },
           {
             key: 'status',
@@ -638,7 +628,7 @@ const AdminMissionDrawer: React.FC<{ missionId: string; onClose: () => void }> =
         <div className="flex items-start justify-between">
           <div>
             <div className="font-mono text-xs text-slate-500">{m?.mission_number ?? missionId.slice(0, 8)}</div>
-            <h2 className="text-lg font-black">{m ? (TYPE_LABEL[m.mission_type] ?? labelize(m.mission_type)) : '…'}</h2>
+            <h2 className="text-lg font-black">{m ? missionTypeLabel(m) : '…'}</h2>
             {m && (
               <span className="mt-1 inline-block">
                 <StatusBadge label={STATUS_LABEL[m.status] ?? labelize(m.status)} tone={STATUS_BADGE_TONE[m.status] ?? 'default'} />

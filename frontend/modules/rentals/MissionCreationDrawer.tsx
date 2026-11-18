@@ -50,14 +50,14 @@ export interface MissionCreationDrawerProps {
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const MISSION_TYPES = [
-  { value: 'delivery', label: 'Livraison' },
-  { value: 'pickup', label: 'Récupération' },
-  { value: 'transfer', label: 'Transfert' },
+  { value: 'delivery', label: 'Livraison au client' },
+  { value: 'pickup', label: 'Récupération véhicule' },
+  { value: 'transfer', label: 'Transfert véhicule' },
   { value: 'convoy', label: 'Convoyage' },
-  { value: 'inspection', label: 'Inspection' },
-  { value: 'cleaning', label: 'Nettoyage' },
-  { value: 'workshop', label: 'Atelier' },
-  { value: 'fuel', label: 'Carburant' },
+  { value: 'inspection', label: 'Inspection véhicule' },
+  { value: 'cleaning', label: 'Nettoyage véhicule' },
+  { value: 'workshop', label: 'Atelier / réparation' },
+  { value: 'fuel', label: 'Carburant / plein' },
   { value: 'other', label: 'Autre' },
 ];
 
