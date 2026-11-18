@@ -141,7 +141,11 @@ class FieldOpsAdminController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'mission_type' => ['required', 'string', 'in:delivery,pickup,check_in,check_out,inspection,assistance'],
+            // Keep this list in sync with the UI's TYPE_LABEL map (web
+            // AdminOpsView) so every type the "Nouvelle mission" form offers is
+            // actually accepted, and with the types the system auto-creates
+            // (e.g. 'transfer' for sub-rental returns).
+            'mission_type' => ['required', 'string', 'in:delivery,pickup,transfer,convoy,check_in,check_out,inspection,cleaning,workshop,fuel,assistance,other'],
             'vehicle_id' => ['nullable', 'uuid'],
             'client_id' => ['nullable', 'uuid'],
             'reservation_id' => ['nullable', 'uuid'],
