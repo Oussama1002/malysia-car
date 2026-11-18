@@ -67,7 +67,9 @@ class ComplianceAlertService
 
     public function syncAll(): void
     {
-        Vehicle::query()->select(['id'])->chunk(200, function ($vehicles): void {
+        // Load the identity columns too (registration / brand / model) so the
+        // generated alerts can name the vehicle, not just its id.
+        Vehicle::query()->chunk(200, function ($vehicles): void {
             foreach ($vehicles as $vehicle) {
                 $this->syncVehicle($vehicle);
             }
@@ -76,6 +78,17 @@ class ComplianceAlertService
 
     private function openAlert(Vehicle $vehicle, string $type, string $severity, string $title, string $description, ?string $dueDate, array $payload): void
     {
+        // Name the vehicle in every alert: plate on the title (quick scanning
+        // in the list) and the full identity appended to the description.
+        $plate = trim((string) ($vehicle->registration_number ?? ''));
+        $label = $this->vehicleLabel($vehicle);
+        $title = $plate !== '' ? "{$title} · {$plate}" : $title;
+        $description = $label !== '' ? rtrim($description, '. ') . " (véhicule {$label})." : $description;
+        $payload = array_merge($payload, array_filter([
+            'vehicle_registration' => $plate !== '' ? $plate : null,
+            'vehicle_label' => $label !== '' ? $label : null,
+        ]));
+
         $existing = ComplianceAlert::query()
             ->where('vehicle_id', $vehicle->id)
             ->where('alert_type', $type)
@@ -105,5 +118,21 @@ class ComplianceAlertService
             'payload' => $payload,
             'triggered_at' => now(),
         ]);
+    }
+
+    /** "12345-A-6 (Renault Clio)" — best available vehicle identity, or "". */
+    private function vehicleLabel(Vehicle $vehicle): string
+    {
+        $plate = trim((string) ($vehicle->registration_number ?? ''));
+        $makeModel = trim(implode(' ', array_filter([
+            trim((string) ($vehicle->brand_name ?? '')),
+            trim((string) ($vehicle->model_name ?? '')),
+        ])));
+
+        if ($plate !== '' && $makeModel !== '') {
+            return "{$plate} ({$makeModel})";
+        }
+
+        return $plate !== '' ? $plate : $makeModel;
     }
 }
