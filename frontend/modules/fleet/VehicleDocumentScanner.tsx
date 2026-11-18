@@ -197,7 +197,10 @@ const ScanSlot: React.FC<{
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-3 gap-2">
-      <div className="text-xs font-bold text-slate-700">{title}</div>
+      {/* Fixed-height title (fits up to two lines) so a longer title like
+          "Autorisation de circulation / Vignette" does not push this card's
+          drop zone below its siblings and break the row alignment. */}
+      <div className="flex h-8 items-start overflow-hidden text-xs font-bold leading-tight text-slate-700">{title}</div>
       {/* Fixed-height description block so drop zones align across cards.
           Must be a hard height (not min-h): a longer description would
           otherwise grow the block and shove this card's drop zone down,
