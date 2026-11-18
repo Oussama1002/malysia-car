@@ -54,20 +54,31 @@ class UserDto {
     return letters.isEmpty ? '?' : letters;
   }
 
-  /// Vrai si le compte est un agent terrain (missionnaire) et rien d'autre.
+  /// Vrai si le compte est un agent terrain (missionnaire / livraison) sans
+  /// rôle back-office : la vue mobile est alors restreinte aux missions.
   ///
-  /// On ne se fie pas uniquement à `role` : la colonne héritée côté backend
-  /// peut être restée sur une valeur par défaut (AGENT_COMMERCIAL) à la
-  /// création, alors que le seul rôle réellement assigné est MISSIONNAIRE.
-  /// Dans ce cas on se rabat sur la liste `roles` : si TOUS les rôles
-  /// assignés sont MISSIONNAIRE, on restreint quand même la vue mobile.
+  /// On agrège `role` ET la liste `roles`. Un agent terrain porte souvent, en
+  /// plus de son rôle réel, la valeur par défaut héritée côté backend
+  /// (AGENT_COMMERCIAL) : ce rôle par défaut NE doit pas à lui seul débloquer
+  /// la vue admin. On ne débloque la vue complète que si un vrai rôle
+  /// back-office (ADMIN, DIRECTEUR, GESTIONNAIRE_FLOTTE, …) est présent.
   bool get isMissionnaireOnly {
-    if ((role ?? '').toUpperCase() == 'MISSIONNAIRE') return true;
-    final codes = roles
-        .map((r) => r.code.toUpperCase())
-        .where((c) => c.isNotEmpty)
-        .toList();
-    return codes.isNotEmpty && codes.every((c) => c == 'MISSIONNAIRE');
+    final codes = <String>{
+      if ((role ?? '').trim().isNotEmpty) role!.trim().toUpperCase(),
+      ...roles.map((r) => r.code.trim().toUpperCase()).where((c) => c.isNotEmpty),
+    };
+    if (codes.isEmpty) return false;
+
+    const fieldRoles = {'MISSIONNAIRE', 'AGENT_LIVRAISON'};
+    const backOfficeRoles = {
+      'ADMIN', 'DIRECTEUR', 'GESTIONNAIRE_FLOTTE', 'COMPTABLE',
+      'CONTENTIEUX', 'ANALYSTE_CREDIT', 'ASSISTANT',
+    };
+
+    final hasFieldRole = codes.any(fieldRoles.contains);
+    final hasBackOfficeRole = codes.any(backOfficeRoles.contains);
+
+    return hasFieldRole && !hasBackOfficeRole;
   }
 
   UserBranchDto? get primaryBranch =>
