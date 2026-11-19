@@ -293,4 +293,139 @@ class UserController extends Controller
 
         return ApiResponse::success($rows);
     }
+
+    /**
+     * Retourne les permissions effectives de l'utilisateur, le catalogue
+     * complet, et le sous-ensemble fourni par ses rôles. Le front s'en sert
+     * pour cocher la liste d'accès dans le drawer « Accès ».
+     */
+    public function permissions(User $user, Request $request): JsonResponse
+    {
+        $all = \App\Models\Permission::query()
+            ->orderBy('module_name')
+            ->orderBy('code')
+            ->get(['id', 'code', 'module_name', 'action_name', 'description']);
+
+        $roleIds = $user->roles()->pluck('roles.id');
+        $fromRoles = $roleIds->isEmpty()
+            ? collect()
+            : \App\Models\Permission::query()
+                ->whereHas('roles', fn ($q) => $q->whereIn('roles.id', $roleIds))
+                ->pluck('code');
+
+        $isAdmin = ($user->role ?? null) === 'ADMIN'
+            || in_array('ADMIN', $user->roleCodes(), true);
+
+        $effective = $isAdmin
+            ? $all->pluck('code')->all()
+            : $user->permissionCodes();
+
+        $overrides = Schema::hasTable('user_permissions')
+            ? $user->userPermissions()->get(['permissions.code', 'user_permissions.effect'])
+            : collect();
+
+        return ApiResponse::success([
+            'available' => $all,
+            'role_codes' => $fromRoles->unique()->values()->all(),
+            'effective_codes' => array_values(array_unique($effective)),
+            'granted_codes' => $overrides->where('pivot.effect', 'grant')->pluck('code')->all(),
+            'revoked_codes' => $overrides->where('pivot.effect', 'revoke')->pluck('code')->all(),
+            'is_admin' => $isAdmin,
+        ]);
+    }
+
+    /**
+     * Synchronise la surcouche `user_permissions` à partir de la liste des
+     * codes effectifs envoyés par l'UI. Le contrôleur calcule le diff vs les
+     * permissions apportées par les rôles :
+     *   - codes présents dans effective_codes mais pas dans les rôles → grant
+     *   - codes absents d'effective_codes mais présents dans les rôles  → revoke
+     *   - sinon : aucune entrée (on retombe sur le rôle)
+     * Un ADMIN est intouchable côté permissions : son accès est total par
+     * construction du modèle, on refuse silencieusement.
+     */
+    public function syncPermissions(User $user, Request $request): JsonResponse
+    {
+        if (! Schema::hasTable('user_permissions')) {
+            return ApiResponse::success([], ['message' => 'Table user_permissions absente — migration manquante.'], null, 409);
+        }
+
+        $isAdmin = ($user->role ?? null) === 'ADMIN'
+            || in_array('ADMIN', $user->roleCodes(), true);
+        if ($isAdmin) {
+            return ApiResponse::success([], ['message' => 'ADMIN dispose de tous les accès — rien à synchroniser.']);
+        }
+
+        $data = $request->validate([
+            'effective_codes' => 'present|array',
+            'effective_codes.*' => 'string',
+        ]);
+
+        $allCodes = \App\Models\Permission::query()->pluck('id', 'code')->all();
+        $target = array_values(array_unique(array_intersect($data['effective_codes'], array_keys($allCodes))));
+
+        $roleIds = $user->roles()->pluck('roles.id');
+        $fromRoles = $roleIds->isEmpty()
+            ? []
+            : \App\Models\Permission::query()
+                ->whereHas('roles', fn ($q) => $q->whereIn('roles.id', $roleIds))
+                ->pluck('code')
+                ->unique()
+                ->values()
+                ->all();
+
+        $grants = array_values(array_diff($target, $fromRoles));
+        $revokes = array_values(array_diff($fromRoles, $target));
+
+        $before = $user->permissionCodes();
+
+        DB::transaction(function () use ($user, $grants, $revokes, $allCodes) {
+            DB::table('user_permissions')->where('user_id', $user->id)->delete();
+            $rows = [];
+            $now = now();
+            foreach ($grants as $code) {
+                if (isset($allCodes[$code])) {
+                    $rows[] = [
+                        'user_id' => $user->id,
+                        'permission_id' => $allCodes[$code],
+                        'effect' => 'grant',
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+            }
+            foreach ($revokes as $code) {
+                if (isset($allCodes[$code])) {
+                    $rows[] = [
+                        'user_id' => $user->id,
+                        'permission_id' => $allCodes[$code],
+                        'effect' => 'revoke',
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+            }
+            if ($rows) {
+                DB::table('user_permissions')->insert($rows);
+            }
+        });
+
+        $after = $user->fresh()->permissionCodes();
+
+        AuditLogger::updated(
+            $user,
+            $request->user(),
+            before: ['permission_codes' => $before],
+            after: ['permission_codes' => $after],
+            request: $request,
+            module: 'admin',
+            label: 'Permissions utilisateur synchronisées',
+        );
+
+        return ApiResponse::success([
+            'effective_codes' => $after,
+            'granted_codes' => $grants,
+            'revoked_codes' => $revokes,
+        ], ['message' => 'Accès mis à jour.']);
+    }
 }

@@ -7,15 +7,18 @@ import {
   createUser,
   deactivateUser,
   deleteUser,
+  getUserPermissions,
   listBranches,
   listRoles,
   listUsers,
   updateUser,
+  updateUserPermissions,
   userLoginHistory,
   type AdminUser,
   type Branch,
   type UserPayload,
   type LoginHistoryRow,
+  type UserPermissionCatalog,
 } from '@/services/adminApi';
 import { ApiError } from '@/services/apiError';
 import { DataTable } from '@/modules/shared/components/DataTable';
@@ -24,7 +27,7 @@ import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
 import { ConfirmModal } from '@/modules/shared/components/ConfirmModal';
 import { EmptyState } from '@/modules/shared/components/EmptyState';
 
-type Mode = 'create' | 'edit' | 'branches' | 'history' | null;
+type Mode = 'create' | 'edit' | 'branches' | 'history' | 'permissions' | null;
 
 export const UserManagementPage: React.FC = () => {
   const qc = useQueryClient();
@@ -121,6 +124,11 @@ export const UserManagementPage: React.FC = () => {
   const openHistory = (u: AdminUser) => {
     setSelected(u);
     setMode('history');
+  };
+  const openPermissions = (u: AdminUser) => {
+    setSelected(u);
+    setErrorMsg(null);
+    setMode('permissions');
   };
   const close = () => {
     setMode(null);
@@ -281,6 +289,12 @@ export const UserManagementPage: React.FC = () => {
                   Éditer
                 </button>
                 <button
+                  className="rounded-lg bg-indigo-50 px-2 py-1 text-indigo-700 hover:bg-indigo-100"
+                  onClick={() => openPermissions(r)}
+                >
+                  Accès
+                </button>
+                <button
                   className="rounded-lg bg-slate-100 px-2 py-1 hover:bg-slate-200"
                   onClick={() => openBranches(r)}
                 >
@@ -392,6 +406,23 @@ export const UserManagementPage: React.FC = () => {
         widthClass="max-w-xl"
       >
         {selected && <LoginHistoryList userId={selected.id} />}
+      </DrawerPanel>
+
+      <DrawerPanel
+        open={mode === 'permissions'}
+        title={`Accès — ${selected?.email ?? ''}`}
+        onClose={close}
+        widthClass="max-w-2xl"
+      >
+        {selected && (
+          <UserPermissionsForm
+            userId={selected.id}
+            userLabel={selected.first_name || selected.last_name
+              ? `${selected.first_name ?? ''} ${selected.last_name ?? ''}`.trim()
+              : selected.email}
+            onClose={close}
+          />
+        )}
       </DrawerPanel>
 
       <ConfirmModal
@@ -756,6 +787,227 @@ const LoginHistoryList: React.FC<{ userId: string }> = ({ userId }) => {
         </li>
       ))}
     </ul>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// User permissions form (per-user overrides on top of role bundle)
+// ---------------------------------------------------------------------------
+
+/**
+ * Affiche le catalogue complet des permissions regroupées par module, avec
+ * les cases cochées en fonction des permissions effectives de l'utilisateur
+ * (celles de son rôle + les grants côté user, moins les revokes côté user).
+ * L'admin peut rendre deux utilisateurs du même rôle différents sans créer
+ * un nouveau rôle : cocher ajoute un grant personnel, décocher une
+ * permission issue du rôle enregistre un revoke.
+ */
+const UserPermissionsForm: React.FC<{
+  userId: string;
+  userLabel: string;
+  onClose: () => void;
+}> = ({ userId, userLabel, onClose }) => {
+  const qc = useQueryClient();
+  const permsQ = useQuery({
+    queryKey: ['admin', 'user', userId, 'permissions'],
+    queryFn: () => getUserPermissions(userId),
+  });
+  const data: UserPermissionCatalog | undefined = permsQ.data?.data;
+
+  // Set local d'accès cochés. On n'initialise qu'une fois la donnée arrivée
+  // sinon on écraserait la sélection courante à chaque re-render.
+  const [effective, setEffective] = useState<Set<string> | null>(null);
+  const [filter, setFilter] = useState('');
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  // Initialisation à partir de la réponse serveur.
+  React.useEffect(() => {
+    if (data && effective === null) {
+      setEffective(new Set(data.effective_codes));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.effective_codes.join('|')]);
+
+  const saveMut = useMutation({
+    mutationFn: (codes: string[]) => updateUserPermissions(userId, codes),
+    onSuccess: (res) => {
+      setEffective(new Set(res.data.effective_codes));
+      setSaveMsg('Accès mis à jour.');
+      setErrMsg(null);
+      qc.invalidateQueries({ queryKey: ['admin', 'user', userId, 'permissions'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => {
+      setSaveMsg(null);
+      setErrMsg(err instanceof ApiError ? err.message : 'Erreur lors de la mise à jour.');
+    },
+  });
+
+  if (permsQ.isLoading || !data || effective === null) {
+    return <div className="text-sm text-slate-500">Chargement…</div>;
+  }
+
+  if (data.is_admin) {
+    return (
+      <div className="space-y-3">
+        <p className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800">
+          {userLabel} est <strong>Administrateur</strong> — tous les accès du catalogue
+          sont accordés automatiquement, aucune personnalisation possible.
+        </p>
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className="df-btn df-btn--ghost">Fermer</button>
+        </div>
+      </div>
+    );
+  }
+
+  const roleSet = new Set(data.role_codes);
+  const needle = filter.trim().toLowerCase();
+
+  // Regrouper par module_name (French label fallback au code).
+  const byModule: Record<string, UserPermissionCatalog['available']> = {};
+  for (const p of data.available) {
+    const mod = (p.module_name || 'autre').toLowerCase();
+    (byModule[mod] ||= []).push(p);
+  }
+  const modules = Object.keys(byModule).sort();
+
+  const toggle = (code: string) => {
+    setEffective((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+    setSaveMsg(null);
+  };
+
+  const resetToRole = () => {
+    setEffective(new Set(data.role_codes));
+    setSaveMsg(null);
+  };
+
+  const totalChanged = () => {
+    const a = new Set(data.effective_codes);
+    if (a.size !== effective.size) return true;
+    for (const c of effective) if (!a.has(c)) return true;
+    return false;
+  };
+
+  const grantedCount = Array.from(effective).filter((c) => !roleSet.has(c)).length;
+  const revokedCount = data.role_codes.filter((c) => !effective.has(c)).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <div><strong>Rôle :</strong> {data.role_codes.length} permission(s). <strong>Surcouche :</strong> +{grantedCount} ajoutée(s) · −{revokedCount} retirée(s).</div>
+        <div className="mt-1 text-[11px]">
+          Cochez pour accorder, décochez pour retirer. Les permissions issues du rôle sont marquées <span className="font-bold text-indigo-700">« Rôle »</span> ;
+          les ajouts personnels par <span className="font-bold text-emerald-700">« + »</span>. Un rôle peut rester le même pour deux utilisateurs
+          avec des accès différents.
+        </div>
+      </div>
+
+      {(saveMsg || errMsg) && (
+        <div
+          className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+            errMsg
+              ? 'border-rose-200 bg-rose-50 text-rose-800'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}
+        >
+          {errMsg ?? saveMsg}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className="df-input min-w-[240px] flex-1"
+          placeholder="Filtrer (code, module, description)…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <button type="button" onClick={resetToRole} className="df-btn df-btn--ghost df-btn--sm">
+          Revenir au rôle
+        </button>
+      </div>
+
+      <div className="max-h-[52vh] overflow-y-auto rounded-xl border border-slate-200">
+        {modules.map((mod) => {
+          const rows = byModule[mod].filter((p) => {
+            if (!needle) return true;
+            const hay = `${p.code} ${p.module_name ?? ''} ${p.action_name ?? ''} ${p.description ?? ''}`.toLowerCase();
+            return hay.includes(needle);
+          });
+          if (rows.length === 0) return null;
+          return (
+            <div key={mod} className="border-b border-slate-100 last:border-b-0">
+              <div className="bg-slate-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                {mod}
+              </div>
+              <ul className="divide-y divide-slate-100">
+                {rows.map((p) => {
+                  const on = effective.has(p.code);
+                  const fromRole = roleSet.has(p.code);
+                  return (
+                    <li key={p.id} className="flex items-start gap-3 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={on}
+                        onChange={() => toggle(p.code)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-slate-800">
+                            {p.description || p.action_name || p.code}
+                          </span>
+                          {fromRole ? (
+                            <span className="rounded-full bg-indigo-50 px-2 py-[1px] text-[10px] font-bold text-indigo-700">
+                              Rôle
+                            </span>
+                          ) : on ? (
+                            <span className="rounded-full bg-emerald-50 px-2 py-[1px] text-[10px] font-bold text-emerald-700">
+                              + Ajouté
+                            </span>
+                          ) : null}
+                          {fromRole && !on && (
+                            <span className="rounded-full bg-rose-50 px-2 py-[1px] text-[10px] font-bold text-rose-700">
+                              Retiré
+                            </span>
+                          )}
+                        </div>
+                        <div className="font-mono text-[11px] text-slate-500">{p.code}</div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="text-xs text-slate-500">
+          {effective.size} permission(s) effective(s).
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="df-btn df-btn--ghost">
+            Annuler
+          </button>
+          <button
+            type="button"
+            disabled={saveMut.isPending || !totalChanged()}
+            onClick={() => saveMut.mutate(Array.from(effective))}
+            className="df-btn df-btn--primary disabled:opacity-60"
+          >
+            {saveMut.isPending ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

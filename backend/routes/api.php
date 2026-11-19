@@ -1151,6 +1151,10 @@ Route::prefix('v1')->group(function () {
                 ->middleware('permission:users.assign_branches');
             Route::get('users/{user}/login-history', [UserController::class, 'loginHistory'])
                 ->middleware('permission:users.view_login_history');
+            Route::get('users/{user}/permissions', [UserController::class, 'permissions'])
+                ->middleware('permission:users.view');
+            Route::put('users/{user}/permissions', [UserController::class, 'syncPermissions'])
+                ->middleware('permission:roles.sync_permissions');
 
             Route::get('roles', [RoleController::class, 'index'])
                 ->middleware('permission:roles.view');

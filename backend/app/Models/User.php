@@ -114,6 +114,21 @@ class User extends Authenticatable
     }
 
     /**
+     * Surcouche par utilisateur au-dessus de ses rôles. Chaque pivot porte
+     * un `effect` : 'grant' pour ajouter la permission à cet utilisateur,
+     * 'revoke' pour la retirer même si son rôle la porte. Permet de
+     * personnaliser les accès sans multiplier les rôles (ex. deux
+     * Assistant(e)s avec des dérogations différentes).
+     *
+     * @return BelongsToMany<Permission, $this>
+     */
+    public function userPermissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class, 'user_permissions', 'user_id', 'permission_id')
+            ->withPivot(['effect']);
+    }
+
+    /**
      * @return HasMany<LoginHistory, $this>
      */
     public function loginHistory(): HasMany
@@ -147,39 +162,45 @@ class User extends Authenticatable
         if (in_array('ADMIN', $this->roleCodes(), true)) {
             return true;
         }
-        if (! Schema::hasTable('permissions')) {
-            return false;
-        }
-        $roleIds = $this->roles()->pluck('roles.id');
-        if ($roleIds->isEmpty()) {
-            return false;
-        }
 
-        return \App\Models\Permission::query()
-            ->whereHas('roles', fn ($q) => $q->whereIn('roles.id', $roleIds))
-            ->where('code', $code)
-            ->exists();
+        return in_array($code, $this->permissionCodes(), true);
     }
 
+    /**
+     * Permissions effectives : union des permissions portées par ses rôles,
+     * à laquelle on applique la surcouche `user_permissions` (`grant` ajoute,
+     * `revoke` retire). ADMIN garde tout le catalogue.
+     *
+     * @return array<int, string>
+     */
     public function permissionCodes(): array
     {
         if (! Schema::hasTable('permissions')) {
             return [];
         }
-        if (($this->attributes['role'] ?? null) === 'ADMIN') {
+        if (($this->attributes['role'] ?? null) === 'ADMIN'
+            || in_array('ADMIN', $this->roleCodes(), true)) {
             return \App\Models\Permission::query()->pluck('code')->all();
         }
         $roleIds = $this->roles()->pluck('roles.id');
-        if ($roleIds->isEmpty()) {
-            return [];
+        $fromRoles = $roleIds->isEmpty()
+            ? collect()
+            : \App\Models\Permission::query()
+                ->whereHas('roles', fn ($q) => $q->whereIn('roles.id', $roleIds))
+                ->pluck('code');
+
+        $effective = $fromRoles->unique()->values()->all();
+
+        if (Schema::hasTable('user_permissions')) {
+            $overrides = $this->userPermissions()
+                ->get(['permissions.code', 'user_permissions.effect']);
+            $granted = $overrides->where('pivot.effect', 'grant')->pluck('code')->all();
+            $revoked = $overrides->where('pivot.effect', 'revoke')->pluck('code')->all();
+            $effective = array_values(array_unique(array_merge($effective, $granted)));
+            $effective = array_values(array_diff($effective, $revoked));
         }
 
-        return \App\Models\Permission::query()
-            ->whereHas('roles', fn ($q) => $q->whereIn('roles.id', $roleIds))
-            ->pluck('code')
-            ->unique()
-            ->values()
-            ->all();
+        return $effective;
     }
 
     public function primaryRoleCode(): string

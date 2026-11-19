@@ -152,6 +152,38 @@ export async function userLoginHistory(id: string): Promise<{ data: LoginHistory
   return apiClient<{ data: LoginHistoryRow[] }>(`/v1/users/${id}/login-history`);
 }
 
+// ----------------------------------------------------------------------------
+// Per-user permission overrides (Accès drawer)
+// ----------------------------------------------------------------------------
+
+export interface UserPermissionCatalog {
+  available: {
+    id: number;
+    code: string;
+    module_name: string;
+    action_name: string;
+    description: string | null;
+  }[];
+  role_codes: string[];
+  effective_codes: string[];
+  granted_codes: string[];
+  revoked_codes: string[];
+  is_admin: boolean;
+}
+
+export async function getUserPermissions(id: string): Promise<{ data: UserPermissionCatalog }> {
+  return apiClient<{ data: UserPermissionCatalog }>(`/v1/users/${id}/permissions`);
+}
+
+export async function updateUserPermissions(id: string, effectiveCodes: string[]): Promise<{
+  data: { effective_codes: string[]; granted_codes: string[]; revoked_codes: string[] };
+}> {
+  return apiClient<{ data: { effective_codes: string[]; granted_codes: string[]; revoked_codes: string[] } }>(
+    `/v1/users/${id}/permissions`,
+    { method: 'PUT', body: JSON.stringify({ effective_codes: effectiveCodes }) },
+  );
+}
+
 // ============================================================================
 // Roles & Permissions
 // ============================================================================
