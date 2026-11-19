@@ -1,4 +1,4 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -15,8 +15,8 @@ import '../data/missions_repo.dart';
 
 const _brand = Color(0xFFB8933F);
 
-/// Fiche dÃ©tail d'une mission : toutes les infos + justificatifs (photos,
-/// Ã©tats des lieux, signatures, incidents) + gÃ©nÃ©ration de contrat. PoussÃ©e
+/// Fiche détail d'une mission : toutes les infos + justificatifs (photos,
+/// états des lieux, signatures, incidents) + génération de contrat. Poussée
 /// par Navigator (hors go_router) pour rester accessible au MISSIONNAIRE.
 class MissionDetailScreen extends ConsumerWidget {
   const MissionDetailScreen({super.key, required this.missionId});
@@ -27,10 +27,10 @@ class MissionDetailScreen extends ConsumerWidget {
     final async = ref.watch(missionDetailProvider(missionId));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('DÃ©tail mission'),
+        title: const Text('Détail mission'),
         actions: [
           IconButton(
-            tooltip: 'RafraÃ®chir',
+            tooltip: 'Rafraîchir',
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(missionDetailProvider(missionId)),
           ),
@@ -64,7 +64,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     ref.invalidate(myMissionsProvider);
   }
 
-  /// ExÃ©cute une transition. Hors-ligne â†’ on enfile l'action et on informe.
+  /// Exécute une transition. Hors-ligne → on enfile l'action et on informe.
   Future<void> _run(String action, Future<void> Function(MissionsRepo) call,
       String okMsg,
       {String? status, String? notes}) async {
@@ -84,7 +84,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
                 queuedAt: DateTime.now(),
               ),
             );
-        _snack('Hors-ligne : action enregistrÃ©e, elle partira Ã  la reconnexion.');
+        _snack('Hors-ligne : action enregistrée, elle partira à la reconnexion.');
       } else {
         _snack(friendlyError(e));
       }
@@ -114,12 +114,12 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
           const SizedBox(height: 12),
           _contractCard(),
           const SizedBox(height: 12),
-          // Ã€ partir d'ici toutes les sections de justificatifs sont des
-          // formulaires INLINE (photos, Ã©tats des lieux, signature client,
-          // incidents), Ã  la maniÃ¨re de l'Ã©tape Annexes du wizard
-          // Â« GÃ©nÃ©rer le contrat Â». Plus de bottom-sheet ni d'Ã©cran
-          // dÃ©diÃ© : le missionnaire voit les blocs existants et les champs
-          // de saisie du nouveau justificatif sur la mÃªme page.
+          // À partir d'ici toutes les sections de justificatifs sont des
+          // formulaires INLINE (photos, états des lieux, signature client,
+          // incidents), à la manière de l'étape Annexes du wizard
+          // « Générer le contrat ». Plus de bottom-sheet ni d'écran
+          // dédié : le missionnaire voit les blocs existants et les champs
+          // de saisie du nouveau justificatif sur la même page.
           _proofSection(
               'Photos', Icons.photo_camera_outlined, d.photos.length,
               child: Column(
@@ -133,13 +133,13 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
                       onBusy: (b) => setState(() => _busy = b),
                       onSaved: (count) {
                         _refresh();
-                        _snack('$count photo(s) ajoutÃ©e(s).');
+                        _snack('$count photo(s) ajoutée(s).');
                       },
                       onError: (msg) => _snack(msg)),
                 ],
               )),
           const SizedBox(height: 12),
-          _proofSection('Ã‰tats des lieux', Icons.fact_check_outlined,
+          _proofSection('États des lieux', Icons.fact_check_outlined,
               d.inspections.length,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,7 +152,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
                       onBusy: (b) => setState(() => _busy = b),
                       onSaved: () {
                         _refresh();
-                        _snack('Ã‰tat des lieux enregistrÃ©.');
+                        _snack('État des lieux enregistré.');
                       },
                       onError: (msg) => _snack(msg)),
                 ],
@@ -171,7 +171,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
                       onBusy: (b) => setState(() => _busy = b),
                       onSaved: () {
                         _refresh();
-                        _snack('Signature enregistrÃ©e.');
+                        _snack('Signature enregistrée.');
                       },
                       onError: (msg) => _snack(msg)),
                 ],
@@ -190,7 +190,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
                       onBusy: (b) => setState(() => _busy = b),
                       onSaved: () {
                         _refresh();
-                        _snack('Incident signalÃ©.');
+                        _snack('Incident signalé.');
                       },
                       onError: (msg) => _snack(msg)),
                 ],
@@ -202,7 +202,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     );
   }
 
-  // â”€â”€ Cartes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Cartes ────────────────────────────────────────────────────────────────
 
   Widget _headerCard() {
     return ModuleCard(
@@ -236,7 +236,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
             Row(children: [
               const Icon(Icons.flag_outlined, size: 15, color: Colors.black45),
               const SizedBox(width: 6),
-              Text('PrioritÃ© : ${missionPriorityFr(m.priority)}',
+              Text('Priorité : ${missionPriorityFr(m.priority)}',
                   style: const TextStyle(
                       fontSize: 12.5, fontWeight: FontWeight.w700)),
             ]),
@@ -253,19 +253,19 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
       rows.add(ModuleKV(label: label, value: value));
     }
 
-    kv('VÃ©hicule', m.vehicleLabel);
+    kv('Véhicule', m.vehicleLabel);
     kv('Client', m.clientLabel);
-    kv('DÃ©but prÃ©vu',
+    kv('Début prévu',
         m.scheduledStartAt != null ? _fmt.format(m.scheduledStartAt!) : null);
-    kv('Fin prÃ©vue',
+    kv('Fin prévue',
         m.scheduledEndAt != null ? _fmt.format(m.scheduledEndAt!) : null);
-    kv('DÃ©marrÃ©e le',
+    kv('Démarrée le',
         m.actualStartAt != null ? _fmt.format(m.actualStartAt!) : null);
-    kv('ArrivÃ© le', m.arrivedAt != null ? _fmt.format(m.arrivedAt!) : null);
-    kv('ClÃ´turÃ©e le',
+    kv('Arrivé le', m.arrivedAt != null ? _fmt.format(m.arrivedAt!) : null);
+    kv('Clôturée le',
         m.actualEndAt != null ? _fmt.format(m.actualEndAt!) : null);
-    kv('DÃ©part', m.pickupAddress ?? m.originAddress);
-    kv('ArrivÃ©e', m.dropoffAddress ?? m.destinationAddress);
+    kv('Départ', m.pickupAddress ?? m.originAddress);
+    kv('Arrivée', m.dropoffAddress ?? m.destinationAddress);
 
     return ModuleCard(
       child: Column(
@@ -275,7 +275,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
               style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
           const SizedBox(height: 8),
           if (rows.isEmpty)
-            const Text('â€”', style: TextStyle(color: Colors.black45))
+            const Text('—', style: TextStyle(color: Colors.black45))
           else
             ...rows,
           if ((m.clientInstructions ?? '').isNotEmpty) ...[
@@ -342,17 +342,17 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
             ),
           ] else if (m.canGenerateContract) ...[
             const Text(
-                'Aucun contrat rattachÃ©. GÃ©nÃ©rez-le depuis la rÃ©servation Ã  la remise du vÃ©hicule.',
+                'Aucun contrat rattaché. Générez-le depuis la réservation à la remise du véhicule.',
                 style: TextStyle(fontSize: 12.5, color: Colors.black54, height: 1.4)),
             const SizedBox(height: 10),
             FilledButton.icon(
-              // MÃªme architecture que le wizard "GÃ©nÃ©rer un contrat" depuis
-              // la rÃ©servation (web + mobile) : 6 Ã©tapes Client â†’ VÃ©hicule â†’
-              // Type â†’ Conditions â†’ Annexes â†’ Validation, prÃ©-remplies
-              // depuis la rÃ©servation attachÃ©e Ã  la mission. Le flux
-              // backend est strictement celui d'AGENTS.md Â§5.3
-              // (POST /contracts draft â†’ POST /payments â†’ activate
-              // best-effort â†’ POST /generate-pdf), gÃ©rÃ© par l'Ã©cran lui-mÃªme.
+              // Même architecture que le wizard "Générer un contrat" depuis
+              // la réservation (web + mobile) : 6 étapes Client → Véhicule →
+              // Type → Conditions → Annexes → Validation, pré-remplies
+              // depuis la réservation attachée à la mission. Le flux
+              // backend est strictement celui d'AGENTS.md §5.3
+              // (POST /contracts draft → POST /payments → activate
+              // best-effort → POST /generate-pdf), géré par l'écran lui-même.
               onPressed: _busy
                   ? null
                   : () => Navigator.of(context).push(MaterialPageRoute(
@@ -363,18 +363,18 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
               style: FilledButton.styleFrom(
                   backgroundColor: _brand, minimumSize: const Size.fromHeight(46)),
               icon: const Icon(Icons.add),
-              label: const Text('GÃ©nÃ©rer le contrat'),
+              label: const Text('Générer le contrat'),
             ),
           ] else
             const Text(
-                'Cette mission n\'est pas rattachÃ©e Ã  une rÃ©servation : pas de contrat Ã  gÃ©nÃ©rer ici.',
+                'Cette mission n\'est pas rattachée à une réservation : pas de contrat à générer ici.',
                 style: TextStyle(fontSize: 12.5, color: Colors.black45, height: 1.4)),
         ],
       ),
     );
   }
 
-  // â”€â”€ Sections justificatifs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Sections justificatifs ─────────────────────────────────────────────────
 
   Widget _proofSection(String title, IconData icon, int count,
       {required Widget child}) {
@@ -424,11 +424,11 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
   }
 
   Widget _inspectionsBody(MissionDetailDto d) {
-    if (d.inspections.isEmpty) return _emptyLine('Aucun Ã©tat des lieux.');
+    if (d.inspections.isEmpty) return _emptyLine('Aucun état des lieux.');
     String label(MissionInspectionDto i) {
-      final t = i.inspectionType == 'check_out' ? 'Sortie' : 'EntrÃ©e';
-      final km = i.odometerKm != null ? ' Â· ${i.odometerKm} km' : '';
-      final fuel = i.fuelLevel != null ? ' Â· ${i.fuelLevel}%' : '';
+      final t = i.inspectionType == 'check_out' ? 'Sortie' : 'Entrée';
+      final km = i.odometerKm != null ? ' · ${i.odometerKm} km' : '';
+      final fuel = i.fuelLevel != null ? ' · ${i.fuelLevel}%' : '';
       return '$t$km$fuel';
     }
 
@@ -453,14 +453,14 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
   }
 
   Widget _issuesBody(MissionDetailDto d) {
-    if (d.issues.isEmpty) return _emptyLine('Aucun incident signalÃ©.');
+    if (d.issues.isEmpty) return _emptyLine('Aucun incident signalé.');
     return Column(
       children: [
         for (final i in d.issues)
           _lineTile(
             i.isResolved ? Icons.check_circle_outline : Icons.report_problem_outlined,
             i.description ?? i.issueType ?? 'Incident',
-            i.isResolved ? 'RÃ©solu' : (i.severity ?? ''),
+            i.isResolved ? 'Résolu' : (i.severity ?? ''),
             danger: !i.isResolved && (i.severity == 'high' || i.severity == 'critical'),
           ),
       ],
@@ -495,34 +495,34 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     );
   }
 
-  // â”€â”€ Barre d'actions (cycle de vie) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Barre d'actions (cycle de vie) ──────────────────────────────────────────
 
   Widget _actionBar() {
     final buttons = <Widget>[];
     final s = m.status;
 
-    // Une seule action Â« suivante Â» proposÃ©e Ã  la fois (machine Ã  Ã©tats).
+    // Une seule action « suivante » proposée à la fois (machine à états).
     if (s == 'assigned' || s == 'pending') {
       buttons.add(_primary('Accepter la mission',
-          () => _run('accept', (r) => r.accept(m.id), 'Mission acceptÃ©e.')));
+          () => _run('accept', (r) => r.accept(m.id), 'Mission acceptée.')));
     } else if (s == 'accepted' || s == 'planned') {
-      buttons.add(_primary('DÃ©marrer',
-          () => _run('start', (r) => r.start(m.id), 'Mission dÃ©marrÃ©e.')));
+      buttons.add(_primary('Démarrer',
+          () => _run('start', (r) => r.start(m.id), 'Mission démarrée.')));
     } else if (s == 'in_progress') {
-      buttons.add(_primary('ArrivÃ© sur site',
-          () => _run('arrive', (r) => r.arrive(m.id), 'ArrivÃ©e enregistrÃ©e.')));
+      buttons.add(_primary('Arrivé sur site',
+          () => _run('arrive', (r) => r.arrive(m.id), 'Arrivée enregistrée.')));
     } else if (s == 'arrived') {
       buttons.add(_primary('Terminer la mission', _complete));
     }
 
-    // ItinÃ©raire complet tel que dÃ©fini dans l'ERP web : origine (dÃ©part) â†’
-    // destination (arrivÃ©e). On ouvre un vrai itinÃ©raire Google Maps avec les
+    // Itinéraire complet tel que défini dans l'ERP web : origine (départ) →
+    // destination (arrivée). On ouvre un vrai itinéraire Google Maps avec les
     // deux points quand ils sont connus ; sinon une simple recherche du point
     // disponible.
-    // Un seul bouton de navigation. On privilÃ©gie le lien Google Maps Ã©pinglÃ© de
-    // l'agence (ParamÃ¨tres â†’ Agences sur l'ERP web) : c'est le point exact.
-    // Sinon on retombe sur l'itinÃ©raire complet origine (dÃ©part) â†’ destination
-    // (arrivÃ©e) tel que dÃ©fini dans l'ERP web.
+    // Un seul bouton de navigation. On privilégie le lien Google Maps épinglé de
+    // l'agence (Paramètres → Agences sur l'ERP web) : c'est le point exact.
+    // Sinon on retombe sur l'itinéraire complet origine (départ) → destination
+    // (arrivée) tel que défini dans l'ERP web.
     final destination = m.dropoffAddress ?? m.destinationAddress;
     final origin = m.pickupAddress ?? m.originAddress;
     final hasDestination = destination != null && destination.trim().isNotEmpty;
@@ -530,7 +530,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     final branchMaps = m.branchMapsUrl?.trim();
     final hasBranchMaps = branchMaps != null && branchMaps.isNotEmpty;
     if (hasBranchMaps || hasDestination || hasOrigin) {
-      buttons.add(_ghost('ItinÃ©raire', Icons.navigation_outlined, () {
+      buttons.add(_ghost('Itinéraire', Icons.navigation_outlined, () {
         if (branchMaps != null && branchMaps.isNotEmpty) {
           _openRawUrl(branchMaps);
         } else {
@@ -541,7 +541,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
 
     final active = !['completed', 'failed', 'cancelled'].contains(s);
     if (active && (s == 'in_progress' || s == 'arrived')) {
-      buttons.add(_ghost('Marquer en Ã©chec', Icons.cancel_outlined,
+      buttons.add(_ghost('Marquer en échec', Icons.cancel_outlined,
           () => _complete(fail: true),
           danger: true));
     }
@@ -576,26 +576,26 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
         ),
       );
 
-  // â”€â”€ Dialogues / sheets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Dialogues / sheets ──────────────────────────────────────────────────────
 
   Future<void> _complete({bool fail = false}) async {
     final notesCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(fail ? 'Marquer en Ã©chec ?' : 'Terminer la mission ?'),
+        title: Text(fail ? 'Marquer en échec ?' : 'Terminer la mission ?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(fail
-                ? 'La mission sera clÃ´turÃ©e comme Ã©chouÃ©e.'
-                : 'Confirmez la clÃ´ture de la mission.'),
+                ? 'La mission sera clôturée comme échouée.'
+                : 'Confirmez la clôture de la mission.'),
             const SizedBox(height: 12),
             TextField(
               controller: notesCtrl,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: fail ? 'Motif de l\'Ã©chec (recommandÃ©)' : 'Notes (facultatif)',
+                hintText: fail ? 'Motif de l\'échec (recommandé)' : 'Notes (facultatif)',
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -609,7 +609,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
             style: FilledButton.styleFrom(
                 backgroundColor: fail ? Colors.red : _brand),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(fail ? 'Marquer Ã©chec' : 'Terminer'),
+            child: Text(fail ? 'Marquer échec' : 'Terminer'),
           ),
         ],
       ),
@@ -620,7 +620,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     await _run(
       'complete',
       (r) => r.complete(m.id, status: status, notes: notes.isEmpty ? null : notes),
-      fail ? 'Mission marquÃ©e en Ã©chec.' : 'Mission terminÃ©e.',
+      fail ? 'Mission marquée en échec.' : 'Mission terminée.',
       status: status,
       notes: notes.isEmpty ? null : notes,
     );
@@ -631,14 +631,14 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
         'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}');
     // On lance directement (comme partout ailleurs dans l'app) : sur la PWA
     // Flutter-web `canLaunchUrl` renvoie `false` pour un https externe et le
-    // `await` casse le geste utilisateur â†’ l'onglet est bloquÃ©.
+    // `await` casse le geste utilisateur → l'onglet est bloqué.
     try {
       await launchUrl(uri,
           mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
-    } catch (_) {/* le navigateur a bloquÃ© l'ouverture : on ignore */}
+    } catch (_) {/* le navigateur a bloqué l'ouverture : on ignore */}
   }
 
-  /// Ouvre un lien tel quel (ex. le lien Google Maps Ã©pinglÃ© de l'agence). On
+  /// Ouvre un lien tel quel (ex. le lien Google Maps épinglé de l'agence). On
   /// lance directement, sans `canLaunchUrl`, pour ne pas casser le geste
   /// utilisateur sur la PWA Flutter-web.
   Future<void> _openRawUrl(String url) async {
@@ -647,11 +647,11 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     try {
       await launchUrl(uri,
           mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
-    } catch (_) {/* le navigateur a bloquÃ© l'ouverture : on ignore */}
+    } catch (_) {/* le navigateur a bloqué l'ouverture : on ignore */}
   }
 
-  /// Ouvre l'itinÃ©raire de la mission dans Google Maps. Avec une origine ET une
-  /// destination, on lance un vrai itinÃ©raire routier (dir) â€” le mÃªme trajet
+  /// Ouvre l'itinéraire de la mission dans Google Maps. Avec une origine ET une
+  /// destination, on lance un vrai itinéraire routier (dir) — le même trajet
   /// que celui saisi dans l'ERP web. Avec un seul point connu, on retombe sur
   /// une recherche simple de ce point.
   Future<void> _openItinerary(String? origin, String? destination) async {
@@ -664,7 +664,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     if (dest == null && orig == null) return;
 
     if (dest == null || orig == null) {
-      // Un seul point connu â†’ recherche simple de ce point.
+      // Un seul point connu → recherche simple de ce point.
       await _openMaps((dest ?? orig)!);
       return;
     }
@@ -676,18 +676,18 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
     try {
       await launchUrl(uri,
           mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank');
-    } catch (_) {/* le navigateur a bloquÃ© l'ouverture : on ignore */}
+    } catch (_) {/* le navigateur a bloqué l'ouverture : on ignore */}
   }
 }
 
-// â”€â”€ Stepper de statut â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stepper de statut ─────────────────────────────────────────────────────────
 
 class _StatusStepper extends StatelessWidget {
   const _StatusStepper({required this.status});
   final String status;
 
   static const _steps = ['assigned', 'accepted', 'in_progress', 'arrived', 'completed'];
-  static const _labels = ['AssignÃ©e', 'AcceptÃ©e', 'En cours', 'ArrivÃ©', 'TerminÃ©e'];
+  static const _labels = ['Assignée', 'Acceptée', 'En cours', 'Arrivé', 'Terminée'];
 
   int get _currentIndex {
     if (status == 'failed' || status == 'cancelled') return -1;
@@ -744,13 +744,13 @@ class _StatusStepper extends StatelessWidget {
   }
 }
 
-// â”€â”€ Formulaires INLINE (photos, Ã©tats des lieux, signature, incidents) â”€â”€â”€â”€â”€â”€
+// ── Formulaires INLINE (photos, états des lieux, signature, incidents) ──────
 //
-// MÃªme philosophie que l'Ã©tape Annexes du wizard Â« GÃ©nÃ©rer le contrat Â» :
+// Même philosophie que l'étape Annexes du wizard « Générer le contrat » :
 // le missionnaire voit les champs de saisie directement dans la fiche de
-// mission, pas dans un bottom-sheet ou un Ã©cran dÃ©diÃ©. Chaque widget gÃ¨re
-// ses propres contrÃ´leurs et appelle `missionsRepoProvider` ; le parent lui
-// envoie un callback `onBusy` pour dÃ©sactiver les boutons d'action pendant
+// mission, pas dans un bottom-sheet ou un écran dédié. Chaque widget gère
+// ses propres contrôleurs et appelle `missionsRepoProvider` ; le parent lui
+// envoie un callback `onBusy` pour désactiver les boutons d'action pendant
 // l'envoi.
 
 typedef _BusyCb = void Function(bool);
@@ -857,9 +857,9 @@ class _InspectionInlineFormState extends ConsumerState<_InspectionInlineForm> {
   final _notes = TextEditingController();
 
   static const _conditions = {
-    'good': 'Bon Ã©tat',
-    'minor_damage': 'DÃ©gÃ¢ts mineurs',
-    'major_damage': 'DÃ©gÃ¢ts majeurs',
+    'good': 'Bon état',
+    'minor_damage': 'Dégâts mineurs',
+    'major_damage': 'Dégâts majeurs',
   };
 
   @override
@@ -900,7 +900,7 @@ class _InspectionInlineFormState extends ConsumerState<_InspectionInlineForm> {
       children: [
         SegmentedButton<String>(
           segments: const [
-            ButtonSegment(value: 'check_in', label: Text('EntrÃ©e')),
+            ButtonSegment(value: 'check_in', label: Text('Entrée')),
             ButtonSegment(value: 'check_out', label: Text('Sortie')),
           ],
           selected: {_type},
@@ -913,18 +913,18 @@ class _InspectionInlineFormState extends ConsumerState<_InspectionInlineForm> {
           Expanded(child: _field(_fuel, 'Carburant (%)', number: true)),
         ]),
         const SizedBox(height: 10),
-        _dropdown('ExtÃ©rieur', _exterior, _conditions,
+        _dropdown('Extérieur', _exterior, _conditions,
             (v) => setState(() => _exterior = v)),
         const SizedBox(height: 8),
-        _dropdown('IntÃ©rieur', _interior, _conditions,
+        _dropdown('Intérieur', _interior, _conditions,
             (v) => setState(() => _interior = v)),
         const SizedBox(height: 10),
-        _field(_notes, 'Observations / dÃ©gÃ¢ts', lines: 2),
+        _field(_notes, 'Observations / dégâts', lines: 2),
         const SizedBox(height: 10),
         FilledButton.icon(
           onPressed: widget.busy ? null : _save,
           icon: const Icon(Icons.check, size: 16),
-          label: const Text("Enregistrer l'Ã©tat des lieux"),
+          label: const Text("Enregistrer l'état des lieux"),
           style: FilledButton.styleFrom(
               backgroundColor: _brand, minimumSize: const Size.fromHeight(44)),
         ),
@@ -1081,16 +1081,16 @@ class _IssueInlineFormState extends ConsumerState<_IssueInlineForm> {
   final _desc = TextEditingController();
 
   static const _types = {
-    'vehicle_damage': 'DÃ©gÃ¢t vÃ©hicule',
+    'vehicle_damage': 'Dégât véhicule',
     'customer_absent': 'Client absent',
     'wrong_address': 'Mauvaise adresse',
-    'mechanical': 'Panne mÃ©canique',
+    'mechanical': 'Panne mécanique',
     'other': 'Autre',
   };
   static const _severities = {
     'low': 'Faible',
     'medium': 'Moyenne',
-    'high': 'Ã‰levÃ©e',
+    'high': 'Élevée',
     'critical': 'Critique',
   };
 
@@ -1102,7 +1102,7 @@ class _IssueInlineFormState extends ConsumerState<_IssueInlineForm> {
 
   Future<void> _save() async {
     if (_desc.text.trim().isEmpty) {
-      widget.onError("DÃ©crivez l'incident.");
+      widget.onError("Décrivez l'incident.");
       return;
     }
     widget.onBusy(true);
@@ -1129,7 +1129,7 @@ class _IssueInlineFormState extends ConsumerState<_IssueInlineForm> {
       children: [
         _dropdown('Type', _type, _types, (v) => setState(() => _type = v)),
         const SizedBox(height: 8),
-        _dropdown('GravitÃ©', _severity, _severities,
+        _dropdown('Gravité', _severity, _severities,
             (v) => setState(() => _severity = v)),
         const SizedBox(height: 10),
         TextField(
