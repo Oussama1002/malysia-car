@@ -379,8 +379,12 @@ export const ContractWizardPage: React.FC = () => {
         const rsvNumber: string = r.reservation_number ?? `RSV-${String(reservationId).slice(0, 8).toUpperCase()}`;
         setPrefillBanner(rsvNumber);
 
-        // Advance past client (0) and vehicle (1) steps to type (2) — both are already set
-        setStepIdx(2);
+        // Démarrage sur Annexes (étape 0) quand on génère un contrat depuis
+        // une réservation — l'agent charge d'abord les pièces du dossier
+        // (CIN, permis, chèque, photos véhicule) puis bascule sur Détails
+        // contrat puis Validation. Avant, on sautait directement à
+        // Validation, ce qui court-circuitait l'étape documents.
+        setStepIdx(0);
       } catch (e) {
         // Non-blocking: just log, don't block the wizard
         console.warn('[ContractWizard] Pre-fill from reservation failed:', e);

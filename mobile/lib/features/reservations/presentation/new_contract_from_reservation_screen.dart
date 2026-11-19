@@ -227,8 +227,12 @@ class _NewContractFromReservationScreenState
       _kmIncluded.text = r.allowedKmPerDay!.toString();
     }
     _prefilledNumber = r.number;
-    // On arrive directement sur l'étape « Type » comme le web.
-    _step = _Step.type;
+    // Démarrage sur Annexes quand on génère un contrat depuis une
+    // réservation : l'agent charge d'abord les pièces du dossier (CIN,
+    // permis, chèque, photos véhicule) avant d'ouvrir Conditions puis
+    // Validation. Avant, on ouvrait Type direct, ce qui court-circuitait
+    // l'étape documents.
+    _step = _Step.annex;
   }
 
   bool _canAdvance() {
