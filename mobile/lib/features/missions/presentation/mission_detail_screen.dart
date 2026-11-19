@@ -8,10 +8,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/widgets/module_scaffold.dart';
 import '../../contracts/presentation/contract_pdf_preview_screen.dart';
 import '../../contracts/presentation/signature_pad.dart';
+import '../../reservations/presentation/new_contract_from_reservation_screen.dart';
 import '../data/mission_action_queue.dart';
 import '../data/mission_dto.dart';
 import '../data/missions_repo.dart';
-import 'generate_contract_screen.dart';
 
 const _brand = Color(0xFFB8933F);
 
@@ -280,10 +280,19 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
                 style: TextStyle(fontSize: 12.5, color: Colors.black54, height: 1.4)),
             const SizedBox(height: 10),
             FilledButton.icon(
+              // Même architecture que le wizard "Générer un contrat" depuis
+              // la réservation (web + mobile) : 6 étapes Client → Véhicule →
+              // Type → Conditions → Annexes → Validation, pré-remplies
+              // depuis la réservation attachée à la mission. Le flux
+              // backend est strictement celui d'AGENTS.md §5.3
+              // (POST /contracts draft → POST /payments → activate
+              // best-effort → POST /generate-pdf), géré par l'écran lui-même.
               onPressed: _busy
                   ? null
                   : () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => GenerateContractScreen(mission: m),
+                        builder: (_) => NewContractFromReservationScreen(
+                          reservationId: m.reservationId,
+                        ),
                       )),
               style: FilledButton.styleFrom(
                   backgroundColor: _brand, minimumSize: const Size.fromHeight(46)),
