@@ -41,15 +41,17 @@ class NewMissionScreen extends ConsumerStatefulWidget {
       _NewMissionScreenState();
 }
 
+// Libellés alignés sur le back-office web (missionTypes.ts). Libellés
+// génériques ici : à la création il n'y a pas encore de contexte sous-location.
 const _kMissionTypes = <(String, String)>[
-  ('delivery', 'Livraison'),
-  ('pickup', 'Récupération'),
-  ('transfer', 'Transfert'),
+  ('delivery', 'Livraison au client'),
+  ('pickup', 'Récupération véhicule'),
+  ('transfer', 'Transfert véhicule'),
   ('convoy', 'Convoyage'),
-  ('inspection', 'Inspection'),
-  ('cleaning', 'Nettoyage'),
-  ('workshop', 'Atelier'),
-  ('fuel', 'Carburant'),
+  ('inspection', 'Inspection véhicule'),
+  ('cleaning', 'Nettoyage véhicule'),
+  ('workshop', 'Atelier / réparation'),
+  ('fuel', 'Carburant / plein'),
   ('other', 'Autre'),
 ];
 

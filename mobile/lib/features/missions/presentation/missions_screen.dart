@@ -73,7 +73,7 @@ class _MissionsScreenState extends ConsumerState<MissionsScreen> {
     return all.where((m) {
       final hay = [
         m.missionNumber,
-        missionTypeFr(m.missionType),
+        missionTypeFr(m.missionType, autoSourceType: m.autoSourceType),
         m.vehicleLabel ?? '',
         m.clientLabel ?? '',
         m.pickupAddress ?? '',
@@ -273,7 +273,7 @@ class _MissionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(missionTypeFr(m.missionType),
+                    Text(missionTypeFr(m.missionType, autoSourceType: m.autoSourceType),
                         style: const TextStyle(
                             fontWeight: FontWeight.w900, fontSize: 15.5)),
                     if (m.missionNumber.isNotEmpty)

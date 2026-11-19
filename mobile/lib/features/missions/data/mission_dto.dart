@@ -37,6 +37,7 @@ class MissionDto {
     this.branchName,
     this.branchAddress,
     this.branchMapsUrl,
+    this.autoSourceType,
     this.photosCount = 0,
     this.inspectionsCount = 0,
     this.issuesCount = 0,
@@ -73,6 +74,9 @@ class MissionDto {
   final String? branchName;
   final String? branchAddress;
   final String? branchMapsUrl;
+  /// Provenance of an auto-generated mission (e.g. 'reservation', 'sub_rental').
+  /// Drives context-aware type labels, exactly like the web back-office.
+  final String? autoSourceType;
   final int photosCount;
   final int inspectionsCount;
   final int issuesCount;
@@ -179,6 +183,7 @@ class MissionDto {
       branchName: branch is Map ? _str(branch['name']) : null,
       branchAddress: branch is Map ? _str(branch['address']) : null,
       branchMapsUrl: branch is Map ? _str(branch['google_maps_url']) : null,
+      autoSourceType: _str(j['auto_source_type']),
       photosCount: _int(j['photos_count']),
       inspectionsCount: _int(j['inspections_count']),
       issuesCount: _int(j['issues_count']),
@@ -312,16 +317,26 @@ class MissionSignatureDto {
       );
 }
 
-/// Libellés FR des types de mission (alignés sur le back-office web).
-String missionTypeFr(String code) {
+/// Libellés FR des types de mission — alignés mot pour mot sur le back-office
+/// web (frontend/modules/mobileOps/missionTypes.ts).
+///
+/// Comme sur le web, certains types se lisent différemment selon l'origine de
+/// la mission : une sous-location récupère le véhicule *chez le fournisseur* et
+/// le *retourne au fournisseur*. Passez [autoSourceType] (= mission.autoSourceType)
+/// pour obtenir ces libellés contextualisés.
+String missionTypeFr(String code, {String? autoSourceType}) {
+  if (autoSourceType == 'sub_rental') {
+    if (code == 'pickup') return 'Récupération chez le fournisseur';
+    if (code == 'transfer') return 'Retour fournisseur';
+  }
   switch (code) {
     case 'delivery':
     case 'livraison':
-      return 'Livraison';
+      return 'Livraison au client';
     case 'pickup':
     case 'recuperation':
     case 'recovery':
-      return 'Récupération';
+      return 'Récupération véhicule';
     case 'vehicle_swap':
     case 'swap':
       return 'Changement de véhicule';
@@ -330,7 +345,7 @@ String missionTypeFr(String code) {
     case 'return':
       return 'Restitution';
     case 'transfer':
-      return 'Transfert';
+      return 'Transfert véhicule';
     case 'convoy':
       return 'Convoyage';
     case 'check_in':
@@ -338,15 +353,15 @@ String missionTypeFr(String code) {
     case 'check_out':
       return 'État des lieux (sortie)';
     case 'cleaning':
-      return 'Nettoyage';
+      return 'Nettoyage véhicule';
     case 'workshop':
-      return 'Atelier';
+      return 'Atelier / réparation';
     case 'fuel':
-      return 'Carburant';
+      return 'Carburant / plein';
     case 'assistance':
-      return 'Assistance';
+      return 'Assistance / dépannage';
     case 'inspection':
-      return 'Inspection';
+      return 'Inspection véhicule';
     case 'maintenance':
       return 'Maintenance';
     case 'other':

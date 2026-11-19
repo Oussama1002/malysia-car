@@ -150,7 +150,7 @@ class _MissionDetailBodyState extends ConsumerState<_MissionDetailBody> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(missionTypeFr(m.missionType),
+                    Text(missionTypeFr(m.missionType, autoSourceType: m.autoSourceType),
                         style: const TextStyle(
                             fontWeight: FontWeight.w900, fontSize: 18)),
                     if (m.missionNumber.isNotEmpty)
