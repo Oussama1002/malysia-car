@@ -30,6 +30,13 @@
     "documents": "مركز المستندات",
     "documentReader": "قارئ المستندات (OCR)",
     "settings": "الإعدادات",
+    "settingsOverview": "نظرة عامة",
+    "settingsUsers": "المستخدمون",
+    "settingsRoles": "الأدوار والصلاحيات",
+    "settingsBranches": "الوكالات",
+    "settingsVehicleBrands": "العلامات والطرازات",
+    "settingsParameters": "الإعدادات العامة",
+    "settingsIntegrations": "التكاملات",
     "audit": "التدقيق",
     "rentals": "تأجير قصير الأجل",
     "websiteLeads": "طلبات الموقع"

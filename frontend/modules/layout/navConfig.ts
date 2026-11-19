@@ -65,7 +65,25 @@ export const GROUPS: NavGroup[] = [
       { to: '/notifications', module: 'notifications', labelKey: 'nav.notifications', icon: 'bell' },
       { to: '/documents', module: 'documents', labelKey: 'nav.documents', icon: 'folder' },
       { to: '/audit', module: 'audit', labelKey: 'nav.audit', icon: 'audit' },
-      { to: '/settings', module: 'settings', labelKey: 'nav.settings', icon: 'gear' },
+    ],
+  },
+  // Paramètres : promu en groupe à part (le sidebar affiche tout groupe à
+  // plusieurs items comme un dropdown). On y liste chaque surface admin
+  // pour que l'accès soit direct depuis la barre, sans passer par la page
+  // Paramètres puis une tuile. Tous les items gardent `module: 'settings'`
+  // donc le gating RBAC existant ne change pas (manage_settings).
+  {
+    key: 'settings',
+    labelKey: 'nav.settings',
+    icon: 'gear',
+    items: [
+      { to: '/settings', module: 'settings', labelKey: 'nav.settingsOverview', icon: 'density' },
+      { to: '/settings/users', module: 'settings', labelKey: 'nav.settingsUsers', icon: 'users' },
+      { to: '/settings/roles', module: 'settings', labelKey: 'nav.settingsRoles', icon: 'shield' },
+      { to: '/settings/branches', module: 'settings', labelKey: 'nav.settingsBranches', icon: 'pin' },
+      { to: '/settings/vehicles', module: 'settings', labelKey: 'nav.settingsVehicleBrands', icon: 'car' },
+      { to: '/settings/parameters', module: 'settings', labelKey: 'nav.settingsParameters', icon: 'bolt' },
+      { to: '/settings/integrations', module: 'settings', labelKey: 'nav.settingsIntegrations', icon: 'external' },
     ],
   },
 ];

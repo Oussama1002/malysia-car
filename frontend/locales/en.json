@@ -33,6 +33,13 @@
     "documents": "Document center",
     "documentReader": "Document Reader (OCR)",
     "settings": "Settings",
+    "settingsOverview": "Overview",
+    "settingsUsers": "Users",
+    "settingsRoles": "Roles & permissions",
+    "settingsBranches": "Branches",
+    "settingsVehicleBrands": "Brands & models",
+    "settingsParameters": "General parameters",
+    "settingsIntegrations": "Integrations",
     "audit": "Audit trail",
     "rentals": "Reservations / Rentals",
     "websiteLeads": "Website requests"

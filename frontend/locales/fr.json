@@ -32,6 +32,13 @@
     "documents": "Centre documentaire",
     "documentReader": "Document Reader (OCR)",
     "settings": "Paramètres",
+    "settingsOverview": "Vue d'ensemble",
+    "settingsUsers": "Utilisateurs",
+    "settingsRoles": "Rôles & permissions",
+    "settingsBranches": "Agences",
+    "settingsVehicleBrands": "Marques & modèles",
+    "settingsParameters": "Réglages généraux",
+    "settingsIntegrations": "Intégrations",
     "audit": "Audit & traçabilité",
     "rentals": "Réservations / Locations",
     "group": {
