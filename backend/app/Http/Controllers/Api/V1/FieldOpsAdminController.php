@@ -125,6 +125,32 @@ class FieldOpsAdminController extends Controller
         $per = min(100, max(1, (int) $request->query('per_page', 25)));
         $page = $query->paginate($per);
 
+        // Attach the supplier (fournisseur) name on sub-rental missions. These
+        // have no client/contract relation — their fournisseur lives on the
+        // SubRentalContract referenced by auto_source_id. Resolve it in one
+        // batched query (no N+1) and expose it as `supplier_name`.
+        $subRentalIds = collect($page->items())
+            ->filter(fn ($m) => $m->auto_source_type === 'sub_rental' && $m->auto_source_id)
+            ->pluck('auto_source_id')
+            ->unique()
+            ->values();
+
+        if ($subRentalIds->isNotEmpty()) {
+            $suppliers = \App\Models\SubRentalContract::withoutGlobalScopes()
+                ->with('supplierAgency:id,name')
+                ->whereIn('id', $subRentalIds)
+                ->get()
+                ->mapWithKeys(fn ($c) => [(string) $c->id => $c->supplierAgency?->name])
+                ->filter();
+
+            $page->getCollection()->transform(function ($m) use ($suppliers) {
+                if ($m->auto_source_type === 'sub_rental') {
+                    $m->setAttribute('supplier_name', $suppliers->get((string) $m->auto_source_id));
+                }
+                return $m;
+            });
+        }
+
         return ApiResponse::success($page->items(), [
             'current_page' => $page->currentPage(),
             'last_page' => $page->lastPage(),

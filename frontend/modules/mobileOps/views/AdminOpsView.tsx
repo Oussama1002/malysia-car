@@ -278,6 +278,16 @@ export const AdminOpsView: React.FC = () => {
             },
           },
           {
+            key: 'supplier',
+            header: 'Fournisseur',
+            render: (m) =>
+              m.supplier_name ? (
+                <span className="font-semibold text-slate-700">{m.supplier_name}</span>
+              ) : (
+                <span className="text-slate-300">—</span>
+              ),
+          },
+          {
             key: 'reservation',
             header: 'Réservation',
             render: (m) => {

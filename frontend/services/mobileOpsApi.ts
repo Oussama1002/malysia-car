@@ -64,6 +64,8 @@ export interface MobileOpsMissionDto {
   // Provenance of an auto-generated mission (e.g. 'reservation', 'sub_rental')
   auto_source_type?: string | null;
   auto_source_id?: string | null;
+  // Fournisseur (supplier agency) name — set on sub-rental missions only.
+  supplier_name?: string | null;
   // Eager-loaded relations
   vehicle?: { id: string; registration_number: string; brand_name?: string | null; model_name?: string | null } | null;
   assigned_agent?: { id: string; email: string } | null;
