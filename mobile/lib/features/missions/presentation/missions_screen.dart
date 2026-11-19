@@ -67,6 +67,41 @@ class _MissionsScreenState extends ConsumerState<MissionsScreen> {
     }
   }
 
+  /// Accepte une mission directement depuis la liste (sans ouvrir la fiche).
+  /// Même logique hors-ligne que la fiche détail : on enfile l'action si le
+  /// réseau saute.
+  Future<void> _acceptMission(MissionDto m) async {
+    try {
+      await ref.read(missionsRepoProvider).accept(m.id);
+      if (!mounted) return;
+      ref.invalidate(myMissionsProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mission acceptée.')),
+      );
+    } catch (e) {
+      if (isNetworkError(e)) {
+        await ref.read(missionActionQueueProvider.notifier).enqueue(
+              QueuedMissionAction(
+                missionId: m.id,
+                action: 'accept',
+                queuedAt: DateTime.now(),
+              ),
+            );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Hors-ligne : acceptation enregistrée, elle partira à la reconnexion.')),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e))),
+        );
+      }
+    }
+  }
+
   List<MissionDto> _filtered(List<MissionDto> all, String q) {
     if (q.trim().isEmpty) return all;
     final needle = q.toLowerCase();
@@ -154,7 +189,12 @@ class _MissionsScreenState extends ConsumerState<MissionsScreen> {
                         for (final m in missions)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                            child: _MissionCard(mission: m),
+                            child: _MissionCard(
+                              mission: m,
+                              onAccept: (m.status == 'assigned' || m.status == 'pending')
+                                  ? () => _acceptMission(m)
+                                  : null,
+                            ),
                           ),
                       ],
                     );
@@ -249,8 +289,11 @@ class _FilterChips extends StatelessWidget {
 /// de cycle de vie vivent désormais dans la fiche détail (une seule action
 /// « suivante » à la fois, plus de boutons qui se chevauchent).
 class _MissionCard extends StatelessWidget {
-  const _MissionCard({required this.mission});
+  const _MissionCard({required this.mission, this.onAccept});
   final MissionDto mission;
+  /// Fourni uniquement pour les missions à accepter (assigned/pending) : affiche
+  /// un bouton « Accepter » directement sur la carte.
+  final VoidCallback? onAccept;
 
   @override
   Widget build(BuildContext context) {
@@ -307,6 +350,24 @@ class _MissionCard extends StatelessWidget {
           ] else if (pickup != null && pickup.isNotEmpty) ...[
             const SizedBox(height: 6),
             _iconLine(Icons.place_outlined, pickup),
+          ],
+          if (onAccept != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onAccept,
+                icon: const Icon(Icons.check_circle_outline, size: 18),
+                label: const Text('Accepter la mission'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _brand,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
           ],
           const SizedBox(height: 10),
           Row(
