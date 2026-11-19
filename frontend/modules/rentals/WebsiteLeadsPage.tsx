@@ -601,6 +601,10 @@ const PricingTab: React.FC<{
   onSetPrice: (vehicleId: string, tiers: Record<string, number>) => Promise<unknown>;
   pending: boolean;
 }> = ({ vehicles, loading, tierSchema, onSetPrice, pending }) => {
+  // Recherche libre : marque, modèle, immatriculation, année, catégorie,
+  // carburant, boîte. On normalise (minuscules + trim) pour matcher sans
+  // tenir compte de la casse ni des espaces au bord.
+  const [search, setSearch] = useState('');
   if (loading) {
     return <div className="df-card df-card__body text-sm text-slate-500">Chargement…</div>;
   }
@@ -611,11 +615,36 @@ const PricingTab: React.FC<{
       </div>
     );
   }
-  const missing = vehicles.filter(
-    (v) => fromPriceOf(v) === null,
-  ).length;
+  const q = search.trim().toLowerCase();
+  const filtered = q.length === 0
+    ? vehicles
+    : vehicles.filter((v) => {
+        const haystack = [
+          v.brand, v.model, v.registration,
+          v.year != null ? String(v.year) : null,
+          v.categorie, v.fuel, v.transmission,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+  const missing = filtered.filter((v) => fromPriceOf(v) === null).length;
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className="df-input min-w-[240px] flex-1"
+          placeholder="Rechercher un véhicule (marque, modèle, immat, année)…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {q.length > 0 && (
+          <span className="text-xs text-slate-500">
+            {filtered.length} / {vehicles.length} véhicule{filtered.length > 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
       {missing > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-black">
@@ -626,17 +655,23 @@ const PricingTab: React.FC<{
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {vehicles.map((v) => (
-          <PricingRow
-            key={v.id}
-            v={v}
-            tierSchema={tierSchema}
-            onSetPrice={onSetPrice}
-            pending={pending}
-          />
-        ))}
-      </div>
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
+          Aucun véhicule ne correspond à « {search} ».
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((v) => (
+            <PricingRow
+              key={v.id}
+              v={v}
+              tierSchema={tierSchema}
+              onSetPrice={onSetPrice}
+              pending={pending}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
