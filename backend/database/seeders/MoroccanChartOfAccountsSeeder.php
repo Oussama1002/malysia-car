@@ -32,6 +32,10 @@ class MoroccanChartOfAccountsSeeder extends Seeder
             ['code' => '4457', 'name' => 'TVA sur marge VO', 'account_type' => 'liability', 'normal_balance' => 'credit'],
             ['code' => '6512', 'name' => 'Valeur nette comptable des immob cedees', 'account_type' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '7512', 'name' => 'Produits de cession des immobilisations', 'account_type' => 'income', 'normal_balance' => 'credit'],
+            // Capitaux propres — affectation du résultat
+            ['code' => '1161', 'name' => 'Report à nouveau (solde créditeur)', 'account_type' => 'equity', 'normal_balance' => 'credit'],
+            ['code' => '1169', 'name' => 'Report à nouveau (solde débiteur)', 'account_type' => 'equity', 'normal_balance' => 'debit'],
+            ['code' => '1191', 'name' => 'Résultat net de l\'exercice', 'account_type' => 'equity', 'normal_balance' => 'credit'],
         ];
     }
 

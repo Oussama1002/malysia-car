@@ -46,6 +46,7 @@ import { BalanceSheetPage } from '@/modules/accounting/reports/BalanceSheetPage'
 import { IncomeStatementPage } from '@/modules/accounting/reports/IncomeStatementPage';
 import { TaxReportPage } from '@/modules/accounting/reports/TaxReportPage';
 import { AccountingSettingsPage } from '@/modules/accounting/AccountingSettingsPage';
+import { BankReconciliationPage } from '@/modules/accounting/BankReconciliationPage';
 // Phase 12 — Arrears / Legal
 import { ArrearsDashboardPage } from '@/modules/arrears/ArrearsDashboardPage';
 import { ArrearsCaseDetailPage } from '@/modules/arrears/ArrearsCaseDetailPage';
@@ -489,6 +490,14 @@ export default function AppRoutes(): React.ReactElement {
               element={
                 <ModuleGate module="accounting">
                   <AccountingSettingsPage />
+                </ModuleGate>
+              }
+            />
+            <Route
+              path="/accounting/bank-reconciliation"
+              element={
+                <ModuleGate module="accounting">
+                  <BankReconciliationPage />
                 </ModuleGate>
               }
             />

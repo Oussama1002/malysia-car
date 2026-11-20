@@ -329,6 +329,62 @@ export function fecExportUrl(from: string, to: string): string {
   return `/v1/accounting/export/fec?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
 }
 
+// ============================================================================
+// Clôture d'exercice
+// ============================================================================
+export interface ClosePreviewLine { code: string; label: string; debit: number; credit: number; }
+export interface ClosePreview { entry_date: string; lines: ClosePreviewLine[]; net: number; }
+
+export function previewFiscalYearClose(id: string): Promise<{ data: ClosePreview }> {
+  return apiClient<{ data: ClosePreview }>(`/v1/fiscal-years/${id}/preview-close`);
+}
+export function allocateFiscalYearResult(id: string): Promise<{ data: AccountingEntry }> {
+  return apiClient<{ data: AccountingEntry }>(`/v1/fiscal-years/${id}/allocate-result`, { method: 'POST' });
+}
+
+// ============================================================================
+// Rapprochement bancaire
+// ============================================================================
+export interface BankStatementLine {
+  id: string;
+  value_date: string;
+  label: string;
+  amount: number;
+  external_reference?: string | null;
+  bank_account_code?: string | null;
+  status: 'unmatched' | 'matched' | 'ignored';
+  matched_payment_id?: string | null;
+  matched_at?: string | null;
+}
+export interface BankSuggestion {
+  id: string;
+  payment_number: string;
+  payment_date: string;
+  payment_method: string;
+  amount: number;
+  customer_id: string;
+  external_reference?: string | null;
+}
+
+export function listBankLines(params: { status?: string; from?: string; to?: string; per_page?: number } = {}): Promise<Paginated<BankStatementLine>> {
+  return apiClient<Paginated<BankStatementLine>>(`/v1/bank-reconciliation${q(params as Record<string, unknown>)}`);
+}
+export function importBankLines(lines: Array<Omit<BankStatementLine, 'id' | 'status' | 'matched_payment_id' | 'matched_at'>>): Promise<{ data: { created: number; skipped_duplicates: number } }> {
+  return apiClient('/v1/bank-reconciliation/import', { method: 'POST', body: JSON.stringify({ lines }) });
+}
+export function suggestBankMatches(lineId: string): Promise<{ data: BankSuggestion[] }> {
+  return apiClient(`/v1/bank-reconciliation/${lineId}/suggestions`);
+}
+export function matchBankLine(lineId: string, paymentId: string): Promise<{ data: BankStatementLine }> {
+  return apiClient(`/v1/bank-reconciliation/${lineId}/match/${paymentId}`, { method: 'POST' });
+}
+export function ignoreBankLine(lineId: string): Promise<{ data: BankStatementLine }> {
+  return apiClient(`/v1/bank-reconciliation/${lineId}/ignore`, { method: 'POST' });
+}
+export function unmatchBankLine(lineId: string): Promise<{ data: BankStatementLine }> {
+  return apiClient(`/v1/bank-reconciliation/${lineId}/unmatch`, { method: 'POST' });
+}
+
 // Bridges
 export function bridgeInvoice(invoiceId: string): Promise<{ data: AccountingEntry }> {
   return apiClient<{ data: AccountingEntry }>(`/v1/accounting/bridge/invoice/${invoiceId}`, { method: 'POST' });

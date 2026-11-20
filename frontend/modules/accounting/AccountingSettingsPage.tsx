@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import {
+  allocateFiscalYearResult,
   closeFiscalYear,
   createFiscalYear,
   createTax,
   getAccountingMappings,
   listFiscalYears,
   listTaxes,
+  previewFiscalYearClose,
   updateAccountingMappings,
   updateTax,
   type AccountingMappings,
+  type ClosePreview,
   type FiscalYear,
   type Tax,
 } from '@/services/accountingApi';
+import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { DrawerPanel } from '@/modules/shared/components/DrawerPanel';
@@ -45,6 +49,7 @@ export const AccountingSettingsPage: React.FC = () => {
   const [taxDrawer, setTaxDrawer] = useState(false);
   const [fyDrawer, setFyDrawer] = useState(false);
   const [editTax, setEditTax] = useState<Tax | null>(null);
+  const [closingFy, setClosingFy] = useState<FiscalYear | null>(null);
 
   const taxesQ = useQuery({ queryKey: ['accounting', 'taxes'], queryFn: () => listTaxes() });
   const fyQ = useQuery({ queryKey: ['accounting', 'fiscal-years'], queryFn: () => listFiscalYears() });
@@ -73,6 +78,11 @@ export const AccountingSettingsPage: React.FC = () => {
 
   const closeFyMut = useMutation({
     mutationFn: (id: string) => closeFiscalYear(id),
+    onSuccess: () => { invalidateFy(); setClosingFy(null); },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur'),
+  });
+  const allocateFyMut = useMutation({
+    mutationFn: (id: string) => allocateFiscalYearResult(id),
     onSuccess: () => invalidateFy(),
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Erreur'),
   });
@@ -169,14 +179,22 @@ export const AccountingSettingsPage: React.FC = () => {
                     <td className="text-slate-700">{fy.end_date}</td>
                     <td className="text-slate-600">{fy.periods?.length ?? 0} périodes</td>
                     <td><StatusBadge label={FY_STATUS_LABEL[fy.status]} tone={FY_STATUS_TONE[fy.status]} /></td>
-                    <td className="px-2">
+                    <td className="px-2 flex gap-1">
                       {fy.status === 'open' && (
                         <button
                           className="df-btn df-btn--ghost text-xs text-rose-600"
-                          disabled={closeFyMut.isPending}
-                          onClick={() => { if (confirm(`Clôturer l'exercice ${fy.code} ?`)) closeFyMut.mutate(fy.id); }}
+                          onClick={() => { setError(null); setClosingFy(fy); }}
                         >
                           Clôturer
+                        </button>
+                      )}
+                      {fy.status === 'closed' && (
+                        <button
+                          className="df-btn df-btn--ghost text-xs text-indigo-600"
+                          disabled={allocateFyMut.isPending}
+                          onClick={() => { if (confirm(`Affecter le résultat de ${fy.code} vers 1161/1169 ?`)) allocateFyMut.mutate(fy.id); }}
+                        >
+                          Affecter résultat
                         </button>
                       )}
                     </td>
@@ -217,6 +235,18 @@ export const AccountingSettingsPage: React.FC = () => {
         />
       </DrawerPanel>
 
+      {/* Close fiscal year — preview modal */}
+      <DrawerPanel open={!!closingFy} title={`Clôturer l'exercice ${closingFy?.code ?? ''}`} onClose={() => setClosingFy(null)}>
+        {closingFy && (
+          <CloseFiscalYearPreview
+            fy={closingFy}
+            submitting={closeFyMut.isPending}
+            onConfirm={() => closeFyMut.mutate(closingFy.id)}
+            onCancel={() => setClosingFy(null)}
+          />
+        )}
+      </DrawerPanel>
+
       {/* Fiscal year drawer */}
       <DrawerPanel open={fyDrawer} title="Nouvel exercice fiscal" onClose={() => setFyDrawer(false)}>
         <FiscalYearForm
@@ -226,6 +256,82 @@ export const AccountingSettingsPage: React.FC = () => {
           onSubmit={(p) => { setError(null); createFyMut.mutate(p); }}
         />
       </DrawerPanel>
+    </div>
+  );
+};
+
+const CloseFiscalYearPreview: React.FC<{
+  fy: FiscalYear;
+  submitting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({ fy, submitting, onConfirm, onCancel }) => {
+  const previewQ = useQuery({
+    queryKey: ['accounting', 'close-preview', fy.id],
+    queryFn: () => previewFiscalYearClose(fy.id),
+  });
+  const preview = previewQ.data?.data as ClosePreview | undefined;
+  const totalDebit = preview?.lines.reduce((s, l) => s + Number(l.debit || 0), 0) ?? 0;
+  const totalCredit = preview?.lines.reduce((s, l) => s + Number(l.credit || 0), 0) ?? 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+        La clôture génère une écriture de solde dans le journal <strong>OD</strong>, poste tous les 6xxx/7xxx et bascule l'exercice en <strong>clôturé</strong>.
+        Les périodes ouvertes sont également fermées.
+      </div>
+
+      {previewQ.isLoading ? (
+        <div className="text-slate-500">Prévisualisation…</div>
+      ) : !preview ? (
+        <div className="text-rose-600 text-sm">Impossible de prévisualiser l'écriture.</div>
+      ) : (
+        <>
+          <div className="df-card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
+                  <th className="px-3 py-2 text-left">Compte</th>
+                  <th className="text-left">Libellé</th>
+                  <th className="text-right">Débit</th>
+                  <th className="text-right">Crédit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {preview.lines.map((l, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-1 font-mono font-bold text-slate-900">{l.code}</td>
+                    <td className="text-slate-700">{l.label}</td>
+                    <td className="text-right font-mono">{l.debit ? formatCurrencyMad(l.debit) : ''}</td>
+                    <td className="text-right font-mono">{l.credit ? formatCurrencyMad(l.credit) : ''}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-slate-300 font-bold">
+                  <td colSpan={2} className="px-3 py-2 text-right">Totaux</td>
+                  <td className="text-right font-mono">{formatCurrencyMad(totalDebit)}</td>
+                  <td className="text-right font-mono">{formatCurrencyMad(totalCredit)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="text-sm">
+            Résultat net : <strong className={preview.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}>
+              {formatCurrencyMad(preview.net)}
+            </strong> {preview.net >= 0 ? '(bénéfice)' : '(perte)'}
+          </div>
+        </>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button className="df-btn df-btn--ghost" onClick={onCancel}>Annuler</button>
+        <button
+          className="df-btn df-btn--danger"
+          disabled={submitting}
+          onClick={onConfirm}
+        >
+          {submitting ? 'Clôture…' : 'Confirmer la clôture'}
+        </button>
+      </div>
     </div>
   );
 };

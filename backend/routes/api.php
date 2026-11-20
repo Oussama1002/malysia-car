@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BankReconciliationController;
 use App\Http\Controllers\Api\V1\BranchController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerSubresourceController;
@@ -964,8 +965,26 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:fiscal_years.view');
         Route::post('fiscal-years', [FiscalYearController::class, 'store'])
             ->middleware(['permission:fiscal_years.manage', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+        Route::get('fiscal-years/{fiscalYear}/preview-close', [FiscalYearController::class, 'previewClose'])
+            ->middleware(['permission:fiscal_years.view']);
         Route::post('fiscal-years/{fiscalYear}/close', [FiscalYearController::class, 'close'])
             ->middleware(['permission:fiscal_years.close', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+        Route::post('fiscal-years/{fiscalYear}/allocate-result', [FiscalYearController::class, 'allocateResult'])
+            ->middleware(['permission:fiscal_years.close', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+
+        // Rapprochement bancaire
+        Route::get('bank-reconciliation', [BankReconciliationController::class, 'index'])
+            ->middleware('permission:accounting.reports.view');
+        Route::post('bank-reconciliation/import', [BankReconciliationController::class, 'import'])
+            ->middleware(['permission:accounting.entries.manage', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+        Route::get('bank-reconciliation/{bankStatementLine}/suggestions', [BankReconciliationController::class, 'suggestions'])
+            ->middleware('permission:accounting.reports.view');
+        Route::post('bank-reconciliation/{bankStatementLine}/match/{payment}', [BankReconciliationController::class, 'match'])
+            ->middleware(['permission:accounting.entries.manage', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+        Route::post('bank-reconciliation/{bankStatementLine}/ignore', [BankReconciliationController::class, 'ignore'])
+            ->middleware(['permission:accounting.entries.manage', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+        Route::post('bank-reconciliation/{bankStatementLine}/unmatch', [BankReconciliationController::class, 'unmatch'])
+            ->middleware(['permission:accounting.entries.manage', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
 
         // Fixed assets
         Route::get('fixed-assets', [FixedAssetController::class, 'index'])

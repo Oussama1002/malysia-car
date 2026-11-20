@@ -143,6 +143,21 @@ class FiscalYearController extends Controller
         ]);
     }
 
+    public function previewClose(FiscalYear $fiscalYear, FiscalYearCloseService $closer): JsonResponse
+    {
+        return ApiResponse::success($closer->previewClose($fiscalYear));
+    }
+
+    public function allocateResult(Request $request, FiscalYear $fiscalYear, FiscalYearCloseService $closer): JsonResponse
+    {
+        try {
+            $entry = $closer->allocateResult($fiscalYear, optional($request->user())->id);
+        } catch (Throwable $e) {
+            return ApiResponse::message($e->getMessage(), 422);
+        }
+        return ApiResponse::success($entry, ['message' => "Résultat affecté. Écriture {$entry->entry_number}."]);
+    }
+
     /**
      * Return the currently active fiscal period (open and covering today).
      */
