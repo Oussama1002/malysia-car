@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getTaxReport } from '@/services/accountingApi';
+import { fecExportUrl, getTaxReport } from '@/services/accountingApi';
+import { getApiBase } from '@/services/apiClient';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { DateField } from '@/modules/shared/components/DateField';
 
@@ -33,6 +34,29 @@ export const TaxReportPage: React.FC = () => {
             <label className="text-xs font-bold uppercase text-slate-500">Au</label>
             <DateField className="df-input mt-1" value={to} onChange={(dfValue) => setTo(dfValue)} />
           </div>
+          <button
+            type="button"
+            className="df-btn df-btn--dark ml-auto"
+            disabled={!from || !to}
+            onClick={async () => {
+              const raw = localStorage.getItem('df_session');
+              const token = raw ? (JSON.parse(raw) as { token?: string }).token : undefined;
+              const r = await fetch(`${getApiBase()}${fecExportUrl(from, to)}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              });
+              if (!r.ok) return;
+              const blob = await r.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `FEC_${from.replace(/-/g, '')}_${to.replace(/-/g, '')}.txt`;
+              document.body.appendChild(a); a.click(); a.remove();
+              URL.revokeObjectURL(url);
+            }}
+            title="Télécharger le FEC (format DGI, pipe-delimited)"
+          >
+            Export FEC
+          </button>
         </div>
       </div>
 

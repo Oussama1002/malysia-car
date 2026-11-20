@@ -925,6 +925,8 @@ Route::prefix('v1')->group(function () {
                 ->middleware('permission:accounting.reports.view');
             Route::get('tax-report', [AccountingReportController::class, 'taxReport'])
                 ->middleware('permission:accounting.reports.view');
+            Route::get('export/fec', [AccountingReportController::class, 'exportFec'])
+                ->middleware('permission:accounting.reports.view');
             Route::get('settings/mappings', [AccountingSettingsController::class, 'mappings'])
                 ->middleware('permission:accounting.reports.view');
             Route::put('settings/mappings', [AccountingSettingsController::class, 'updateMappings'])

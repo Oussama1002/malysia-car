@@ -10,7 +10,9 @@ use App\Models\AccountingEntryLine;
 use App\Models\FiscalPeriod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AccountingReportController extends Controller
 {
@@ -349,5 +351,95 @@ class AccountingReportController extends Controller
             'total_vat_collected' => round((float) $totalTaxCollected, 2),
             'total_withholding' => round((float) $totalWithholding, 2),
         ]);
+    }
+
+    // ==================================================================
+    // Export FEC (Fichier des Écritures Comptables) — DGFiP / DGI Maroc
+    // Pipe-delimited UTF-8, 18 colonnes, uniquement les écritures postées.
+    // ==================================================================
+
+    public function exportFec(Request $request): StreamedResponse
+    {
+        $request->validate([
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+        $from = $request->query('from');
+        $to = $request->query('to');
+
+        $filename = sprintf('FEC_%s_%s.txt', str_replace('-', '', $from), str_replace('-', '', $to));
+
+        return new StreamedResponse(function () use ($from, $to) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, implode('|', [
+                'JournalCode', 'JournalLib', 'EcritureNum', 'EcritureDate',
+                'CompteNum', 'CompteLib', 'CompAuxNum', 'CompAuxLib',
+                'PieceRef', 'PieceDate', 'EcritureLib', 'Debit', 'Credit',
+                'EcritureLet', 'DateLet', 'ValidDate', 'Montantdevise', 'Idevise',
+            ]) . "\n");
+
+            DB::table('accounting_entry_lines as l')
+                ->join('accounting_entries as e', 'l.entry_id', '=', 'e.id')
+                ->join('accounting_journals as j', 'e.journal_id', '=', 'j.id')
+                ->leftJoin('accounting_accounts as a', 'l.account_code', '=', 'a.code')
+                ->where('e.status', 'posted')
+                ->whereDate('e.entry_date', '>=', $from)
+                ->whereDate('e.entry_date', '<=', $to)
+                ->orderBy('e.entry_date')
+                ->orderBy('e.entry_number')
+                ->orderBy('l.line_order')
+                ->select([
+                    'j.code as journal_code', 'j.name as journal_name',
+                    'e.entry_number', 'e.entry_date', 'e.reference', 'e.description', 'e.posted_at', 'e.currency_code',
+                    'l.account_code', 'l.label as line_label', 'l.debit', 'l.credit', 'l.third_party_id',
+                    'a.name as account_name',
+                ])
+                ->chunk(500, function ($rows) use ($out) {
+                    foreach ($rows as $r) {
+                        $cells = [
+                            $this->fec($r->journal_code),
+                            $this->fec($r->journal_name),
+                            $this->fec($r->entry_number),
+                            $this->fecDate($r->entry_date),
+                            $this->fec($r->account_code),
+                            $this->fec($r->account_name ?? ''),
+                            $this->fec($r->third_party_id ?? ''),
+                            '',
+                            $this->fec($r->reference ?? ''),
+                            $this->fecDate($r->entry_date),
+                            $this->fec($r->description . ' — ' . $r->line_label),
+                            $this->fecAmount($r->debit),
+                            $this->fecAmount($r->credit),
+                            '',
+                            '',
+                            $this->fecDate($r->posted_at ?? $r->entry_date),
+                            '',
+                            $this->fec($r->currency_code ?? 'MAD'),
+                        ];
+                        fwrite($out, implode('|', $cells) . "\n");
+                    }
+                });
+            fclose($out);
+        }, Response::HTTP_OK, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    private function fec(?string $v): string
+    {
+        return str_replace(['|', "\n", "\r", "\t"], ' ', (string) $v);
+    }
+
+    private function fecDate(?string $d): string
+    {
+        if (! $d) return '';
+        $t = strtotime($d);
+        return $t ? date('Ymd', $t) : '';
+    }
+
+    private function fecAmount($v): string
+    {
+        return number_format((float) $v, 2, ',', '');
     }
 }

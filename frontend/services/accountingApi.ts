@@ -325,6 +325,10 @@ export function getTaxReport(params: { from?: string; to?: string } = {}): Promi
   return apiClient(`/v1/accounting/tax-report${q(params as Record<string, unknown>)}`);
 }
 
+export function fecExportUrl(from: string, to: string): string {
+  return `/v1/accounting/export/fec?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+}
+
 // Bridges
 export function bridgeInvoice(invoiceId: string): Promise<{ data: AccountingEntry }> {
   return apiClient<{ data: AccountingEntry }>(`/v1/accounting/bridge/invoice/${invoiceId}`, { method: 'POST' });
