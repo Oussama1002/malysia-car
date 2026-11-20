@@ -17,6 +17,7 @@ import { formatCurrencyMad, formatDate } from '@/modules/shared/formatters';
 import { GeneratePdfButton } from '@/modules/shared/components/GeneratePdfButton';
 import { EntityAuditTimeline } from '@/modules/shared/components/EntityAuditTimeline';
 import { DateField } from '@/modules/shared/components/DateField';
+import { LinkedAccountingEntryBadge } from '@/modules/accounting/LinkedAccountingEntryBadge';
 
 export const InvoiceDetailPage: React.FC = () => {
   const { id = '' } = useParams();
@@ -109,6 +110,10 @@ export const InvoiceDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {i.status !== 'draft' && (
+        <LinkedAccountingEntryBadge sourceType="invoice" sourceId={String(i.id)} />
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <SummaryCard title="Sous-total" value={formatCurrencyMad(Number(i.subtotal_amount))} />

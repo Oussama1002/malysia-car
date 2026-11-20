@@ -6,6 +6,7 @@ import { ApiError } from '@/services/apiError';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 import { formatCurrencyMad } from '@/modules/shared/formatters';
 import { DateField } from '@/modules/shared/components/DateField';
+import { LinkedAccountingEntryBadge } from '@/modules/accounting/LinkedAccountingEntryBadge';
 
 const STATUS_TONE: Record<string, 'success' | 'danger' | 'warning'> = {
   active: 'success',
@@ -59,6 +60,10 @@ export const FixedAssetDetailPage: React.FC = () => {
       </header>
 
       {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+
+      {asset.status === 'disposed' && (
+        <LinkedAccountingEntryBadge sourceType="asset_disposal" sourceId={String(asset.id)} />
+      )}
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-4">

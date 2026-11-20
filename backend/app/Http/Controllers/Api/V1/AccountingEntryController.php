@@ -33,6 +33,9 @@ class AccountingEntryController extends Controller
         if ($source = $request->query('source_type')) {
             $q->where('source_type', $source);
         }
+        if ($sourceId = $request->query('source_id')) {
+            $q->where('source_id', $sourceId);
+        }
         if ($ref = $request->query('reference')) {
             $q->where('reference', 'like', "%{$ref}%");
         }
