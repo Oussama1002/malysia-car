@@ -70,7 +70,7 @@ class AccountingBridgeService
 
             AccountingEntryLine::insert($lines);
             $entry->recalculateTotals();
-            $entry->save();
+            $this->autoPost($entry, $userId);
         });
 
         return $entry->fresh('lines');
@@ -119,7 +119,7 @@ class AccountingBridgeService
                 $this->line($entry->id, 2, $map['account_client'], "Client {$payment->customer_id}", 0, $amount),
             ]);
             $entry->recalculateTotals();
-            $entry->save();
+            $this->autoPost($entry, $userId);
         });
 
         return $entry->fresh('lines');
@@ -167,7 +167,7 @@ class AccountingBridgeService
                 $this->line($entry->id, 2, $accCode, "Amort. cumulé {$asset->name}", 0, $amount),
             ]);
             $entry->recalculateTotals();
-            $entry->save();
+            $this->autoPost($entry, $userId);
 
             $line->is_posted = true;
             $line->entry_id = $entry->id;
@@ -235,7 +235,7 @@ class AccountingBridgeService
 
             AccountingEntryLine::insert($lines);
             $entry->recalculateTotals();
-            $entry->save();
+            $this->autoPost($entry, $userId);
 
             $asset->disposal_entry_id = $entry->id;
             $asset->save();
@@ -260,6 +260,14 @@ class AccountingBridgeService
             ]);
             return null;
         }
+    }
+
+    private function autoPost(AccountingEntry $entry, ?string $userId): void
+    {
+        $entry->status = 'posted';
+        $entry->posted_at = now();
+        $entry->posted_by_user_id = $userId;
+        $entry->save();
     }
 
     private function resolveJournal(string $type): AccountingJournal

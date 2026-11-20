@@ -202,7 +202,41 @@ class AccountingReportController extends Controller
 
         $assets = $section('asset');
         $liabilities = $section('liability');
-        $equity = $section('equity');
+        $equity = collect($section('equity')->all());
+
+        // Résultat de l'exercice : produits - charges (postés) jusqu'à as_of
+        // Ajouté en ligne synthétique dans Capitaux propres pour équilibrer le bilan
+        // tant que les écritures de clôture n'ont pas été passées.
+        $pl = DB::table('accounting_entry_lines as l')
+            ->join('accounting_entries as e', 'l.entry_id', '=', 'e.id')
+            ->join('accounting_accounts as a', 'l.account_code', '=', 'a.code')
+            ->where('e.status', 'posted')
+            ->whereDate('e.entry_date', '<=', $asOf)
+            ->whereIn('a.account_type', ['income', 'expense'])
+            ->select('a.account_type', 'a.normal_balance', DB::raw('SUM(l.debit) as d'), DB::raw('SUM(l.credit) as c'))
+            ->groupBy('a.account_type', 'a.normal_balance')
+            ->get();
+        $income = 0.0;
+        $expense = 0.0;
+        foreach ($pl as $row) {
+            $delta = ($row->normal_balance === 'credit') ? ((float) $row->c - (float) $row->d) : ((float) $row->d - (float) $row->c);
+            if ($row->account_type === 'income') {
+                $income += $delta;
+            } else {
+                $expense += $delta;
+            }
+        }
+        $netIncome = round($income - $expense, 2);
+        if (abs($netIncome) >= 0.01) {
+            $equity->push([
+                'code' => '1191',
+                'name' => "Résultat net de l'exercice",
+                'parent_code' => null,
+                'balance' => $netIncome,
+            ]);
+        }
+
+        $equityTotal = $equity->sum('balance');
 
         return ApiResponse::success([
             'as_of' => $asOf,
@@ -215,11 +249,11 @@ class AccountingReportController extends Controller
                 'total' => round($liabilities->sum('balance'), 2),
             ],
             'equity' => [
-                'lines' => $equity,
-                'total' => round($equity->sum('balance'), 2),
+                'lines' => $equity->values(),
+                'total' => round($equityTotal, 2),
             ],
-            'total_liabilities_equity' => round($liabilities->sum('balance') + $equity->sum('balance'), 2),
-            'is_balanced' => abs($assets->sum('balance') - $liabilities->sum('balance') - $equity->sum('balance')) < 0.01,
+            'total_liabilities_equity' => round($liabilities->sum('balance') + $equityTotal, 2),
+            'is_balanced' => abs($assets->sum('balance') - $liabilities->sum('balance') - $equityTotal) < 0.01,
         ]);
     }
 
