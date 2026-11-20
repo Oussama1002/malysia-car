@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Invoice;
+use App\Models\Payment;
+use App\Observers\InvoiceAccountingObserver;
+use App\Observers\PaymentAccountingObserver;
 use App\Services\DocumentReader\GoogleVisionOcrProvider;
 use App\Services\DocumentReader\OcrProviderInterface;
 use App\Services\DocumentReader\TesseractOcrProvider;
@@ -60,6 +64,9 @@ class AppServiceProvider extends ServiceProvider
         // validation (et autres chaînes traduites) sortent en français, quelle
         // que soit la valeur d'APP_LOCALE dans l'environnement.
         $this->app->setLocale('fr');
+
+        Invoice::observe(InvoiceAccountingObserver::class);
+        Payment::observe(PaymentAccountingObserver::class);
 
         RateLimiter::for('login', function (Request $request) {
             $email = (string) $request->input('email', '');
