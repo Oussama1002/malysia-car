@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\FiscalPeriod;
 use App\Models\FiscalYear;
+use App\Services\FiscalYearCloseService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class FiscalYearController extends Controller
 {
@@ -104,25 +107,40 @@ class FiscalYearController extends Controller
     /**
      * Close a fiscal year and all of its open periods.
      */
-    public function close(Request $request, FiscalYear $fiscalYear): JsonResponse
+    public function close(Request $request, FiscalYear $fiscalYear, FiscalYearCloseService $closer): JsonResponse
     {
         if ($fiscalYear->status === 'closed') {
             return ApiResponse::message('This fiscal year is already closed.', 422);
         }
 
-        $fiscalYear->status           = 'closed';
-        $fiscalYear->closed_at        = now();
-        $fiscalYear->closed_by_user_id = optional($request->user())->id;
-        $fiscalYear->save();
+        $userId = optional($request->user())->id;
 
-        // Close all periods that are still open within this fiscal year.
-        $fiscalYear->periods()
-            ->where('status', 'open')
-            ->update(['status' => 'closed']);
+        try {
+            $entry = $closer->close($fiscalYear, $userId);
+        } catch (Throwable $e) {
+            Log::warning('Fiscal year close falling back to status-only flip', [
+                'fiscal_year_id' => $fiscalYear->id,
+                'reason' => $e->getMessage(),
+            ]);
+            // Pas d'écriture de clôture possible (plan comptable incomplet,
+            // exercice sans mouvement) — on ferme quand même l'exercice pour
+            // bloquer les nouvelles écritures, et on remonte la raison.
+            $fiscalYear->status = 'closed';
+            $fiscalYear->closed_at = now();
+            $fiscalYear->closed_by_user_id = $userId;
+            $fiscalYear->save();
+            $fiscalYear->periods()->where('status', 'open')->update(['status' => 'closed']);
+            $fiscalYear->load('periods');
+            return ApiResponse::success($fiscalYear, ['message' => "Exercice clôturé sans écriture: {$e->getMessage()}"]);
+        }
 
+        $fiscalYear->refresh();
         $fiscalYear->load('periods');
 
-        return ApiResponse::success($fiscalYear);
+        return ApiResponse::success($fiscalYear, [
+            'message' => "Exercice clôturé. Écriture {$entry->entry_number} générée.",
+            'closing_entry_id' => $entry->id,
+        ]);
     }
 
     /**

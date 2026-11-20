@@ -60,12 +60,23 @@ class AccountingBridgeService
             $tax = (float) $invoice->tax_amount;
             $total = (float) $invoice->total_amount;
 
+            // Avoirs (credit notes) : on écrit l'exact contraire d'une facture.
+            // Le compte client est crédité, le produit et la TVA sont débités.
+            $isCredit = strtolower((string) ($invoice->invoice_type ?? '')) === 'credit_note';
+            $clientD = $isCredit ? 0 : $total;
+            $clientC = $isCredit ? $total : 0;
+            $revenueD = $isCredit ? $subtotal : 0;
+            $revenueC = $isCredit ? 0 : $subtotal;
+            $taxD = $isCredit ? $tax : 0;
+            $taxC = $isCredit ? 0 : $tax;
+            $label = $isCredit ? 'Avoir' : 'Produit';
+
             $lines = [
-                $this->line($entry->id, 1, $map['account_client'], "Client {$invoice->customer_id}", $total, 0),
-                $this->line($entry->id, 2, $this->invoiceRevenueAccount($invoice, $map), "Produit {$invoice->invoice_type}", 0, $subtotal),
+                $this->line($entry->id, 1, $map['account_client'], "Client {$invoice->customer_id}", $clientD, $clientC),
+                $this->line($entry->id, 2, $this->invoiceRevenueAccount($invoice, $map), "{$label} {$invoice->invoice_type}", $revenueD, $revenueC),
             ];
             if ($tax > 0) {
-                $lines[] = $this->line($entry->id, 3, $map['account_tva_collectee'], 'TVA facturée', 0, $tax);
+                $lines[] = $this->line($entry->id, 3, $map['account_tva_collectee'], $isCredit ? 'TVA sur avoir' : 'TVA facturée', $taxD, $taxC);
             }
 
             AccountingEntryLine::insert($lines);
