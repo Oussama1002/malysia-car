@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AccountingEntry;
 use App\Models\AccountingEntryLine;
 use App\Models\AccountingJournal;
+use App\Models\Customer;
 use App\Models\DepreciationLine;
 use App\Models\FiscalPeriod;
 use App\Models\FixedAsset;
@@ -71,8 +72,9 @@ class AccountingBridgeService
             $taxC = $isCredit ? 0 : $tax;
             $label = $isCredit ? 'Avoir' : 'Produit';
 
+            $customerLabel = $this->customerLabel($invoice->customer_id);
             $lines = [
-                $this->line($entry->id, 1, $map['account_client'], "Client {$invoice->customer_id}", $clientD, $clientC),
+                $this->line($entry->id, 1, $map['account_client'], "Client {$customerLabel}", $clientD, $clientC, 'customer', $invoice->customer_id),
                 $this->line($entry->id, 2, $this->invoiceRevenueAccount($invoice, $map), "{$label} {$invoice->invoice_type}", $revenueD, $revenueC),
             ];
             if ($tax > 0) {
@@ -125,9 +127,10 @@ class AccountingBridgeService
                 ? $map['account_banque']
                 : $map['account_caisse'];
 
+            $customerLabel = $this->customerLabel($payment->customer_id);
             AccountingEntryLine::insert([
                 $this->line($entry->id, 1, $bankAccount, "Encaissement {$payment->payment_method}", $amount, 0),
-                $this->line($entry->id, 2, $map['account_client'], "Client {$payment->customer_id}", 0, $amount),
+                $this->line($entry->id, 2, $map['account_client'], "Client {$customerLabel}", 0, $amount, 'customer', $payment->customer_id),
             ]);
             $entry->recalculateTotals();
             $this->autoPost($entry, $userId);
@@ -304,8 +307,16 @@ class AccountingBridgeService
         return $prefix . $year . '-' . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
     }
 
-    private function line(string $entryId, int $order, string $code, string $label, float $debit, float $credit): array
-    {
+    private function line(
+        string $entryId,
+        int $order,
+        string $code,
+        string $label,
+        float $debit,
+        float $credit,
+        ?string $thirdPartyType = null,
+        ?string $thirdPartyId = null,
+    ): array {
         return [
             'id' => (string) Str::uuid(),
             'entry_id' => $entryId,
@@ -316,9 +327,19 @@ class AccountingBridgeService
             'debit' => round($debit, 2),
             'credit' => round($credit, 2),
             'currency_code' => 'MAD',
+            'third_party_type' => $thirdPartyType,
+            'third_party_id' => $thirdPartyId,
             'created_at' => now(),
             'updated_at' => now(),
         ];
+    }
+
+    private function customerLabel(?string $customerId): string
+    {
+        if (! $customerId) return '-';
+        $customer = Customer::find($customerId);
+        if (! $customer) return $customerId;
+        return trim($customer->customer_code . ' · ' . $customer->display_name);
     }
 
     /**

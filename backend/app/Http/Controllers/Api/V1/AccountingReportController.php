@@ -96,6 +96,88 @@ class AccountingReportController extends Controller
     }
 
     // ==================================================================
+    // Balance auxiliaire client (3421 détaillé par tiers)
+    // Utilise third_party_id posé par le bridge sur les lignes 3421.
+    // ==================================================================
+
+    public function customerAuxiliaryBalance(Request $request): JsonResponse
+    {
+        $request->validate([
+            'as_of' => ['nullable', 'date'],
+            'customer_id' => ['nullable', 'uuid'],
+            'account_code' => ['nullable', 'string'],
+            'only_open' => ['nullable', 'boolean'],
+        ]);
+
+        $asOf = $request->query('as_of', now()->toDateString());
+        $accountCode = $request->query('account_code', '3421');
+        $customerId = $request->query('customer_id');
+        $onlyOpen = filter_var($request->query('only_open', false), FILTER_VALIDATE_BOOLEAN);
+
+        $q = DB::table('accounting_entry_lines as l')
+            ->join('accounting_entries as e', 'l.entry_id', '=', 'e.id')
+            ->leftJoin('customers as c', function ($j) {
+                $j->on('l.third_party_id', '=', 'c.id')->where('l.third_party_type', '=', 'customer');
+            })
+            ->leftJoin('customer_individual_profiles as cip', 'c.id', '=', 'cip.customer_id')
+            ->leftJoin('customer_company_profiles as ccp', 'c.id', '=', 'ccp.customer_id')
+            ->where('e.status', 'posted')
+            ->where('l.account_code', $accountCode)
+            ->where('l.third_party_type', 'customer')
+            ->whereNotNull('l.third_party_id')
+            ->whereDate('e.entry_date', '<=', $asOf)
+            ->select(
+                'l.third_party_id as customer_id',
+                'c.customer_code',
+                'cip.first_name', 'cip.last_name',
+                'ccp.trade_name', 'ccp.legal_name',
+                DB::raw('SUM(l.debit) as total_debit'),
+                DB::raw('SUM(l.credit) as total_credit'),
+                DB::raw('COUNT(*) as line_count'),
+            )
+            ->groupBy(
+                'l.third_party_id', 'c.customer_code',
+                'cip.first_name', 'cip.last_name', 'ccp.trade_name', 'ccp.legal_name',
+            );
+
+        if ($customerId) {
+            $q->where('l.third_party_id', $customerId);
+        }
+
+        $rows = $q->get()->map(function ($r) {
+            $debit = (float) $r->total_debit;
+            $credit = (float) $r->total_credit;
+            $balance = round($debit - $credit, 2); // 3421 est un compte d'actif → solde débiteur = client doit
+            $name = trim($r->trade_name ?? $r->legal_name ?? trim(($r->first_name ?? '') . ' ' . ($r->last_name ?? '')));
+            return [
+                'customer_id' => $r->customer_id,
+                'customer_code' => $r->customer_code,
+                'customer_name' => $name ?: '(inconnu)',
+                'total_debit' => round($debit, 2),
+                'total_credit' => round($credit, 2),
+                'balance' => $balance,
+                'line_count' => (int) $r->line_count,
+            ];
+        });
+
+        if ($onlyOpen) {
+            $rows = $rows->filter(fn ($r) => abs($r['balance']) >= 0.01)->values();
+        }
+
+        return ApiResponse::success([
+            'as_of' => $asOf,
+            'account_code' => $accountCode,
+            'customers' => $rows->values(),
+            'totals' => [
+                'total_debit' => round($rows->sum('total_debit'), 2),
+                'total_credit' => round($rows->sum('total_credit'), 2),
+                'total_balance' => round($rows->sum('balance'), 2),
+                'customer_count' => $rows->count(),
+            ],
+        ]);
+    }
+
+    // ==================================================================
     // Balance générale / Trial balance
     // ==================================================================
 
@@ -382,6 +464,12 @@ class AccountingReportController extends Controller
                 ->join('accounting_entries as e', 'l.entry_id', '=', 'e.id')
                 ->join('accounting_journals as j', 'e.journal_id', '=', 'j.id')
                 ->leftJoin('accounting_accounts as a', 'l.account_code', '=', 'a.code')
+                ->leftJoin('customers as c', function ($join) {
+                    $join->on('l.third_party_id', '=', 'c.id')
+                        ->where('l.third_party_type', '=', 'customer');
+                })
+                ->leftJoin('customer_individual_profiles as cip', 'c.id', '=', 'cip.customer_id')
+                ->leftJoin('customer_company_profiles as ccp', 'c.id', '=', 'ccp.customer_id')
                 ->where('e.status', 'posted')
                 ->whereDate('e.entry_date', '>=', $from)
                 ->whereDate('e.entry_date', '<=', $to)
@@ -391,11 +479,23 @@ class AccountingReportController extends Controller
                 ->select([
                     'j.code as journal_code', 'j.name as journal_name',
                     'e.entry_number', 'e.entry_date', 'e.reference', 'e.description', 'e.posted_at', 'e.currency_code',
-                    'l.account_code', 'l.label as line_label', 'l.debit', 'l.credit', 'l.third_party_id',
+                    'l.account_code', 'l.label as line_label', 'l.debit', 'l.credit',
+                    'l.third_party_type', 'l.third_party_id',
                     'a.name as account_name',
+                    'c.customer_code as c_code',
+                    'cip.first_name as c_first', 'cip.last_name as c_last',
+                    'ccp.trade_name as c_trade', 'ccp.legal_name as c_legal',
                 ])
                 ->chunk(500, function ($rows) use ($out) {
                     foreach ($rows as $r) {
+                        $auxNum = '';
+                        $auxLib = '';
+                        if ($r->third_party_type === 'customer' && $r->c_code) {
+                            $auxNum = $r->c_code;
+                            $auxLib = trim(($r->c_trade ?? $r->c_legal ?? trim(($r->c_first ?? '') . ' ' . ($r->c_last ?? ''))));
+                        } elseif ($r->third_party_id) {
+                            $auxNum = $r->third_party_id;
+                        }
                         $cells = [
                             $this->fec($r->journal_code),
                             $this->fec($r->journal_name),
@@ -403,8 +503,8 @@ class AccountingReportController extends Controller
                             $this->fecDate($r->entry_date),
                             $this->fec($r->account_code),
                             $this->fec($r->account_name ?? ''),
-                            $this->fec($r->third_party_id ?? ''),
-                            '',
+                            $this->fec($auxNum),
+                            $this->fec($auxLib),
                             $this->fec($r->reference ?? ''),
                             $this->fecDate($r->entry_date),
                             $this->fec($r->description . ' — ' . $r->line_label),
