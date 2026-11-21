@@ -385,6 +385,30 @@ export function unmatchBankLine(lineId: string): Promise<{ data: BankStatementLi
   return apiClient(`/v1/bank-reconciliation/${lineId}/unmatch`, { method: 'POST' });
 }
 
+export interface AutoMatchResult {
+  scanned: number;
+  matched: number;
+  ambiguous: number;
+  no_candidate: number;
+  dry_run: boolean;
+  details: Array<{
+    line_id: string;
+    value_date: string;
+    amount: number;
+    payment_id: string;
+    payment_number: string;
+    score: number;
+  }>;
+}
+export function autoMatchBankLines(
+  params: { from?: string; to?: string; dry_run?: boolean } = {},
+): Promise<{ data: AutoMatchResult; meta?: { message?: string } }> {
+  return apiClient('/v1/bank-reconciliation/auto-match', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 // Bridges
 export function bridgeInvoice(invoiceId: string): Promise<{ data: AccountingEntry }> {
   return apiClient<{ data: AccountingEntry }>(`/v1/accounting/bridge/invoice/${invoiceId}`, { method: 'POST' });

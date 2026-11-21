@@ -979,6 +979,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('permission:accounting.reports.view');
         Route::post('bank-reconciliation/import', [BankReconciliationController::class, 'import'])
             ->middleware(['permission:accounting.entries.manage', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+        Route::post('bank-reconciliation/auto-match', [BankReconciliationController::class, 'autoMatch'])
+            ->middleware(['permission:accounting.entries.manage', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
         Route::get('bank-reconciliation/{bankStatementLine}/suggestions', [BankReconciliationController::class, 'suggestions'])
             ->middleware('permission:accounting.reports.view');
         Route::post('bank-reconciliation/{bankStatementLine}/match/{payment}', [BankReconciliationController::class, 'match'])

@@ -150,4 +150,93 @@ class BankReconciliationController extends Controller
 
         return ApiResponse::success($line);
     }
+
+    /**
+     * POST /v1/bank-reconciliation/auto-match
+     * Rapproche en masse les lignes `unmatched` qui ont EXACTEMENT un candidat
+     * paiement avec : même montant (±0,01), date ±1 jour, méthode banque/chèque/carte,
+     * pas déjà matché par une autre ligne.
+     *
+     * Body (optionnel) :
+     *   - from, to : fenêtre value_date à rapprocher (par défaut toutes les unmatched)
+     *   - dry_run  : si true, retourne les scores sans écrire
+     */
+    public function autoMatch(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+        $dryRun = filter_var($data['dry_run'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        $lines = BankStatementLine::query()
+            ->where('status', 'unmatched')
+            ->when($data['from'] ?? null, fn ($q, $v) => $q->whereDate('value_date', '>=', $v))
+            ->when($data['to'] ?? null, fn ($q, $v) => $q->whereDate('value_date', '<=', $v))
+            ->orderBy('value_date')
+            ->get();
+
+        $usedPaymentIds = BankStatementLine::query()
+            ->whereNotNull('matched_payment_id')
+            ->pluck('matched_payment_id')
+            ->all();
+
+        $matched = 0;
+        $ambiguous = 0;
+        $none = 0;
+        $details = [];
+
+        foreach ($lines as $line) {
+            $amount = abs((float) $line->amount);
+            $from = Carbon::parse($line->value_date)->subDay();
+            $to = Carbon::parse($line->value_date)->addDay();
+
+            $candidates = Payment::query()
+                ->whereNull('deleted_at')
+                ->whereIn('payment_method', ['bank_transfer', 'check', 'card'])
+                ->whereRaw('ABS(amount - ?) < 0.01', [$amount])
+                ->whereBetween('payment_date', [$from->toDateString(), $to->toDateString()])
+                ->whereNotIn('id', $usedPaymentIds)
+                ->limit(2)
+                ->get(['id', 'payment_number', 'amount']);
+
+            if ($candidates->count() === 1) {
+                $payment = $candidates->first();
+                if (! $dryRun) {
+                    $line->status = 'matched';
+                    $line->matched_payment_id = $payment->id;
+                    $line->matched_by_user_id = optional($request->user())->id;
+                    $line->matched_at = now();
+                    $line->save();
+                    $usedPaymentIds[] = $payment->id;
+                }
+                $matched++;
+                $details[] = [
+                    'line_id' => $line->id,
+                    'value_date' => (string) $line->value_date,
+                    'amount' => (float) $line->amount,
+                    'payment_id' => $payment->id,
+                    'payment_number' => $payment->payment_number,
+                    'score' => 100,
+                ];
+            } elseif ($candidates->count() > 1) {
+                $ambiguous++;
+            } else {
+                $none++;
+            }
+        }
+
+        return ApiResponse::success([
+            'scanned' => $lines->count(),
+            'matched' => $matched,
+            'ambiguous' => $ambiguous,
+            'no_candidate' => $none,
+            'dry_run' => $dryRun,
+            'details' => $details,
+        ], ['message' => $dryRun
+            ? "Simulation : {$matched} lignes rapprochables, {$ambiguous} ambiguës, {$none} sans candidat."
+            : "{$matched} lignes rapprochées, {$ambiguous} ambiguës ignorées, {$none} sans candidat.",
+        ]);
+    }
 }

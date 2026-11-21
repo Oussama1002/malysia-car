@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  autoMatchBankLines,
   importBankLines,
   listBankLines,
   matchBankLine,
   suggestBankMatches,
   ignoreBankLine,
   unmatchBankLine,
+  type AutoMatchResult,
   type BankStatementLine,
   type BankSuggestion,
 } from '@/services/accountingApi';
@@ -46,7 +48,14 @@ export const BankReconciliationPage: React.FC = () => {
   const ignoreMut = useMutation({ mutationFn: (line: string) => ignoreBankLine(line), onSuccess: invalidate });
   const unmatchMut = useMutation({ mutationFn: (line: string) => unmatchBankLine(line), onSuccess: invalidate });
 
+  const [autoResult, setAutoResult] = useState<AutoMatchResult | null>(null);
+  const autoMut = useMutation({
+    mutationFn: (dryRun: boolean) => autoMatchBankLines({ dry_run: dryRun }),
+    onSuccess: (res) => { setAutoResult(res.data); invalidate(); },
+  });
+
   const lines = linesQ.data?.data ?? [];
+  const unmatchedCount = lines.filter((l) => l.status === 'unmatched').length;
 
   return (
     <div className="space-y-6">
@@ -55,8 +64,43 @@ export const BankReconciliationPage: React.FC = () => {
           <Link to="/accounting" className="text-xs font-bold text-indigo-600">← Comptabilité</Link>
           <h1 className="text-2xl font-black text-slate-900">Rapprochement bancaire</h1>
         </div>
-        <button className="df-btn df-btn--primary" onClick={() => setImportOpen(true)}>Importer un relevé</button>
+        <div className="flex gap-2">
+          <button
+            className="df-btn df-btn--ghost"
+            disabled={autoMut.isPending || unmatchedCount === 0}
+            onClick={() => autoMut.mutate(true)}
+            title="Simule sans écrire : liste les lignes qui ont exactement un paiement candidat (montant exact, date ±1 jour)."
+          >
+            {autoMut.isPending ? 'Simulation…' : 'Simuler rapprochement auto'}
+          </button>
+          <button
+            className="df-btn df-btn--secondary"
+            disabled={autoMut.isPending || unmatchedCount === 0}
+            onClick={() => autoMut.mutate(false)}
+          >
+            {autoMut.isPending ? 'Rapprochement…' : 'Rapprocher automatiquement'}
+          </button>
+          <button className="df-btn df-btn--primary" onClick={() => setImportOpen(true)}>Importer un relevé</button>
+        </div>
       </header>
+
+      {autoResult && (
+        <div className="df-card">
+          <div className="df-card__body flex items-center justify-between gap-4 text-sm">
+            <div className="flex-1">
+              <div className="font-bold text-slate-800">
+                {autoResult.dry_run ? 'Simulation' : 'Rapprochement automatique'} — {autoResult.scanned} ligne(s) scannée(s)
+              </div>
+              <div className="mt-1 flex flex-wrap gap-4 text-xs text-slate-600">
+                <span className="text-emerald-700 font-bold">✓ {autoResult.matched} rapprochée(s)</span>
+                <span className="text-amber-700">⚠ {autoResult.ambiguous} ambiguë(s)</span>
+                <span className="text-slate-500">○ {autoResult.no_candidate} sans candidat</span>
+              </div>
+            </div>
+            <button className="df-btn df-btn--ghost text-xs" onClick={() => setAutoResult(null)}>Fermer</button>
+          </div>
+        </div>
+      )}
 
       <div className="df-card">
         <div className="df-card__body flex items-center gap-3">
