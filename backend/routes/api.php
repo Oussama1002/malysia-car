@@ -948,6 +948,14 @@ Route::prefix('v1')->group(function () {
                 ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
             Route::post('bridge/fixed-charge-payment/{fixedChargePayment}', [AccountingBridgeController::class, 'fromFixedChargePayment'])
                 ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+            Route::post('bridge/sub-rental-payment/{subRentalPayment}', [AccountingBridgeController::class, 'fromSubRentalPayment'])
+                ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+            Route::post('bridge/wallet-transaction/{walletTransaction}', [AccountingBridgeController::class, 'fromWalletTransaction'])
+                ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+
+            // Supplier auxiliary ledger (4411 + 6136)
+            Route::get('supplier-auxiliary-balance', [AccountingReportController::class, 'supplierAuxiliaryBalance'])
+                ->middleware('permission:accounting.reports.view');
         });
 
         // Taxes

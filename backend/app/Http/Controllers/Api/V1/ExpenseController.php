@@ -123,6 +123,9 @@ class ExpenseController extends Controller
         $data = $request->validate([
             'label' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
+            'subtotal_amount' => ['nullable', 'numeric', 'min:0'],
+            'tax_amount' => ['nullable', 'numeric', 'min:0'],
+            'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'expense_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date'],
             'category' => ['required', 'string', 'max:50'],
@@ -164,6 +167,9 @@ class ExpenseController extends Controller
         $data = $request->validate([
             'label' => ['sometimes', 'string', 'max:255'],
             'amount' => ['sometimes', 'numeric', 'min:0'],
+            'subtotal_amount' => ['nullable', 'numeric', 'min:0'],
+            'tax_amount' => ['nullable', 'numeric', 'min:0'],
+            'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'expense_date' => ['sometimes', 'date'],
             'due_date' => ['nullable', 'date'],
             'category' => ['sometimes', 'string', 'max:50'],

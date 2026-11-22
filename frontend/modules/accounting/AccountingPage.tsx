@@ -48,6 +48,7 @@ export const AccountingPage: React.FC = () => {
         <AccountingCard to="/accounting/reports/balance-sheet" title="Bilan (Actif/Passif)" description="Situation patrimoniale à une date donnée." />
         <AccountingCard to="/accounting/reports/income-statement" title="Compte de résultat" description="Produits vs charges — résultat de l'exercice." />
         <AccountingCard to="/accounting/reports/tax-report" title="État TVA" description="TVA collectée et retenues à la source par période." />
+        <AccountingCard to="/accounting/reports/supplier-auxiliary" title="Auxiliaire fournisseurs" description="Soldes 4411 + sous-location par fournisseur." />
         <AccountingCard to="/accounting/fixed-assets" title="Immobilisations" description="Actifs, dotations aux amortissements, cessions." />
         <AccountingCard to="/accounting/bank-reconciliation" title="Rapprochement bancaire" description="Lignes de relevé bancaire à pointer avec les paiements." />
         <AccountingCard to="/accounting/settings" title="Paramètres fiscaux" description="Taxes, exercices fiscaux, périodes." />

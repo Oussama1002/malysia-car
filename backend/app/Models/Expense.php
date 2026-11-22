@@ -18,7 +18,8 @@ class Expense extends Model
 
     protected $fillable = [
         'id', 'company_id', 'branch_id',
-        'label', 'amount', 'currency_code', 'expense_date', 'due_date',
+        'label', 'amount', 'subtotal_amount', 'tax_amount', 'tax_rate',
+        'currency_code', 'expense_date', 'due_date',
         'category', 'expense_type', 'status', 'payment_method', 'reference',
         'vehicle_id', 'driver_id', 'customer_id', 'contract_id',
         'reservation_id', 'mission_id', 'supplier_id',
@@ -29,6 +30,9 @@ class Expense extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'subtotal_amount' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
+        'tax_rate' => 'decimal:2',
         'expense_date' => 'date',
         'due_date' => 'date',
         'paid_at' => 'datetime',

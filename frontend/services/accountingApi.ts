@@ -442,3 +442,35 @@ export const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = {
 export function entryStatusTone(s: EntryStatus): 'default' | 'success' | 'danger' | 'warning' {
   return s === 'posted' ? 'success' : s === 'cancelled' ? 'danger' : 'default';
 }
+
+// ── Supplier auxiliary balance (4411 + 6136) ──────────────────────────
+export interface SupplierAuxRow {
+  supplier_id: string;
+  supplier_kind: 'supplier' | 'supplier_agency';
+  supplier_name: string;
+  total_debit: number;
+  total_credit: number;
+  balance: number;
+  line_count: number;
+}
+export interface SupplierAuxResponse {
+  as_of: string;
+  account_code: string | null;
+  suppliers: SupplierAuxRow[];
+  totals: {
+    total_debit: number;
+    total_credit: number;
+    total_balance: number;
+    supplier_count: number;
+  };
+}
+export async function getSupplierAuxiliary(params: {
+  as_of?: string;
+  supplier_id?: string;
+  account_code?: string;
+  only_open?: boolean;
+} = {}): Promise<{ data: SupplierAuxResponse }> {
+  return apiClient<{ data: SupplierAuxResponse }>(
+    `/v1/accounting/supplier-auxiliary-balance${q(params as Record<string, unknown>)}`,
+  );
+}

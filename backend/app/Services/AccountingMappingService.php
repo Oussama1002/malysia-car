@@ -30,6 +30,10 @@ class AccountingMappingService
             'account_charge_entretien' => '6125',
             'account_charge_assurance' => '6134',
             'account_charge_defaut' => '6181',
+            'account_tva_deductible' => '3455',
+            'account_charge_location' => '6136',
+            'account_wallet' => '4421',
+            'account_wallet_adjustment' => '6714',
         ];
     }
 

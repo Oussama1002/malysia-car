@@ -8,12 +8,16 @@ use App\Models\FixedAsset;
 use App\Models\FixedChargePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\SubRentalPayment;
+use App\Models\WalletTransaction;
 use App\Observers\DepreciationAccountingObserver;
 use App\Observers\ExpenseAccountingObserver;
 use App\Observers\FixedAssetAccountingObserver;
 use App\Observers\FixedChargePaymentAccountingObserver;
 use App\Observers\InvoiceAccountingObserver;
 use App\Observers\PaymentAccountingObserver;
+use App\Observers\SubRentalPaymentAccountingObserver;
+use App\Observers\WalletTransactionAccountingObserver;
 use App\Services\DocumentReader\GoogleVisionOcrProvider;
 use App\Services\DocumentReader\OcrProviderInterface;
 use App\Services\DocumentReader\TesseractOcrProvider;
@@ -79,6 +83,8 @@ class AppServiceProvider extends ServiceProvider
         FixedAsset::observe(FixedAssetAccountingObserver::class);
         Expense::observe(ExpenseAccountingObserver::class);
         FixedChargePayment::observe(FixedChargePaymentAccountingObserver::class);
+        SubRentalPayment::observe(SubRentalPaymentAccountingObserver::class);
+        WalletTransaction::observe(WalletTransactionAccountingObserver::class);
 
         RateLimiter::for('login', function (Request $request) {
             $email = (string) $request->input('email', '');

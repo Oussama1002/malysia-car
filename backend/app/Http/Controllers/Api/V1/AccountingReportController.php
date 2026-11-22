@@ -179,6 +179,93 @@ class AccountingReportController extends Controller
     }
 
     // ==================================================================
+    // Grand livre auxiliaire fournisseurs (4411 + sous-location 6136)
+    // ==================================================================
+
+    public function supplierAuxiliaryBalance(Request $request): JsonResponse
+    {
+        $request->validate([
+            'as_of' => ['nullable', 'date'],
+            'supplier_id' => ['nullable', 'uuid'],
+            'account_code' => ['nullable', 'string'],
+            'only_open' => ['nullable', 'boolean'],
+        ]);
+
+        $asOf = $request->query('as_of', now()->toDateString());
+        $accountCode = $request->query('account_code');
+        $supplierId = $request->query('supplier_id');
+        $onlyOpen = filter_var($request->query('only_open', false), FILTER_VALIDATE_BOOLEAN);
+
+        // Two supplier worlds coexist: ExpenseSupplier (classic fournisseurs)
+        // and SupplierAgency (sous-location). They share the same accounting
+        // lanes but live in separate tables — union them so the comptable sees
+        // one list.
+        $q = DB::table('accounting_entry_lines as l')
+            ->join('accounting_entries as e', 'l.entry_id', '=', 'e.id')
+            ->leftJoin('expense_suppliers as es', function ($j) {
+                $j->on('l.third_party_id', '=', 'es.id')->where('l.third_party_type', '=', 'supplier');
+            })
+            ->leftJoin('supplier_agencies as sa', function ($j) {
+                $j->on('l.third_party_id', '=', 'sa.id')->where('l.third_party_type', '=', 'supplier_agency');
+            })
+            ->where('e.status', 'posted')
+            ->whereIn('l.third_party_type', ['supplier', 'supplier_agency'])
+            ->whereNotNull('l.third_party_id')
+            ->whereDate('e.entry_date', '<=', $asOf);
+
+        if ($accountCode) {
+            $q->where('l.account_code', $accountCode);
+        }
+        if ($supplierId) {
+            $q->where('l.third_party_id', $supplierId);
+        }
+
+        $rows = $q->select(
+                'l.third_party_id as supplier_id',
+                'l.third_party_type as supplier_kind',
+                'es.name as expense_supplier_name',
+                'sa.name as agency_name',
+                DB::raw('SUM(l.debit) as total_debit'),
+                DB::raw('SUM(l.credit) as total_credit'),
+                DB::raw('COUNT(*) as line_count'),
+            )
+            ->groupBy('l.third_party_id', 'l.third_party_type', 'es.name', 'sa.name')
+            ->get()
+            ->map(function ($r) {
+                $debit = (float) $r->total_debit;
+                $credit = (float) $r->total_credit;
+                // 4411 est un compte de passif → solde créditeur = nous devons.
+                $balance = round($credit - $debit, 2);
+                $name = $r->expense_supplier_name ?? $r->agency_name ?? '(inconnu)';
+                return [
+                    'supplier_id' => $r->supplier_id,
+                    'supplier_kind' => $r->supplier_kind,
+                    'supplier_name' => $name,
+                    'total_debit' => round($debit, 2),
+                    'total_credit' => round($credit, 2),
+                    'balance' => $balance,
+                    'line_count' => (int) $r->line_count,
+                ];
+            });
+
+        if ($onlyOpen) {
+            $rows = $rows->filter(fn ($r) => abs($r['balance']) >= 0.01)->values();
+        }
+
+        return ApiResponse::success([
+            'as_of' => $asOf,
+            'account_code' => $accountCode,
+            'suppliers' => $rows->values(),
+            'totals' => [
+                'total_debit' => round($rows->sum('total_debit'), 2),
+                'total_credit' => round($rows->sum('total_credit'), 2),
+                'total_balance' => round($rows->sum('balance'), 2),
+                'supplier_count' => $rows->count(),
+            ],
+        ]);
+    }
+
+    // ==================================================================
     // Balance générale / Trial balance
     // ==================================================================
 

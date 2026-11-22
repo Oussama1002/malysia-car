@@ -8,11 +8,14 @@ use App\Models\AccountingJournal;
 use App\Models\Customer;
 use App\Models\DepreciationLine;
 use App\Models\Expense;
+use App\Models\ExpenseSupplier;
 use App\Models\FiscalPeriod;
 use App\Models\FixedAsset;
 use App\Models\FixedChargePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\SubRentalPayment;
+use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -263,10 +266,10 @@ class AccountingBridgeService
     public function fromExpense(Expense $expense, ?string $userId = null): AccountingEntry
     {
         $chargeKey = AccountingMappingService::expenseAccountKeyFor($expense->category);
-        $map = $this->mappingService->requireMappings(
-            $expense->company_id,
-            [$chargeKey, 'account_fournisseur', 'account_banque', 'account_caisse']
-        );
+        $needs = [$chargeKey, 'account_fournisseur', 'account_banque', 'account_caisse'];
+        $tax = (float) ($expense->tax_amount ?? 0);
+        if ($tax > 0) $needs[] = 'account_tva_deductible';
+        $map = $this->mappingService->requireMappings($expense->company_id, $needs);
 
         if (AccountingEntry::where('source_type', 'expense')->where('source_id', $expense->id)->exists()) {
             throw new RuntimeException('Accounting entry already generated for this expense.');
@@ -274,7 +277,7 @@ class AccountingBridgeService
         $isPaid = $expense->status === 'paid';
 
         $entry = null;
-        DB::transaction(function () use (&$entry, $expense, $userId, $map, $chargeKey, $isPaid) {
+        DB::transaction(function () use (&$entry, $expense, $userId, $map, $chargeKey, $isPaid, $tax) {
             // When the expense is already paid cash/bank, book straight to the bank/cash
             // account; otherwise record a supplier payable and let the bank reconciliation
             // or a later payment clear it.
@@ -305,16 +308,153 @@ class AccountingBridgeService
                 'created_by_user_id' => $userId,
             ]);
 
-            $amount = (float) $expense->amount;
+            $total = (float) $expense->amount;
+            $subtotal = $tax > 0 ? (float) ($expense->subtotal_amount ?? ($total - $tax)) : $total;
             $chargeAccount = $map[$chargeKey];
             $counterpart = $isPaid
                 ? ($journalType === 'bank' ? $map['account_banque'] : $map['account_caisse'])
                 : $map['account_fournisseur'];
 
-            AccountingEntryLine::insert([
-                $this->line($entry->id, 1, $chargeAccount, "Charge {$expense->category}", $amount, 0),
-                $this->line($entry->id, 2, $counterpart, $isPaid ? 'Règlement dépense' : 'Fournisseur', 0, $amount),
+            // Supplier auxiliary ledger — only when the counterpart is 4411 and we know who.
+            $supplierId = $expense->supplier_id;
+            $counterpartAux = (! $isPaid && $supplierId) ? ['supplier', $supplierId] : [null, null];
+
+            $order = 1;
+            $lines = [];
+            $lines[] = $this->line($entry->id, $order++, $chargeAccount, "Charge {$expense->category}", $subtotal, 0);
+            if ($tax > 0) {
+                $lines[] = $this->line($entry->id, $order++, $map['account_tva_deductible'], 'TVA déductible', $tax, 0);
+            }
+            $lines[] = $this->line(
+                $entry->id, $order++, $counterpart,
+                $isPaid ? 'Règlement dépense' : $this->supplierLabel($supplierId),
+                0, $total,
+                $counterpartAux[0], $counterpartAux[1],
+            );
+
+            AccountingEntryLine::insert($lines);
+            $entry->recalculateTotals();
+            $this->autoPost($entry, $userId);
+        });
+
+        return $entry->fresh('lines');
+    }
+
+    public function fromSubRentalPayment(SubRentalPayment $payment, ?string $userId = null): AccountingEntry
+    {
+        $contract = $payment->contract()->first();
+        if (! $contract) {
+            throw new RuntimeException('Sub-rental payment is not linked to a contract.');
+        }
+        $map = $this->mappingService->requireMappings(
+            $contract->company_id,
+            ['account_charge_location', 'account_banque', 'account_caisse']
+        );
+
+        if (AccountingEntry::where('source_type', 'sub_rental_payment')->where('source_id', $payment->id)->exists()) {
+            throw new RuntimeException('Accounting entry already generated for this sub-rental payment.');
+        }
+
+        $entry = null;
+        DB::transaction(function () use (&$entry, $payment, $contract, $userId, $map) {
+            $method = strtolower((string) ($payment->payment_method ?? ''));
+            $journalType = in_array($method, ['bank_transfer', 'check', 'cheque', 'virement'], true) ? 'bank' : 'cash';
+            $journal = $this->resolveJournal($journalType, $contract->company_id);
+            $date = $payment->payment_date?->toDateString() ?? now()->toDateString();
+            $period = $this->resolvePeriod($date, $contract->company_id);
+
+            $entry = AccountingEntry::create([
+                'id' => (string) Str::uuid(),
+                'company_id' => $contract->company_id,
+                'branch_id' => $contract->branch_id,
+                'journal_id' => $journal->id,
+                'fiscal_period_id' => $period?->id,
+                'entry_number' => $this->nextNumber($journal),
+                'entry_date' => $date,
+                'description' => "Sous-location {$contract->contract_number}",
+                'reference' => $payment->reference ?? $contract->contract_number,
+                'status' => 'draft',
+                'source_type' => 'sub_rental_payment',
+                'source_id' => $payment->id,
+                'currency_code' => 'MAD',
+                'created_by_user_id' => $userId,
             ]);
+
+            $amount = (float) $payment->amount;
+            $supplierId = $contract->supplier_agency_id;
+            $counterpart = $journalType === 'bank' ? $map['account_banque'] : $map['account_caisse'];
+
+            AccountingEntryLine::insert([
+                $this->line($entry->id, 1, $map['account_charge_location'], 'Location fournisseur', $amount, 0, $supplierId ? 'supplier_agency' : null, $supplierId),
+                $this->line($entry->id, 2, $counterpart, 'Règlement sous-location', 0, $amount),
+            ]);
+            $entry->recalculateTotals();
+            $this->autoPost($entry, $userId);
+
+            $payment->accounting_entry_id = $entry->id;
+            $payment->saveQuietly();
+        });
+
+        return $entry->fresh('lines');
+    }
+
+    public function fromWalletTransaction(WalletTransaction $tx, ?string $userId = null): AccountingEntry
+    {
+        $map = $this->mappingService->requireMappings(
+            $tx->company_id,
+            ['account_wallet', 'account_wallet_adjustment', 'account_client']
+        );
+
+        if (AccountingEntry::where('source_type', 'wallet_transaction')->where('source_id', $tx->id)->exists()) {
+            throw new RuntimeException('Accounting entry already generated for this wallet transaction.');
+        }
+
+        $entry = null;
+        DB::transaction(function () use (&$entry, $tx, $userId, $map) {
+            $journal = $this->resolveJournal('general', $tx->company_id);
+            $date = ($tx->created_at ?? now())->toDateString();
+            $period = $this->resolvePeriod($date, $tx->company_id);
+
+            $entry = AccountingEntry::create([
+                'id' => (string) Str::uuid(),
+                'company_id' => $tx->company_id,
+                'journal_id' => $journal->id,
+                'fiscal_period_id' => $period?->id,
+                'entry_number' => $this->nextNumber($journal),
+                'entry_date' => $date,
+                'description' => "Portefeuille client — {$tx->type}",
+                'reference' => $tx->reference_type ? ($tx->reference_type . '/' . $tx->reference_id) : null,
+                'status' => 'draft',
+                'source_type' => 'wallet_transaction',
+                'source_id' => $tx->id,
+                'currency_code' => 'MAD',
+                'created_by_user_id' => $userId,
+            ]);
+
+            $amount = (float) $tx->amount;
+            $customerId = $tx->customer_id;
+            $customerLabel = $this->customerLabel($customerId);
+
+            // credit = money added to the wallet (liability increases)
+            // debit  = money removed (liability decreases)
+            if ($tx->direction === 'credit') {
+                // What created the credit? Early-return / goodwill — booked as an
+                // exceptional charge so the P&L reflects the economic cost.
+                AccountingEntryLine::insert([
+                    $this->line($entry->id, 1, $map['account_wallet_adjustment'], "Crédit portefeuille {$tx->type}", $amount, 0),
+                    $this->line($entry->id, 2, $map['account_wallet'], "Portefeuille {$customerLabel}", 0, $amount, 'customer', $customerId),
+                ]);
+            } else {
+                // Debit: either applied to clear a receivable (3421) or a manual
+                // reversal (booked back through the adjustment account).
+                $appliedToInvoice = in_array($tx->reference_type, ['contract', 'reservation', 'invoice'], true);
+                $counterpart = $appliedToInvoice ? $map['account_client'] : $map['account_wallet_adjustment'];
+                $counterpartAux = $appliedToInvoice ? ['customer', $customerId] : [null, null];
+                AccountingEntryLine::insert([
+                    $this->line($entry->id, 1, $map['account_wallet'], "Portefeuille {$customerLabel}", $amount, 0, 'customer', $customerId),
+                    $this->line($entry->id, 2, $counterpart, $appliedToInvoice ? 'Imputation portefeuille' : "Débit portefeuille {$tx->type}", 0, $amount, $counterpartAux[0], $counterpartAux[1]),
+                ]);
+            }
             $entry->recalculateTotals();
             $this->autoPost($entry, $userId);
         });
@@ -485,6 +625,13 @@ class AccountingBridgeService
         $customer = Customer::find($customerId);
         if (! $customer) return $customerId;
         return trim($customer->customer_code . ' · ' . $customer->display_name);
+    }
+
+    private function supplierLabel(?string $supplierId): string
+    {
+        if (! $supplierId) return 'Fournisseur';
+        $supplier = ExpenseSupplier::find($supplierId);
+        return $supplier ? ('Fournisseur ' . $supplier->name) : 'Fournisseur';
     }
 
     /**

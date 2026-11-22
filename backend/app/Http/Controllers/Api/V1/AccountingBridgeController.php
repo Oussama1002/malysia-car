@@ -10,6 +10,8 @@ use App\Models\FixedAsset;
 use App\Models\FixedChargePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\SubRentalPayment;
+use App\Models\WalletTransaction;
 use App\Services\AccountingBridgeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,6 +75,26 @@ class AccountingBridgeController extends Controller
     {
         try {
             $entry = $this->bridge->fromFixedChargePayment($fixedChargePayment, optional($request->user())->id);
+        } catch (RuntimeException $e) {
+            return ApiResponse::message($e->getMessage(), 422);
+        }
+        return ApiResponse::success($entry, null, null, 201);
+    }
+
+    public function fromSubRentalPayment(Request $request, SubRentalPayment $subRentalPayment): JsonResponse
+    {
+        try {
+            $entry = $this->bridge->fromSubRentalPayment($subRentalPayment, optional($request->user())->id);
+        } catch (RuntimeException $e) {
+            return ApiResponse::message($e->getMessage(), 422);
+        }
+        return ApiResponse::success($entry, null, null, 201);
+    }
+
+    public function fromWalletTransaction(Request $request, WalletTransaction $walletTransaction): JsonResponse
+    {
+        try {
+            $entry = $this->bridge->fromWalletTransaction($walletTransaction, optional($request->user())->id);
         } catch (RuntimeException $e) {
             return ApiResponse::message($e->getMessage(), 422);
         }

@@ -39,6 +39,10 @@ class AccountingSettingsController extends Controller
             'mappings.account_charge_entretien' => ['sometimes', 'string', 'max:30'],
             'mappings.account_charge_assurance' => ['sometimes', 'string', 'max:30'],
             'mappings.account_charge_defaut' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_tva_deductible' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_charge_location' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_wallet' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_wallet_adjustment' => ['sometimes', 'string', 'max:30'],
         ]);
 
         $companyId = optional($request->user())->company_id;

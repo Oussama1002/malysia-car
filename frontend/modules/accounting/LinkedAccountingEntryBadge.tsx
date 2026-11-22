@@ -7,7 +7,15 @@ import { ENTRY_STATUS_LABEL, entryStatusTone } from '@/services/accountingApi';
 import type { Paginated } from '@/services/adminApi';
 import { StatusBadge } from '@/modules/shared/components/StatusBadge';
 
-type SourceType = 'invoice' | 'payment' | 'depreciation' | 'asset_disposal' | 'expense' | 'fixed_charge_payment';
+type SourceType =
+  | 'invoice'
+  | 'payment'
+  | 'depreciation'
+  | 'asset_disposal'
+  | 'expense'
+  | 'fixed_charge_payment'
+  | 'sub_rental_payment'
+  | 'wallet_transaction';
 
 export const LinkedAccountingEntryBadge: React.FC<{
   sourceType: SourceType;

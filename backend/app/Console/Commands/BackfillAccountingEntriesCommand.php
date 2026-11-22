@@ -9,6 +9,8 @@ use App\Models\FixedAsset;
 use App\Models\FixedChargePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\SubRentalPayment;
+use App\Models\WalletTransaction;
 use App\Services\AccountingBridgeService;
 use Illuminate\Console\Command;
 use Throwable;
@@ -17,16 +19,16 @@ class BackfillAccountingEntriesCommand extends Command
 {
     protected $signature = 'accounting:backfill
                             {--dry-run : Count what would be generated, without writing}
-                            {--only= : invoice|payment|depreciation|disposal|expense|fixed_charge_payment — restrict to one source}';
+                            {--only= : invoice|payment|depreciation|disposal|expense|fixed_charge_payment|sub_rental_payment|wallet_transaction — restrict to one source}';
 
-    protected $description = 'Generate missing journal entries for existing invoices, payments, depreciation lines, disposed assets, expenses and fixed-charge payments';
+    protected $description = 'Generate missing journal entries for every bridged source (invoices, payments, depreciation, disposals, expenses, fixed-charge payments, sub-rental payments, wallet transactions)';
 
     public function handle(AccountingBridgeService $bridge): int
     {
         $dry = (bool) $this->option('dry-run');
         $only = $this->option('only');
 
-        $kinds = ['invoice', 'payment', 'depreciation', 'disposal', 'expense', 'fixed_charge_payment'];
+        $kinds = ['invoice', 'payment', 'depreciation', 'disposal', 'expense', 'fixed_charge_payment', 'sub_rental_payment', 'wallet_transaction'];
         if ($only && ! in_array($only, $kinds, true)) {
             $this->error("--only must be one of: " . implode(', ', $kinds));
             return self::FAILURE;
@@ -43,8 +45,52 @@ class BackfillAccountingEntriesCommand extends Command
         $run('disposal', fn () => $this->backfillDisposals($bridge, $dry));
         $run('expense', fn () => $this->backfillExpenses($bridge, $dry));
         $run('fixed_charge_payment', fn () => $this->backfillFixedChargePayments($bridge, $dry));
+        $run('sub_rental_payment', fn () => $this->backfillSubRentalPayments($bridge, $dry));
+        $run('wallet_transaction', fn () => $this->backfillWalletTransactions($bridge, $dry));
 
         return self::SUCCESS;
+    }
+
+    private function backfillSubRentalPayments(AccountingBridgeService $bridge, bool $dry): void
+    {
+        $existing = AccountingEntry::where('source_type', 'sub_rental_payment')->pluck('source_id')->all();
+        $payments = SubRentalPayment::whereNotIn('id', $existing)->get();
+
+        $this->info("[sub_rental_payment] {$payments->count()} à traiter");
+        if ($dry) return;
+
+        $ok = 0; $ko = 0;
+        foreach ($payments as $p) {
+            try {
+                $bridge->fromSubRentalPayment($p);
+                $ok++;
+            } catch (Throwable $ex) {
+                $ko++;
+                $this->line("  skip {$p->id}: {$ex->getMessage()}");
+            }
+        }
+        $this->info("  ✓ {$ok} / skip {$ko}");
+    }
+
+    private function backfillWalletTransactions(AccountingBridgeService $bridge, bool $dry): void
+    {
+        $existing = AccountingEntry::where('source_type', 'wallet_transaction')->pluck('source_id')->all();
+        $txs = WalletTransaction::whereNotIn('id', $existing)->get();
+
+        $this->info("[wallet_transaction] {$txs->count()} à traiter");
+        if ($dry) return;
+
+        $ok = 0; $ko = 0;
+        foreach ($txs as $t) {
+            try {
+                $bridge->fromWalletTransaction($t);
+                $ok++;
+            } catch (Throwable $ex) {
+                $ko++;
+                $this->line("  skip {$t->id}: {$ex->getMessage()}");
+            }
+        }
+        $this->info("  ✓ {$ok} / skip {$ko}");
     }
 
     private function backfillExpenses(AccountingBridgeService $bridge, bool $dry): void
