@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\DepreciationLine;
+use App\Models\Expense;
 use App\Models\FixedAsset;
+use App\Models\FixedChargePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\AccountingBridgeService;
@@ -51,6 +53,26 @@ class AccountingBridgeController extends Controller
     {
         try {
             $entry = $this->bridge->fromAssetDisposal($fixedAsset, optional($request->user())->id);
+        } catch (RuntimeException $e) {
+            return ApiResponse::message($e->getMessage(), 422);
+        }
+        return ApiResponse::success($entry, null, null, 201);
+    }
+
+    public function fromExpense(Request $request, Expense $expense): JsonResponse
+    {
+        try {
+            $entry = $this->bridge->fromExpense($expense, optional($request->user())->id);
+        } catch (RuntimeException $e) {
+            return ApiResponse::message($e->getMessage(), 422);
+        }
+        return ApiResponse::success($entry, null, null, 201);
+    }
+
+    public function fromFixedChargePayment(Request $request, FixedChargePayment $fixedChargePayment): JsonResponse
+    {
+        try {
+            $entry = $this->bridge->fromFixedChargePayment($fixedChargePayment, optional($request->user())->id);
         } catch (RuntimeException $e) {
             return ApiResponse::message($e->getMessage(), 422);
         }

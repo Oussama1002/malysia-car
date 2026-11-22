@@ -27,6 +27,7 @@ class MoroccanChartOfAccountsSeeder extends Seeder
             ['code' => '7321', 'name' => 'Produits financiers', 'account_type' => 'income', 'normal_balance' => 'credit'],
             ['code' => '6125', 'name' => 'Entretien et reparations vehicules', 'account_type' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '6134', 'name' => 'Primes d assurance', 'account_type' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6181', 'name' => 'Autres charges externes diverses', 'account_type' => 'expense', 'normal_balance' => 'debit'],
             ['code' => '4455', 'name' => 'TVA collectee', 'account_type' => 'liability', 'normal_balance' => 'credit'],
             ['code' => '3455', 'name' => 'TVA deductible', 'account_type' => 'asset', 'normal_balance' => 'debit'],
             ['code' => '4457', 'name' => 'TVA sur marge VO', 'account_type' => 'liability', 'normal_balance' => 'credit'],

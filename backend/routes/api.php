@@ -944,6 +944,10 @@ Route::prefix('v1')->group(function () {
                 ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
             Route::post('bridge/asset-disposal/{fixedAsset}', [AccountingBridgeController::class, 'fromAssetDisposal'])
                 ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+            Route::post('bridge/expense/{expense}', [AccountingBridgeController::class, 'fromExpense'])
+                ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
+            Route::post('bridge/fixed-charge-payment/{fixedChargePayment}', [AccountingBridgeController::class, 'fromFixedChargePayment'])
+                ->middleware(['permission:accounting.bridge.run', 'role:ADMIN,DIRECTEUR,COMPTABLE']);
         });
 
         // Taxes

@@ -35,6 +35,10 @@ class AccountingSettingsController extends Controller
             'mappings.account_amortissement_cumule' => ['sometimes', 'string', 'max:30'],
             'mappings.account_penalites_retard' => ['sometimes', 'string', 'max:30'],
             'mappings.account_produits_financiers' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_fournisseur' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_charge_entretien' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_charge_assurance' => ['sometimes', 'string', 'max:30'],
+            'mappings.account_charge_defaut' => ['sometimes', 'string', 'max:30'],
         ]);
 
         $companyId = optional($request->user())->company_id;

@@ -22,6 +22,7 @@ import { apiClient } from '@/services/apiClient';
 import { endpoints } from '@/services/endpoints';
 import { queryKeys } from '@/services/queryKeys';
 import { ApiError } from '@/services/apiError';
+import { LinkedAccountingEntryBadge } from '@/modules/accounting/LinkedAccountingEntryBadge';
 
 /**
  * Unpack any error (including Laravel 422 validation bags and 500 exceptions
@@ -567,6 +568,9 @@ const PaymentDetailView: React.FC<{
         {payment.external_reference && <Row label="Référence" value={payment.external_reference} />}
         {payment.notes && <Row label="Notes" value={<span className="italic">{payment.notes}</span>} />}
       </div>
+
+      {/* Linked accounting entry */}
+      <LinkedAccountingEntryBadge sourceType="payment" sourceId={String(payment.id)} />
 
       {/* Allocations */}
       {payment.allocations && payment.allocations.length > 0 && (

@@ -3,11 +3,15 @@
 namespace App\Providers;
 
 use App\Models\DepreciationLine;
+use App\Models\Expense;
 use App\Models\FixedAsset;
+use App\Models\FixedChargePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Observers\DepreciationAccountingObserver;
+use App\Observers\ExpenseAccountingObserver;
 use App\Observers\FixedAssetAccountingObserver;
+use App\Observers\FixedChargePaymentAccountingObserver;
 use App\Observers\InvoiceAccountingObserver;
 use App\Observers\PaymentAccountingObserver;
 use App\Services\DocumentReader\GoogleVisionOcrProvider;
@@ -73,6 +77,8 @@ class AppServiceProvider extends ServiceProvider
         Payment::observe(PaymentAccountingObserver::class);
         DepreciationLine::observe(DepreciationAccountingObserver::class);
         FixedAsset::observe(FixedAssetAccountingObserver::class);
+        Expense::observe(ExpenseAccountingObserver::class);
+        FixedChargePayment::observe(FixedChargePaymentAccountingObserver::class);
 
         RateLimiter::for('login', function (Request $request) {
             $email = (string) $request->input('email', '');

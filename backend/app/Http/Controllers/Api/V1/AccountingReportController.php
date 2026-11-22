@@ -8,6 +8,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingEntry;
 use App\Models\AccountingEntryLine;
 use App\Models\FiscalPeriod;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -450,6 +451,19 @@ class AccountingReportController extends Controller
         $to = $request->query('to');
 
         $filename = sprintf('FEC_%s_%s.txt', str_replace('-', '', $from), str_replace('-', '', $to));
+
+        // Regulatory traceability: FEC exports must be auditable.
+        AuditLogger::record(
+            action: 'fec.export',
+            user: $request->user(),
+            entityType: 'accounting_entries',
+            entityId: null,
+            after: ['from' => $from, 'to' => $to, 'filename' => $filename],
+            module: 'accounting',
+            legal: true,
+            request: $request,
+            label: 'Export FEC',
+        );
 
         return new StreamedResponse(function () use ($from, $to) {
             $out = fopen('php://output', 'w');

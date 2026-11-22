@@ -26,7 +26,32 @@ class AccountingMappingService
             'account_amortissement_cumule' => '2834',
             'account_penalites_retard' => '7385',
             'account_produits_financiers' => '7321',
+            'account_fournisseur' => '4411',
+            'account_charge_entretien' => '6125',
+            'account_charge_assurance' => '6134',
+            'account_charge_defaut' => '6181',
         ];
+    }
+
+    /**
+     * Map a free-text expense/fixed-charge category to a mapping key.
+     * Unknown categories fall through to the default charge account.
+     *
+     * @return string one of the keys returned by self::defaults()
+     */
+    public static function expenseAccountKeyFor(?string $category): string
+    {
+        $c = strtolower(trim((string) $category));
+        if ($c === '') return 'account_charge_defaut';
+        if (str_contains($c, 'entretien') || str_contains($c, 'maintenance')
+            || str_contains($c, 'repair') || str_contains($c, 'reparation')
+            || str_contains($c, 'réparation')) {
+            return 'account_charge_entretien';
+        }
+        if (str_contains($c, 'assurance') || str_contains($c, 'insurance')) {
+            return 'account_charge_assurance';
+        }
+        return 'account_charge_defaut';
     }
 
     /**
