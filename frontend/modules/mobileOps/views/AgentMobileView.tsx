@@ -30,13 +30,26 @@ const STATUS_TONE: Record<string, string> = {
   failed: 'bg-rose-100 text-rose-800',
 };
 
+// Libellés FR des types de mission — doit rester aligné sur
+// mobile/lib/features/missions/data/mission_dto.dart (missionTypeFr)
+// et sur frontend/modules/mobileOps/views/AdminOpsView.tsx (TYPE_LABEL).
 const TYPE_LABEL: Record<string, string> = {
   delivery: 'Livraison',
   pickup: 'Récupération',
-  check_in: 'Check-in',
-  check_out: 'Check-out',
+  vehicle_swap: 'Changement de véhicule',
+  handover: 'Remise du véhicule',
+  return: 'Restitution',
+  transfer: 'Transfert',
+  convoy: 'Convoyage',
+  check_in: 'État des lieux (entrée)',
+  check_out: 'État des lieux (sortie)',
   inspection: 'Inspection',
+  cleaning: 'Nettoyage',
+  workshop: 'Atelier',
+  fuel: 'Carburant',
   assistance: 'Assistance',
+  maintenance: 'Maintenance',
+  other: 'Autre',
 };
 
 const PHOTO_PHASES = [

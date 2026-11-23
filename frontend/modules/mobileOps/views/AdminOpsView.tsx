@@ -39,9 +39,14 @@ const STATUS_LABEL: Record<string, string> = {
   failed: 'Échec',
 };
 
+// Libellés FR des types de mission — doit rester aligné sur
+// mobile/lib/features/missions/data/mission_dto.dart (missionTypeFr).
 const TYPE_LABEL: Record<string, string> = {
   delivery: 'Livraison',
   pickup: 'Récupération',
+  vehicle_swap: 'Changement de véhicule',
+  handover: 'Remise du véhicule',
+  return: 'Restitution',
   transfer: 'Transfert',
   convoy: 'Convoyage',
   check_in: 'État des lieux (entrée)',
@@ -51,8 +56,17 @@ const TYPE_LABEL: Record<string, string> = {
   workshop: 'Atelier',
   fuel: 'Carburant',
   assistance: 'Assistance',
+  maintenance: 'Maintenance',
   other: 'Autre',
 };
+
+// Types qu'un agent peut créer à la main : exclut les missions
+// auto-générées (vehicle_swap, handover, return, maintenance).
+const MANUAL_CREATE_TYPES: Array<keyof typeof TYPE_LABEL | string> = [
+  'delivery', 'pickup', 'transfer', 'convoy',
+  'check_in', 'check_out', 'inspection',
+  'cleaning', 'workshop', 'fuel', 'assistance', 'other',
+];
 
 const ISSUE_TYPE_LABEL: Record<string, string> = {
   vehicle_damage: 'Dommage véhicule',
@@ -882,8 +896,8 @@ const CreateMissionDrawer: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           <div>
             <label className="mb-1 block text-xs font-bold text-slate-700">Type de mission *</label>
             <select value={form.mission_type} onChange={(e) => set('mission_type', e.target.value)} className="df-input w-full text-xs">
-              {Object.entries(TYPE_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              {MANUAL_CREATE_TYPES.map((k) => (
+                <option key={k} value={k}>{TYPE_LABEL[k] ?? k}</option>
               ))}
             </select>
           </div>
