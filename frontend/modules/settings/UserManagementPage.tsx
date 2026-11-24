@@ -865,9 +865,12 @@ const UserPermissionsForm: React.FC<{
   const roleSet = new Set(data.role_codes);
   const needle = filter.trim().toLowerCase();
 
-  // Regrouper par module_name (French label fallback au code).
+  // Regrouper par module_name (French label fallback au code). Certains codes
+  // sont masqués de l'UI Accès (ex. audit.export : géré côté rôle uniquement).
+  const HIDDEN_CODES = new Set(['audit.export']);
   const byModule: Record<string, UserPermissionCatalog['available']> = {};
   for (const p of data.available) {
+    if (HIDDEN_CODES.has(p.code)) continue;
     const mod = (p.module_name || 'autre').toLowerCase();
     (byModule[mod] ||= []).push(p);
   }
