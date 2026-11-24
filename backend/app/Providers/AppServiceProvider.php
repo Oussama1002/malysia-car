@@ -25,6 +25,7 @@ use App\Services\Sms\ExternalSmsProviderStub;
 use App\Services\Sms\LogSmsProvider;
 use App\Services\Sms\SmsProviderInterface;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -76,6 +77,36 @@ class AppServiceProvider extends ServiceProvider
         // validation (et autres chaînes traduites) sortent en français, quelle
         // que soit la valeur d'APP_LOCALE dans l'environnement.
         $this->app->setLocale('fr');
+
+        // Short-alias morph map so audit_logs.entity_type and
+        // app_notifications.entity_type never store a full "App\\Models\\…"
+        // class name. The audit filter dropdown and the AuditTrailPresenter
+        // both key off these short codes; keeping both encodings in the same
+        // column (QA 2026-11-24 M8) made half of audit history invisible.
+        Relation::enforceMorphMap([
+            'contract' => \App\Models\Contract::class,
+            'reservation' => \App\Models\Reservation::class,
+            'payment' => \App\Models\Payment::class,
+            'customer' => \App\Models\Customer::class,
+            'vehicle' => \App\Models\Vehicle::class,
+            'invoice' => \App\Models\Invoice::class,
+            'mission' => \App\Models\Mission::class,
+            'user' => \App\Models\User::class,
+            'notification' => \App\Models\Notification::class,
+            'website_lead' => \App\Models\WebsiteLead::class,
+            'kyc_case' => \App\Models\CustomerKycCase::class,
+            'credit_application' => \App\Models\CreditApplication::class,
+            'arrears_case' => \App\Models\ArrearsCase::class,
+            'signature_envelope' => \App\Models\SignatureEnvelope::class,
+            'entity_attachment' => \App\Models\EntityAttachment::class,
+            'supplier_agency' => \App\Models\SupplierAgency::class,
+            'sub_rental_contract' => \App\Models\SubRentalContract::class,
+            'sub_rental_payment' => \App\Models\SubRentalPayment::class,
+            'vehicle_swap_request' => \App\Models\VehicleSwapRequest::class,
+            'vehicle_maintenance_plan' => \App\Models\VehicleMaintenancePlan::class,
+            'vehicle_movement' => \App\Models\VehicleMovement::class,
+            'franchise_rule' => \App\Models\FranchiseRule::class,
+        ]);
 
         Invoice::observe(InvoiceAccountingObserver::class);
         Payment::observe(PaymentAccountingObserver::class);

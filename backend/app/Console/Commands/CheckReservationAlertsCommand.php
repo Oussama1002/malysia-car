@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Notification;
 use App\Models\Reservation;
 use App\Services\NotificationService;
 use Carbon\Carbon;
@@ -28,20 +29,44 @@ class CheckReservationAlertsCommand extends Command
             ->limit(200)
             ->get();
 
+        $sent = 0;
         foreach ($rows as $r) {
+            // Dedupe: QA 2026-11-24 M2 found 6× duplicates per reservation in 20h
+            // because this command (scheduled every ~4h) kept re-emitting without
+            // a guard. One notification per reservation per due-day is enough —
+            // the dashboard badge stops being noise and the mailer queue stops
+            // flooding when SMTP is back.
+            $dueKey = Carbon::parse($r->desired_end_at)->format('Y-m-d');
+            $already = Notification::query()
+                ->where('category', 'rentals.return_due')
+                ->where('entity_id', $r->id)
+                ->whereDate('created_at', '>=', now()->subDay()->startOfDay())
+                ->whereRaw("JSON_EXTRACT(payload, '$.due_key') = ?", [$dueKey])
+                ->exists();
+            if ($already) {
+                continue;
+            }
+
             $this->notifications->notifyRoles(
                 roleCodes: ['GESTIONNAIRE_FLOTTE', 'DIRECTEUR', 'ADMIN'],
                 category: 'rentals.return_due',
                 title: 'Retour véhicule attendu',
-                body: 'Réservation '.$r->reservation_number.' — retour prévu '.$r->desired_end_at,
+                body: sprintf(
+                    'Réservation %s — retour prévu %s',
+                    $r->reservation_number,
+                    // dd/MM/yyyy HH:mm per AGENTS §5.6 (was raw ISO Carbon toString).
+                    Carbon::parse($r->desired_end_at)->format('d/m/Y H:i'),
+                ),
                 module: 'rentals',
                 priority: 'high',
                 entity: $r,
                 linkUrl: '/rentals',
+                payload: ['due_key' => $dueKey],
             );
+            $sent++;
         }
 
-        $this->info('Reservation alerts: '.$rows->count());
+        $this->info(sprintf('Reservation alerts: %d candidates, %d new, %d deduplicated', $rows->count(), $sent, $rows->count() - $sent));
 
         return self::SUCCESS;
     }
