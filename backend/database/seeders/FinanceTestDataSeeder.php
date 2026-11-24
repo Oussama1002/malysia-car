@@ -59,6 +59,7 @@ class FinanceTestDataSeeder extends Seeder
             $vehicle = $this->seedVehicle($company);
             $contract = $this->seedContract($company, $customer, $vehicle, $admin);
             $bank = $this->seedBankAccount($company);
+            $this->seedExtraBankAccounts($company);
 
             $this->seedPayments($company, $customer, $contract, $bank, $admin);
             $this->seedInvoices($company, $customer, $contract, $admin);
@@ -177,6 +178,64 @@ class FinanceTestDataSeeder extends Seeder
                 'is_active' => true,
                 'is_primary' => true,
                 'notes' => self::MARKER,
+            ]
+        );
+    }
+
+    /**
+     * Extra bank accounts so the Trésorerie page has several rows to test:
+     * a secondary bank in EUR, a cash register, and an inactive account.
+     */
+    private function seedExtraBankAccounts(Company $company): void
+    {
+        BankAccount::firstOrCreate(
+            ['company_id' => $company->id, 'account_name' => 'BMCE EUR (TEST)'],
+            [
+                'id' => (string) Str::uuid(),
+                'bank_name' => 'BMCE Bank',
+                'account_number' => '011780002345678901234567',
+                'iban' => 'MA64011780002345678901234567',
+                'swift_code' => 'BMCEMAMC',
+                'currency_code' => 'EUR',
+                'opening_balance' => 12000.00,
+                'current_balance' => 12000.00,
+                'is_active' => true,
+                'is_primary' => false,
+                'notes' => self::MARKER.' — Compte EUR secondaire',
+            ]
+        );
+
+        BankAccount::firstOrCreate(
+            ['company_id' => $company->id, 'account_name' => 'Caisse espèces (TEST)'],
+            [
+                'id' => (string) Str::uuid(),
+                'bank_name' => 'Caisse',
+                'account_number' => 'CAISSE-TEST-001',
+                'iban' => null,
+                'swift_code' => null,
+                'currency_code' => 'MAD',
+                'opening_balance' => 8000.00,
+                'current_balance' => 8000.00,
+                'is_active' => true,
+                'is_primary' => false,
+                'notes' => self::MARKER.' — Caisse espèces agence',
+            ]
+        );
+
+        BankAccount::firstOrCreate(
+            ['company_id' => $company->id, 'account_name' => 'CIH Fermé (TEST)'],
+            [
+                'id' => (string) Str::uuid(),
+                'bank_name' => 'CIH Bank',
+                'account_number' => '230150003456789012345678',
+                'iban' => 'MA64230150003456789012345678',
+                'swift_code' => 'CIHMMAMC',
+                'currency_code' => 'MAD',
+                'opening_balance' => 0.00,
+                'current_balance' => 0.00,
+                'is_active' => false,
+                'is_primary' => false,
+                'notes' => self::MARKER.' — Compte historique inactif',
             ]
         );
     }
