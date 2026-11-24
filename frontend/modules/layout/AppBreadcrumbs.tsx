@@ -14,7 +14,6 @@ const NAV_KEYS: Record<string, string> = {
   'used-cars': 'nav.usedCars',
   gps: 'nav.gps',
   ai: 'nav.ai',
-  'mobile-ops': 'nav.mobileOps',
   missions: 'nav.missions',
   notifications: 'nav.notifications',
   documents: 'nav.documents',

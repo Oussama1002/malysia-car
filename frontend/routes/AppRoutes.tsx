@@ -76,7 +76,6 @@ import {
   AiMaintenancePredictionPage,
   AiVehiclePricingPredictionPage,
 } from '@/modules/ai/AiPredictionPages';
-import { MobileOpsPage } from '@/modules/mobileOps/MobileOpsPage';
 import { MissionsPage } from '@/modules/missions/MissionsPage';
 import { NotificationsPage } from '@/modules/notifications/NotificationsPage';
 import { SettingsPage } from '@/modules/settings/SettingsPage';
@@ -151,9 +150,9 @@ function HomeRedirect(): React.ReactElement {
   // renvoie en boucle vers /dashboard.
   const role = session?.user.role as AppRole | undefined;
   if (role && !canAccessModule(role, 'dashboard')) {
-    return <Navigate to="/mobile-ops" replace />;
+    return <Navigate to="/missions" replace />;
   }
-  return <Navigate to={isMobile ? '/mobile-ops' : '/dashboard'} replace />;
+  return <Navigate to={isMobile ? '/missions' : '/dashboard'} replace />;
 }
 
 export default function AppRoutes(): React.ReactElement {
@@ -686,15 +685,6 @@ export default function AppRoutes(): React.ReactElement {
                   <AiRoleGate roles={['ADMIN', 'DIRECTEUR', 'CONTENTIEUX']}>
                     <AiAnomaliesPage />
                   </AiRoleGate>
-                </ModuleGate>
-              }
-            />
-
-            <Route
-              path="/mobile-ops"
-              element={
-                <ModuleGate module="mobileOps">
-                  <MobileOpsPage />
                 </ModuleGate>
               }
             />

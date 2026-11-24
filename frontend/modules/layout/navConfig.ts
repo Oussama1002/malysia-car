@@ -54,7 +54,6 @@ export const GROUPS: NavGroup[] = [
     icon: 'sparkles',
     items: [
       { to: '/ai', module: 'ai', labelKey: 'nav.ai', icon: 'sparkles' },
-      { to: '/mobile-ops', module: 'mobileOps', labelKey: 'nav.mobileOps', icon: 'mobile' },
     ],
   },
   {

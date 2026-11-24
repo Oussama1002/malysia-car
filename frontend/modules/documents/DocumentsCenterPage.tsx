@@ -134,7 +134,7 @@ function entityLink(entityType: string, entityId: string): string {
   if (entityType === 'vehicle') return `/fleet/${entityId}`;
   if (entityType === 'customer') return `/customers/${entityId}`;
   if (entityType === 'contract') return `/contracts/${entityId}`;
-  if (entityType === 'mission') return '/mobile-ops';
+  if (entityType === 'mission') return '/missions';
   return '/dashboard';
 }
 
