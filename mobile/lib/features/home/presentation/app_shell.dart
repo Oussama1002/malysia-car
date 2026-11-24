@@ -369,7 +369,15 @@ class _PersistentTopBarState extends ConsumerState<_PersistentTopBar> {
                           minimumSize: const Size.fromHeight(48),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('Déconnexion'),
+                        // "Déconnexion" (11 chars) wraps mid-word on 375 px
+                        // viewports (QA 2026-11-24 M10). The dialog header
+                        // and prompt both already say "déconnecter" so the
+                        // confirm button can be the short verb alone.
+                        child: const Text(
+                          'Quitter',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ],

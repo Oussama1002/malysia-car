@@ -98,7 +98,18 @@ export interface InvoiceCreatePayload {
 
 export type PaymentStatus = 'received' | 'allocated' | 'refunded' | 'reversed';
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'check' | 'card' | 'compensation' | 'wallet';
-export type PaymentType = 'avance' | 'paiement_location' | 'solde' | 'caution' | 'penalite' | 'utilisation_avoir';
+export type PaymentType =
+  | 'avance'
+  | 'acompte'
+  | 'paiement_location'
+  | 'solde'
+  | 'caution'
+  | 'penalite'
+  | 'utilisation_avoir'
+  // Legacy English values still present on pre-normalization rows. Keep them in
+  // the union so TypeScript narrows cleanly; see PAYMENT_TYPE_LABEL for render.
+  | 'rent'
+  | 'down_payment';
 
 export interface PaymentAllocation {
   id: string;
@@ -517,11 +528,19 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
 
 export const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = {
   avance: 'Avance',
+  acompte: 'Acompte',
   paiement_location: 'Paiement location',
   solde: 'Solde',
-  caution: 'Caution',
+  // AGENTS §5.2 — DB keeps the enum 'caution' (API contract) but every
+  // UI label reads "Franchise d'assurance".
+  caution: "Franchise d'assurance",
   penalite: 'Pénalité',
   utilisation_avoir: 'Utilisation avoir',
+  // Legacy English values still readable until the backfill migration has
+  // run everywhere. Map them to the French equivalents so the Payments list
+  // never shows raw enum (QA 2026-11-24 M3).
+  rent: 'Paiement location',
+  down_payment: 'Acompte',
 };
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {

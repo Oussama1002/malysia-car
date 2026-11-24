@@ -23,6 +23,8 @@ const MODULE_OPTIONS = [
   'rentals',
   'gps',
   'used_cars',
+  'mobile_ops',
+  'notifications',
   'general',
   'system',
 ];
@@ -43,6 +45,10 @@ const MODULE_FR: Record<string, string> = {
   rentals: 'Réservations',
   gps: 'GPS',
   used_cars: 'Véhicules occasion',
+  // QA 2026-11-24 M9 — these two were stored but missing from the French map,
+  // so the MODULE column showed raw snake_case like `mobile_ops`.
+  mobile_ops: 'Opérations mobile',
+  notifications: 'Notifications',
   general: 'Général',
   system: 'Système',
 };

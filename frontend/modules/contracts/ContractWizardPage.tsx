@@ -1222,15 +1222,13 @@ export const ContractWizardPage: React.FC = () => {
                       >
                         <option value="">— Sélectionner —</option>
                         {(clients.data ?? []).map((c) => {
-                          // Label the identifier explicitly in the dropdown so
-                          // an agent generating a contract never signs off on
-                          // the wrong Mohamed : CIN XXXXXXX for an individual,
-                          // ICE XXXXXXX for a company. "CIN —" is shown when
-                          // the client has no national_id_number stored so the
-                          // missing data is obvious instead of silent.
+                          // AGENTS §5.8 — client dropdowns render as
+                          // "Name · XXXXXXX (Particulier|Entreprise)" — the
+                          // parenthesized kind already disambiguates CIN vs
+                          // ICE, so no literal prefix. Missing identifier is
+                          // still shown as '—' so the gap stays obvious.
                           const id = (c.idNumber ?? '').toString().trim();
-                          const label = c.kind === 'ENTREPRISE' ? 'ICE' : 'CIN';
-                          const suffix = ` · ${label} ${id || '—'}`;
+                          const suffix = ` · ${id || '—'}`;
                           return (
                             <option key={c.id} value={c.id}>
                               {c.name}{suffix} {c.kind === 'ENTREPRISE' ? '(Entreprise)' : '(Particulier)'}
