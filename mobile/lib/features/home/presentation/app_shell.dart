@@ -171,12 +171,14 @@ class _AppShellState extends ConsumerState<AppShell> {
 // Drawer latéral — tous les modules de l'accueil
 // ---------------------------------------------------------------------------
 
-class _ModulesDrawer extends StatelessWidget {
+class _ModulesDrawer extends ConsumerWidget {
   const _ModulesDrawer();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
+    final role = ref.watch(currentUserProvider).valueOrNull?.role;
+    final modules = modulesForRole(role);
     return Drawer(
       backgroundColor: cs.surface,
       child: SafeArea(
@@ -227,10 +229,10 @@ class _ModulesDrawer extends StatelessWidget {
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: kModules.length,
+                itemCount: modules.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 2),
                 itemBuilder: (ctx, i) {
-                  final m = kModules[i];
+                  final m = modules[i];
                   return ListTile(
                     leading: Container(
                       width: 38,

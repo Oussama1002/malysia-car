@@ -17,6 +17,30 @@ class ModuleDescriptor {
   final Color color;
 }
 
+/// Modules visibles pour le rôle COMPTABLE sur mobile. Reflète le périmètre
+/// web (`finance`, `contracts`, `documents`, `subRentals`, chat) : pas de
+/// flotte, clients, GPS ni réservations.
+const Set<String> kComptableModulePaths = {
+  '/paiements',
+  '/contrats',
+  '/documents',
+  '/sous-location',
+  '/discussions',
+};
+
+/// Retourne la liste de modules autorisés pour un code de rôle donné.
+/// Un rôle inconnu / non filtré conserve l'accès complet.
+List<ModuleDescriptor> modulesForRole(String? roleCode) {
+  final code = (roleCode ?? '').trim().toUpperCase();
+  if (code == 'COMPTABLE') {
+    return [
+      for (final m in kModules)
+        if (kComptableModulePaths.contains(m.path)) m,
+    ];
+  }
+  return kModules;
+}
+
 const List<ModuleDescriptor> kModules = [
   ModuleDescriptor(
       path: '/reservations',

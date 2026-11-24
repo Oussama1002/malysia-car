@@ -220,12 +220,13 @@ class _HeroPill extends StatelessWidget {
   }
 }
 
-class _ModulesGrid extends StatelessWidget {
+class _ModulesGrid extends ConsumerWidget {
   const _ModulesGrid();
 
   @override
-  Widget build(BuildContext context) {
-    const modules = kModules;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final role = ref.watch(currentUserProvider).valueOrNull?.role;
+    final modules = modulesForRole(role);
     return GridView.count(
       crossAxisCount: 3,
       shrinkWrap: true,
