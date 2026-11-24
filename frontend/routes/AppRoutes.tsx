@@ -689,6 +689,9 @@ export default function AppRoutes(): React.ReactElement {
               }
             />
 
+            <Route path="/mobile-ops" element={<Navigate to="/missions" replace />} />
+            <Route path="/mobile-ops/*" element={<Navigate to="/missions" replace />} />
+
             <Route
               path="/missions"
               element={
