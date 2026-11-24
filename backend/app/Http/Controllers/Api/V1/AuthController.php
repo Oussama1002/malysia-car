@@ -51,6 +51,29 @@ class AuthController extends Controller
             ]);
         }
 
+        // Mobile sign-ins for gated roles (COMPTABLE / ASSISTANT) require an
+        // admin to validate the attempt before a token is issued. Detected by
+        // the device_name: 'spa' is the web ERP, anything else is a mobile
+        // client. The pending request is polled by the mobile app on
+        // /v1/auth/mobile-login/{id}/status until approve/reject/expire.
+        $user->load(['roles', 'branches']);
+        $userRoleCodes = $user->roles->pluck('code')->map(fn ($c) => strtoupper((string) $c))->all();
+        $isMobile = $device !== 'spa';
+        $needsApproval = $isMobile && ! empty(array_intersect(
+            $userRoleCodes,
+            MobileLoginApprovalController::GATED_ROLES
+        ));
+        if ($needsApproval) {
+            $pending = MobileLoginApprovalController::createPending($user, $request);
+            $this->logAttempt($request, $user->id, $email, false, 'pending_admin_approval');
+
+            return ApiResponse::success([
+                'pending' => true,
+                'request_id' => $pending->id,
+                'expires_at' => $pending->expires_at->toIso8601String(),
+            ], null, null, 202);
+        }
+
         $token = $user->createToken($device, ['*'])->plainTextToken;
 
         if (Schema::hasColumn('users', 'last_login_at')) {
@@ -65,8 +88,6 @@ class AuthController extends Controller
             label: 'Connexion utilisateur',
             request: $request,
         );
-
-        $user->load(['roles', 'branches']);
 
         return ApiResponse::success([
             'token' => $token,

@@ -77,6 +77,7 @@ import {
   AiVehiclePricingPredictionPage,
 } from '@/modules/ai/AiPredictionPages';
 import { MissionsPage } from '@/modules/missions/MissionsPage';
+import { MobileLoginApprovalPage } from '@/modules/admin/MobileLoginApprovalPage';
 import { NotificationsPage } from '@/modules/notifications/NotificationsPage';
 import { SettingsPage } from '@/modules/settings/SettingsPage';
 import { UserManagementPage } from '@/modules/settings/UserManagementPage';
@@ -691,6 +692,11 @@ export default function AppRoutes(): React.ReactElement {
 
             <Route path="/mobile-ops" element={<Navigate to="/missions" replace />} />
             <Route path="/mobile-ops/*" element={<Navigate to="/missions" replace />} />
+
+            <Route
+              path="/admin/mobile-login/:requestId"
+              element={<MobileLoginApprovalPage />}
+            />
 
             <Route
               path="/missions"

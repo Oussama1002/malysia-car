@@ -132,12 +132,32 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/reset-password', [PasswordResetController::class, 'reset'])
         ->middleware('throttle:6,1');
 
+    // Mobile login approval — polled publicly by the mobile client using the
+    // request id returned at login time. Issues the Sanctum token once the
+    // admin has approved.
+    Route::get('auth/mobile-login/{id}/status', [
+        \App\Http\Controllers\Api\V1\MobileLoginApprovalController::class,
+        'status',
+    ])->middleware('throttle:60,1');
+
     // Authenticated endpoints
     Route::middleware(['auth:sanctum', 'tenant.scope'])->group(function () {
         // === Identity (always allowed for the authenticated user)
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::post('auth/me/avatar', [AuthController::class, 'updateAvatar']);
+
+        // Mobile login approvals (admin-side). The controller enforces the
+        // ADMIN role check internally so the routes stay simple.
+        Route::get('auth/mobile-login/{id}', [
+            \App\Http\Controllers\Api\V1\MobileLoginApprovalController::class, 'show',
+        ]);
+        Route::post('auth/mobile-login/{id}/approve', [
+            \App\Http\Controllers\Api\V1\MobileLoginApprovalController::class, 'approve',
+        ]);
+        Route::post('auth/mobile-login/{id}/reject', [
+            \App\Http\Controllers\Api\V1\MobileLoginApprovalController::class, 'reject',
+        ]);
 
         // Réglages opérationnels en lecture (contracts, reservations…) :
         // nécessaires aux pages Réservations/Contrats pour tout rôle. Les

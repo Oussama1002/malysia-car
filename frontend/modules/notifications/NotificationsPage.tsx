@@ -56,6 +56,7 @@ const CATEGORY_FR: Record<string, string> = {
   'sub_rental_overdue': 'Sous-location en retard',
   'sub_rental_margin_negative': 'Marge sous-location négative',
   'sub_rental_blacklisted_supplier': 'Fournisseur bloqué',
+  'mobile_login_pending': 'Connexion mobile à valider',
 };
 
 const MODULE_FR: Record<string, string> = {
