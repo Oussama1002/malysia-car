@@ -41,6 +41,8 @@ export const AppLayout: React.FC = () => {
   const [aiOpen, setAiOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const crumb = useBreadcrumb();
   const { pathname } = useLocation();
   const navPaths = useMemo(() => GROUPS.flatMap((g) => g.items.map((i) => i.to)), []);
@@ -214,6 +216,15 @@ export const AppLayout: React.FC = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [notifOpen]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setUserMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [userMenuOpen]);
 
   const handleMarkRead = async (id: string) => {
     await notificationsApi.markRead(id);
@@ -506,19 +517,70 @@ export const AppLayout: React.FC = () => {
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              void (async () => {
-                await logout();
-                navigate('/login', { replace: true });
-              })();
-            }}
-            className="df-btn df-btn--ghost df-btn--sm"
-          >
-            <Icon name="external" size={14} />
-            <span className="hidden md:inline">{t('auth.logout')}</span>
-          </button>
+          <div className="relative" ref={userMenuRef}>
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen((v) => !v)}
+              className="df-btn df-btn--ghost df-btn--sm flex items-center gap-2"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+            >
+              <span
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-[color:var(--df-brand-500)] text-[11px] font-black uppercase text-white"
+                aria-hidden="true"
+              >
+                {(session?.user.name || session?.user.email || '?').trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="hidden max-w-[160px] truncate md:inline text-[12.5px] font-semibold text-[color:var(--df-text)]">
+                {session?.user.name || session?.user.email || '—'}
+              </span>
+              <Icon name="chevron-down" size={14} />
+            </button>
+
+            {userMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-[color:var(--df-border)] bg-[color:var(--df-surface)] shadow-xl"
+              >
+                <div className="border-b border-[color:var(--df-border)] px-4 py-3">
+                  <p className="truncate text-[13px] font-bold text-[color:var(--df-text)]">
+                    {session?.user.name || '—'}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11.5px] text-[color:var(--df-text-muted)]">
+                    {session?.user.email || ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] font-semibold text-[color:var(--df-text)] hover:bg-[color:var(--df-surface-elev)] transition"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate('/profile');
+                  }}
+                >
+                  <Icon name="user" size={16} />
+                  <span>Mon profil</span>
+                </button>
+                <div className="border-t border-[color:var(--df-border)]" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    void (async () => {
+                      await logout();
+                      navigate('/login', { replace: true });
+                    })();
+                  }}
+                >
+                  <Icon name="log-out" size={16} />
+                  <span>{t('auth.logout')}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
         {[
