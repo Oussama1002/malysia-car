@@ -52,13 +52,13 @@ class AuthController extends Controller
         }
 
         // Mobile sign-ins for gated roles (COMPTABLE / ASSISTANT) require an
-        // admin to validate the attempt before a token is issued. Detected by
-        // the device_name: 'spa' is the web ERP, anything else is a mobile
-        // client. The pending request is polled by the mobile app on
-        // /v1/auth/mobile-login/{id}/status until approve/reject/expire.
+        // admin to validate the attempt before a token is issued. Web clients
+        // send device_name starting with 'driveflow-' (or legacy 'spa'); the
+        // Flutter app sends 'android-mobile' / 'ios-mobile'. Anything that
+        // contains 'mobile' is a mobile client; the rest is web.
         $user->load(['roles', 'branches']);
         $userRoleCodes = $user->roles->pluck('code')->map(fn ($c) => strtoupper((string) $c))->all();
-        $isMobile = $device !== 'spa';
+        $isMobile = str_contains(strtolower($device), 'mobile');
         $needsApproval = $isMobile && ! empty(array_intersect(
             $userRoleCodes,
             MobileLoginApprovalController::GATED_ROLES
