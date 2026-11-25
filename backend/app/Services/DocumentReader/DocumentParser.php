@@ -27,6 +27,15 @@ class DocumentParser
             : $detectedType;
 
         Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'detected' => $detectedType, 'text_length' => mb_strlen($normalized)]);
+        // When detection fails, dump a redacted preview of the OCR text so the
+        // operator can see what Tesseract actually produced and the detector
+        // regexes can be tuned to it.
+        if ($detectedType === ReaderDocument::TYPE_OTHER) {
+            Log::info('DocumentParser.parse.ocr_preview', [
+                'preview_head' => mb_substr($normalized, 0, 600),
+                'preview_tail' => mb_substr($normalized, -200),
+            ]);
+        }
 
         // Au Maroc, l'« attestation de paiement » (TSAV / vignette) et
         // l'« autorisation de circulation » sont le même papier physique :
@@ -171,10 +180,24 @@ class DocumentParser
             return ReaderDocument::TYPE_DRIVING_LICENSE;
         }
         // Passport — the printed title is the strongest signal, but Tesseract
-        // on holograms often garbles letters. The MRZ line 1 ("P<" followed by
-        // a 3-letter country code) is the ICAO-standard fingerprint for TD3
-        // passports and is caught even when the title is unreadable.
-        if (preg_match('/PASSPORT|PASSEPORT|PASS\s*E?PORT|REPUBLIQUE.*MAROC.*PASS|\bP\s*<\s*[A-Z]{3}/u', $upper)) {
+        // on holograms garbles letters ("PASSPOAT", "PASSFORT") and reads the
+        // MRZ `<` fillers as `«`, `C`, `(`, or spaces. The ICAO TD3 MRZ has
+        // two 44-char lines; line 2's fingerprint (9-char doc num + check +
+        // 3-letter nationality + 7-digit birth + sex + 7-digit expiry) is
+        // uniquely passport-shaped and survives most OCR noise.
+        $hasPassportTitle = (bool) preg_match(
+            '/PASS?[A-Z]?PO[A-Z]?T|PASS?E?PO[A-Z]?T|REPUBLIQUE.*MAROC.*PASS/u',
+            $upper
+        );
+        // MRZ line 1: starts with P then any filler char then 3 letters.
+        $hasMrzLine1 = (bool) preg_match('/\bP[<«\(C\s]{1,2}[A-Z]{3}[A-Z<«]/u', $upper);
+        // MRZ line 2: 9 alnum + filler + digit + 3 letters + 6 digits (birth)
+        //             + anything + M/F/< + 6 digits (expiry).
+        $hasMrzLine2 = (bool) preg_match(
+            '/[A-Z0-9]{8,9}[<«\(C ]{0,2}\d?[A-Z]{3}\d{6,7}[MF<«\(]/u',
+            $upper
+        );
+        if ($hasPassportTitle || $hasMrzLine1 || $hasMrzLine2) {
             return ReaderDocument::TYPE_PASSPORT;
         }
         // Insurance / assurance — checked BEFORE payment-attestation because
