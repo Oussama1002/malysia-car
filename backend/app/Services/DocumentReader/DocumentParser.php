@@ -170,8 +170,11 @@ class DocumentParser
         if (preg_match('/PERMIS\s+DE\s+CONDUIRE|DRIVING\s+LIC[EÉ]NCE|DRIVER\s+LICENSE/u', $upper)) {
             return ReaderDocument::TYPE_DRIVING_LICENSE;
         }
-        // Passport
-        if (preg_match('/PASSPORT|PASSEPORT|REPUBLIQUE.*MAROC.*PASS/u', $upper)) {
+        // Passport — the printed title is the strongest signal, but Tesseract
+        // on holograms often garbles letters. The MRZ line 1 ("P<" followed by
+        // a 3-letter country code) is the ICAO-standard fingerprint for TD3
+        // passports and is caught even when the title is unreadable.
+        if (preg_match('/PASSPORT|PASSEPORT|PASS\s*E?PORT|REPUBLIQUE.*MAROC.*PASS|\bP\s*<\s*[A-Z]{3}/u', $upper)) {
             return ReaderDocument::TYPE_PASSPORT;
         }
         // Insurance / assurance — checked BEFORE payment-attestation because
@@ -2136,6 +2139,15 @@ class DocumentParser
         // `(?<!\d)` stops the greedy label gap from eating the day's first digit
         // ("le 22/09/2026" read as 2/09/2026).
         $datePattern = '(?<!\d)(?P<d>\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|(?:19|20|21)\d{2}[\/\-.]\d{1,2}[\/\-.]\d{1,2})';
+        // Month-name dates ("06 FEB /FÉV 94", "04 APR 19", "06 février 1994")
+        // — printed on passports and many foreign IDs. Any of the three
+        // substrings (day / month / year) wins and is converted via
+        // monthNameDateToIso().
+        $monthNamePattern = '(?P<m>(?P<mday>\d{1,2})[\s\-\/]+'
+            .'(?P<mmon>JAN|FEB|F[EÉ]V|MAR|APR|AVR|MAY|MAI|JUN|JUIN|JUL|JUIL|AUG|AO[UÛ]T|SEP|OCT|NOV|D[EÉ]C|'
+            .'JANVIER|F[EÉ]VRIER|MARS|AVRIL|JUIN|JUILLET|AO[UÛ]T|SEPTEMBRE|OCTOBRE|NOVEMBRE|D[EÉ]CEMBRE|'
+            .'JANUARY|FEBRUARY|MARCH|APRIL|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)[A-Z/\s]{0,10}?'
+            .'(?P<myear>\d{2,4}))';
         // Use `#` as the delimiter (not `/`) so a label containing a literal
         // slash — e.g. "Date et / Lieu de naissance" on the Moroccan permis —
         // can't terminate the regex early and trigger
@@ -2145,9 +2157,21 @@ class DocumentParser
             if (preg_match('#'.$label.'[^\n\r:]*[:\-]?[ \t]*'.$datePattern.'#iu', $text, $m)) {
                 return $this->canonicalizeDate($m['d']);
             }
+            if (preg_match('#'.$label.'[^\n\r:]*[:\-]?[ \t]*'.$monthNamePattern.'#iu', $text, $m)) {
+                $iso = $this->monthNameDateToIso($m['mday'], $m['mmon'], $m['myear']);
+                if ($iso !== null) {
+                    return $iso;
+                }
+            }
             // Next line (label-only, value on the next non-empty line)
             if (preg_match('#'.$label.'[^\n\r]*[\r\n]+\s*'.$datePattern.'#iu', $text, $m)) {
                 return $this->canonicalizeDate($m['d']);
+            }
+            if (preg_match('#'.$label.'[^\n\r]*[\r\n]+\s*'.$monthNamePattern.'#iu', $text, $m)) {
+                $iso = $this->monthNameDateToIso($m['mday'], $m['mmon'], $m['myear']);
+                if ($iso !== null) {
+                    return $iso;
+                }
             }
             // Up to 3 lines below: handles cases where OCR fractures the row
             // ("Né le … <garbage line> <garbage line> 06.10.2001").
@@ -2160,6 +2184,49 @@ class DocumentParser
         }
 
         return null;
+    }
+
+    /**
+     * Convert a day + month-name + year triple to ISO 8601.
+     * Accepts English, French, and common 3-letter abbreviations.
+     * 2-digit years map 00-49 → 20xx, 50-99 → 19xx.
+     */
+    private function monthNameDateToIso(string $day, string $month, string $year): ?string
+    {
+        $map = [
+            'JAN' => 1, 'JANVIER' => 1, 'JANUARY' => 1,
+            'FEB' => 2, 'FEV' => 2, 'FÉV' => 2, 'FEVRIER' => 2, 'FÉVRIER' => 2, 'FEBRUARY' => 2,
+            'MAR' => 3, 'MARS' => 3, 'MARCH' => 3,
+            'APR' => 4, 'AVR' => 4, 'AVRIL' => 4, 'APRIL' => 4,
+            'MAY' => 5, 'MAI' => 5,
+            'JUN' => 6, 'JUIN' => 6, 'JUNE' => 6,
+            'JUL' => 7, 'JUIL' => 7, 'JUILLET' => 7, 'JULY' => 7,
+            'AUG' => 8, 'AOU' => 8, 'AOÛ' => 8, 'AOUT' => 8, 'AOÛT' => 8, 'AUGUST' => 8,
+            'SEP' => 9, 'SEPTEMBRE' => 9, 'SEPTEMBER' => 9,
+            'OCT' => 10, 'OCTOBRE' => 10, 'OCTOBER' => 10,
+            'NOV' => 11, 'NOVEMBRE' => 11, 'NOVEMBER' => 11,
+            'DEC' => 12, 'DÉC' => 12, 'DECEMBRE' => 12, 'DÉCEMBRE' => 12, 'DECEMBER' => 12,
+        ];
+        $mkey = mb_strtoupper(trim($month));
+        $mi = $map[$mkey] ?? null;
+        if ($mi === null) {
+            return null;
+        }
+        $di = (int) $day;
+        if ($di < 1 || $di > 31) {
+            return null;
+        }
+        $yi = (int) $year;
+        if (strlen($year) === 2) {
+            $yi += $yi < 50 ? 2000 : 1900;
+        } elseif (strlen($year) !== 4) {
+            return null;
+        }
+        if ($yi < 1900 || $yi > 2100) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d-%02d', $yi, $mi, $di);
     }
 
     private function canonicalizeDate(string $raw): ?string
