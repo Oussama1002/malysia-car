@@ -72,6 +72,20 @@ class KycChecklistFromScanTest extends TestCase
         $this->assertSame('pending', $doc->verification_status);
     }
 
+    public function test_a_scanned_passport_lands_on_the_passport_line(): void
+    {
+        $customerId = $this->makeCustomer();
+        CustomerKycCase::query()->create([
+            'customer_id' => $customerId, 'kyc_status' => 'pending', 'verification_level' => 'basic',
+        ]);
+
+        app(DocumentReaderService::class)->link($this->makeReaderDocument('passport'), 'customer', $customerId);
+
+        $doc = CustomerKycDocument::query()->first();
+        $this->assertNotNull($doc);
+        $this->assertSame('passport', $doc->document_type);
+    }
+
     public function test_a_scanned_licence_lands_on_the_licence_line(): void
     {
         $customerId = $this->makeCustomer();

@@ -256,7 +256,8 @@ class DocumentReaderService
     private function fileKycChecklist(ReaderDocument $document, string $customerId): void
     {
         $type = match ($document->document_type) {
-            ReaderDocument::TYPE_CIN, ReaderDocument::TYPE_PASSPORT => 'cin',
+            ReaderDocument::TYPE_CIN => 'cin',
+            ReaderDocument::TYPE_PASSPORT => 'passport',
             ReaderDocument::TYPE_DRIVING_LICENSE => 'driving_license',
             default => null,
         };
