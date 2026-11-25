@@ -270,6 +270,23 @@ class DocumentParser
         $docNumber = $mrz['document_number']
             ?? $this->firstMatch('/\b([A-Z]{1,2}\d{6,9})\b/u', $text);
 
+        // MRZ line 2 carries DOB and expiry in a check-digit protected YYMMDD
+        // layout — far more reliable than the printed month-name dates on
+        // passports (e.g. "06 FEB /FÉV 94") which our numeric extractDate()
+        // misses entirely. Use the label value when present, else fall back
+        // to MRZ.
+        $birth = $this->extractDate($text, [
+            'Date\s+of\s+birth',
+            'Date\s+de\s+naissance',
+            'N[ée]\(?e\)?\s+le',
+            'Birth',
+        ]) ?? ($mrz['date_of_birth'] ?? null);
+        $expiry = $this->extractDate($text, [
+            'Date\s+of\s+expiry',
+            'Date\s+d\'expiration',
+            'Expiry',
+        ]) ?? ($mrz['expiry_date'] ?? null);
+
         return [
             'first_name' => $names['first_name'] ?? $mrz['given_names'] ?? null,
             'last_name' => $names['last_name'] ?? $mrz['surname'] ?? null,
@@ -277,17 +294,13 @@ class DocumentParser
                 ?? trim(($mrz['given_names'] ?? '').' '.($mrz['surname'] ?? '')) ?: null,
             'document_number' => $docNumber,
             'document_type' => 'passport',
-            'date_of_birth' => $this->extractDate($text, [
-                'Date\s+of\s+birth',
-                'Date\s+de\s+naissance',
-                'N[ée]\(?e\)?\s+le',
-                'Birth',
-            ]),
-            'nationality' => $mrz['nationality'] ?? $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+'),
+            'date_of_birth' => $birth,
+            'nationality' => $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+')
+                ?? ($mrz['nationality'] ?? null),
             // Certains passeports impriment le domicile : on le prend quand il y est.
             'address' => $this->extractAddress($text),
             'issue_date' => $this->extractDate($text, ['Date\s+of\s+issue', 'Date\s+de\s+d[ée]livrance']),
-            'expiry_date' => $this->extractDate($text, ['Date\s+of\s+expiry', 'Date\s+d\'expiration', 'Expiry']),
+            'expiry_date' => $expiry,
         ];
     }
 
@@ -2549,7 +2562,14 @@ class DocumentParser
                     $given = explode('<<', $parts[1])[0];
                     $out['given_names'] = trim(str_replace('<', ' ', $given)) ?: null;
                 }
-                // Next line usually carries the doc number in the first 9 chars.
+                // ICAO Doc 9303 MRZ line 2 (44 chars, TD3 format):
+                //   0-8   passport number        9 check
+                //   10-12 nationality
+                //   13-18 date of birth YYMMDD   19 check
+                //   20    sex (M/F/<)
+                //   21-26 date of expiry YYMMDD  27 check
+                //   28-41 personal number        42 check
+                //   43    composite check
                 $next = isset($lines[$idx + 1]) ? trim(str_replace(' ', '', $lines[$idx + 1])) : '';
                 if (strlen($next) >= 9) {
                     $candidate = substr($next, 0, 9);
@@ -2558,11 +2578,50 @@ class DocumentParser
                         $out['document_number'] = $candidate;
                     }
                 }
+                if (strlen($next) >= 20) {
+                    $dob = $this->mrzDateToIso(substr($next, 13, 6), past: true);
+                    if ($dob !== null) {
+                        $out['date_of_birth'] = $dob;
+                    }
+                }
+                if (strlen($next) >= 28) {
+                    $exp = $this->mrzDateToIso(substr($next, 21, 6), past: false);
+                    if ($exp !== null) {
+                        $out['expiry_date'] = $exp;
+                    }
+                }
                 break;
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Convert a MRZ YYMMDD field to ISO 8601. `past=true` (DOB) assumes
+     * years ≥ current year map to 19xx; `past=false` (expiry) assumes
+     * years < current year map to 21xx so a passport issued in 2019 and
+     * expiring in 2029 ("290404") is read as 2029, not 1929.
+     */
+    private function mrzDateToIso(string $yymmdd, bool $past): ?string
+    {
+        if (! preg_match('/^\d{6}$/', $yymmdd)) {
+            return null;
+        }
+        $yy = (int) substr($yymmdd, 0, 2);
+        $mm = (int) substr($yymmdd, 2, 2);
+        $dd = (int) substr($yymmdd, 4, 2);
+        if ($mm < 1 || $mm > 12 || $dd < 1 || $dd > 31) {
+            return null;
+        }
+        $currentYY = (int) date('y');
+        if ($past) {
+            $year = $yy > $currentYY ? 1900 + $yy : 2000 + $yy;
+        } else {
+            $year = $yy < $currentYY ? 2100 + $yy : 2000 + $yy;
+        }
+
+        return sprintf('%04d-%02d-%02d', $year, $mm, $dd);
     }
 
     /** @param list<string> $needles */

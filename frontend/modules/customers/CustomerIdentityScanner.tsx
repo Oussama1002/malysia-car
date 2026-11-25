@@ -355,6 +355,10 @@ function normalizeNationality(raw: unknown): string | undefined {
     { matches: (s) => s.startsWith('NLD') || s.includes('PAYS-BAS') || s.includes('NETHERL') || s === 'NL', label: 'Pays-Bas' },
     { matches: (s) => s.startsWith('BEL') || s.includes('BELG') || s === 'BE', label: 'Belgique' },
     { matches: (s) => s.startsWith('PRT') || s.includes('PORTUG') || s === 'PT', label: 'Portugal' },
+    { matches: (s) => s.startsWith('CAN') || s.includes('CANADI') || s === 'CA', label: 'Canada' },
+    { matches: (s) => s.startsWith('CHE') || s.includes('SUISSE') || s.includes('SWISS') || s === 'CH', label: 'Suisse' },
+    { matches: (s) => s.startsWith('EGY') || s.includes('EGYPT') || s === 'EG', label: 'Égypte' },
+    { matches: (s) => s.startsWith('SEN') || s.includes('SENEGAL') || s === 'SN', label: 'Sénégal' },
   ];
 
   for (const { matches, label } of table) {
