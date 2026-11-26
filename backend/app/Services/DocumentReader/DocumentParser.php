@@ -333,11 +333,32 @@ class DocumentParser
     /** @return array<string, mixed> */
     private function parseDrivingLicense(string $text): array
     {
-        $names = $this->extractNames($text);
+        // Quebec (SAAQ) uses EU/ICAO field order where "1" is the SURNAME and
+        // "2" is the given name — opposite of the Moroccan layout handled by
+        // extractNames(). Detect Quebec and use its own label pair; the
+        // Moroccan default stays untouched.
+        $isQuebec = (bool) preg_match('/QU[ÉE]BEC|SAAQ|\(QC\)/u', mb_strtoupper($text));
+        if ($isQuebec) {
+            $names = [];
+            $lastQc = $this->valueAfterLabel($text, '(?:^|\n)[ \t]*1[ \t]+', 3);
+            $firstQc = $this->valueAfterLabel($text, '(?:^|\n)[ \t]*2[ \t]+', 3);
+            if ($lastQc) {
+                $names['last_name'] = $this->cleanName($lastQc);
+            }
+            if ($firstQc) {
+                $names['first_name'] = $this->cleanName($firstQc);
+            }
+            if (isset($names['first_name']) || isset($names['last_name'])) {
+                $names['full_name'] = trim(($names['first_name'] ?? '').' '.($names['last_name'] ?? ''));
+            }
+        } else {
+            $names = $this->extractNames($text);
+        }
         // Fallback to the heuristic when the license has no French labels —
         // Moroccan permis 2010+ has Latin labels but the OCR sometimes drops
-        // them.
-        if (! isset($names['first_name']) || ! isset($names['last_name'])) {
+        // them. Skip the heuristic for Quebec — it is tuned to Moroccan
+        // layout and would wreck a clean Quebec label result.
+        if (! $isQuebec && (! isset($names['first_name']) || ! isset($names['last_name']))) {
             $heuristic = $this->extractNamesHeuristic($text);
             $names = array_filter(array_merge($heuristic, $names), fn ($v) => $v !== null && $v !== '');
             if (isset($names['first_name']) || isset($names['last_name'])) {
@@ -347,14 +368,19 @@ class DocumentParser
 
         // EU/ICAO layout uses numbered fields: "5." = license number, "4a."/"4b."
         // = issue/expiry dates, "9." = categories. Match those alongside the
-        // French labels.
+        // French labels. Quebec (SAAQ) uses "4d" for the permis number and
+        // "5" for a separate reference number, so 4d must beat 5 when both
+        // are present. Quebec format: H2505-060294-03 (letter + 4 digits -
+        // 6 digits - 2 digits).
         $licenseNumber = $this->labelValue($text, [
+            '4d\s*\.?',
             'N°\s*Permis',
             'N°\s*de\s*Permis',
             'License\s*No',
             'Driver\s*License\s*No',
             '5\s*\.',
         ], '[A-Z0-9\-\/]{4,20}')
+            ?? $this->firstMatch('/\b([A-Z]\d{4}-\d{6}-\d{2})\b/u', $text)
             ?? $this->firstMatch('/\b(\d{2,3}[-\/]\d{4,8})\b/u', $text)
             ?? $this->longestMatch('/\b[A-Z]{0,2}\d{6,10}\b/u', $text);
 
@@ -363,26 +389,29 @@ class DocumentParser
         // Date classifier handles licenses that bury labels under OCR noise.
         $classified = $this->classifyDatesByYear($text);
         $birth = $this->extractDate($text, [
+            'Date\s+de\s+naissance\s*\(A-M-J\)', // Quebec SAAQ
             'Date\s+de\s+naissance',
             'Date\s+et\s*/?\s*Lieu\s+de\s+naissance', // Moroccan permis bilingual label
             'N[ée]\(?e\)?\s+le',
             'Date\s+of\s+birth',
             'naissance',                               // fallback: just the key word
-            '3\s*\.',
+            '3\s*\.?',                                 // Quebec: "3" (no dot)
         ]) ?? $classified['birth'];
         $issue = $this->extractDate($text, [
+            'Valide\s+le',                             // Quebec SAAQ
             'Date\s+de\s+d[ée]livrance',
             'Issued',
             'D[ée]livr[ée]\s+le',
-            '4a\s*\.',
+            '4a\s*\.?',
         ]) ?? $classified['issue'];
         $expiry = $this->extractDate($text, [
+            'Expire\s+le',                             // Quebec SAAQ
             'Fin\s+de\s+validit[ée]',   // Moroccan permis verso label
             'Validit[ée]',
             'Valable\s+jusqu',
             'Expiry',
             'Expir',
-            '4b\s*\.',
+            '4b\s*\.?',
         ]);
         // The expiry (Fin de validité) is always AFTER the délivrance date. On a
         // Moroccan permis the recto shows "délivré … Le 27/08/2020" and the verso
@@ -418,8 +447,10 @@ class DocumentParser
         // high-contrast OCR font on a clean background — far more reliable than
         // the watermarked, bilingual front side. Prefer its surname unless the
         // front-side label already produced the same name (which keeps nicer
-        // spacing, e.g. "EL HADI" vs MRZ "ELHADI").
-        $mrzSurname = $this->extractMrzSurname($text);
+        // spacing, e.g. "EL HADI" vs MRZ "ELHADI"). Only Moroccan permis have
+        // a verso MRZ line — Quebec doesn't, so skip to avoid overwriting the
+        // clean Quebec label result with random text that looks MRZ-ish.
+        $mrzSurname = $isQuebec ? null : $this->extractMrzSurname($text);
         if ($mrzSurname) {
             $labelLast = $names['last_name'] ?? null;
             $labelMatchesMrz = $labelLast
@@ -434,21 +465,30 @@ class DocumentParser
 
         // Moroccan Permis prints the CIN under the "N°C.N.I.E." block (and
         // again in the MRZ at the bottom). Pull both as a fallback for the
-        // customer scanner.
-        $cin = $this->valueAfterLabel($text, '(?:N°\s*C\.?N\.?I\.?E?\.?|C\.?N\.?I\.?E?\.?)', 4);
-        if ($cin) {
-            $cin = preg_replace('/\s+/', '', $cin) ?? $cin;
-            if (! preg_match('/^[A-Z]{1,2}\d{3,8}$/u', $cin)) {
-                $cin = null;
+        // customer scanner. Quebec has no CIN equivalent on the permis —
+        // and the raw longestMatch would grab "H2505" out of the permis
+        // number and label it CIN, which is wrong.
+        if ($isQuebec) {
+            $cin = null;
+        } else {
+            $cin = $this->valueAfterLabel($text, '(?:N°\s*C\.?N\.?I\.?E?\.?|C\.?N\.?I\.?E?\.?)', 4);
+            if ($cin) {
+                $cin = preg_replace('/\s+/', '', $cin) ?? $cin;
+                if (! preg_match('/^[A-Z]{1,2}\d{3,8}$/u', $cin)) {
+                    $cin = null;
+                }
             }
+            $cin = $cin
+                ?? $this->longestMatch('/\b[A-Z]{1,2}\d{5,8}\b/u', $text)
+                ?? $this->longestMatch('/\b[A-Z]{1,2}\d{3,8}\b/u', $text);
         }
-        $cin = $cin
-            ?? $this->longestMatch('/\b[A-Z]{1,2}\d{5,8}\b/u', $text)
-            ?? $this->longestMatch('/\b[A-Z]{1,2}\d{3,8}\b/u', $text);
 
-        // Nationality: a Moroccan permis is headed "ROYAUME DU MAROC".
+        // Nationality: a Moroccan permis is headed "ROYAUME DU MAROC"; a
+        // Quebec permis is Canadian.
         $nationality = null;
-        if (preg_match('/ROYAUME\s+DU\s+MAROC|\bMAROC\b|MOROCCO/iu', $text)) {
+        if ($isQuebec) {
+            $nationality = 'Canada';
+        } elseif (preg_match('/ROYAUME\s+DU\s+MAROC|\bMAROC\b|MOROCCO/iu', $text)) {
             $nationality = 'Maroc';
         }
 
