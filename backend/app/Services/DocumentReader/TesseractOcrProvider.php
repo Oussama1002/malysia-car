@@ -71,6 +71,11 @@ class TesseractOcrProvider implements OcrProviderInterface
         $isCheque = $docType === 'cheque';
 
         $isIdCard = in_array($docType, ['cin', 'passport', 'driving_license'], true);
+        // The customer scan slot accepts either CIN or passport and sends no
+        // hint, so docType arrives as 'other'. Allow the orientation-retry
+        // pass on those too — its looksLikeIdDocument() guard prevents a
+        // non-ID document from being rotated for nothing.
+        $isIdOrUnknown = $isIdCard || $docType === 'other';
 
         if ($ext === 'pdf') {
             // Une carte d'identité n'a pas besoin d'un rendu A4 à 300 dpi :
@@ -153,6 +158,14 @@ class TesseractOcrProvider implements OcrProviderInterface
                 $pageText = $this->runTesseract($image, $pageLang);
                 if ($isCheque && ! $this->looksLikeCheque($pageText)) {
                     $pageText = $this->retryRotations($image, $lang, $pageText);
+                }
+                // Identity docs scanned upside down defeat Tesseract's OSD
+                // when holograms / guilloche confuse the orientation score,
+                // so OSD returns Rotate=0 and the page comes back as mirrored
+                // nonsense. When no ID fingerprint shows up, try the three
+                // quarter turns and keep the first one that reads like an ID.
+                if ($isIdOrUnknown && ! $this->looksLikeIdDocument($pageText)) {
+                    $pageText = $this->retryIdRotations($image, $pageLang, $pageText);
                 }
                 // The amount is handwritten, on a line of its own, in a
                 // guilloche background: --psm 6 wants a uniform block and often
@@ -409,6 +422,55 @@ class TesseractOcrProvider implements OcrProviderInterface
             }
             $text = $this->runTesseract($image, $lang);
             if ($this->looksLikeCheque($text)) {
+                return $text;
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * True when the OCR text carries at least one fingerprint typical of an
+     * identity document — printed title, MRZ line, or the `<`/`>` fillers.
+     */
+    private function looksLikeIdDocument(string $text): bool
+    {
+        $upper = mb_strtoupper($text);
+        if (preg_match('/PASSPORT|PASSEPORT|CIN\b|CARTE\s+NATIONALE|PERMIS\s+DE\s+CONDUIRE|DRIVING\s+LIC[EÉ]NCE|QU[ÉE]BEC|SAAQ|ROYAUME\s+DU\s+MAROC/u', $upper)) {
+            return true;
+        }
+        // MRZ line 1 of a passport (TD3) begins "P<" + 3-letter country code.
+        if (preg_match('/\bP\s*<\s*[A-Z]{3}/u', $upper)) {
+            return true;
+        }
+        // Three or more consecutive filler chars are only produced by MRZ
+        // lines — their presence confirms an ID even when every readable word
+        // is garbled. `>` appears when the page was scanned upside down and
+        // Tesseract read `<` from below.
+        if (preg_match('/<{3,}|>{3,}/', $text)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Rotate through 90/180/270 and keep the first orientation whose OCR
+     * output passes looksLikeIdDocument(). Used when OSD was wrong or the
+     * `osd` traineddata is missing on the host.
+     */
+    private function retryIdRotations(string $image, string $lang, string $fallback): string
+    {
+        // When the fallback text already contains `>` fillers, the page is
+        // almost certainly upside down (MRZ `<` read as `>`), so try 180 first
+        // for the fastest recovery.
+        $order = preg_match('/>{3,}/', $fallback) ? [180, 90, 180] : [90, 180, 90];
+        foreach ($order as $step) {
+            if (! $this->rotateImage($image, $step)) {
+                return $fallback;
+            }
+            $text = $this->runTesseract($image, $lang);
+            if ($this->looksLikeIdDocument($text)) {
                 return $text;
             }
         }
