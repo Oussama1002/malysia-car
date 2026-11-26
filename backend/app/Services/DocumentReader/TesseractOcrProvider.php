@@ -430,8 +430,13 @@ class TesseractOcrProvider implements OcrProviderInterface
     }
 
     /**
-     * True when the OCR text carries at least one fingerprint typical of an
-     * identity document — printed title, MRZ line, or the `<`/`>` fillers.
+     * True when the OCR text looks like an upright identity document —
+     * printed title, MRZ line 1, or correctly-oriented `<<<` fillers.
+     *
+     * Important: `>{3,}` runs are NOT an ID signature. They are the mirrored
+     * MRZ fillers from a page scanned upside down, so treating them as an ID
+     * signal would prevent the orientation retry from firing on the exact
+     * case it was built for.
      */
     private function looksLikeIdDocument(string $text): bool
     {
@@ -443,11 +448,10 @@ class TesseractOcrProvider implements OcrProviderInterface
         if (preg_match('/\bP\s*<\s*[A-Z]{3}/u', $upper)) {
             return true;
         }
-        // Three or more consecutive filler chars are only produced by MRZ
-        // lines — their presence confirms an ID even when every readable word
-        // is garbled. `>` appears when the page was scanned upside down and
-        // Tesseract read `<` from below.
-        if (preg_match('/<{3,}|>{3,}/', $text)) {
+        // Three or more consecutive upright `<` fillers are only produced by
+        // real MRZ lines — their presence confirms an ID even when every
+        // readable word is garbled.
+        if (preg_match('/<{3,}/', $text)) {
             return true;
         }
 
