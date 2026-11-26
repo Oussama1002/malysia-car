@@ -326,8 +326,13 @@ class DocumentParser
             'document_number' => $docNumber,
             'document_type' => 'passport',
             'date_of_birth' => $birth,
-            'nationality' => $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+')
-                ?? ($mrz['nationality'] ?? null),
+            // MRZ nationality (3-letter ISO code) is check-digit protected
+            // and clean. The printed label value sits on a holographed, noisy
+            // part of the page — OCR routinely grabs garbage like "Sys" out
+            // of the chip glare — so trust MRZ first and only fall back to
+            // the label match when no MRZ reading was available.
+            'nationality' => ($mrz['nationality'] ?? null)
+                ?? $this->labelValue($text, ['Nationality', 'Nationalit[ée]'], '[A-Za-z\s]+'),
             // Certains passeports impriment le domicile : on le prend quand il y est.
             'address' => $this->extractAddress($text),
             'issue_date' => $this->extractDate($text, ['Date\s+of\s+issue', 'Date\s+de\s+d[ée]livrance']),

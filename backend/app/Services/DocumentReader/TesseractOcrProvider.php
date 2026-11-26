@@ -465,11 +465,16 @@ class TesseractOcrProvider implements OcrProviderInterface
      */
     private function retryIdRotations(string $image, string $lang, string $fallback): string
     {
-        // When the fallback text already contains `>` fillers, the page is
-        // almost certainly upside down (MRZ `<` read as `>`), so try 180 first
-        // for the fastest recovery.
-        $order = preg_match('/>{3,}/', $fallback) ? [180, 90, 180] : [90, 180, 90];
-        foreach ($order as $step) {
+        // Steps are CUMULATIVE rotations applied to the image. Upside-down
+        // (180°) is the most common ID mis-scan — photos taken while holding
+        // the phone the other way round — so try it first. Then +90° takes
+        // us to 270° cumulative, then another +180° back to 90°, which
+        // covers every quarter turn.
+        //
+        // The previous order [90, 180, 90] went 90 → 270 → 360, NEVER hitting
+        // 180°. A Canadian passport scanned upside down could not be
+        // recovered no matter how many rotations the loop allowed.
+        foreach ([180, 90, 180] as $step) {
             if (! $this->rotateImage($image, $step)) {
                 return $fallback;
             }
