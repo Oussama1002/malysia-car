@@ -22,9 +22,14 @@ class DocumentParser
     {
         $normalized = $this->normalize($rawText);
         $detectedType = $this->detectType($normalized);
-        $type = $hintedType && in_array($hintedType, ReaderDocument::TYPES, true)
-            ? $hintedType
-            : $detectedType;
+        // 'other' is a frontend placeholder for "no real hint" — the customer
+        // dual CIN/Passport slot sends it when both types are allowed. When
+        // that reaches the parser, the detector's finding is the better
+        // answer. Only honour hints that name a real document type.
+        $hintIsReal = $hintedType
+            && $hintedType !== ReaderDocument::TYPE_OTHER
+            && in_array($hintedType, ReaderDocument::TYPES, true);
+        $type = $hintIsReal ? $hintedType : $detectedType;
 
         Log::info('DocumentParser.parse', ['type' => $type, 'hinted' => $hintedType, 'detected' => $detectedType, 'text_length' => mb_strlen($normalized)]);
         // When detection fails, dump a redacted preview of the OCR text so the
@@ -53,7 +58,7 @@ class DocumentParser
 
         // If a specific type was expected but the document looks like something else, flag it
         $typeMismatch = null;
-        if ($hintedType && $detectedType !== ReaderDocument::TYPE_OTHER && $detectedType !== $hintedType && ! $isMergedPair) {
+        if ($hintIsReal && $detectedType !== ReaderDocument::TYPE_OTHER && $detectedType !== $hintedType && ! $isMergedPair) {
             $typeLabels = [
                 ReaderDocument::TYPE_INSURANCE => 'une assurance',
                 ReaderDocument::TYPE_PAYMENT_ATTESTATION => 'une attestation de paiement',
